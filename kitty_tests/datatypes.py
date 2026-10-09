@@ -104,11 +104,22 @@ class TestDataTypes(BaseTest):
         self.assertTrue(png.startswith(b'\x89PNG\r\n\x1a\n'))
         self.ae(load_png_data(png), (rgba, 2, 2))
         for args in (
-            (b'', 0, 0), (rgba, 0, 2), (rgba, 2, 0), (rgba[:-1], 2, 2), (rgba + b'\0', 2, 2),
-            (rgba, 4, 4), (rgba, 65537, 65537), (rgba, 2**32 - 1, 2**32 - 1), (rgba, 2**31, 2),
+            (b'', 0, 0),
+            (rgba, 0, 2),
+            (rgba, 2, 0),
+            (rgba[:-1], 2, 2),
+            (rgba + b'\0', 2, 2),
+            (rgba, 4, 4),
+            (rgba, 65537, 65537),
+            (rgba, 2**32 - 1, 2**32 - 1),
+            (rgba, 2**31, 2),
+            (rgba, 2**32 + 2, 2),
+            (rgba, -2, -2),
         ):
             with self.assertRaises(ValueError, msg=repr(args[1:])):
                 png_from_32bit_rgba_data(*args)
+        with self.assertRaises(OverflowError):
+            png_from_32bit_rgba_data(rgba, 2, 2**64 + 2)
 
     def test_to_color(self):
         for x in 'xxx #12 #1234 rgb:a/b'.split():
