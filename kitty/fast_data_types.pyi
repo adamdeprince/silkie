@@ -49,6 +49,7 @@ CLD_CONTINUED: int
 CLD_EXITED: int
 SHM_NAME_MAX: int
 MAX_CUSTOM_SHADER_GROUPS: int
+POINTER_MAP_SIZE: int
 MOUSE_SELECTION_LINE: int
 MOUSE_SELECTION_EXTEND: int
 MOUSE_SELECTION_NORMAL: int
@@ -539,6 +540,7 @@ def compile_program(
 
 def custom_shader_needs_render(before: Tuple[bool, int, int], after: Tuple[bool, int, int], event_mask: int, now: int) -> bool: ...
 def simulate_custom_shader_render_ticks(num_ticks: int, event_mask: int = 0, initialize: bool = False) -> list[bool]: ...
+def sample_pointer_map(data: bytes, u: float, v: float) -> tuple[float, float]: ...
 def set_os_window_chrome(os_window_id: int) -> bool:
     pass
 
