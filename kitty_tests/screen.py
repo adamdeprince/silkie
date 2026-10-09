@@ -304,6 +304,15 @@ class TestScreen(BaseTest):
         for amt in (float('nan'), float('inf'), float('-inf')):
             self.assertFalse(s.fractional_scroll(amt))
             self.ae(s.scrolled_by, before)
+        s.scroll_to_absolute(float('nan'))
+        self.ae(s.scrolled_by, before)
+        self.assertRaises(OverflowError, s.fractional_scroll, 10**400)
+        self.assertRaises(OverflowError, s.scroll_to_absolute, 10**400)
+        self.ae(s.scrolled_by, before)
+        s.scroll_to_absolute(-3.5)
+        self.ae(s.scrolled_by, 0)
+        s.scroll_to_absolute(float('inf'))
+        self.ae(s.scrolled_by, s.historybuf.count)
 
     def test_emoji_skin_tone_modifiers(self):
         s = self.create_screen()
