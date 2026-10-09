@@ -294,6 +294,17 @@ class TestScreen(BaseTest):
         for i in range(s.lines):
             self.ae(str(s.line(i)).strip(), '')
 
+    def test_fractional_scroll_not_finite(self):
+        s = self.create_screen(cols=5, lines=5, scrollback=10)
+        for i in range(15):
+            s.draw(str(i))
+            parse_bytes(s, b'\r\n')
+        s.scroll_to_absolute(5.0)
+        before = s.scrolled_by
+        for amt in (float('nan'), float('inf'), float('-inf')):
+            self.assertFalse(s.fractional_scroll(amt))
+            self.ae(s.scrolled_by, before)
+
     def test_emoji_skin_tone_modifiers(self):
         s = self.create_screen()
         q = chr(0x1F469) + chr(0x1F3FD)

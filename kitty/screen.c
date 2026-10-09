@@ -6066,7 +6066,7 @@ screen_history_scroll(Screen *self, int amt, bool upwards) {
 
 static bool
 screen_fractional_scroll(Screen *self, double amt) {
-    if (amt == 0) return false;
+    if (amt == 0 || !isfinite(amt)) return false;
     index_type before_scrolled_by = self->scrolled_by;
     double before_pixels = self->pixel_scroll_offset_y;
     double integral_part, fractional_part = modf(amt, &integral_part);
