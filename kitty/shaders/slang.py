@@ -42,11 +42,13 @@ from kitty.fast_data_types import (
     DIM,
     GLSL_VERSION,
     GRAPHICS_ALPHA_MASK_PROGRAM,
+    GRAPHICS_INDEXED_PROGRAM,
     GRAPHICS_PREMULT_PROGRAM,
     GRAPHICS_PROGRAM,
     MARK,
     MARK_MASK,
     MAX_CUSTOM_SHADER_GROUPS,
+    NUM_INDEXED_IMAGE_SPECIAL_COLORS,
     PADDING_PROGRAM,
     REVERSE,
     ROUNDED_RECT_PROGRAM,
@@ -248,6 +250,7 @@ class LoadShaderPrograms:
             'rounded_rect': ROUNDED_RECT_PROGRAM,
             'border': BORDERS_PROGRAM,
             'padding': PADDING_PROGRAM,
+            'indexed_graphics': GRAPHICS_INDEXED_PROGRAM,
         }.items():
             vert, frag = glsl_shaders(name)
             compile_program(prog, (vert,), (frag,), metadata[name], allow_recompile)
@@ -377,6 +380,7 @@ class SlangFile(NamedTuple):
         match os.path.basename(self.path):
             case 'background.slang' | 'cell.slang':
                 ans['MARK_MASK'] = str(MARK_MASK)
+                ans['NUM_INDEXED_IMAGE_SPECIAL_COLORS'] = str(NUM_INDEXED_IMAGE_SPECIAL_COLORS)
                 ans['REVERSE_SHIFT'] = str(REVERSE)
                 ans['STRIKE_SHIFT'] = str(STRIKETHROUGH)
                 ans['DIM_SHIFT'] = str(DIM)
