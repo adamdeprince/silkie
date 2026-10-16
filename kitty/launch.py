@@ -697,6 +697,7 @@ def _launch(
     base_env: dict[str, str] | None = None,
     child_death_callback: Callable[[int, Exception | None], None] | None = None,
     startup_command_via_shell_integration: Sequence[str] | str = (),
+    restored_scrollback: bytes = b'',
 ) -> Window | None:
     source_window = boss.active_window_for_cwd
     if opts.source_window:
@@ -899,6 +900,7 @@ def _launch(
                 is_clone_launch=is_clone_launch,
                 next_to=next_to,
                 startup_command_via_shell_integration=startup_command_via_shell_integration,
+                restored_scrollback=restored_scrollback,
                 dock_owner=dock_owner,
                 **kw,
             )
@@ -947,6 +949,7 @@ def launch(
     base_env: dict[str, str] | None = None,
     child_death_callback: Callable[[int, Exception | None], None] | None = None,
     startup_command_via_shell_integration: Sequence[str] | str = (),
+    restored_scrollback: bytes = b'',
 ) -> Window | None:
     active = boss.active_window
     if opts.keep_focus and active:
@@ -963,6 +966,7 @@ def launch(
             base_env,
             child_death_callback,
             startup_command_via_shell_integration,
+            restored_scrollback,
         )
     finally:
         if opts.keep_focus and active:
