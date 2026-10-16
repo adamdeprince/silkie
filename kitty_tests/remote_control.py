@@ -52,3 +52,22 @@ class TestRemoteControl(BaseTest):
             cmd.response_from_kitty(boss, windows[0], PayloadGetter(cmd, {'self': True}))
 
         setter.assert_called_once_with(11, '')
+
+    def test_send_key_excludes_active_window(self):
+        windows = [Window(1, 11), Window(2, 11)]
+        boss = Boss(windows)
+        cmd = command_for_name('send-key')
+
+        for exclude_active in (False, True):
+            with (
+                self.subTest(exclude_active=exclude_active),
+                patch.object(windows[0], 'send_key', create=True) as active,
+                patch.object(windows[1], 'send_key', create=True) as other,
+            ):
+                cmd.response_from_kitty(boss, windows[1], PayloadGetter(cmd, {'all': True, 'exclude_active': exclude_active, 'keys': ['ctrl+a', 'ctrl+b']}))
+
+                other.assert_called_once_with('ctrl+a', 'ctrl+b')
+                if exclude_active:
+                    active.assert_not_called()
+                else:
+                    active.assert_called_once_with('ctrl+a', 'ctrl+b')
