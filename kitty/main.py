@@ -317,6 +317,7 @@ def _run_app(opts: Options, args: CLIOptions, bad_lines: Sequence[BadLine] = (),
             startup_sessions = tuple(create_sessions(opts, args))
         wincls = (startup_sessions[0].os_window_class if startup_sessions else '') or args.cls or appname
         winname = (startup_sessions[0].os_window_name if startup_sessions else '') or args.name or wincls or appname
+        wintitle = (startup_sessions[0].os_window_title if startup_sessions else '') or args.title
         window_state = (args.start_as if args.start_as and args.start_as != 'normal' else None) or (  # ty: ignore[redundant-condition]
             getattr(startup_sessions[0], 'os_window_state', None) if startup_sessions else None
         )
@@ -329,12 +330,12 @@ def _run_app(opts: Options, args: CLIOptions, bad_lines: Sequence[BadLine] = (),
             window_id = create_os_window(
                 run_app.initial_window_size_func(get_os_window_sizing_data(opts, startup_sessions[0] if startup_sessions else None), cached_values),
                 pre_show_callback,
-                args.title or appname,
+                wintitle or appname,
                 winname,
                 wincls,
                 wstate,
                 load_all_shaders,
-                disallow_override_title=bool(args.title),
+                disallow_override_title=bool(wintitle),
                 layer_shell_config=run_app.layer_shell_config,
                 x=pos_x,
                 y=pos_y,
