@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # License: GPLv3 Copyright: 2026 Kovid Goyal <kovid at kovidgoyal.net>
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from kitty.rc.base import PayloadGetter, all_command_names, command_for_name
 
@@ -33,6 +33,20 @@ class Boss:
 
 
 class TestRemoteControl(BaseTest):
+    def test_set_enabled_layouts_configured(self):
+        from kitty.boss import Boss as KittyBoss
+
+        for configured in (False, True):
+            with self.subTest(configured=configured):
+                options = self.set_options({'enabled_layouts': ['tall']})
+                boss = Mock(active_tab=Mock())
+                args = ('set-enabled-layouts',) + (('--configured',) if configured else ()) + ('stack',)
+
+                KittyBoss.call_remote_control(boss, None, args)
+
+                boss.active_tab.set_enabled_layouts.assert_called_once_with(['stack'])
+                self.ae(options.enabled_layouts, ['stack'] if configured else ['tall'])
+
     def test_set_os_window_title_command_is_registered(self):
         self.assertIn('set_os_window_title', all_command_names())
         self.ae(command_for_name('set-os-window-title').name, 'set-os-window-title')
@@ -85,4 +99,3 @@ class TestRemoteControl(BaseTest):
                             mock.assert_called_once_with(*keys)
                         else:
                             mock.assert_not_called()
-
