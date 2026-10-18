@@ -200,6 +200,8 @@ def clear_font_caches() -> None:
 def set_font_family(opts: Options | None = None, override_font_size: float | None = None, add_builtin_nerd_font: bool = False) -> None:
     global current_faces, builtin_nerd_font_descriptor
     opts = opts or defaults
+    from .styles import configure
+    configure(opts)
     sz = override_font_size or opts.font_size
     font_map = get_font_files(opts)
     current_faces = [(font_map['medium'], False, False)]

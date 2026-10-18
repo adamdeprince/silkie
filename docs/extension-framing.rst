@@ -36,9 +36,10 @@ has
 * a key that appears more than once,
 * a value out of the range its page gives, or a number that is not written
   as above,
-* no value for a field its page requires, or
-* fields longer than 127 bytes, counted from after the semicolon that ends
-  the selector.
+* no value for a field its page requires.
+
+Storage grows with the frame. There is no fixed field-length limit; a
+configured ``escape_limit`` can bound an entire OSC sequence.
 
 No frame from a program, whether it is rejected, incomplete or accepted,
 ever reaches the program or anything else as keystrokes.

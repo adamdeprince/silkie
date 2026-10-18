@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -368,9 +369,11 @@ no key at all are sRGB. As for text, the components are encoded with the sRGB
 transfer curve in every gamut. The key applies to RGB and RGBA data, <code class="docutils literal notranslate"><span class="pre">f=24</span></code>
 and <code class="docutils literal notranslate"><span class="pre">f=32</span></code>, and belongs in the first chunk of a chunked transmission. It
 applies in the same way to the pixels of a GPU surface, <code class="docutils literal notranslate"><span class="pre">t=g</span></code>. It is ignored
-for the two formats that have no gamut to choose: an HDR image, <code class="docutils literal notranslate"><span class="pre">f=64</span></code>, is
-linear extended sRGB by definition, see the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>, and the
-colors in the records of a vector image, <code class="docutils literal notranslate"><span class="pre">f=200</span></code>, are sRGB.</p>
+for <code class="docutils literal notranslate"><span class="pre">f=64</span></code>, whose pixels are linear extended sRGB by definition, see the
+<a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>. A vector image, <code class="docutils literal notranslate"><span class="pre">f=200</span></code>, also ignores <code class="docutils literal notranslate"><span class="pre">G</span></code>: each paint
+names its own color space in the <a class="reference internal" href="vector-protocol.html"><span class="doc">Vector images</span></a>. Vector text, paths,
+gradients and embedded images share a linear extended-sRGB compositor and
+retain wide-gamut and HDR values through clipping and blending.</p>
 <p>A PNG image, <code class="docutils literal notranslate"><span class="pre">f=100</span></code>, says what its colors are by itself, and the key is
 ignored for it. A PNG is in Display P3 or Rec. 2020 when its embedded profile
 has the primaries of that gamut, whatever the curve of the profile, or when

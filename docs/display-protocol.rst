@@ -174,8 +174,14 @@ Configuration
 ----------------
 
 The operating system reports most of these values, but not all. Nothing tells
-a terminal that it is on e-ink, so in Silkie the :opt:`display_info` option
-declares whatever the OS cannot, overriding detection. Currently, Silkie reports
+a terminal that it is on e-ink. In Silkie, :opt:`eink_mode` declares an e-paper
+display and selects black text on white unless a light or dark color scheme
+was explicitly chosen. It takes precedence over detected display kind and
+over ``display_info kind=...``. Runtime changes with ``set_eink_mode`` notify
+display subscribers immediately. The :opt:`display_info` option declares
+individual properties that the OS cannot, overriding detection; using only
+``display_info kind=eink`` changes the report without changing colors. Neither
+setting guesses whether an e-paper panel is grayscale or color. Currently, Silkie reports
 ``kind`` only on macOS, and ``gamut`` on macOS and on Wayland compositors that
 implement the color management protocol. There the compositor gives the
 primaries of the display, and ``gamut`` is the widest of the three whose area

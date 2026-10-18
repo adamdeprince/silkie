@@ -30,6 +30,7 @@ please do so by opening issues in the `GitHub bug tracker
    vector-protocol
    keyboard-protocol
    text-sizing-protocol
+   font-protocol
    hdr-protocol
    cell-alpha-protocol
    capabilities-protocol

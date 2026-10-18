@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="#">Developer &amp; LLM guide</a>
+  <a href="#">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -326,32 +327,28 @@ kitty’s manuals, and Silkie’s extension specifications. This guide links to
 each source and the relevant implementation files.</p>
 <section id="source-and-version">
 <h2>Source and version<a class="headerlink" href="#source-and-version" title="Link to this heading">¶</a></h2>
-<p><strong>Main branch:</strong> <a class="reference external" href="https://github.com/adamdeprince/silkie/tree/silkie">adamdeprince/silkie, branch silkie</a>. This is the HTML source
-browser for the implementation described here. Use this branch when inspecting
-code or preparing a change.</p>
-<p>Upstream manuals describe upstream kitty and can evolve independently of this
-fork. For exact behavior, inspect the Silkie checkout you are targeting and
-record its commit. Runtime capability replies determine which extensions,
-versions, and optional features the running terminal supports; a project name
-or version string alone is insufficient.</p>
+<p>Silkie’s source is on the <a class="reference external" href="https://github.com/adamdeprince/silkie/tree/silkie">silkie branch</a>.</p>
+<p>Upstream kitty manuals may describe behavior that differs from your Silkie
+build. The source for your version shows how a feature is implemented. Runtime
+capability queries tell your application which extensions, versions, and
+optional features are available.</p>
 </section>
-<section id="reading-order-for-developers-and-llms">
-<h2>Reading order for developers and LLMs<a class="headerlink" href="#reading-order-for-developers-and-llms" title="Link to this heading">¶</a></h2>
-<ol class="arabic simple">
-<li><p>Read the <a class="reference external" href="https://sw.kovidgoyal.net/kitty/">kitty overview</a> and
-<a class="reference external" href="https://sw.kovidgoyal.net/kitty/kittens_intro/">kitten overview</a> to
-distinguish the terminal from its tools.</p></li>
-<li><p>Consult the <a class="reference internal" href="#id1">terminal foundations</a> and <a class="reference internal" href="#inherited-kitty-protocols">inherited kitty protocols</a> below.
-For the full protocol details, follow the upstream protocol index,
-including its individual specifications; the index alone is not the spec.</p></li>
-<li><p>Read <a class="reference internal" href="capabilities-protocol.html"><span class="doc">Extension capabilities protocol</span></a> and <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 extension framing</span></a>, then the
-<a class="reference internal" href="#silkie-extension-map">Silkie extension map</a> below. For an overview of all Silkie behavior, read
-every linked extension, including its discovery, cleanup, and platform limits.</p></li>
-<li><p>Read the relevant <a class="reference internal" href="#kitten-and-application-apis">kitten and application APIs</a> if writing a kitten, a TUI,
-a remote-control client, or shell integration.</p></li>
-<li><p>Check the <a class="reference internal" href="#implementation-map">implementation map</a> against the target commit. Implement feature
-queries and fallbacks, then test in the target terminal and environment.</p></li>
-</ol>
+<section id="getting-started">
+<h2>Getting started<a class="headerlink" href="#getting-started" title="Link to this heading">¶</a></h2>
+<p>If you are new to kitty, the <a class="reference external" href="https://sw.kovidgoyal.net/kitty/">kitty overview</a>
+introduces the terminal, and the <a class="reference external" href="https://sw.kovidgoyal.net/kitty/kittens_intro/">kitten overview</a> introduces its tools and
+plugins. The <a class="reference internal" href="#id1">terminal foundations</a> and <a class="reference internal" href="#inherited-kitty-protocols">inherited kitty protocols</a> below
+cover the standards and protocols that Silkie builds on.</p>
+<p>To add a Silkie feature to your application, start with
+<a class="reference internal" href="capabilities-protocol.html"><span class="doc">Extension capabilities protocol</span></a> and <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 extension framing</span></a>, then choose the
+protocols you need from the <a class="reference internal" href="#silkie-extension-map">Silkie extension map</a>. Each specification
+explains how to discover support, use the feature, and clean up afterward,
+including any platform limits. Test your application in the target terminal
+and provide a fallback when a feature is unavailable.</p>
+<p>For kittens, terminal user interfaces, remote-control clients, and shell
+integration, see <a class="reference internal" href="#kitten-and-application-apis">kitten and application APIs</a>. The <a class="reference internal" href="#implementation-map">implementation map</a>
+points to the relevant code if you want to investigate behavior or contribute
+a change to Silkie.</p>
 </section>
 <section id="terminal-foundations">
 <span id="id1"></span><h2>Terminal foundations<a class="headerlink" href="#terminal-foundations" title="Link to this heading">¶</a></h2>
@@ -452,15 +449,19 @@ and implementation details. The <a class="reference internal" href="reference.ht
 <td><p><a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>; <a class="reference internal" href="wide-gamut-protocol.html"><span class="doc">Wide gamut colors</span></a>; <a class="reference internal" href="cell-alpha-protocol.html"><span class="doc">Cell background alpha</span></a></p></td>
 <td><p>SGR, kitty graphics, display information</p></td>
 </tr>
-<tr class="row-even"><td><p>Image cursors</p></td>
+<tr class="row-even"><td><p>Font families and typography</p></td>
+<td><p><a class="reference internal" href="font-protocol.html"><span class="doc">Font selection protocol</span></a></p></td>
+<td><p>SGR, kitty font configuration and text sizing</p></td>
+</tr>
+<tr class="row-odd"><td><p>Image cursors</p></td>
 <td><p><a class="reference internal" href="pointer-image-protocol.html"><span class="doc">Image pointer extension</span></a></p></td>
 <td><p>kitty pointer shapes and graphics</p></td>
 </tr>
-<tr class="row-odd"><td><p>Display and timing</p></td>
+<tr class="row-even"><td><p>Display and timing</p></td>
 <td><p><a class="reference internal" href="display-protocol.html"><span class="doc">Display protocol</span></a>; <a class="reference internal" href="latency-protocol.html"><span class="doc">Low latency protocol</span></a>; <a class="reference internal" href="frame-protocol.html"><span class="doc">Frame presentation protocol</span></a></p></td>
 <td><p>Shared framing and the clock/units defined by each protocol</p></td>
 </tr>
-<tr class="row-even"><td><p>Settings and tools</p></td>
+<tr class="row-odd"><td><p>Settings and tools</p></td>
 <td><p><a class="reference internal" href="configuration.html"><span class="doc">Silkie configuration</span></a>; <a class="reference internal" href="show-pointer.html"><span class="doc">Show pointer</span></a>; <a class="reference internal" href="window-actions.html"><span class="doc">Window actions</span></a></p></td>
 <td><p>kitty configuration, key mappings, and kitten tools</p></td>
 </tr>
@@ -493,7 +494,7 @@ the tablet, gesture, and scroll protocols.</p></li>
 </section>
 <section id="implementation-map">
 <h2>Implementation map<a class="headerlink" href="#implementation-map" title="Link to this heading">¶</a></h2>
-<p>All links in this map open HTML views on the <strong>silkie</strong> branch.</p>
+<p>The source files below are on the <strong>silkie</strong> branch.</p>
 <div class="table-wrapper colwidths-given docutils container" id="id4">
 <table class="docutils align-default" id="id4">
 <caption><span class="caption-text">Source locations</span><a class="headerlink" href="#id4" title="Link to this table">¶</a></caption>
@@ -518,6 +519,8 @@ the tablet, gesture, and scroll protocols.</p></li>
 <tr class="row-even"><td><p>Graphics, vectors, and ink</p></td>
 <td><p><a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/kitty/graphics.c">kitty/graphics.c</a>;
 <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/kitty/vector.c">kitty/vector.c</a>;
+<a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/kitty/fonts/vector.py">kitty/fonts/vector.py</a>;
+<a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/kittens/tui/vector.py">kittens/tui/vector.py</a>;
 <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/kitty/ink.c">kitty/ink.c</a></p></td>
 </tr>
 <tr class="row-odd"><td><p>Input and platform integration</p></td>
@@ -609,7 +612,7 @@ capabilities depend on the whole path to the terminal.</p>
             <ul>
 <li><a class="reference internal" href="#">Writing software for Silkie</a><ul>
 <li><a class="reference internal" href="#source-and-version">Source and version</a></li>
-<li><a class="reference internal" href="#reading-order-for-developers-and-llms">Reading order for developers and LLMs</a></li>
+<li><a class="reference internal" href="#getting-started">Getting started</a></li>
 <li><a class="reference internal" href="#terminal-foundations">Terminal foundations</a></li>
 <li><a class="reference internal" href="#inherited-kitty-protocols">Inherited kitty protocols</a></li>
 <li><a class="reference internal" href="#silkie-extension-map">Silkie extension map</a></li>

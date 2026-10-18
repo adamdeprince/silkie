@@ -79,7 +79,7 @@ UPSTREAM_DOCS = {
 UPSTREAM_OPTIONS = {'input_delay', 'repaint_delay', 'macos_colorspace'}
 SILKIE_OPTIONS = (
     'hdr', 'hdr_max_headroom', 'cursor_brightness', 'wayland_colorspace',
-    'display_info', 'tablet_hardware_ids', 'haptic_feedback',
+    'eink_mode', 'color_scheme', 'display_info', 'tablet_hardware_ids', 'haptic_feedback',
 )
 
 

@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="#">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -344,6 +345,14 @@ binary targets.</p>
 </div>
 <p>Launch <code class="docutils literal notranslate"><span class="pre">silkie</span></code> and use <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code> for its companion tools.</p>
 </section>
+<section id="fonts">
+<h2>Fonts<a class="headerlink" href="#fonts" title="Link to this heading">¶</a></h2>
+<p>Install Iosevka for Silkie’s default text and Iosevka Slab for the serif role.
+For CJK text, install a regional Sarasa Term or Noto Sans CJK family. Font
+files are separate from the application; when a preferred font is absent,
+the operating system substitutes an available face. The <a class="reference internal" href="font-protocol.html"><span class="doc">Font selection protocol</span></a>
+reference links the font sources and explains regional glyph selection.</p>
+</section>
 <section id="source-builds">
 <h2>Source builds<a class="headerlink" href="#source-builds" title="Link to this heading">¶</a></h2>
 </section>
@@ -386,17 +395,6 @@ by the terminal and connected devices.</p>
 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty configuration manual</a> for the
 inherited settings. Applications should query <a class="reference internal" href="capabilities-protocol.html"><span class="doc">Extension capabilities protocol</span></a>
 before enabling extensions.</p>
-</section>
-<section id="build-this-website">
-<h2>Build this website<a class="headerlink" href="#build-this-website" title="Link to this heading">¶</a></h2>
-<p>The website can be built without compiling the terminal. From the checkout:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">venv</span> <span class="o">/</span><span class="n">tmp</span><span class="o">/</span><span class="n">silkie</span><span class="o">-</span><span class="n">site</span><span class="o">-</span><span class="n">venv</span>
-<span class="o">/</span><span class="n">tmp</span><span class="o">/</span><span class="n">silkie</span><span class="o">-</span><span class="n">site</span><span class="o">-</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">r</span> <span class="n">docs</span><span class="o">/</span><span class="n">silkie</span><span class="o">/</span><span class="n">requirements</span><span class="o">.</span><span class="n">txt</span>
-<span class="n">make</span> <span class="n">html</span> <span class="n">SPHINXBUILD</span><span class="o">=/</span><span class="n">tmp</span><span class="o">/</span><span class="n">silkie</span><span class="o">-</span><span class="n">site</span><span class="o">-</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">sphinx</span><span class="o">-</span><span class="n">build</span>
-</pre></div>
-</div>
-<p>Open <code class="docutils literal notranslate"><span class="pre">html/index.html</span></code> for the project homepage and <code class="docutils literal notranslate"><span class="pre">html/reference.html</span></code>
-for the extension reference. Website sources live in <code class="docutils literal notranslate"><span class="pre">docs/silkie/</span></code>.</p>
 </section>
 </section>
 
@@ -456,11 +454,11 @@ for the extension reference. Website sources live in <code class="docutils liter
             <ul>
 <li><a class="reference internal" href="#">Install Silkie</a><ul>
 <li><a class="reference internal" href="#binary-packages">Binary packages</a></li>
+<li><a class="reference internal" href="#fonts">Fonts</a></li>
 <li><a class="reference internal" href="#source-builds">Source builds</a></li>
 <li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
 <li><a class="reference internal" href="#build-and-launch">Build and launch</a></li>
 <li><a class="reference internal" href="#try-the-input-inspector">Try the input inspector</a></li>
-<li><a class="reference internal" href="#build-this-website">Build this website</a></li>
 </ul>
 </li>
 </ul>

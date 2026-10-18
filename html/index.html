@@ -258,6 +258,13 @@ and tools called kittens. <a class="reference external" href="https://sw.kovidgo
 <p>Silkie adds protocols that applications can discover and use as needed.
 Support depends on the operating system, input device, display, and compositor;
 each specification describes its capabilities and limits.</p>
+<section id="fonts-and-typography">
+<h3>Fonts and typography<a class="headerlink" href="#fonts-and-typography" title="Link to this heading">¶</a></h3>
+<p>Mix Iosevka’s sans-serif and slab-serif faces, select weights from Thin to
+Heavy, and control slant in either direction. Regional CJK font preferences
+preserve character widths and the terminal grid. Font files are installed
+separately; see <a class="reference internal" href="font-protocol.html"><span class="doc">Font selection protocol</span></a> for configuration and escape sequences.</p>
+</section>
 <section id="pen-touch-and-gestures">
 <h3>Pen, touch, and gestures<a class="headerlink" href="#pen-touch-and-gestures" title="Link to this heading">¶</a></h3>
 <p>Give applications pressure and tilt information, touch contacts, smooth
@@ -268,7 +275,8 @@ scrolling, and gesture events. Inspect what a device reports with the
 </section>
 <section id="vector-graphics-and-ink">
 <h3>Vector graphics and ink<a class="headerlink" href="#vector-graphics-and-ink" title="Link to this heading">¶</a></h3>
-<p>Send paths and scenes for the terminal to render at the displayed size.
+<p>Send paths, styled text and scenes for the terminal to render at the displayed
+size, with session fonts, text measurement, nested window clips and HDR color.
 Let the terminal draw pen strokes as input arrives, without waiting for
 each sample to make a round trip to the application.</p>
 <p><a class="reference internal" href="vector-protocol.html"><span class="doc">Vector images</span></a> · <a class="reference internal" href="ink-protocol.html"><span class="doc">Terminal-side ink</span></a> ·
@@ -318,9 +326,9 @@ kitty; use the Silkie packages or source above to get these additions.</p>
 upstream references to understand the terminal as a whole.</p>
 <section id="find-the-specifications">
 <h3>Find the specifications<a class="headerlink" href="#find-the-specifications" title="Link to this heading">¶</a></h3>
-<p>Find the terminal standards, kitty and kitten manuals, Silkie extension
-specifications, and source on the <code class="docutils literal notranslate"><span class="pre">silkie</span></code> branch in the developer and LLM guide.</p>
-<p><a class="reference internal" href="developer-guide.html"><span class="doc">Developer &amp; LLM guide</span></a></p>
+<p>The developer guide brings together terminal standards, kitty and kitten
+manuals, Silkie’s extension specifications, and links to the source.</p>
+<p><a class="reference internal" href="developer-guide.html"><span class="doc">Developer guide</span></a></p>
 </section>
 <section id="use-the-extension-reference">
 <h3>Use the extension reference<a class="headerlink" href="#use-the-extension-reference" title="Link to this heading">¶</a></h3>
@@ -349,7 +357,7 @@ that use and extend kitty, such as image display, SSH integration, and remote co
     <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch</a>
     <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation</a>
     <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation</a>
-    <a href="developer-guide.html">Developer &amp; LLM guide</a>
+    <a href="developer-guide.html">Developer guide</a>
   </nav>
 </footer>
 <script src="_static/documentation_options.js?v=7f41d439"></script>

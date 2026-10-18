@@ -168,6 +168,7 @@ typedef struct {
 
         size_t storage_limit;
     LoadData currently_loading;
+    PyObject *vector_font_session, *vector_response;
     id_type image_id_counter;
     struct {
         size_t count, capacity;
@@ -237,6 +238,7 @@ typedef struct GraphicsRenderData {
 } GraphicsRenderData;
 
 GraphicsManager *grman_alloc(bool for_paused_rendering);
+void grman_share_vector_fonts(GraphicsManager *dest, GraphicsManager *source);
 void grman_clear(GraphicsManager *, bool, CellPixelSize fg);
 const char *grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_t *payload, Cursor *c, bool *is_dirty, CellPixelSize fg);
 void grman_put_cell_image(

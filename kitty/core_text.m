@@ -289,7 +289,8 @@ font_descriptor_from_python(PyObject *src) {
         PyObject *key, *value;
         Py_ssize_t pos = 0;
         while (PyDict_Next(t, &pos, &key, &value)) {
-            double val = PyFloat_AS_DOUBLE(value);
+            double val = PyFloat_AsDouble(value);
+            if (PyErr_Occurred()) return NULL;
             uint32_t tag = string_to_tag((const uint8_t *)PyUnicode_AsUTF8(key));
             RAII_CoreFoundation(CFNumberRef, cf_tag, CFNumberCreate(NULL, kCFNumberSInt32Type, &tag));
             RAII_CoreFoundation(CFNumberRef, cf_val, CFNumberCreate(NULL, kCFNumberDoubleType, &val));
@@ -746,7 +747,18 @@ face_from_descriptor(PyObject *descriptor, FONTS_DATA_HANDLE fg) {
     }
     if (!desc) desc = font_descriptor_from_python(descriptor);
     if (!desc) return NULL;
-    RAII_CoreFoundation(CTFontRef, font, CTFontCreateWithFontDescriptor(desc, fg ? scaled_point_sz(fg) : 12, NULL));
+    CGAffineTransform matrix = CGAffineTransformIdentity;
+    PyObject *transform = PyDict_GetItemString(descriptor, "matrix");
+    if (transform) {
+        double xx, xy, yx, yy;
+        if (!PyArg_ParseTuple(transform, "dddd", &xx, &xy, &yx, &yy)) return NULL;
+        if (!isfinite(xx) || !isfinite(xy) || !isfinite(yx) || !isfinite(yy)) {
+            PyErr_SetString(PyExc_ValueError, "Font matrix contains a non-finite value");
+            return NULL;
+        }
+        matrix = CGAffineTransformMake(xx, yx, xy, yy, 0, 0);
+    }
+    RAII_CoreFoundation(CTFontRef, font, CTFontCreateWithFontDescriptor(desc, fg ? scaled_point_sz(fg) : 12, &matrix));
     if (!font) {
         PyErr_SetString(PyExc_ValueError, "Failed to create CTFont object");
         return NULL;

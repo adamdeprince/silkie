@@ -44,7 +44,7 @@ and even specify special fonts for particular characters.
 
 opt(
     'font_family',
-    'monospace',
+    'Iosevka',
     option_type='parse_font_spec',
     long_text="""
 You can specify different fonts for the bold/italic/bold-italic variants.
@@ -60,6 +60,39 @@ opt('bold_font', 'auto', option_type='parse_font_spec')
 opt('italic_font', 'auto', option_type='parse_font_spec')
 
 opt('bold_italic_font', 'auto', option_type='parse_font_spec')
+
+opt(
+    '+font_role',
+    'sans Iosevka',
+    option_type='font_role',
+    add_to_default=True,
+    long_text="""
+Map a name used by Silkie's font protocol to a font specification. Each entry
+is a role name followed by the same font specification accepted by
+:opt:`font_family`. Entries may be repeated to define additional roles.
+The ``default`` role always uses :opt:`font_family`.
+""",
+)
+opt('+font_role', 'serif Iosevka Slab', option_type='font_role', add_to_default=True)
+
+opt(
+    'cjk_font', 'auto', option_type='parse_font_spec',
+    long_text="""
+Preferred font for Chinese, Japanese and Korean text. ``auto`` tries the
+regional Sarasa Term and Noto Sans CJK families before platform fallback.
+Requested weights use the nearest available face. CJK glyphs retain their
+cell widths. Explicit specifications also accept variable axes and features.
+""",
+)
+
+opt(
+    'cjk_font_locale', 'auto', choices=('auto', 'jp', 'kr', 'sc', 'tc', 'hk'),
+    long_text="""
+Regional glyph forms used when :opt:`cjk_font` is ``auto``: Japanese, Korean,
+Simplified Chinese, Traditional Chinese or Hong Kong. ``auto`` uses the
+process locale and defaults to Simplified Chinese when unspecified.
+""",
+)
 
 opt('font_size', '11.0', option_type='to_font_size', ctype='double', long_text='Font size (in pts).')
 
@@ -2564,6 +2597,24 @@ egr()  # }}}
 # colors {{{
 agr('colors', 'Color scheme')
 
+opt(
+    'color_scheme',
+    'auto',
+    choices=('auto', 'light', 'dark'),
+    long_text="""
+Use :code:`light` for black text on white or :code:`dark` for white text on
+black. These built-in high contrast schemes also set cursor, selection and
+tab colors. :code:`auto` uses your configured colors and automatic theme
+files, except that :opt:`eink_mode` selects the light scheme.
+
+Switch at runtime with :code:`set_color_scheme light`, :code:`dark`,
+:code:`auto` or :code:`toggle`. The default shortcut is
+:code:`ctrl+shift+f12`. Changes apply to all windows, including new windows,
+until the configuration is reloaded. Applications that subscribe to kitty's
+color preference notifications are notified.
+""",
+)
+
 opt('foreground', '#dddddd', option_type='to_color', ctype='color_as_int', long_text='The foreground and background colors.')
 
 opt(
@@ -3448,6 +3499,30 @@ is supported. For example::
 
 This will create a menu entry named "Launch something special" in an "Actions" menu in the macOS global menubar.
 Sub-menus can be created by adding more levels separated by the :code:`::` characters.
+""",
+)
+
+opt(
+    'eink_mode',
+    'no',
+    option_type='to_bool',
+    ctype='bool',
+    long_text="""
+Declare an e-paper display even when the operating system identifies it as
+an ordinary monitor, for example an external BOOX monitor. Silkie reports
+:code:`kind=eink` through the :doc:`display protocol </display-protocol>`
+and uses black text on white when :opt:`color_scheme` is :code:`auto`.
+An explicit :code:`color_scheme dark` also works on e-paper.
+
+This setting applies to all Silkie windows. Switch at runtime with
+:code:`set_eink_mode yes`, :code:`no` or :code:`toggle`; the default shortcut
+is :code:`ctrl+shift+alt+f12`. Display subscribers receive the change.
+Reloading the configuration restores the configured setting.
+
+Color capability and refresh timing are not inferred from e-paper mode.
+Use :opt:`display_info` to declare them if needed, for example
+:code:`display_info color=gray bits=4` for a sixteen-level grayscale panel.
+E-paper mode takes precedence over :code:`display_info kind=...`.
 """,
 )
 
@@ -4750,6 +4825,10 @@ agr('shortcuts.misc', 'Miscellaneous')
 map('Show documentation', 'show_kitty_doc kitty_mod+f1 show_kitty_doc overview')
 
 map('Command palette', 'command_palette kitty_mod+f3 command_palette')
+
+map('Switch black on white and white on black', 'toggle_color_scheme kitty_mod+f12 set_color_scheme toggle')
+
+map('Toggle e-paper display mode', 'toggle_eink_mode kitty_mod+alt+f12 set_eink_mode toggle')
 
 map(
     'Toggle fullscreen',

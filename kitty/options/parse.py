@@ -15,17 +15,17 @@ from kitty.options.utils import (
     custom_shaders, deprecated_adjust_line_height, deprecated_hide_window_decorations_aliases,
     deprecated_macos_show_window_title_in_menubar_alias, deprecated_scrollback_indicator_opacity,
     deprecated_send_text, disable_ligatures, edge_width, env, filter_notification, font_features,
-    hide_window_decorations, macos_option_as_alt, macos_titlebar_color, menu_map, modify_font,
-    mouse_hide_wait, narrow_symbols, notify_on_cmd_finish, optional_edge_width, parse_font_spec,
-    parse_map, parse_mouse_map, paste_actions, pointer_shape_when_dragging, remap_modifiers,
-    remote_control_password, resize_debounce_time, scrollback_lines, scrollback_pager_history_size,
-    scrollbar_color, shell_integration, show_hyperlink_targets, store_multiple, symbol_map,
-    tab_activity_symbol, tab_bar_edge, tab_bar_margin_height, tab_bar_min_tabs, tab_fade,
-    tab_font_style, tab_separator, tab_title_template, tab_title_wrap, text_fg_override_threshold,
-    titlebar_color, to_cursor_shape, to_cursor_unfocused_shape, to_font_size, to_layout_names,
-    to_modifiers, transparent_background_colors, underline_exclusion, url_prefixes, url_style,
-    visual_bell_duration, visual_window_select_characters, window_border_width, window_logo_scale,
-    window_size
+    font_role, hide_window_decorations, macos_option_as_alt, macos_titlebar_color, menu_map,
+    modify_font, mouse_hide_wait, narrow_symbols, notify_on_cmd_finish, optional_edge_width,
+    parse_font_spec, parse_map, parse_mouse_map, paste_actions, pointer_shape_when_dragging,
+    remap_modifiers, remote_control_password, resize_debounce_time, scrollback_lines,
+    scrollback_pager_history_size, scrollbar_color, shell_integration, show_hyperlink_targets,
+    store_multiple, symbol_map, tab_activity_symbol, tab_bar_edge, tab_bar_margin_height,
+    tab_bar_min_tabs, tab_fade, tab_font_style, tab_separator, tab_title_template, tab_title_wrap,
+    text_fg_override_threshold, titlebar_color, to_cursor_shape, to_cursor_unfocused_shape,
+    to_font_size, to_layout_names, to_modifiers, transparent_background_colors, underline_exclusion,
+    url_prefixes, url_style, visual_bell_duration, visual_window_select_characters, window_border_width,
+    window_logo_scale, window_size
 )
 
 
@@ -121,6 +121,17 @@ class Parser:
 
     def box_drawing_scale(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['box_drawing_scale'] = box_drawing_scale(val)
+
+    def cjk_font(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['cjk_font'] = parse_font_spec(val)
+
+    def cjk_font_locale(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_cjk_font_locale:
+            raise ValueError(f"The value {val} is not a valid choice for cjk_font_locale")
+        ans["cjk_font_locale"] = val
+
+    choices_for_cjk_font_locale = frozenset(('auto', 'jp', 'kr', 'sc', 'tc', 'hk'))
 
     def clear_all_mouse_actions(self, val: str, ans: dict[str, typing.Any]) -> None:
         clear_all_mouse_actions(val, ans)
@@ -917,6 +928,14 @@ class Parser:
     def color255(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['color255'] = to_color_or_none(val)
 
+    def color_scheme(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_color_scheme:
+            raise ValueError(f"The value {val} is not a valid choice for color_scheme")
+        ans["color_scheme"] = val
+
+    choices_for_color_scheme = frozenset(('auto', 'light', 'dark'))
+
     def command_on_bell(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['command_on_bell'] = to_cmdline(val)
 
@@ -1010,6 +1029,9 @@ class Parser:
     def editor(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['editor'] = str(val)
 
+    def eink_mode(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['eink_mode'] = to_bool(val)
+
     def enable_audio_bell(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['enable_audio_bell'] = to_bool(val)
 
@@ -1048,6 +1070,10 @@ class Parser:
     def font_features(self, val: str, ans: dict[str, typing.Any]) -> None:
         for k, v in font_features(val):
             ans["font_features"][k] = v
+
+    def font_role(self, val: str, ans: dict[str, typing.Any]) -> None:
+        for k, v in font_role(val):
+            ans["font_role"][k] = v
 
     def font_size(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['font_size'] = to_font_size(val)
@@ -1699,6 +1725,7 @@ def create_result_dict() -> dict[str, typing.Any]:
         'exe_search_path': {},
         'filter_notification': {},
         'font_features': {},
+        'font_role': {},
         'kitten_alias': {},
         'menu_map': {},
         'modify_font': {},

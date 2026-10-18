@@ -44,8 +44,9 @@ typedef struct {
     color_type fg, bg, decoration_fg;
     sprite_index sprite_idx;
     CellAttrs attrs;
+    uint32_t text_style;
 } GPUCell;
-static_assert(sizeof(GPUCell) == 20, "Fix the ordering of GPUCell");
+static_assert(sizeof(GPUCell) == 24, "Fix the ordering of GPUCell");
 
 #define SCALE_BITS 3
 #define WIDTH_BITS 3
@@ -237,6 +238,7 @@ attrs_to_cursor(const CellAttrs attrs, Cursor *c) {
 
 #define cursor_as_gpu_cell(cursor)      \
     {.attrs = cursor_to_attrs(cursor),  \
+     .text_style = (cursor)->sgr.text_style, \
      .fg = (cursor->sgr.fg & COL_MASK), \
      .bg = (cursor->sgr.bg & COL_MASK), \
      .decoration_fg = cursor->sgr.decoration_fg & COL_MASK}

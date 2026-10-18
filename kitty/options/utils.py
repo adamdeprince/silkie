@@ -219,6 +219,8 @@ def detach_tab_parse(func: str, rest: str) -> FuncArgsType:
     'dump_lines_with_attrs',
     'set_window_title',
     'simulate_color_scheme_preference_change',
+    'set_color_scheme',
+    'set_eink_mode',
 )
 def simple_parse(func: str, rest: str) -> FuncArgsType:
     return func, (rest,)
@@ -1249,6 +1251,15 @@ def symbol_map_parser(val: str, min_size: int = 2) -> Iterable[tuple[tuple[int, 
 
 def symbol_map(val: str) -> Iterable[tuple[tuple[int, int], str]]:
     yield from symbol_map_parser(val)
+
+
+def font_role(val: str) -> Iterable[tuple[str, FontSpec]]:
+    import re
+
+    parts = val.split(maxsplit=1)
+    if len(parts) != 2 or parts[0] == 'default' or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]*', parts[0]):
+        raise ValueError('Expected a role name other than default followed by a font specification')
+    yield parts[0], parse_font_spec(parts[1])
 
 
 def narrow_symbols(val: str) -> Iterable[tuple[tuple[int, int], int]]:

@@ -761,7 +761,7 @@ def kitty_env(args: Options) -> Env:
     ans.xt_version = '.'.join(map(str, version))
 
     xxhash = xxhash_flags()
-    at_least_version('harfbuzz', 1, 5)
+    at_least_version('harfbuzz', 7, 1)
     cflags.extend(pkg_config('libpng', '--cflags-only-I'))
     cflags.extend(pkg_config('lcms2', '--cflags-only-I'))
     cflags.extend(xxhash[0])

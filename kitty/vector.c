@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <ctype.h>
+#include "vector-color.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -657,12 +658,13 @@ dash_polyline(const Poly *p, const double *dash, unsigned ndash, double phase, P
 
 enum { PAINT_NONE, PAINT_SOLID, PAINT_GRADIENT };
 typedef struct {
-    uint8_t type, r, g, b, a;
+    uint8_t type;
+    float r, g, b, a; // straight alpha, linear extended sRGB
     uint32_t gradient;
 } Paint;
 typedef struct {
     double offset;
-    uint8_t r, g, b, a;
+    float r, g, b, a;
 } Stop;
 enum { BLEND_NORMAL, BLEND_MULTIPLY, BLEND_SCREEN };
 
@@ -672,7 +674,7 @@ typedef struct {
     double cx, cy, sx, sy;
 } PathCursor;
 
-typedef struct {
+typedef struct Elem {
     uint32_t id, parent, ref;  // ref: clip path of a group, symbol of a use, image of an image
     char type;
     bool has_t, visible, has_focus, in_progress;
@@ -694,6 +696,11 @@ typedef struct {
     Box box;
     bool has_box;
     PathCursor cursor;  // where the path has got to
+    struct Elem **runs;
+    size_t nruns;
+    PyObject *text;
+    bool has_clip_box;
+    Box clip_box;
 } Elem;
 
 #define NAME elem_map
@@ -716,6 +723,7 @@ struct VectorDoc {
     // part of the image inside the box, which is in the image's user units
     bool damage_all;
     Box damage;
+    PyObject *font_session;
 };
 
 static void
@@ -725,6 +733,9 @@ elem_free(Elem *e) {
     free(e->pts);
     free(e->dash);
     free(e->stops);
+    for (size_t i = 0; i < e->nruns; i++) elem_free(e->runs[i]);
+    free(e->runs);
+    Py_XDECREF(e->text);
     free(e);
 }
 
@@ -765,7 +776,13 @@ vector_doc_free(VectorDoc *d) {
     free(d->order);
     free(d->sorted);
     vt_cleanup(&d->by_id);
+    Py_XDECREF(d->font_session);
     free(d);
+}
+
+void
+vector_doc_set_font_session(VectorDoc *d, PyObject *session) {
+    Py_XSETREF(d->font_session, Py_XNewRef(session));
 }
 
 size_t
@@ -926,6 +943,7 @@ elem_box(Elem *e) {
         e->cursor = (PathCursor){0};
         path_box(&e->path, 0, &e->cursor, &e->box);
         pen_box(e, 0, &e->box);
+        for (size_t i = 0; i < e->nruns; i++) box_union(&e->box, box_grow(elem_box(e->runs[i]), e->runs[i]->stroke.type == PAINT_NONE ? 0 : e->runs[i]->width / 2));
         e->has_box = true;
     }
     return e->box;
@@ -1001,7 +1019,7 @@ damage_elem(VectorDoc *d, Elem *e) {
             if (is_clip_path(d, e->id)) goto all;
             box = box_grow(elem_box(e), stroke_reach(e));
             break;
-        case 'k': box = elem_box(e); break;
+        case 'k': case 't': box = elem_box(e); break;
         case 'u': {
             Elem *sym = lookup(d, e->ref);
             if (!sym || sym->type != 's') return;  // draws nothing
@@ -1193,35 +1211,67 @@ parse_color(const char *s, const char *end, Paint *p) {
     if (n > 1 && *s == '@') {
         double id;
         s++;
-        if (!parse_num(&s, end, &id) || s != end || id < 0 || id > UINT32_MAX) FAIL("Bad gradient reference");
+        if (!parse_num(&s, end, &id) || s != end || id < 0 || id > UINT32_MAX || id != floor(id)) FAIL("Bad gradient reference");
         p->type = PAINT_GRADIENT;
         p->gradient = (uint32_t)id;
         return true;
     }
-    if (n < 7 || *s != '#') FAIL("Bad color");
-    const char *star = memchr(s, '*', n);  // HDR brightness suffix, accepted and shown at SDR
-    size_t hexlen = (star ? (size_t)(star - s) : n) - 1;
-    if (hexlen != 6 && hexlen != 8) FAIL("Bad color");
-    unsigned v[4] = {0, 0, 0, 255};
-    for (size_t i = 0; i < hexlen / 2; i++) {
-        unsigned x = 0;
-        for (int k = 0; k < 2; k++) {
-            char c = s[1 + 2 * i + k];
-            x <<= 4;
-            if (c >= '0' && c <= '9') x |= c - '0';
-            else if (c >= 'a' && c <= 'f') x |= c - 'a' + 10;
-            else if (c >= 'A' && c <= 'F') x |= c - 'A' + 10;
-            else FAIL("Bad color");
+    const char *star = memchr(s, '*', n);
+    const char *color_end = star ? star : end;
+    float channels[4] = {0, 0, 0, 1};
+    const char *colon = memchr(s, ':', color_end - s);
+    if (colon) {
+        unsigned gamut = 0;
+        bool linear = false;
+        size_t prefix = colon-s;
+        if (prefix == 4 && !memcmp(s, "srgb", 4)) {}
+        else if (prefix == 2 && !memcmp(s, "p3", 2)) gamut = 1;
+        else if (prefix == 7 && !memcmp(s, "rec2020", 7)) gamut = 2;
+        else if (prefix == 6 && !memcmp(s, "linear", 6)) linear = true;
+        else FAIL("Unknown color space");
+        const char *q = colon+1;
+        unsigned count = 0;
+        while (q < color_end) {
+            double v;
+            if (count == 4 || !parse_num(&q, color_end, &v)) FAIL("Bad color components");
+            if ((!linear || count == 3) && (v < 0 || v > 1)) FAIL("Color component outside 0..1");
+            channels[count++] = (float)v;
+            if (q < color_end) {
+                if (*q++ != '/' || q == color_end) FAIL("Bad color components");
+            }
         }
-        v[i] = x;
+        if (count < 3) FAIL("Color needs three or four components");
+        if (!linear) for (unsigned i = 0; i < 3; i++) channels[i] = vector_decode_srgb(channels[i]);
+        vector_to_srgb(channels, gamut);
+    } else {
+        if (n < 7 || *s != '#') FAIL("Bad color");
+        size_t hexlen = (star ? (size_t)(star - s) : n) - 1;
+        if (hexlen != 6 && hexlen != 8) FAIL("Bad color");
+        unsigned v[4] = {0, 0, 0, 255};
+        for (size_t i = 0; i < hexlen / 2; i++) {
+            unsigned x = 0;
+            for (int k = 0; k < 2; k++) {
+                char c = s[1 + 2 * i + k];
+                x <<= 4;
+                if (c >= '0' && c <= '9') x |= c - '0';
+                else if (c >= 'a' && c <= 'f') x |= c - 'a' + 10;
+                else if (c >= 'A' && c <= 'F') x |= c - 'A' + 10;
+                else FAIL("Bad color");
+            }
+            v[i] = x;
+        }
+        for (unsigned i = 0; i < 3; i++) channels[i] = vector_decode_srgb(v[i] / 255.f);
+        channels[3] = v[3] / 255.f;
     }
     if (star) {
         double b;
         const char *q = star + 1;
-        if (!parse_num(&q, end, &b) || q != end) FAIL("Bad brightness");
+        if (!parse_num(&q, end, &b) || q != end || b < 0) FAIL("Bad brightness");
+        for (unsigned i = 0; i < 3; i++) channels[i] *= (float)(b / 100);
     }
+    for (unsigned i = 0; i < 4; i++) if (!isfinite(channels[i])) FAIL("Color overflow");
     p->type = PAINT_SOLID;
-    p->r = v[0], p->g = v[1], p->b = v[2], p->a = v[3];
+    p->r = channels[0], p->g = channels[1], p->b = channels[2], p->a = channels[3];
     return true;
 }
 
@@ -1343,6 +1393,16 @@ parse_field(Record *r, const char *key, size_t klen, const char *v, const char *
         if (!parse_nums(&q, end, m, 6) || q != end) FAIL("Bad transform");
         e->t = (Mat){m[0], m[1], m[2], m[3], m[4], m[5]};
         e->has_t = true;
+    } else if (IS("box")) {
+        double b[4];
+        const char *q = v;
+        if (!parse_nums(&q, end, b, 4) || q != end || b[2] < 0 || b[3] < 0 || !isfinite(b[0]+b[2]) || !isfinite(b[1]+b[3])) FAIL("Bad clipping box");
+        e->clip_box = (Box){b[0], b[1], b[0]+b[2], b[1]+b[3]};
+        e->has_clip_box = true;
+    } else if (IS("text") && r->op == 't') {
+        if ((size_t)(end-v) > PY_SSIZE_T_MAX) FAIL("Text too large");
+        Py_XSETREF(e->text, PyBytes_FromStringAndSize(v, end-v));
+        if (!e->text) { PyErr_Clear(); FAIL("Out of memory"); }
     } else if (IS("clip") || IS("s") || IS("img")) {
         if (!parse_uint(v, end, &e->ref)) return false;
     } else if (IS("o")) {
@@ -1424,13 +1484,76 @@ parse_field(Record *r, const char *key, size_t klen, const char *v, const char *
 }
 
 static bool
-parse_record(const char *line, const char *end, Record *r) {
+compile_text(VectorDoc *doc, Elem *e) {
+    if (!e->text) FAIL("Text record without text");
+    PyObject *module = PyImport_ImportModule("kitty.fonts.vector");
+    PyObject *session = doc->font_session ? Py_NewRef(doc->font_session) : PyDict_New();
+    PyObject *runs = module && session ? PyObject_CallMethod(module, "compile_text", "OO", session, e->text) : NULL;
+    Py_XDECREF(module);
+    Py_XDECREF(session);
+    bool ok = false;
+    if (!runs) goto done;
+    Py_ssize_t count = PyList_Size(runs);
+    if (count < 0) goto done;
+    if ((size_t)count > SIZE_MAX / sizeof(Elem *)) goto allocation_failure;
+    e->runs = calloc((size_t)count, sizeof(Elem *));
+    if (count && !e->runs) goto allocation_failure;
+    e->nruns = (size_t)count;
+    e->bytes = e->nruns * sizeof(Elem *);
+    for (Py_ssize_t i = 0; i < count; i++) {
+        PyObject *commands;
+        const char *fill, *stroke;
+        double width;
+        if (!PyArg_ParseTuple(PyList_GET_ITEM(runs, i), "Ossd", &commands, &fill, &stroke, &width)) goto done;
+        Elem *run = e->runs[i] = elem_new();
+        if (!run) goto allocation_failure;
+        run->width = width;
+        run->join = JOIN_ROUND;
+        if (!parse_color(fill, fill+strlen(fill), &run->fill) || !parse_color(stroke, stroke+strlen(stroke), &run->stroke)) goto done;
+        for (Py_ssize_t k = 0; k < PyList_Size(commands); k++) {
+            PyObject *cmd = PyList_GET_ITEM(commands, k);
+            const long op = PyLong_AsLong(PyTuple_GET_ITEM(cmd, 0));
+            if (op < PC_MOVE || op > PC_CLOSE) goto done;
+            PathCmd pc = {.op = (uint8_t)op};
+            Py_ssize_t n = PyTuple_GET_SIZE(cmd)-1;
+            if (n != (op == PC_CLOSE ? 0 : op == PC_CUBIC ? 6 : op == PC_QUAD ? 4 : 2)) goto done;
+            for (Py_ssize_t j = 0; j < n; j++) {
+                pc.p[j] = PyFloat_AsDouble(PyTuple_GET_ITEM(cmd, j+1));
+                if (!isfinite(pc.p[j]) || PyErr_Occurred()) goto done;
+            }
+            if (run->path.count == SIZE_MAX) goto allocation_failure;
+            if (run->path.count == run->path.capacity) {
+                void *np = reserve_array(run->path.item, &run->path.capacity, run->path.count+1, sizeof(PathCmd), 16);
+                if (!np) goto allocation_failure;
+                run->path.item = np;
+            }
+            run->path.item[run->path.count++] = pc;
+        }
+        if (run->path.capacity > (SIZE_MAX-sizeof(Elem)) / sizeof(PathCmd)) goto allocation_failure;
+        size_t bytes = sizeof(Elem) + run->path.capacity * sizeof(PathCmd);
+        if (e->bytes > SIZE_MAX-bytes) goto allocation_failure;
+        e->bytes += bytes;
+    }
+    ok = true;
+    goto done;
+allocation_failure:
+    parse_error = "Out of memory or vector text allocation overflow";
+done:
+    Py_XDECREF(runs);
+    if (PyErr_ExceptionMatches(PyExc_MemoryError)) parse_error = "Out of memory laying out vector text";
+    if (PyErr_Occurred()) PyErr_Clear();
+    if (!ok && !parse_error) parse_error = "Invalid vector text, font or layout";
+    return ok;
+}
+
+static bool
+parse_record(VectorDoc *doc, const char *line, const char *end, Record *r) {
     memset(r, 0, sizeof(*r));
     while (line < end && *line == ' ') line++;
     if (line >= end) return true;  // blank
     r->op = *line++;
     if (line < end && *line != ' ') FAIL("Record type must be a single character");
-    if (!strchr("gpsuikalrx", r->op)) {
+    if (!strchr("gpsuikalrxt", r->op)) {
         r->op = 0;  // unknown record types are ignored for forward compatibility
         return true;
     }
@@ -1458,21 +1581,24 @@ parse_record(const char *line, const char *end, Record *r) {
     if (!e->id && r->op != 'g') FAIL("Only the root group has id 0");
     r->id = e->id;
     switch (r->op) {
+        case 't':
+            if (!compile_text(doc, e)) return false;
+            break;
         case 'p':
         case 's':
             if (!r->have_d) FAIL("Path without d");
-            if (!r->have_fill && !r->have_stroke) e->fill = (Paint){PAINT_SOLID, 0, 0, 0, 255, 0};
+            if (!r->have_fill && !r->have_stroke) e->fill = (Paint){PAINT_SOLID, 0, 0, 0, 1, 0};
             break;
         case 'u':
             if (!e->ref) FAIL("Use without s");
-            if (!r->have_fill && !r->have_stroke) e->fill = (Paint){PAINT_SOLID, 0, 0, 0, 255, 0};
+            if (!r->have_fill && !r->have_stroke) e->fill = (Paint){PAINT_SOLID, 0, 0, 0, 1, 0};
             break;
         case 'i':
             if (!e->ref) FAIL("Image without img");
             break;
         case 'k':
             if (!r->have_pts) FAIL("Pen without pts");
-            if (!r->have_fill) e->fill = (Paint){PAINT_SOLID, 0, 0, 0, 255, 0};
+            if (!r->have_fill) e->fill = (Paint){PAINT_SOLID, 0, 0, 0, 1, 0};
             if (!r->have_cap) e->cap = CAP_ROUND;
             break;
         case 'a':
@@ -1483,7 +1609,8 @@ parse_record(const char *line, const char *end, Record *r) {
             if (!e->nstops) FAIL("Gradient without stops");
             break;
     }
-    e->bytes = sizeof(Elem) + e->path.count * sizeof(PathCmd) + e->npts * 3 * sizeof(double) + e->ndash * sizeof(double) + e->nstops * sizeof(Stop);
+    e->bytes += sizeof(Elem) + e->path.count * sizeof(PathCmd) + e->npts * 3 * sizeof(double) + e->ndash * sizeof(double) + e->nstops * sizeof(Stop);
+    if (e->text) e->bytes += (size_t)PyBytes_GET_SIZE(e->text);
     return true;
 }
 
@@ -1539,7 +1666,7 @@ vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
             recs = np;
         }
         parse_error = NULL;
-        if (!parse_record(s, le, recs + nrecs)) {
+        if (!parse_record(d, s, le, recs + nrecs)) {
             snprintf(errbuf, sizeof(errbuf), "Line %u: %s", lineno, parse_error ? parse_error : "Bad record");
             err = errbuf;
             nrecs++;
@@ -1564,6 +1691,7 @@ vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
                         d->root.opacity = 100;
                         d->root.blend = BLEND_NORMAL;
                         d->root.visible = true;
+                        d->root.has_clip_box = false;
                         d->damage_all = true;
                     } else if (r->delete_group) {
                         delete_group(d, r->id);
@@ -1600,6 +1728,8 @@ vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
                         d->root.opacity = r->elem->opacity;
                         d->root.blend = r->elem->blend;
                         d->root.visible = r->elem->visible;
+                        d->root.has_clip_box = r->elem->has_clip_box;
+                        d->root.clip_box = r->elem->clip_box;
                         break;
                     }
                     /* fallthrough */
@@ -1628,7 +1758,7 @@ vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
 // Rendering {{{
 
 typedef struct {
-    uint8_t *px;  // premultiplied RGBA
+    float *px;  // premultiplied linear extended-sRGB RGBA
     Rect r;       // the pixels of the image it holds
 } Canvas;
 
@@ -1679,12 +1809,12 @@ eval_stops(const Elem *g, double t, float *r, float *gg, float *b, float *a) {
         c[2] = st[i - 1].b + (st[i].b - st[i - 1].b) * f;
         c[3] = st[i - 1].a + (st[i].a - st[i - 1].a) * f;
     }
-    *r = (float)(c[0] / 255), *gg = (float)(c[1] / 255), *b = (float)(c[2] / 255), *a = (float)(c[3] / 255);
+    *r = (float)c[0], *gg = (float)c[1], *b = (float)c[2], *a = (float)c[3];
 }
 
 static inline void
 sample_image(const VectorImageData *img, double u, double v, float *r, float *g, float *b, float *a) {
-    const unsigned bpp = img->is_opaque ? 3 : 4;
+    const unsigned bpp = img->is_float ? 8 : img->is_opaque ? 3 : 4;
     double fx = u - 0.5, fy = v - 0.5;
     int x0 = (int)floor(fx), y0 = (int)floor(fy);
     float tx = (float)(fx - x0), ty = (float)(fy - y0), acc[4] = {0, 0, 0, 0};
@@ -1697,14 +1827,21 @@ sample_image(const VectorImageData *img, double u, double v, float *r, float *g,
             if (x < 0) x = 0;
             if (x >= (int)img->width) x = img->width - 1;
             const uint8_t *p = img->data + ((size_t)y * img->width + x) * bpp;
-            float w = (i ? tx : 1 - tx) * (j ? ty : 1 - ty), pa = img->is_opaque ? 255 : p[3];
-            acc[0] += p[0] * pa * w;
-            acc[1] += p[1] * pa * w;
-            acc[2] += p[2] * pa * w;
-            acc[3] += pa * w;
+            float c[4], w = (i ? tx : 1 - tx) * (j ? ty : 1 - ty);
+            if (img->is_float) {
+                uint16_t h[4]; // one RGBA16F pixel; memcpy also permits unaligned sources
+                memcpy(h, p, sizeof(h));
+                for (unsigned k = 0; k < 4; k++) c[k] = vector_half_to_float(h[k]);
+            } else {
+                for (unsigned k = 0; k < 3; k++) c[k] = vector_decode_srgb(p[k] / 255.f);
+                c[3] = img->is_opaque ? 1 : p[3] / 255.f;
+                vector_to_srgb(c, img->gamut);
+            }
+            for (unsigned k = 0; k < 3; k++) acc[k] += c[k] * c[3] * w;
+            acc[3] += c[3] * w;
         }
     }
-    *r = acc[0] / 65025.f, *g = acc[1] / 65025.f, *b = acc[2] / 65025.f, *a = acc[3] / 255.f;
+    *r = acc[0], *g = acc[1], *b = acc[2], *a = acc[3];
 }
 
 static inline void
@@ -1743,7 +1880,7 @@ paint_at(const Fill *f, int x, int y, float *r, float *g, float *b, float *a) {
 
 // Composites the premultiplied source S onto D, both in [0, 1], writing D's new value to out
 static inline void
-blend_pixel(uint8_t *out, const float *S, const float *D, uint8_t blend) {
+blend_pixel(float *out, const float *S, const float *D, uint8_t blend) {
     float O[4];
     switch (blend) {
         case BLEND_MULTIPLY:
@@ -1756,7 +1893,8 @@ blend_pixel(uint8_t *out, const float *S, const float *D, uint8_t blend) {
             for (int k = 0; k < 3; k++) O[k] = S[k] + D[k] * (1 - S[3]);
     }
     O[3] = S[3] + D[3] * (1 - S[3]);
-    for (int k = 0; k < 4; k++) out[k] = (uint8_t)(clampf(O[k]) * 255 + 0.5f);
+    for (int k = 0; k < 3; k++) out[k] = O[k];
+    out[3] = clampf(O[3]);
 }
 
 static void
@@ -1764,7 +1902,7 @@ composite_span(void *ctx, int y, int x0, int x1, const float *cov) {
     const Fill *f = ctx;
     Canvas *c = f->canvas;
     const size_t at = rect_index(c->r, x0, y);
-    uint8_t *row = c->px + at * 4;
+    float *row = c->px + at * 4;
     const uint8_t *clip = f->clip ? f->clip + at : NULL;
     for (int x = x0; x < x1; x++, row += 4) {
         float cv = cov[x - x0];
@@ -1772,7 +1910,7 @@ composite_span(void *ctx, int y, int x0, int x1, const float *cov) {
         if (cv <= 0) continue;
         float S[4], D[4];
         paint_at(f, x, y, S, S + 1, S + 2, S + 3);
-        for (int k = 0; k < 4; k++) S[k] *= cv, D[k] = row[k] / 255.f;
+        for (int k = 0; k < 4; k++) S[k] *= cv, D[k] = row[k];
         blend_pixel(row, S, D, f->blend);
     }
 }
@@ -1807,8 +1945,8 @@ setup_fill(Render *r, Fill *f, const Target *t, const Paint *p, Mat m, float opa
     f->opacity = opacity;
     if (p->type == PAINT_SOLID) {
         f->type = FILL_SOLID;
-        float a = p->a / 255.f * opacity;
-        f->r = p->r / 255.f * a, f->g = p->g / 255.f * a, f->b = p->b / 255.f * a, f->a = a;
+        float a = p->a * opacity;
+        f->r = p->r * a, f->g = p->g * a, f->b = p->b * a, f->a = a;
         return true;
     }
     Elem *g = lookup(r->doc, p->gradient);
@@ -1952,11 +2090,11 @@ static void
 composite_group(Canvas *dst, const Canvas *src, float opacity) {
     size_t n = rect_size(dst->r);
     for (size_t i = 0; i < n; i++) {
-        const uint8_t *s = src->px + 4 * i;
-        uint8_t *d = dst->px + 4 * i;
-        if (!s[3]) continue;
+        const float *s = src->px + 4 * i;
+        float *d = dst->px + 4 * i;
+        if (s[3] <= 0) continue;
         float S[4], D[4];
-        for (int k = 0; k < 4; k++) S[k] = s[k] / 255.f * opacity, D[k] = d[k] / 255.f;
+        for (int k = 0; k < 4; k++) S[k] = s[k] * opacity, D[k] = d[k];
         blend_pixel(d, S, D, BLEND_NORMAL);
     }
 }
@@ -2019,6 +2157,14 @@ render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
                     f->target.clip = f->own_clip = make_clip(r, cp, f->m, f->target.clip);
                 }
             }
+            if (g->has_clip_box) {
+                Box b = g->clip_box;
+                PathCmd commands[] = {{PC_MOVE,{b.x0,b.y0}}, {PC_LINE,{b.x1,b.y0}}, {PC_LINE,{b.x1,b.y1}}, {PC_LINE,{b.x0,b.y1}}, {PC_CLOSE,{0}}};
+                Elem box = {.t = identity, .path = {.item = commands, .count = 5}};
+                uint8_t *mask = make_clip(r, &box, f->m, f->target.clip);
+                free(f->own_clip);
+                f->target.clip = f->own_clip = mask;
+            }
             if (g->blend != BLEND_NORMAL) f->target.blend = g->blend;
             if (g->opacity < 100) {
                 f->layer = calloc(1, sizeof(Canvas));
@@ -2027,7 +2173,7 @@ render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
                     break;
                 }
                 f->layer->r = r->area;
-                f->layer->px = calloc(rect_size(r->area), 4);
+                f->layer->px = calloc(rect_size(r->area), 4 * sizeof(float));
                 if (!f->layer->px) {
                     r->failed = true;
                     break;
@@ -2068,6 +2214,9 @@ render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
             } break;
             case 'p':
                 if (!outside(r, box_grow(elem_box(e), stroke_reach(e)), em)) draw_path(r, e, &e->path, em, &t);
+                break;
+            case 't':
+                if (!outside(r, elem_box(e), em)) for (size_t i = 0; i < e->nruns && !r->failed; i++) draw_path(r, e->runs[i], &e->runs[i]->path, em, &t);
                 break;
             case 'u': {
                 Elem *sym = lookup(r->doc, e->ref);
@@ -2117,15 +2266,16 @@ sort_elements(VectorDoc *d) {
     return true;
 }
 
-uint8_t *
-vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
+float *
+vector_doc_render_linear(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
     if (!width || !height || !d->width || !d->height || !rect.width || !rect.height) return NULL;
     if (width > INT32_MAX || height > INT32_MAX) return NULL;
     if (rect.x >= width || rect.y >= height || rect.width > width - rect.x || rect.height > height - rect.y) return NULL;
     if (!sort_elements(d)) return NULL;
     const Rect area = {(int)rect.x, (int)rect.y, (int)(rect.x + rect.width), (int)(rect.y + rect.height)};
     Render r = {.doc = d, .sorted = d->sorted, .nsorted = d->nsorted, .area = area, .lookup = lookup, .lookup_ctx = ctx};
-    Canvas canvas = {.px = calloc(rect_size(area), 4), .r = area};
+    if (rect_size(area) > SIZE_MAX / (4 * sizeof(float))) return NULL;
+    Canvas canvas = {.px = calloc(rect_size(area), 4 * sizeof(float)), .r = area};
     if (!canvas.px) return NULL;
     // The scale is that of the whole image whatever part of it is drawn, and
     // every step from here on works out a pixel from the geometry over that
@@ -2136,13 +2286,26 @@ vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect
         free(canvas.px);
         return NULL;
     }
-    // straight alpha for the GPU
+    // Straight alpha, without gamut or brightness clipping.
     for (size_t i = 0, n = rect_size(area); i < n; i++) {
-        uint8_t *p = canvas.px + 4 * i;
-        if (p[3] && p[3] != 255)
-            for (int k = 0; k < 3; k++) p[k] = (uint8_t)fmin(255, (p[k] * 255 + p[3] / 2) / p[3]);
+        float *p = canvas.px + 4 * i;
+        if (p[3] > 0) for (unsigned k = 0; k < 3; k++) p[k] /= p[3];
     }
     return canvas.px;
+}
+
+uint8_t *
+vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
+    float *linear = vector_doc_render_linear(d, width, height, rect, lookup, ctx);
+    if (!linear) return NULL;
+    const size_t n = (size_t)rect.width * rect.height;
+    uint8_t *out = malloc(n * 4);
+    if (out) for (size_t i = 0; i < n; i++) {
+        out[4*i+3] = (uint8_t)(clampf(linear[4*i+3]) * 255 + .5f);
+        for (unsigned k = 0; k < 3; k++) out[4*i+k] = out[4*i+3] ? (uint8_t)(clampf(vector_encode_srgb(linear[4*i+k])) * 255 + .5f) : 0;
+    }
+    free(linear);
+    return out;
 }
 
 uint8_t *
@@ -2169,6 +2332,18 @@ void
 vector_doc_clear_damage(VectorDoc *d) {
     d->damage_all = false;
     d->damage = empty_box;
+}
+
+bool
+vector_doc_image_changed(VectorDoc *d, uint32_t id) {
+    for (size_t i = 0; i < d->count; i++) {
+        const Elem *e = d->order[i];
+        if (e && e->type == 'i' && e->ref == id) {
+            d->damage_all = true;
+            return true;
+        }
+    }
+    return false;
 }
 
 // }}}

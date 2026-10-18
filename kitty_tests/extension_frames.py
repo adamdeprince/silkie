@@ -32,7 +32,7 @@ def assert_extension_frames(test, screen, selector, query='op=query', key='id'):
         f'v=2:{query}:{key}=5', f'v=+1:{query}:{key}=5', f'v=1x:{query}:{key}=5',
     ):
         test.ae(reply(body), b'', f'{selector}: {body}')
-    # The fields of a frame are at most 127 bytes
+    # Storage grows with the frame, including fields introduced in later versions.
     body = f'v=1:{query}:{key}=5:p='
-    test.ae(reply(body + 'x' * (128 - len(body))), b'', f'{selector}: 128 bytes')
-    test.ae(reply(body + 'x' * (127 - len(body))), good, f'{selector}: 127 bytes')
+    for size in (127, 128, 4096, 16384):
+        test.ae(reply(body + 'x' * (size - len(body))), good, f'{selector}: {size} bytes')

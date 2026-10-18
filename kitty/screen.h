@@ -393,6 +393,7 @@ void screen_save_mode(Screen *, unsigned int);
 bool write_escape_code_to_child(Screen *self, unsigned char which, const char *data);
 void screen_visibility_changed(Screen *self, bool potentially_visible);
 void screen_caps_query(Screen *self, const char *data, size_t sz);
+void screen_font_protocol(Screen *self, const char *data, size_t sz);
 void screen_reset_extension_modes(Screen *self);
 void screen_display_protocol(Screen *self, const char *data, size_t sz);
 void screen_display_changed(Screen *self, const DisplayInfo *d);

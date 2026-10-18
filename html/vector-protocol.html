@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -324,8 +325,8 @@ viewer, a plotting library or a pen application, has to rasterize everything
 itself and send the pixels again whenever the window is resized, the view is
 zoomed or a stroke is added, and over a slow link that is what makes such
 programs feel remote. Vector images are a pixel format of the graphics
-protocol, <code class="docutils literal notranslate"><span class="pre">f=200</span></code>, whose data is not pixels but a small scene: paths, glyph
-outlines, pen strokes, raster images and gradients. The terminal keeps the
+protocol, <code class="docutils literal notranslate"><span class="pre">f=200</span></code>, whose data is not pixels but a small scene: paths, shaped
+text, glyph outlines, pen strokes, raster images and gradients. The terminal keeps the
 scene and rasterizes it itself, at the exact size the image is shown at, so it
 is crisp at any zoom, and a program changes it with patches a few bytes long.
 The format is rich enough to render a PDF page, see <a class="reference internal" href="#rendering-a-pdf">Rendering a PDF</a>.</p>
@@ -387,7 +388,7 @@ has id <code class="docutils literal notranslate"><span class="pre">0</span></co
 created, within their group, and groups among their siblings likewise.
 Replacing an element keeps its place in that order.</p>
 <dl>
-<dt><code class="docutils literal notranslate"><span class="pre">g</span></code> <em>group</em></dt><dd><p><code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">id=</span> <span class="pre">[p=&lt;parent</span> <span class="pre">group&gt;]</span> <span class="pre">[t=&lt;transform&gt;]</span> <span class="pre">[clip=&lt;path</span> <span class="pre">id&gt;]</span> <span class="pre">[o=&lt;opacity&gt;]</span> <span class="pre">[blend=normal|multiply|screen]</span> <span class="pre">[v=0|1]</span></code></p>
+<dt><code class="docutils literal notranslate"><span class="pre">g</span></code> <em>group</em></dt><dd><p><code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">id=</span> <span class="pre">[p=&lt;parent</span> <span class="pre">group&gt;]</span> <span class="pre">[t=&lt;transform&gt;]</span> <span class="pre">[clip=&lt;path</span> <span class="pre">id&gt;]</span> <span class="pre">[box=x,y,width,height]</span> <span class="pre">[o=&lt;opacity&gt;]</span> <span class="pre">[blend=normal|multiply|screen]</span> <span class="pre">[v=0|1]</span></code></p>
 <p>Groups nest through <code class="docutils literal notranslate"><span class="pre">p</span></code> and carry the state a PDF or SVG renderer
 pushes and pops: a transform, a clip, an opacity and a blend mode.
 <code class="docutils literal notranslate"><span class="pre">clip</span></code> names a <code class="docutils literal notranslate"><span class="pre">p</span></code> or <code class="docutils literal notranslate"><span class="pre">s</span></code> element whose geometry, in the group’s
@@ -399,6 +400,17 @@ every drawing operation inside the group, <code class="docutils literal notransl
 <code class="docutils literal notranslate"><span class="pre">v=0</span></code> hides the group and its subtree without deleting it. The root
 group accepts all of these except <code class="docutils literal notranslate"><span class="pre">p</span></code>, so <code class="docutils literal notranslate"><span class="pre">g</span> <span class="pre">id=0</span> <span class="pre">t=...</span></code> pans and
 zooms the whole scene.</p>
+<p><code class="docutils literal notranslate"><span class="pre">box</span></code> is a rectangular clip in this group’s coordinate system. Width
+and height must be nonnegative; a zero dimension clips everything away.
+It intersects <code class="docutils literal notranslate"><span class="pre">clip</span></code> and every enclosing group’s clip. See
+<a class="reference internal" href="#nested-window-clips">Nested window clips</a>. Replacing a group without <code class="docutils literal notranslate"><span class="pre">box</span></code> removes its box.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">t</span></code> <em>text</em></dt><dd><p><code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">id=</span> <span class="pre">[g=]</span> <span class="pre">text=&lt;base64</span> <span class="pre">UTF-8</span> <span class="pre">JSON&gt;</span> <span class="pre">[t=&lt;transform&gt;]</span></code></p>
+<p>Shapes and retains a string or styled runs as vector outlines. The JSON
+layout object is described under <a class="reference internal" href="#text-layout-and-measurement">Text layout and measurement</a>. Text
+participates in group transforms, clipping, opacity, blending and normal
+element replacement and deletion. Its outlines are generated once when
+the record is accepted, then rasterized at the placement’s resolution.</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">p</span></code> <em>path</em></dt><dd><p><code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">id=</span> <span class="pre">[g=]</span> <span class="pre">d=&lt;path&gt;</span> <span class="pre">[fill=&lt;color&gt;|none]</span> <span class="pre">[rule=nz|eo]</span> <span class="pre">[stroke=&lt;color&gt;]</span> <span class="pre">[w=&lt;width&gt;]</span> <span class="pre">[cap=butt|round|square]</span> <span class="pre">[join=miter|round|bevel]</span> <span class="pre">[ml=&lt;miter</span> <span class="pre">limit&gt;]</span> <span class="pre">[dash=&lt;lengths&gt;]</span> <span class="pre">[dp=&lt;dash</span> <span class="pre">phase&gt;]</span> <span class="pre">[t=&lt;transform&gt;]</span></code></p>
 <p>The path data in <code class="docutils literal notranslate"><span class="pre">d</span></code> is the SVG path syntax with commas, never spaces,
@@ -455,12 +467,186 @@ scene. Deleting an element that other elements refer to, a symbol, a
 gradient or a clip, leaves those elements in place but without it.</p>
 </dd>
 </dl>
-<p>Colors are <code class="docutils literal notranslate"><span class="pre">#rrggbb</span></code> or <code class="docutils literal notranslate"><span class="pre">#rrggbbaa</span></code> in sRGB, or <code class="docutils literal notranslate"><span class="pre">none</span></code>. A color may
-carry a brightness suffix for HDR displays, <code class="docutils literal notranslate"><span class="pre">*&lt;percent&gt;</span></code> of SDR white as in
-the HDR protocol, for instance <code class="docutils literal notranslate"><span class="pre">#ff8800*250</span></code>; a terminal without HDR shows
-it at normal brightness. Transforms are the six numbers of an affine matrix,
+<p>Colors are <code class="docutils literal notranslate"><span class="pre">#rrggbb</span></code> or <code class="docutils literal notranslate"><span class="pre">#rrggbbaa</span></code> in sRGB, or <code class="docutils literal notranslate"><span class="pre">none</span></code>. The floating-point
+forms <code class="docutils literal notranslate"><span class="pre">srgb:r/g/b[/a]</span></code>, <code class="docutils literal notranslate"><span class="pre">p3:r/g/b[/a]</span></code> and <code class="docutils literal notranslate"><span class="pre">rec2020:r/g/b[/a]</span></code> use
+components from 0 to 1, the named primaries and the sRGB transfer curve,
+matching <a class="reference internal" href="wide-gamut-protocol.html"><span class="doc">Wide gamut colors</span></a>. <code class="docutils literal notranslate"><span class="pre">linear:r/g/b[/a]</span></code> uses linear extended
+sRGB: RGB may be negative or exceed 1; alpha is 0 to 1 and defaults to 1.
+All numbers must be finite. Slashes keep these colors unambiguous in
+comma-separated gradient stops.</p>
+<p>Every color form accepts <code class="docutils literal notranslate"><span class="pre">*&lt;percent&gt;</span></code> to multiply linear RGB by that
+percentage, without changing alpha: <code class="docutils literal notranslate"><span class="pre">#ff8800*250</span></code> or <code class="docutils literal notranslate"><span class="pre">p3:1/0.2/0*300</span></code>.
+This works in fills, strokes, pen strokes, symbols, text and decorations,
+and gradient stops. Gradient references <code class="docutils literal notranslate"><span class="pre">&#64;&lt;id&gt;</span></code> work for text paints too.
+The compositor and gradient interpolation operate in linear extended sRGB,
+preserving HDR and out-of-sRGB channels through nested groups and clips.
+Embedded raster images retain their tagged gamut and <code class="docutils literal notranslate"><span class="pre">f=64</span></code> HDR values.
+The GPU texture is RGBA16F (finite channels saturate at its representable
+range, ±65504), with display gamut/headroom conversion at presentation.
+<code class="docutils literal notranslate"><span class="pre">T=1</span></code> on the image selects the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a> tone mapper. SDR output
+uses the terminal’s existing HDR-to-SDR presentation path.</p>
+<p>Transforms are the six numbers of an affine matrix,
 <code class="docutils literal notranslate"><span class="pre">t=a,b,c,d,e,f</span></code>, mapping <code class="docutils literal notranslate"><span class="pre">x,</span> <span class="pre">y</span></code> to <code class="docutils literal notranslate"><span class="pre">a*x</span> <span class="pre">+</span> <span class="pre">c*y</span> <span class="pre">+</span> <span class="pre">e,</span> <span class="pre">b*x</span> <span class="pre">+</span> <span class="pre">d*y</span> <span class="pre">+</span> <span class="pre">f</span></code>, the
 SVG and PDF convention.</p>
+</section>
+<section id="nested-window-clips">
+<h2>Nested window clips<a class="headerlink" href="#nested-window-clips" title="Link to this heading">¶</a></h2>
+<p>Clips are retained device-space masks after the owning group’s transform.
+A descendant’s translation, rotation, scale or inverse transform cannot
+escape an enclosing clip. There is no fixed nesting limit; the optional
+<code class="docutils literal notranslate"><span class="pre">vector_depth_limit</span></code> configuration applies as to other nested groups.
+For a window manager such as odin-seat, put each window’s content under a
+group with its outer clip, then nest content and widget clips:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">g</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1000</span> <span class="n">t</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">50</span><span class="p">,</span><span class="mi">30</span> <span class="n">box</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">400</span><span class="p">,</span><span class="mi">240</span>
+<span class="n">g</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1001</span> <span class="n">p</span><span class="o">=</span><span class="mi">1000</span> <span class="n">box</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="mi">40</span><span class="p">,</span><span class="mi">380</span><span class="p">,</span><span class="mi">190</span>
+<span class="n">g</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1002</span> <span class="n">p</span><span class="o">=</span><span class="mi">1001</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.866</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span><span class="o">-</span><span class="mf">0.5</span><span class="p">,</span><span class="mf">0.866</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span> <span class="n">box</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">200</span><span class="p">,</span><span class="mi">100</span>
+<span class="n">p</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1003</span> <span class="n">g</span><span class="o">=</span><span class="mi">1002</span> <span class="n">d</span><span class="o">=</span><span class="n">M</span><span class="o">-</span><span class="mi">100</span><span class="p">,</span><span class="o">-</span><span class="mi">100</span><span class="n">L1000</span><span class="p">,</span><span class="o">-</span><span class="mi">100</span><span class="n">L1000</span><span class="p">,</span><span class="mi">1000</span><span class="n">L</span><span class="o">-</span><span class="mi">100</span><span class="p">,</span><span class="mi">1000</span><span class="n">Z</span> <span class="n">fill</span><span class="o">=</span><span class="c1">#336699*200</span>
+</pre></div>
+</div>
+<p>The blue drawing remains inside all three boxes. Moving the outer group
+moves its clip and contents together. A window manager assigns element IDs
+and attaches child scenes beneath its window group when merging scenes;
+<code class="docutils literal notranslate"><span class="pre">box</span></code> constrains that subtree, rather than other root-level elements.</p>
+</section>
+<section id="font-resources-in-the-vector-protocol">
+<h2>Font resources in the vector protocol<a class="headerlink" href="#font-resources-in-the-vector-protocol" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">a=v,f=200,i=&lt;request</span> <span class="pre">id&gt;</span></code> is the vector service. Its payload is UTF-8 JSON,
+carried by the graphics protocol’s normal base64 encoding, chunking,
+compression and direct/file/temporary-file/shared-memory transports. It does
+not need <code class="docutils literal notranslate"><span class="pre">s</span></code> or <code class="docutils literal notranslate"><span class="pre">v</span></code> and creates no image or placement. <code class="docutils literal notranslate"><span class="pre">i</span></code> correlates
+the reply and occupies no image ID. Continuation chunks may omit the action
+and retain the first chunk’s parameters. Use ordinary kitty graphics chunks
+of at most 4096 base64 bytes. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">v</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">77</span><span class="p">;</span><span class="o">&lt;</span><span class="n">base64</span> <span class="n">of</span> <span class="p">{</span><span class="s2">"op"</span><span class="p">:</span><span class="s2">"fonts"</span><span class="p">}</span><span class="o">&gt;&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+<span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Gi</span><span class="o">=</span><span class="mi">77</span><span class="p">;</span><span class="n">OK</span><span class="p">;</span><span class="o">&lt;</span><span class="n">base64</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">JSON</span> <span class="n">result</span><span class="o">&gt;&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+</pre></div>
+</div>
+<p>Errors are <code class="docutils literal notranslate"><span class="pre">EINVAL:&lt;base64</span> <span class="pre">of</span> <span class="pre">{&quot;error&quot;:&quot;description&quot;}&gt;</span></code>; transport errors
+use the ordinary graphics error responses. <code class="docutils literal notranslate"><span class="pre">q</span></code> has the ordinary quiet
+semantics; use <code class="docutils literal notranslate"><span class="pre">q=0</span></code> when a result is needed. Successful result bodies grow
+with the data and are not truncated to the ordinary short graphics message.</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">{&quot;op&quot;:&quot;fonts&quot;}</span></code></dt><dd><p>Lists installed faces (family, style, PostScript name, weight, native
+slant in degrees, and monospace status), configured roles, and uploaded
+session font IDs. <code class="docutils literal notranslate"><span class="pre">version:1</span></code> identifies this text/resource protocol.
+Family and PostScript names can be used as <code class="docutils literal notranslate"><span class="pre">font</span></code> selectors.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">{&quot;op&quot;:&quot;inspect&quot;,&quot;font&quot;:&quot;Iosevka&quot;}</span></code></dt><dd><p>Reports the selected face’s units per em, glyph count, weight, native
+slant, and variable axes, each with tag, minimum, default and maximum.
+Role, weight and italic selection are also accepted.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">{&quot;op&quot;:&quot;upload&quot;,&quot;id&quot;:&quot;body&quot;,&quot;data&quot;:&quot;&lt;base64</span> <span class="pre">font</span> <span class="pre">bytes&gt;&quot;,&quot;index&quot;:0}</span></code></dt><dd><p>Loads a TrueType/OpenType outline font into memory. <code class="docutils literal notranslate"><span class="pre">index</span></code> selects a
+collection member and defaults to zero. The nonempty string ID has a
+separate namespace from image and element IDs. Reusing it atomically
+replaces the font after validation. The reply has its ID and inspection
+metadata. Select it as <code class="docutils literal notranslate"><span class="pre">&quot;font&quot;:&quot;&#64;body&quot;</span></code>. Font bytes are never written
+to the image disk cache or registered with the operating system.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">{&quot;op&quot;:&quot;release&quot;,&quot;id&quot;:&quot;body&quot;}</span></code></dt><dd><p>Releases the session handle. Already-retained text keeps its outlines;
+subsequent layouts using that handle fail until it is uploaded again.
+Uploads are local to the PTY, shared across its main and alternate
+buffers, and freed when that session closes. Image deletion does not
+release fonts. There is no fixed font-count limit; applications should
+release resources when finished. Transport allocation errors are reported.</p>
+</dd>
+</dl>
+</section>
+<section id="text-layout-and-measurement">
+<h2>Text layout and measurement<a class="headerlink" href="#text-layout-and-measurement" title="Link to this heading">¶</a></h2>
+<p>The text record’s decoded JSON is a layout object, for example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">"font"</span><span class="p">:</span><span class="s2">"Iosevka"</span><span class="p">,</span><span class="s2">"size"</span><span class="p">:</span><span class="mi">24</span><span class="p">,</span><span class="s2">"x"</span><span class="p">:</span><span class="mi">10</span><span class="p">,</span><span class="s2">"y"</span><span class="p">:</span><span class="mi">30</span><span class="p">,</span><span class="s2">"angle"</span><span class="p">:</span><span class="o">-</span><span class="mi">12</span><span class="p">,</span>
+ <span class="s2">"runs"</span><span class="p">:[</span>
+   <span class="p">{</span><span class="s2">"text"</span><span class="p">:</span><span class="s2">"Window "</span><span class="p">,</span><span class="s2">"fill"</span><span class="p">:</span><span class="s2">"#dddddd"</span><span class="p">},</span>
+   <span class="p">{</span><span class="s2">"text"</span><span class="p">:</span><span class="s2">"title"</span><span class="p">,</span><span class="s2">"weight"</span><span class="p">:</span><span class="mi">700</span><span class="p">,</span><span class="s2">"italic"</span><span class="p">:</span><span class="n">true</span><span class="p">,</span><span class="s2">"slant"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span>
+    <span class="s2">"underline"</span><span class="p">:</span><span class="s2">"double"</span><span class="p">,</span><span class="s2">"fill"</span><span class="p">:</span><span class="s2">"p3:1/0.2/0*250"</span><span class="p">}</span>
+ <span class="p">]}</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">text</span></code> for a single string or <code class="docutils literal notranslate"><span class="pre">runs</span></code> for an array of objects, each
+with a <code class="docutils literal notranslate"><span class="pre">text</span></code> string and style overrides. Top-level style fields are the
+defaults for each run; runs advance consecutively on the same baseline.
+Split runs at intended shaping boundaries: a style change also ends a
+ligature or script shaping run. JSON escaping preserves spaces, newlines,
+Unicode and control characters without introducing extra scene records.</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">font</span></code> / <code class="docutils literal notranslate"><span class="pre">role</span></code></dt><dd><p>Select an installed family/PostScript name or an <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> session handle,
+or use a configured <a class="reference internal" href="font-protocol.html"><span class="doc">Font selection protocol</span></a> role such as <code class="docutils literal notranslate"><span class="pre">sans</span></code> or
+<code class="docutils literal notranslate"><span class="pre">serif</span></code>. Default: the terminal’s configured regular font (Iosevka).
+Vector text also accepts proportional outline fonts.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">size</span></code> / <code class="docutils literal notranslate"><span class="pre">weight</span></code> / <code class="docutils literal notranslate"><span class="pre">italic</span></code> / <code class="docutils literal notranslate"><span class="pre">slant</span></code></dt><dd><p>Positive em size in scene units (default 16), weight 100–900 (default
+400), italic letterforms (boolean, default false), and optional absolute
+slant in degrees from -15 to 15. Negative slant leans right; zero can
+make italic letterforms upright; positive synthesizes inverse slant.
+Installed static families select the nearest face; variable fonts use
+their weight axis. Uploaded static faces retain their native weight and
+letterforms; upload each desired face or a variable font.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">axes</span></code> / <code class="docutils literal notranslate"><span class="pre">features</span></code></dt><dd><p>A dictionary of supported four-character OpenType axis tags and design
+values, and an array of HarfBuzz feature strings such as <code class="docutils literal notranslate"><span class="pre">[&quot;liga=0&quot;,</span>
+<span class="pre">&quot;ss01=1&quot;]</span></code>. Explicit axis values must lie within the font’s range.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">direction</span></code> / <code class="docutils literal notranslate"><span class="pre">language</span></code> / <code class="docutils literal notranslate"><span class="pre">script</span></code> / <code class="docutils literal notranslate"><span class="pre">fallback</span></code></dt><dd><p>Optional shaping direction (<code class="docutils literal notranslate"><span class="pre">ltr</span></code>, <code class="docutils literal notranslate"><span class="pre">rtl</span></code>, <code class="docutils literal notranslate"><span class="pre">ttb</span></code> or <code class="docutils literal notranslate"><span class="pre">btt</span></code>), BCP47
+language and ISO15924 script. HarfBuzz guesses unspecified properties.
+An optional array of font selectors supplies fallback faces; the
+configured regional CJK face is also tried for missing clusters.
+Combining marks and joined sequences stay together when choosing a
+fallback. This is a run layout API: applications supply visual run order
+for mixed bidirectional paragraphs, and line breaks rather than automatic
+paragraph wrapping. Bitmap-only and embedded color glyph painting are
+not part of the outline text format.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">fill</span></code> / <code class="docutils literal notranslate"><span class="pre">stroke</span></code> / <code class="docutils literal notranslate"><span class="pre">stroke_width</span></code> / <code class="docutils literal notranslate"><span class="pre">background</span></code></dt><dd><p>Vector paints, including gradients and HDR/wide-gamut colors. Fill
+defaults to black, stroke to <code class="docutils literal notranslate"><span class="pre">none</span></code> and stroke width to 1; text strokes
+have round joins. Background is optional and fills each run’s logical box.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">underline</span></code> / <code class="docutils literal notranslate"><span class="pre">underline_color</span></code> / <code class="docutils literal notranslate"><span class="pre">strike</span></code> / <code class="docutils literal notranslate"><span class="pre">overline</span></code></dt><dd><p>Underline style <code class="docutils literal notranslate"><span class="pre">none</span></code> (default), <code class="docutils literal notranslate"><span class="pre">single</span></code>, <code class="docutils literal notranslate"><span class="pre">double</span></code>, <code class="docutils literal notranslate"><span class="pre">curly</span></code>,
+<code class="docutils literal notranslate"><span class="pre">dotted</span></code> or <code class="docutils literal notranslate"><span class="pre">dashed</span></code>; its optional paint defaults to the fill.
+Strike and overline are booleans. Decorations are vector geometry and
+accept the same HDR/wide-gamut paints and transforms as the glyphs.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">x</span></code> / <code class="docutils literal notranslate"><span class="pre">y</span></code> / <code class="docutils literal notranslate"><span class="pre">angle</span></code></dt><dd><p>Top-level baseline origin (default 0,0) and rotation in degrees (default
+0). Positive rotation is clockwise in the scene’s downward y axis.
+<code class="docutils literal notranslate"><span class="pre">\n</span></code> starts another line. The record’s affine transform and all parent
+transforms apply afterward. Use group boxes to clip text to a viewport.</p>
+</dd>
+</dl>
+<p>Send the same layout object with <code class="docutils literal notranslate"><span class="pre">&quot;op&quot;:&quot;measure&quot;</span></code> through <code class="docutils literal notranslate"><span class="pre">a=v</span></code> to
+measure without creating an image or rasterizing pixels. The result gives
+<code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">height</span></code> of the unrotated logical layout in user units,
+<code class="docutils literal notranslate"><span class="pre">advance:[x,y]</span></code> before the origin/rotation, <code class="docutils literal notranslate"><span class="pre">ascent</span></code> and <code class="docutils literal notranslate"><span class="pre">descent</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">ink:[left,top,right,bottom]</span></code> after the layout origin/rotation, or
+<code class="docutils literal notranslate"><span class="pre">null</span></code> for no painted geometry. Ink includes decorations, backgrounds and
+stroke reach; curve extrema are measured from the shaped outlines.
+<code class="docutils literal notranslate"><span class="pre">missing</span></code> lists Unicode scalar indices for unresolved glyphs, across the
+concatenated runs. Rendering uses the same layout code. Measurement precedes
+scene transforms, gradient lookup, opacity and clipping; it reports the full
+string even when a window shows only a clipped part.</p>
+</section>
+<section id="python-client-helpers">
+<h2>Python client helpers<a class="headerlink" href="#python-client-helpers" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">kittens.tui.vector</span></code> provides <code class="docutils literal notranslate"><span class="pre">service_request</span></code>, <code class="docutils literal notranslate"><span class="pre">font_upload</span></code>,
+<code class="docutils literal notranslate"><span class="pre">measure_text</span></code>, <code class="docutils literal notranslate"><span class="pre">parse_service_response</span></code>, <code class="docutils literal notranslate"><span class="pre">text_record</span></code>, <code class="docutils literal notranslate"><span class="pre">clip_group</span></code>
+and <code class="docutils literal notranslate"><span class="pre">scene</span></code>. Transmission helpers yield correctly chunked graphics
+sequences for the application’s output queue. The response parser accepts
+either a framed APC or the <code class="docutils literal notranslate"><span class="pre">G</span></code>-prefixed body from an input parser and
+returns the request ID and decoded result. It raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> for an
+error response. For example, after uploading <code class="docutils literal notranslate"><span class="pre">body</span></code> and receiving its
+successful reply:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">kittens.tui.vector</span><span class="w"> </span><span class="kn">import</span> <span class="n">clip_group</span><span class="p">,</span> <span class="n">measure_text</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">text_record</span>
+
+<span class="n">layout</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"font"</span><span class="p">:</span> <span class="s2">"@body"</span><span class="p">,</span> <span class="s2">"size"</span><span class="p">:</span> <span class="mi">24</span><span class="p">,</span> <span class="s2">"text"</span><span class="p">:</span> <span class="s2">"Window title"</span><span class="p">,</span>
+          <span class="s2">"x"</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="s2">"y"</span><span class="p">:</span> <span class="mi">28</span><span class="p">,</span> <span class="s2">"fill"</span><span class="p">:</span> <span class="s2">"p3:1/0.3/0*200"</span><span class="p">}</span>
+<span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">measure_text</span><span class="p">(</span><span class="mi">77</span><span class="p">,</span> <span class="n">layout</span><span class="p">):</span>
+    <span class="n">output_queue</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+<span class="c1"># Handle request 77's result in the application's normal input loop.</span>
+<span class="n">records</span> <span class="o">=</span> <span class="p">[</span><span class="n">clip_group</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">240</span><span class="p">]),</span>
+           <span class="n">clip_group</span><span class="p">(</span><span class="mi">101</span><span class="p">,</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">392</span><span class="p">,</span> <span class="mi">32</span><span class="p">],</span> <span class="n">parent</span><span class="o">=</span><span class="mi">100</span><span class="p">),</span>
+           <span class="n">text_record</span><span class="p">(</span><span class="mi">102</span><span class="p">,</span> <span class="n">layout</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="mi">101</span><span class="p">)]</span>
+<span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">scene</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">240</span><span class="p">,</span> <span class="n">records</span><span class="p">):</span>
+    <span class="n">output_queue</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
 <section id="rendering">
 <h2>Rendering<a class="headerlink" href="#rendering" title="Link to this heading">¶</a></h2>
@@ -469,7 +655,7 @@ appearance on a gray or color display, whenever it is first shown, the scene
 changes, or the size it is shown at changes, with user units scaled so the
 intrinsic size fills the placement. Scenes count toward the image storage
 quota by the size of their elements, not by pixels.</p>
-<p>Kitty rasterizes on the CPU. Drawing all of a scene that covers a large window
+<p>Silkie rasterizes on the CPU. Drawing all of a scene that covers a large window
 at a high pixel density takes tens to hundreds of milliseconds, which is what
 the first showing, a change of size and some patches cost. Most patches cost
 far less, because kitty works out the rectangle a patch can have changed and
@@ -479,7 +665,7 @@ drawing everything:</p>
 <li><p>Appending to a pen stroke, or to a path that is stroked and has
 <code class="docutils literal notranslate"><span class="pre">fill=none</span></code>, draws the rectangle around the appended geometry and not
 the one around the stroke. This is what live ink costs.</p></li>
-<li><p>Adding, replacing or deleting a path, a use or a pen stroke draws the
+<li><p>Adding, replacing or deleting a path, text, a use or a pen stroke draws the
 rectangle around where the element was and where it now is. So does
 appending to a filled path, since a fill is closed across the gap between
 the ends of a subpath and more of it changes than was appended.</p></li>
@@ -531,7 +717,8 @@ records are concatenated to the geometry of their target, and a transmission
 with <code class="docutils literal notranslate"><span class="pre">a=t</span></code> or <code class="docutils literal notranslate"><span class="pre">a=T</span></code> empties the table before adding. The table, written
 out as records, is the whole state of the image and can be sent to a fresh
 terminal after a reconnection, as one <code class="docutils literal notranslate"><span class="pre">a=t</span></code> transmission. The patches
-themselves need not be kept. A relay that does not understand the records can
+themselves need not be kept. Session font uploads must also be replayed before
+text records that reference them. A relay that does not understand the records can
 still forward them as opaque image data, keeping the transmissions and the
 patches in order.</p>
 </section>
@@ -544,6 +731,10 @@ patches in order.</p>
 </div>
 <p>A terminal that does answers <code class="docutils literal notranslate"><span class="pre">OK</span></code>, one that does not answers <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code> or
 nothing at all, in which case the usual timeout applies.</p>
+<p>That query establishes base scene support. For shaped text, font resources,
+measurement, box clips and HDR paints, query <code class="docutils literal notranslate"><span class="pre">a=v,f=200</span></code> with
+<code class="docutils literal notranslate"><span class="pre">{&quot;op&quot;:&quot;fonts&quot;}</span></code> and inspect <code class="docutils literal notranslate"><span class="pre">version</span></code> and <code class="docutils literal notranslate"><span class="pre">features</span></code>. An older vector
+implementation can accept base scenes while lacking these additions.</p>
 </section>
 </section>
 
@@ -605,6 +796,10 @@ nothing at all, in which case the usual timeout applies.</p>
 <li><a class="reference internal" href="#transmitting-a-vector-image">Transmitting a vector image</a></li>
 <li><a class="reference internal" href="#editing-a-vector-image">Editing a vector image</a></li>
 <li><a class="reference internal" href="#records">Records</a></li>
+<li><a class="reference internal" href="#nested-window-clips">Nested window clips</a></li>
+<li><a class="reference internal" href="#font-resources-in-the-vector-protocol">Font resources in the vector protocol</a></li>
+<li><a class="reference internal" href="#text-layout-and-measurement">Text layout and measurement</a></li>
+<li><a class="reference internal" href="#python-client-helpers">Python client helpers</a></li>
 <li><a class="reference internal" href="#rendering">Rendering</a></li>
 <li><a class="reference internal" href="#rendering-a-pdf">Rendering a PDF</a></li>
 <li><a class="reference internal" href="#relays-and-multiplexers">Relays and multiplexers</a></li>

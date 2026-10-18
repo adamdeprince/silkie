@@ -1436,6 +1436,19 @@ convert_from_opts_menu_map(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_eink_mode(PyObject *val, Options *opts) {
+    opts->eink_mode = PyObject_IsTrue(val);
+}
+
+static void
+convert_from_opts_eink_mode(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "eink_mode");
+    if (ret == NULL) return;
+    convert_from_python_eink_mode(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_display_info(PyObject *val, Options *opts) {
     display_info(val, opts);
 }
@@ -1657,19 +1670,6 @@ convert_from_opts_wayland_enable_ime(PyObject *py_opts, Options *opts) {
 }
 
 static void
-convert_from_python_remap_modifiers(PyObject *val, Options *opts) {
-    remap_modifiers(val, opts);
-}
-
-static void
-convert_from_opts_remap_modifiers(PyObject *py_opts, Options *opts) {
-    PyObject *ret = PyObject_GetAttrString(py_opts, "remap_modifiers");
-    if (ret == NULL) return;
-    convert_from_python_remap_modifiers(ret, opts);
-    Py_DECREF(ret);
-}
-
-static void
 convert_from_python_csi_limit(PyObject *val, Options *opts) {
     opts->csi_limit = PyLong_AsUnsignedLong(val);
 }
@@ -1744,6 +1744,19 @@ convert_from_opts_vector_curve_limit(PyObject *py_opts, Options *opts) {
     PyObject *ret = PyObject_GetAttrString(py_opts, "vector_curve_limit");
     if (ret == NULL) return;
     convert_from_python_vector_curve_limit(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_remap_modifiers(PyObject *val, Options *opts) {
+    remap_modifiers(val, opts);
+}
+
+static void
+convert_from_opts_remap_modifiers(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "remap_modifiers");
+    if (ret == NULL) return;
+    convert_from_python_remap_modifiers(ret, opts);
     Py_DECREF(ret);
 }
 
@@ -1969,6 +1982,8 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     if (PyErr_Occurred()) return false;
     convert_from_opts_menu_map(py_opts, opts);
     if (PyErr_Occurred()) return false;
+    convert_from_opts_eink_mode(py_opts, opts);
+    if (PyErr_Occurred()) return false;
     convert_from_opts_display_info(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_wayland_titlebar_color(py_opts, opts);
@@ -2003,8 +2018,6 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     if (PyErr_Occurred()) return false;
     convert_from_opts_wayland_enable_ime(py_opts, opts);
     if (PyErr_Occurred()) return false;
-    convert_from_opts_remap_modifiers(py_opts, opts);
-    if (PyErr_Occurred()) return false;
     convert_from_opts_csi_limit(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_escape_limit(py_opts, opts);
@@ -2016,6 +2029,8 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_vector_raster_limit(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_vector_curve_limit(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_remap_modifiers(py_opts, opts);
     if (PyErr_Occurred()) return false;
     return true;
 }

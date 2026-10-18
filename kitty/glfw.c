@@ -3433,16 +3433,19 @@ void
 os_window_display_info(OSWindow *w, DisplayInfo *d) {
     // The display the window is on, see docs/display-protocol.rst
     GLFWdisplayinfo g = {0};
-    char buf[256], *saveptr = NULL;
+    char *saveptr = NULL;
     if (w && w->handle) glfwGetWindowDisplayInfo(w->handle, &g);
     *d = (DisplayInfo){.kind = display_kinds[g.kind], .color = display_colors[g.color], .gamut = display_gamuts[g.gamut], .bits = g.bits, .period_us = g.period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g.scale, .ppi = g.ppi};
     // Overrides for what the OS cannot tell us
-    if (!OPT(display_info) || snprintf(buf, sizeof(buf), "%s", OPT(display_info)) >= (int)sizeof(buf)) return;
+    if (OPT(eink_mode)) d->kind = display_kinds[GLFW_DISPLAY_KIND_EINK];
+    if (!OPT(display_info) || !OPT(display_info)[0]) return;
+    RAII_ALLOC(char, buf, strdup(OPT(display_info)));
+    if (!buf) fatal("Out of memory parsing display_info");
     for (char *tok = strtok_r(buf, " ", &saveptr); tok; tok = strtok_r(NULL, " ", &saveptr)) {
         char *val = strchr(tok, '=');
         if (!val) continue;
         *val++ = 0;
-        if (!strcmp(tok, "kind")) d->kind = display_name(display_kinds, arraysz(display_kinds), val, d->kind);
+        if (!strcmp(tok, "kind") && !OPT(eink_mode)) d->kind = display_name(display_kinds, arraysz(display_kinds), val, d->kind);
         else if (!strcmp(tok, "color")) d->color = display_name(display_colors, arraysz(display_colors), val, d->color);
         else if (!strcmp(tok, "gamut")) d->gamut = display_name(display_gamuts, arraysz(display_gamuts), val, d->gamut);
         else if (!strcmp(tok, "bits")) d->bits = atoi(val);

@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Tablet pointer protocol" href="tablet-protocol.html"><link rel="prev" title="Extension capabilities protocol" href="capabilities-protocol.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Font selection protocol" href="font-protocol.html"><link rel="prev" title="Extension capabilities protocol" href="capabilities-protocol.html">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>OSC 777 extension framing - Silkie</title>
@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -349,10 +350,10 @@ has</p>
 <li><p>a key that appears more than once,</p></li>
 <li><p>a value out of the range its page gives, or a number that is not written
 as above,</p></li>
-<li><p>no value for a field its page requires, or</p></li>
-<li><p>fields longer than 127 bytes, counted from after the semicolon that ends
-the selector.</p></li>
+<li><p>no value for a field its page requires.</p></li>
 </ul>
+<p>Storage grows with the frame. There is no fixed field-length limit; a
+configured <code class="docutils literal notranslate"><span class="pre">escape_limit</span></code> can bound an entire OSC sequence.</p>
 <p>No frame from a program, whether it is rejected, incomplete or accepted,
 ever reaches the program or anything else as keystrokes.</p>
 </section>
@@ -446,12 +447,12 @@ protocol, and does so by default, see <a class="reference internal" href="config
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="tablet-protocol.html">
+          <a class="next-page" href="font-protocol.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Tablet pointer protocol</div>
+                <div class="title">Font selection protocol</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

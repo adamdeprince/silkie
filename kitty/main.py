@@ -369,8 +369,8 @@ class AppRunner:
         self.initial_window_size_func = initial_window_size_func
 
     def __call__(self, opts: Options, args: CLIOptions, bad_lines: Sequence[BadLine] = (), talk_fd: int = -1) -> None:
-        if theme_colors.refresh():
-            theme_colors.patch_opts(opts, args.debug_rendering)
+        theme_colors.refresh()
+        theme_colors.patch_opts(opts, args.debug_rendering)
         set_options(opts, is_wayland(), args.debug_rendering, args.debug_font_fallback)
         try:
             set_font_family(opts, add_builtin_nerd_font=True)

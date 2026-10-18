@@ -104,6 +104,7 @@ typedef struct Options {
 
     char *default_window_logo;
     char *display_info;
+    bool eink_mode;
     struct {
         char **paths;
         size_t count;
@@ -765,7 +766,7 @@ void set_gpu_viewport(unsigned w, unsigned h);
 void free_texture(uint32_t *);
 void free_framebuffer(uint32_t *);
 void send_image_to_gpu(uint32_t *, const void *, int32_t, int32_t, bool, bool, bool, bool, RepeatStrategy);
-void update_image_on_gpu(uint32_t, const void *, int32_t, int32_t, int32_t, int32_t);
+void update_image_on_gpu(uint32_t, const void *, int32_t, int32_t, int32_t, int32_t, bool);
 void copy_surface_texture_to_texture(bool, uint32_t, uint32_t *, int32_t, int32_t);
 float effective_hdr_headroom(const OSWindow *w);
 void scale_output_to_hdr_white_level(const OSWindow *w);

@@ -3502,6 +3502,8 @@ class Boss:
     def apply_new_options(self, opts: Options) -> None:
         bg_before = get_options().background
         bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in self.all_windows}
+        theme_colors.refresh()
+        theme_colors.patch_opts(opts, self.args.debug_rendering)
         configured_color_scheme_changed = bg_before.is_dark != opts.background.is_dark
         # Update options storage
         set_options(opts, is_wayland(), self.args.debug_rendering, self.args.debug_font_fallback)
@@ -3529,6 +3531,10 @@ class Boss:
         for tm in self.all_tab_managers:
             tm.apply_options()
         # Update colors
+        from .colors import color_scheme_spec, patch_colors
+
+        if (spec := color_scheme_spec(opts)) is not None:
+            patch_colors(spec, configured=True, notify_on_bg_change=False)
         if theme_colors.has_applied_theme:
             theme_colors.refresh()
             if theme_colors.has_applied_theme:  # in case the theme file was deleted
@@ -3660,6 +3666,31 @@ class Boss:
                 a(line)
         msg = '\n'.join(ans).rstrip()
         self.show_error(_('Errors parsing configuration'), msg)
+
+    @ac('misc', 'Set black on white (light), white on black (dark), auto, or toggle in all windows')
+    def set_color_scheme(self, scheme: str = 'toggle') -> None:
+        opts = get_options()
+        if scheme == 'toggle':
+            w = self.window_for_dispatch or self.active_window
+            is_dark = w.is_dark if w is not None else opts.background.is_dark
+            scheme = 'light' if is_dark else 'dark'
+        if scheme not in ('auto', 'light', 'dark'):
+            self.show_error(_('Invalid color scheme'), _('Use light, dark, auto or toggle.'))
+            return
+        opts.color_scheme = scheme
+        theme_colors.apply_color_scheme()
+
+    @ac('misc', 'Declare an e-paper display in all windows: yes, no, or toggle')
+    def set_eink_mode(self, mode: str = 'toggle') -> None:
+        from .fast_data_types import set_eink_mode
+
+        opts = get_options()
+        if mode not in ('yes', 'no', 'toggle'):
+            self.show_error(_('Invalid e-paper mode'), _('Use yes, no or toggle.'))
+            return
+        enabled = not opts.eink_mode if mode == 'toggle' else mode == 'yes'
+        set_eink_mode(enabled)
+        theme_colors.apply_color_scheme()
 
     @ac(
         'misc',

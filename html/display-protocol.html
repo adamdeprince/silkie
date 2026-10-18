@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -470,8 +471,14 @@ client with a different display.</p>
 <section id="configuration">
 <h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>
 <p>The operating system reports most of these values, but not all. Nothing tells
-a terminal that it is on e-ink, so in Silkie the <a class="reference internal" href="configuration.html#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> option
-declares whatever the OS cannot, overriding detection. Currently, Silkie reports
+a terminal that it is on e-ink. In Silkie, <a class="reference internal" href="configuration.html#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a> declares an e-paper
+display and selects black text on white unless a light or dark color scheme
+was explicitly chosen. It takes precedence over detected display kind and
+over <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=...</span></code>. Runtime changes with <code class="docutils literal notranslate"><span class="pre">set_eink_mode</span></code> notify
+display subscribers immediately. The <a class="reference internal" href="configuration.html#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> option declares
+individual properties that the OS cannot, overriding detection; using only
+<code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> changes the report without changing colors. Neither
+setting guesses whether an e-paper panel is grayscale or color. Currently, Silkie reports
 <code class="docutils literal notranslate"><span class="pre">kind</span></code> only on macOS, and <code class="docutils literal notranslate"><span class="pre">gamut</span></code> on macOS and on Wayland compositors that
 implement the color management protocol. There the compositor gives the
 primaries of the display, and <code class="docutils literal notranslate"><span class="pre">gamut</span></code> is the widest of the three whose area

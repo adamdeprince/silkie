@@ -283,6 +283,7 @@ typedef struct {
         bool bold, italic, reverse, strikethrough, dim, blink;
         uint8_t decoration, hdr_fg, hdr_bg, gamut_fg, gamut_bg;
         color_type fg, bg, decoration_fg;
+        uint32_t text_style;
     } sgr;
 } Cursor;
 

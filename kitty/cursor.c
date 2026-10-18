@@ -6,6 +6,7 @@
  */
 
 #include "line.h"
+#include "fonts.h"
 
 #include <structmember.h>
 
@@ -148,6 +149,15 @@ cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group) {
                 else self->sgr.hdr_bg = val;
             } break;
             case 9: self->sgr.strikethrough = true; break;
+            case 10 ... 19: {
+                PyObject *module = text_style_module();
+                RAII_PyObject(result, module ? PyObject_CallMethod(module, "select_slot", "II", self->sgr.text_style, attr - 10) : NULL);
+                if (result) {
+                    unsigned long style = PyLong_AsUnsignedLong(result);
+                    if (!PyErr_Occurred() && style <= UINT32_MAX) self->sgr.text_style = (uint32_t)style;
+                }
+                if (PyErr_Occurred()) PyErr_Print();
+            } break;
             case 21: self->sgr.decoration = 2; break;
             case 221: self->sgr.bold = false; break;
             case 222: self->sgr.dim = false; break;
@@ -241,6 +251,7 @@ apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, un
                     cell->fg = 0;
                     cell->bg = 0;
                     cell->decoration_fg = 0;
+                    cell->text_style = 0;
                 }
             } break;
             case 1: S(bold, true);
@@ -443,6 +454,7 @@ SGR_UINT_GETSET(hdr_fg)
 SGR_UINT_GETSET(hdr_bg)
 SGR_UINT_GETSET(gamut_fg)
 SGR_UINT_GETSET(gamut_bg)
+SGR_UINT_GETSET(text_style)
 
 static PyObject *
 bg_alpha_get(Cursor *self, void UNUSED *closure) {
@@ -472,7 +484,7 @@ static PyMemberDef members[] = {
 
 static PyGetSetDef getseters[] = {
     GETSET(bold) GETSET(italic) GETSET(reverse) GETSET(strikethrough) GETSET(dim) GETSET(blink) GETSET(text_blink) GETSET(decoration) GETSET(fg) GETSET(bg)
-        GETSET(decoration_fg) GETSET(hdr_fg) GETSET(hdr_bg) GETSET(gamut_fg) GETSET(gamut_bg) GETSET(bg_alpha){NULL} /* Sentinel */
+        GETSET(decoration_fg) GETSET(hdr_fg) GETSET(hdr_bg) GETSET(gamut_fg) GETSET(gamut_bg) GETSET(bg_alpha) GETSET(text_style){NULL} /* Sentinel */
 };
 
 static PyMethodDef methods[] = {

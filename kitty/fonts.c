@@ -23,6 +23,13 @@
 #define debug debug_fonts
 
 static PyObject *python_send_to_gpu_impl = NULL;
+static PyObject *text_styles_module = NULL;
+
+PyObject *
+text_style_module(void) {
+    if (!text_styles_module) text_styles_module = PyImport_ImportModule("kitty.fonts.styles");
+    return text_styles_module;
+}
 extern PyTypeObject Line_Type;
 
 enum { NO_FONT = -3, MISSING_FONT = -2, BLANK_FONT = -1, BOX_FONT = 0 };
@@ -72,7 +79,7 @@ typedef struct {
     size_t num_ffs_hb_features;
     GLYPH_PROPERTIES_MAP_HANDLE glyph_properties_hash_table;
     SHAPED_RUN_MAP_HANDLE shaped_run_hash_table;
-    bool bold, italic, emoji_presentation;
+    bool bold, italic, emoji_presentation, is_text_style;
     SpacerStrategy spacer_strategy;
 } Font;
 
@@ -103,6 +110,14 @@ typedef struct ScaledFontData {
 #define VAL_TY ScaledFontData
 #define HASH_FN vt_hash_float
 #define CMPR_FN vt_cmpr_float
+#include "kitty-verstable.h"
+
+// Request keys and descriptor indices are cached separately: distinct requests
+// resolving to the same static face share its glyph and shaping caches.
+#define NAME text_style_font_map_t
+#define KEY_TY uint64_t
+#define VAL_TY ssize_t
+#define HASH_FN vt_hash_integer
 #include "kitty-verstable.h"
 
 typedef union DecorationsKey {
@@ -145,9 +160,12 @@ typedef struct {
     fallback_font_map_t fallback_font_map;
     scaled_font_map_t scaled_font_map;
     decorations_index_map_t decorations_index_map;
+    text_style_font_map_t text_style_fonts, text_style_descriptors;
 } FontGroup;
 
 static FontGroup *font_groups = NULL;
+static size_t initialize_font(FontGroup *fg, unsigned int desc_idx, const char *ftype);
+static PyObject *descriptor_for_idx = NULL;
 static size_t font_groups_capacity = 0;
 static size_t num_font_groups = 0;
 static id_type font_group_id_counter = 0;
@@ -261,6 +279,8 @@ del_font_group(FontGroup *fg) {
     vt_cleanup(&fg->fallback_font_map);
     vt_cleanup(&fg->scaled_font_map);
     vt_cleanup(&fg->decorations_index_map);
+    vt_cleanup(&fg->text_style_fonts);
+    vt_cleanup(&fg->text_style_descriptors);
     for (size_t i = 0; i < fg->fonts_count; i++) del_font(fg->fonts + i);
     free(fg->fonts);
     fg->fonts = NULL;
@@ -699,19 +719,16 @@ output_cell_fallback_data(const ListOfChars *lc, bool bold, bool italic, bool em
 PyObject *
 iter_fallback_faces(FONTS_DATA_HANDLE fgh, ssize_t *idx) {
     FontGroup *fg = (FontGroup *)fgh;
-    if (*idx + 1 < (ssize_t)fg->fallback_fonts_count) {
+    while (*idx + 1 < (ssize_t)fg->fallback_fonts_count) {
         *idx += 1;
-        return fg->fonts[fg->first_fallback_font_idx + *idx].face;
+        Font *font = fg->fonts + fg->first_fallback_font_idx + *idx;
+        if (!font->is_text_style) return font->face;
     }
     return NULL;
 }
 
 static ssize_t
 load_fallback_font(FontGroup *fg, const ListOfChars *lc, bool bold, bool italic, bool emoji_presentation) {
-    if (fg->fallback_fonts_count > 100) {
-        log_error("Too many fallback fonts");
-        return MISSING_FONT;
-    }
     ssize_t f;
 
     if (bold) f = italic ? fg->bi_font_idx : fg->bold_font_idx;
@@ -784,6 +801,53 @@ in_symbol_maps(FontGroup *fg, char_type ch) {
     return NO_FONT;
 }
 
+static unsigned
+is_cjk_text(const ListOfChars *lc) {
+    if (lc->chars[0] < 0x1100) return 0; // The first CJK script block is Hangul Jamo.
+    switch (hb_unicode_script(hb_unicode_funcs_get_default(), lc->chars[0])) {
+        case HB_SCRIPT_HIRAGANA: case HB_SCRIPT_KATAKANA: return 2;
+        case HB_SCRIPT_HANGUL: return 3;
+        case HB_SCRIPT_HAN: case HB_SCRIPT_BOPOMOFO: case HB_SCRIPT_YI: return 1;
+        default: break;
+    }
+    char_type ch = lc->chars[0];
+    return (ch >= 0x3000 && ch <= 0x303f) || (ch >= 0xff01 && ch <= 0xff60) || (ch >= 0xffe0 && ch <= 0xffee);
+}
+
+static ssize_t
+font_for_text_style(FontGroup *fg, const GPUCell *cell, unsigned cjk) {
+    uint64_t key = ((uint64_t)cell->text_style << 4) | (cell->attrs.bold << 3) | (cell->attrs.italic << 2) | cjk;
+    text_style_font_map_t_itr it = vt_get(&fg->text_style_fonts, key);
+    if (!vt_is_end(it)) return it.data->val;
+    PyObject *module = text_style_module();
+    if (!module) { PyErr_Print(); return NO_FONT; }
+    RAII_PyObject(result, PyObject_CallMethod(module, "descriptor_index", "Iiii", cell->text_style, cell->attrs.bold, cell->attrs.italic, cjk));
+    if (!result) { PyErr_Print(); return NO_FONT; }
+    long long desc_idx = PyLong_AsLongLong(result);
+    if (PyErr_Occurred()) { PyErr_Print(); return NO_FONT; }
+    ssize_t idx = NO_FONT;
+    if (desc_idx >= 0 && (unsigned long long)desc_idx <= UINT_MAX) {
+        it = vt_get(&fg->text_style_descriptors, (uint64_t)desc_idx);
+        if (!vt_is_end(it)) idx = it.data->val;
+        else {
+            if (fg->fonts_count >= SIZE_MAX / sizeof(Font) || fg->fonts_capacity > SIZE_MAX / sizeof(Font) / 2) {
+                PyErr_NoMemory(); PyErr_Print(); return NO_FONT;
+            }
+            ensure_space_for(fg, fonts, Font, fg->fonts_count + 1, fonts_capacity, 5, true);
+            idx = initialize_font(fg, (unsigned)desc_idx, "text style");
+            fg->fonts[idx].is_text_style = true;
+            fg->fallback_fonts_count++;
+            if (!set_size_for_face(fg->fonts[idx].face, fg->fcm.cell_height, true, (FONTS_DATA_HANDLE)fg)) {
+                if (PyErr_Occurred()) PyErr_Print();
+                return NO_FONT;
+            }
+            if (vt_is_end(vt_insert(&fg->text_style_descriptors, (uint64_t)desc_idx, idx))) fatal("Out of memory caching text style font");
+        }
+    }
+    if (vt_is_end(vt_insert(&fg->text_style_fonts, key, idx))) fatal("Out of memory caching text style request");
+    return idx;
+}
+
 
 static bool allow_use_of_box_fonts = true;
 
@@ -837,6 +901,13 @@ font_for_cell(
             *is_emoji_presentation = has_emoji_presentation(cpu_cell, lc);
             ans = in_symbol_maps(fg, lc->chars[0]);
             if (ans > -1) return ans;
+            if (!*is_emoji_presentation && (gpu_cell->text_style || is_cjk_text(lc))) {
+                ans = font_for_text_style(fg, gpu_cell, is_cjk_text(lc));
+                if (ans >= 0 && has_cell_text((bool (*)(const void *, char_type))face_has_codepoint, fg->fonts[ans].face, false, lc)) {
+                    *is_main_font = true;
+                    return ans;
+                }
+            }
             switch (gpu_cell->attrs.bold | (gpu_cell->attrs.italic << 1)) {
                 case 0: ans = fg->medium_font_idx; break;
                 case 1: ans = fg->bold_font_idx; break;
@@ -873,8 +944,6 @@ box_glyph_id(char_type ch) {
     }
     END_ALLOW_CASE_RANGE
 }
-
-static PyObject *descriptor_for_idx = NULL;
 
 void
 render_alpha_mask(
@@ -2430,6 +2499,8 @@ initialize_font_group(FontGroup *fg) {
     vt_init(&fg->fallback_font_map);
     vt_init(&fg->scaled_font_map);
     vt_init(&fg->decorations_index_map);
+    vt_init(&fg->text_style_fonts);
+    vt_init(&fg->text_style_descriptors);
 #define I(attr)                                                                                             \
     if (descriptor_indices.attr) fg->attr##_font_idx = initialize_font(fg, descriptor_indices.attr, #attr); \
     else fg->attr##_font_idx = -1;
@@ -2477,6 +2548,7 @@ load_fonts_data(double font_sz_in_pts, double dpi_x, double dpi_y) {
 static void
 finalize(void) {
     Py_CLEAR(python_send_to_gpu_impl);
+    Py_CLEAR(text_styles_module);
     clear_symbol_maps();
     Py_CLEAR(descriptor_for_idx);
     free_font_groups();
@@ -2847,7 +2919,36 @@ pyrender_box_char(PyObject *self UNUSED, PyObject *args) {
     return Py_NewRef(ans);
 }
 
+static PyObject *
+font_style_metrics(PyObject UNUSED *self, PyObject *descriptor) {
+    RAII_PyObject(face, face_from_descriptor(descriptor, NULL));
+    if (!face) return NULL;
+    hb_face_t *hb_face = hb_font_get_face(harfbuzz_font_for_face(face));
+    unsigned size = 0, weight = 400;
+    double slant = 0;
+    hb_blob_t *blob = hb_face_reference_table(hb_face, HB_TAG('O', 'S', '/', '2'));
+    const unsigned char *data = (const unsigned char *)hb_blob_get_data(blob, &size);
+    if (size >= 6) weight = ((unsigned)data[4] << 8) | data[5];
+    hb_blob_destroy(blob);
+    blob = hb_face_reference_table(hb_face, HB_TAG('p', 'o', 's', 't'));
+    data = (const unsigned char *)hb_blob_get_data(blob, &size);
+    if (size >= 8) {
+        uint32_t value = ((uint32_t)data[4] << 24) | ((uint32_t)data[5] << 16) | ((uint32_t)data[6] << 8) | data[7];
+        slant = (int32_t)value / 65536.0;
+    }
+    hb_blob_destroy(blob);
+    return Py_BuildValue("Id", weight, slant);
+}
+
+#include "vector-text.h"
+
 static PyMethodDef module_methods[] = {
+    METHODB(vector_font, METH_VARARGS),
+    METHODB(vector_font_info, METH_O),
+    METHODB(vector_font_covers, METH_VARARGS),
+    METHODB(vector_shape, METH_VARARGS),
+    METHODB(vector_validate_color, METH_O),
+    METHODB(font_style_metrics, METH_O),
     METHODB(set_font_data, METH_VARARGS),
     METHODB(sprite_idx_to_pos, METH_VARARGS),
     METHODB(free_font_data, METH_NOARGS),

@@ -848,8 +848,8 @@ class TestGraphics(BaseTest):
         self.ae((img['gamut'], img['data']), (2, b'abcdefgh'))
         # and sending the image again without one makes it sRGB again
         self.ae(sl('abcd', s=1, v=1)['gamut'], 0)
-        # An HDR image is linear extended sRGB by definition and the colors of a vector image are sRGB, so
-        # neither takes a gamut, and an image id that had one loses it when it becomes one of those
+        # HDR pixels use extended sRGB; vector paints specify their own gamut.
+        # Neither takes G, and replacing an image clears its old gamut tag.
         self.ae(sl('abcdefgh', s=1, v=1, f=64, G=1)['gamut'], 0)
         self.ae(sl('abcd', s=1, v=1, G=2)['gamut'], 2)
         self.ae(sl('abcdefgh', s=1, v=1, f=64, G=2)['gamut'], 0)
@@ -2510,7 +2510,8 @@ class TestGraphics(BaseTest):
     def test_vector_dash_limit(self):
         # A dash pattern far finer than its path is long would cut it into more dashes than memory or time allow
         import signal
-        s = self.create_screen()
+        # This tests the opt-in budget; the default is unlimited.
+        s = self.create_screen(options={'vector_dash_limit': 250000})
         g = s.grman
 
         def draw(payload, image_id):

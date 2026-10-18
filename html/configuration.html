@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -320,6 +321,63 @@
 location, syntax, and inherited settings, see <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty’s configuration reference</a>.</p>
 <p>The option defaults and descriptions below come from Silkie’s configuration
 definitions.</p>
+<section id="e-paper-and-color-switching">
+<h2>E-paper and color switching<a class="headerlink" href="#e-paper-and-color-switching" title="Link to this heading">¶</a></h2>
+<p>For an external e-paper monitor, including a BOOX monitor that the operating
+system treats as an ordinary display, add this to <code class="docutils literal notranslate"><span class="pre">kitty.conf</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">eink_mode</span> <span class="n">yes</span>
+</pre></div>
+</div>
+<p>Silkie uses black text on white and reports <code class="docutils literal notranslate"><span class="pre">kind=eink</span></code> to applications
+through the <a class="reference internal" href="display-protocol.html"><span class="doc">Display protocol</span></a>. Applications can use that information to
+avoid animation, smooth scrolling and frequent redraws. Software must support
+the protocol to use it.</p>
+<p>Press <code class="docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code> to switch between black on white and white on black.
+The display is still reported as e-paper in either scheme. Press
+<code class="docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code> to toggle e-paper mode. These shortcuts use <code class="docutils literal notranslate"><span class="pre">kitty_mod</span></code>
+(by default <code class="docutils literal notranslate"><span class="pre">ctrl+shift</span></code>) and affect all Silkie windows. The actions are also
+available from the command palette. To choose your own shortcuts:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">f6</span> <span class="n">set_color_scheme</span> <span class="n">toggle</span>
+<span class="nb">map</span> <span class="n">f7</span> <span class="n">set_eink_mode</span> <span class="n">toggle</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">light</span></code> or <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> for a persistent color
+choice on any display. <code class="docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">auto</span></code> returns to configured colors
+and automatic themes, or to black on white while e-paper mode is enabled.
+Explicit light and dark choices take precedence over automatic themes and
+OS appearance changes. Reloading the configuration restores the saved choices.</p>
+<p>E-paper mode declares the display kind without assuming its color depth or
+refresh timing. For a panel known to have sixteen levels of gray, also set:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span>
+</pre></div>
+</div>
+<p>Leave that line out for a color e-paper monitor, or declare its actual
+capabilities. <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> remains available as a reporting-only
+override that leaves the color scheme unchanged. These declarations apply to
+all windows in the Silkie process, so toggle the mode when moving between an
+ordinary monitor and an e-paper monitor.</p>
+</section>
+<section id="fonts-and-cjk-text">
+<h2>Fonts and CJK text<a class="headerlink" href="#fonts-and-cjk-text" title="Link to this heading">¶</a></h2>
+<p>Silkie’s default <code class="docutils literal notranslate"><span class="pre">font_family</span></code> is <code class="docutils literal notranslate"><span class="pre">Iosevka</span></code>. Install Iosevka and, for the
+serif role, Iosevka Slab. See <a class="reference internal" href="font-protocol.html"><span class="doc">Font selection protocol</span></a> for protocol selection,
+font installation links and CJK behavior. Font files are not bundled.</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">font_role</span></code></dt><dd><p>Repeatable role-to-font mappings, using kitty’s font specification syntax.
+The defaults are <code class="docutils literal notranslate"><span class="pre">sans</span> <span class="pre">Iosevka</span></code> and <code class="docutils literal notranslate"><span class="pre">serif</span> <span class="pre">Iosevka</span> <span class="pre">Slab</span></code>. <code class="docutils literal notranslate"><span class="pre">default</span></code>
+is reserved for <code class="docutils literal notranslate"><span class="pre">font_family</span></code>. Configured roles can carry features and
+variable-axis settings, and there is no fixed role count.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">cjk_font</span></code></dt><dd><p>Default: <code class="docutils literal notranslate"><span class="pre">auto</span></code>. Prefer regional Sarasa Term, Noto Sans CJK or Noto
+Sans Mono CJK, then regional system fonts and platform glyph fallback.
+An explicit font specification overrides that preference.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">cjk_font_locale</span></code></dt><dd><p>Default: <code class="docutils literal notranslate"><span class="pre">auto</span></code>. Choose <code class="docutils literal notranslate"><span class="pre">jp</span></code>, <code class="docutils literal notranslate"><span class="pre">kr</span></code>, <code class="docutils literal notranslate"><span class="pre">sc</span></code>, <code class="docutils literal notranslate"><span class="pre">tc</span></code> or <code class="docutils literal notranslate"><span class="pre">hk</span></code> for
+regional CJK glyph forms. Automatic selection follows the process locale,
+defaulting to <code class="docutils literal notranslate"><span class="pre">sc</span></code> when unspecified.</p>
+</dd>
+</dl>
+</section>
 <section id="input-limits">
 <h2>Input limits<a class="headerlink" href="#input-limits" title="Link to this heading">¶</a></h2>
 <p>These limits apply to data a program writes to the terminal. Each one is a
@@ -402,6 +460,40 @@ can show in full. Everything that is not tagged with a gamut is sRGB and
 keeps its appearance, unlike with <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.macos_colorspace"><code class="xref std std-opt docutils literal notranslate"><span class="pre">macos_colorspace</span></code></a>. This needs a
 compositor that implements color management, on any other the window stays
 sRGB. A wide window is drawn with one extra pass over its pixels.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-eink_mode">
+<span class="sig-name descname"><span class="pre">eink_mode</span></span><a class="headerlink" href="#opt-eink_mode" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">no</span></code>.</p>
+<p>Declare an e-paper display even when the operating system identifies it as
+an ordinary monitor, for example an external BOOX monitor. Silkie reports
+<code class="code docutils literal notranslate"><span class="pre">kind=eink</span></code> through the <a class="reference internal" href="display-protocol.html"><span class="doc">display protocol</span></a>
+and uses black text on white when <a class="reference internal" href="#opt-color_scheme"><code class="xref std std-opt docutils literal notranslate"><span class="pre">color_scheme</span></code></a> is <code class="code docutils literal notranslate"><span class="pre">auto</span></code>.
+An explicit <code class="code docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> also works on e-paper.</p>
+<p>This setting applies to all Silkie windows. Switch at runtime with
+<code class="code docutils literal notranslate"><span class="pre">set_eink_mode</span> <span class="pre">yes</span></code>, <code class="code docutils literal notranslate"><span class="pre">no</span></code> or <code class="code docutils literal notranslate"><span class="pre">toggle</span></code>; the default shortcut
+is <code class="code docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code>. Display subscribers receive the change.
+Reloading the configuration restores the configured setting.</p>
+<p>Color capability and refresh timing are not inferred from e-paper mode.
+Use <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> to declare them if needed, for example
+<code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=gray</span> <span class="pre">bits=4</span></code> for a sixteen-level grayscale panel.
+E-paper mode takes precedence over <code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=...</span></code>.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-color_scheme">
+<span class="sig-name descname"><span class="pre">color_scheme</span></span><a class="headerlink" href="#opt-color_scheme" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">auto</span></code>.</p>
+<p>Use <code class="code docutils literal notranslate"><span class="pre">light</span></code> for black text on white or <code class="code docutils literal notranslate"><span class="pre">dark</span></code> for white text on
+black. These built-in high contrast schemes also set cursor, selection and
+tab colors. <code class="code docutils literal notranslate"><span class="pre">auto</span></code> uses your configured colors and automatic theme
+files, except that <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a> selects the light scheme.</p>
+<p>Switch at runtime with <code class="code docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">light</span></code>, <code class="code docutils literal notranslate"><span class="pre">dark</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">auto</span></code> or <code class="code docutils literal notranslate"><span class="pre">toggle</span></code>. The default shortcut is
+<code class="code docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code>. Changes apply to all windows, including new windows,
+until the configuration is reloaded. Applications that subscribe to kitty’s
+color preference notifications are notified.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -502,6 +594,8 @@ pen, a tablet or a pad is reported as before.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Silkie configuration</a><ul>
+<li><a class="reference internal" href="#e-paper-and-color-switching">E-paper and color switching</a></li>
+<li><a class="reference internal" href="#fonts-and-cjk-text">Fonts and CJK text</a></li>
 <li><a class="reference internal" href="#input-limits">Input limits</a></li>
 </ul>
 </li>

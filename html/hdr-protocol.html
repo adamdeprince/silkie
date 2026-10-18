@@ -244,7 +244,7 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
-  <a href="developer-guide.html">Developer &amp; LLM guide</a>
+  <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
@@ -261,6 +261,7 @@
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -405,6 +406,11 @@ is within the headroom nothing is changed. <code class="docutils literal notrans
 <p>To check whether a terminal supports <code class="docutils literal notranslate"><span class="pre">f=64</span></code>, use the query action described
 in the graphics protocol with <code class="docutils literal notranslate"><span class="pre">f=64</span></code> and a single pixel of data, a terminal
 that does not know the format responds with <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code>.</p>
+<p>The <a class="reference internal" href="vector-protocol.html"><span class="doc">Vector images</span></a> uses the same HDR presentation path. Brightness
+suffixes and linear extended-sRGB paints work in every vector primitive,
+including styled text, strokes, gradients and symbols. Nested clips and
+group opacity preserve HDR values; embedded <code class="docutils literal notranslate"><span class="pre">f=64</span></code> images retain their
+linear colors. Vector images also accept <code class="docutils literal notranslate"><span class="pre">T=1</span></code> for tone mapping.</p>
 </section>
 <section id="cursor">
 <h2>Cursor<a class="headerlink" href="#cursor" title="Link to this heading">¶</a></h2>

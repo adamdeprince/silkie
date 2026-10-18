@@ -482,6 +482,7 @@ class Face:
     def applied_features(self) -> Dict[str, str]: ...
 
 class CoreTextFont(TypedDict):
+    matrix: NotRequired[tuple[float, float, float, float]]
     descriptor_type: Literal['core_text']
     path: str
     postscript_name: str
@@ -971,6 +972,9 @@ def add_tab(os_window_id: int) -> int:
 def cell_size_for_window(os_window_id: int) -> Tuple[int, int]:
     pass
 
+def set_eink_mode(enabled: bool) -> None:
+    pass
+
 def wakeup_main_loop() -> None:
     pass
 
@@ -1024,6 +1028,8 @@ def test_shape(line: Line, path: Optional[str] = None, index: int = 0) -> List[T
 def test_render_line(line: Line) -> None:
     pass
 
+def font_style_metrics(descriptor: FontObject) -> tuple[int, float]: ...
+
 def sprite_map_set_limits(w: int, h: int) -> None:
     pass
 
@@ -1064,6 +1070,7 @@ class LineBuf:
     def as_ansi(self, callback: Callable[[str], None]) -> None: ...
 
 class Cursor:
+    text_style: int
     x: int
     y: int
     bg: int
@@ -1691,3 +1698,10 @@ def request_callback_with_thumbnail(
 ) -> None: ...
 def png_from_32bit_rgba_data(data: bytes, width: int, height: int, flip_vertically: bool = False) -> bytes: ...
 def set_uint_at_address(address: int, value: int) -> None: ...
+def vector_font(source: bytes | CoreTextFont | FontConfigPattern, index: int = 0) -> object: ...
+def vector_font_info(font: object) -> dict[str, Any]: ...
+def vector_font_covers(font: object, text: str) -> bool: ...
+def vector_validate_color(color: str) -> None: ...
+def vector_shape(
+    font: object, text: str, size: float, axes: dict[str, float], features: list[str], direction: str, language: str, script: str, shear: float
+) -> dict[str, Any]: ...

@@ -8,8 +8,8 @@ viewer, a plotting library or a pen application, has to rasterize everything
 itself and send the pixels again whenever the window is resized, the view is
 zoomed or a stroke is added, and over a slow link that is what makes such
 programs feel remote. Vector images are a pixel format of the graphics
-protocol, ``f=200``, whose data is not pixels but a small scene: paths, glyph
-outlines, pen strokes, raster images and gradients. The terminal keeps the
+protocol, ``f=200``, whose data is not pixels but a small scene: paths, shaped
+text, glyph outlines, pen strokes, raster images and gradients. The terminal keeps the
 scene and rasterizes it itself, at the exact size the image is shown at, so it
 is crisp at any zoom, and a program changes it with patches a few bytes long.
 The format is rich enough to render a PDF page, see `Rendering a PDF`_.
@@ -78,7 +78,7 @@ created, within their group, and groups among their siblings likewise.
 Replacing an element keeps its place in that order.
 
 ``g`` *group*
-    ``g id= [p=<parent group>] [t=<transform>] [clip=<path id>] [o=<opacity>] [blend=normal|multiply|screen] [v=0|1]``
+    ``g id= [p=<parent group>] [t=<transform>] [clip=<path id>] [box=x,y,width,height] [o=<opacity>] [blend=normal|multiply|screen] [v=0|1]``
 
     Groups nest through ``p`` and carry the state a PDF or SVG renderer
     pushes and pops: a transform, a clip, an opacity and a blend mode.
@@ -91,6 +91,20 @@ Replacing an element keeps its place in that order.
     ``v=0`` hides the group and its subtree without deleting it. The root
     group accepts all of these except ``p``, so ``g id=0 t=...`` pans and
     zooms the whole scene.
+
+    ``box`` is a rectangular clip in this group's coordinate system. Width
+    and height must be nonnegative; a zero dimension clips everything away.
+    It intersects ``clip`` and every enclosing group's clip. See
+    `Nested window clips`_. Replacing a group without ``box`` removes its box.
+
+``t`` *text*
+    ``t id= [g=] text=<base64 UTF-8 JSON> [t=<transform>]``
+
+    Shapes and retains a string or styled runs as vector outlines. The JSON
+    layout object is described under `Text layout and measurement`_. Text
+    participates in group transforms, clipping, opacity, blending and normal
+    element replacement and deletion. Its outlines are generated once when
+    the record is accepted, then rasterized at the placement's resolution.
 
 ``p`` *path*
     ``p id= [g=] d=<path> [fill=<color>|none] [rule=nz|eo] [stroke=<color>] [w=<width>] [cap=butt|round|square] [join=miter|round|bevel] [ml=<miter limit>] [dash=<lengths>] [dp=<dash phase>] [t=<transform>]``
@@ -163,12 +177,199 @@ Replacing an element keeps its place in that order.
     scene. Deleting an element that other elements refer to, a symbol, a
     gradient or a clip, leaves those elements in place but without it.
 
-Colors are ``#rrggbb`` or ``#rrggbbaa`` in sRGB, or ``none``. A color may
-carry a brightness suffix for HDR displays, ``*<percent>`` of SDR white as in
-the HDR protocol, for instance ``#ff8800*250``; a terminal without HDR shows
-it at normal brightness. Transforms are the six numbers of an affine matrix,
+Colors are ``#rrggbb`` or ``#rrggbbaa`` in sRGB, or ``none``. The floating-point
+forms ``srgb:r/g/b[/a]``, ``p3:r/g/b[/a]`` and ``rec2020:r/g/b[/a]`` use
+components from 0 to 1, the named primaries and the sRGB transfer curve,
+matching :doc:`wide-gamut-protocol`. ``linear:r/g/b[/a]`` uses linear extended
+sRGB: RGB may be negative or exceed 1; alpha is 0 to 1 and defaults to 1.
+All numbers must be finite. Slashes keep these colors unambiguous in
+comma-separated gradient stops.
+
+Every color form accepts ``*<percent>`` to multiply linear RGB by that
+percentage, without changing alpha: ``#ff8800*250`` or ``p3:1/0.2/0*300``.
+This works in fills, strokes, pen strokes, symbols, text and decorations,
+and gradient stops. Gradient references ``@<id>`` work for text paints too.
+The compositor and gradient interpolation operate in linear extended sRGB,
+preserving HDR and out-of-sRGB channels through nested groups and clips.
+Embedded raster images retain their tagged gamut and ``f=64`` HDR values.
+The GPU texture is RGBA16F (finite channels saturate at its representable
+range, ±65504), with display gamut/headroom conversion at presentation.
+``T=1`` on the image selects the :doc:`hdr-protocol` tone mapper. SDR output
+uses the terminal's existing HDR-to-SDR presentation path.
+
+Transforms are the six numbers of an affine matrix,
 ``t=a,b,c,d,e,f``, mapping ``x, y`` to ``a*x + c*y + e, b*x + d*y + f``, the
 SVG and PDF convention.
+
+Nested window clips
+-------------------
+
+Clips are retained device-space masks after the owning group's transform.
+A descendant's translation, rotation, scale or inverse transform cannot
+escape an enclosing clip. There is no fixed nesting limit; the optional
+``vector_depth_limit`` configuration applies as to other nested groups.
+For a window manager such as odin-seat, put each window's content under a
+group with its outer clip, then nest content and widget clips::
+
+    g id=1000 t=1,0,0,1,50,30 box=0,0,400,240
+    g id=1001 p=1000 box=10,40,380,190
+    g id=1002 p=1001 t=0.866,0.5,-0.5,0.866,0,0 box=0,0,200,100
+    p id=1003 g=1002 d=M-100,-100L1000,-100L1000,1000L-100,1000Z fill=#336699*200
+
+The blue drawing remains inside all three boxes. Moving the outer group
+moves its clip and contents together. A window manager assigns element IDs
+and attaches child scenes beneath its window group when merging scenes;
+``box`` constrains that subtree, rather than other root-level elements.
+
+Font resources in the vector protocol
+--------------------------------------
+
+``a=v,f=200,i=<request id>`` is the vector service. Its payload is UTF-8 JSON,
+carried by the graphics protocol's normal base64 encoding, chunking,
+compression and direct/file/temporary-file/shared-memory transports. It does
+not need ``s`` or ``v`` and creates no image or placement. ``i`` correlates
+the reply and occupies no image ID. Continuation chunks may omit the action
+and retain the first chunk's parameters. Use ordinary kitty graphics chunks
+of at most 4096 base64 bytes. For example::
+
+    <ESC>_Ga=v,f=200,i=77;<base64 of {"op":"fonts"}><ESC>\
+    <ESC>_Gi=77;OK;<base64 UTF-8 JSON result><ESC>\
+
+Errors are ``EINVAL:<base64 of {"error":"description"}>``; transport errors
+use the ordinary graphics error responses. ``q`` has the ordinary quiet
+semantics; use ``q=0`` when a result is needed. Successful result bodies grow
+with the data and are not truncated to the ordinary short graphics message.
+
+``{"op":"fonts"}``
+    Lists installed faces (family, style, PostScript name, weight, native
+    slant in degrees, and monospace status), configured roles, and uploaded
+    session font IDs. ``version:1`` identifies this text/resource protocol.
+    Family and PostScript names can be used as ``font`` selectors.
+
+``{"op":"inspect","font":"Iosevka"}``
+    Reports the selected face's units per em, glyph count, weight, native
+    slant, and variable axes, each with tag, minimum, default and maximum.
+    Role, weight and italic selection are also accepted.
+
+``{"op":"upload","id":"body","data":"<base64 font bytes>","index":0}``
+    Loads a TrueType/OpenType outline font into memory. ``index`` selects a
+    collection member and defaults to zero. The nonempty string ID has a
+    separate namespace from image and element IDs. Reusing it atomically
+    replaces the font after validation. The reply has its ID and inspection
+    metadata. Select it as ``"font":"@body"``. Font bytes are never written
+    to the image disk cache or registered with the operating system.
+
+``{"op":"release","id":"body"}``
+    Releases the session handle. Already-retained text keeps its outlines;
+    subsequent layouts using that handle fail until it is uploaded again.
+    Uploads are local to the PTY, shared across its main and alternate
+    buffers, and freed when that session closes. Image deletion does not
+    release fonts. There is no fixed font-count limit; applications should
+    release resources when finished. Transport allocation errors are reported.
+
+Text layout and measurement
+---------------------------
+
+The text record's decoded JSON is a layout object, for example::
+
+    {"font":"Iosevka","size":24,"x":10,"y":30,"angle":-12,
+     "runs":[
+       {"text":"Window ","fill":"#dddddd"},
+       {"text":"title","weight":700,"italic":true,"slant":0,
+        "underline":"double","fill":"p3:1/0.2/0*250"}
+     ]}
+
+Use ``text`` for a single string or ``runs`` for an array of objects, each
+with a ``text`` string and style overrides. Top-level style fields are the
+defaults for each run; runs advance consecutively on the same baseline.
+Split runs at intended shaping boundaries: a style change also ends a
+ligature or script shaping run. JSON escaping preserves spaces, newlines,
+Unicode and control characters without introducing extra scene records.
+
+``font`` / ``role``
+    Select an installed family/PostScript name or an ``@`` session handle,
+    or use a configured :doc:`font-protocol` role such as ``sans`` or
+    ``serif``. Default: the terminal's configured regular font (Iosevka).
+    Vector text also accepts proportional outline fonts.
+
+``size`` / ``weight`` / ``italic`` / ``slant``
+    Positive em size in scene units (default 16), weight 100–900 (default
+    400), italic letterforms (boolean, default false), and optional absolute
+    slant in degrees from -15 to 15. Negative slant leans right; zero can
+    make italic letterforms upright; positive synthesizes inverse slant.
+    Installed static families select the nearest face; variable fonts use
+    their weight axis. Uploaded static faces retain their native weight and
+    letterforms; upload each desired face or a variable font.
+
+``axes`` / ``features``
+    A dictionary of supported four-character OpenType axis tags and design
+    values, and an array of HarfBuzz feature strings such as ``["liga=0",
+    "ss01=1"]``. Explicit axis values must lie within the font's range.
+
+``direction`` / ``language`` / ``script`` / ``fallback``
+    Optional shaping direction (``ltr``, ``rtl``, ``ttb`` or ``btt``), BCP47
+    language and ISO15924 script. HarfBuzz guesses unspecified properties.
+    An optional array of font selectors supplies fallback faces; the
+    configured regional CJK face is also tried for missing clusters.
+    Combining marks and joined sequences stay together when choosing a
+    fallback. This is a run layout API: applications supply visual run order
+    for mixed bidirectional paragraphs, and line breaks rather than automatic
+    paragraph wrapping. Bitmap-only and embedded color glyph painting are
+    not part of the outline text format.
+
+``fill`` / ``stroke`` / ``stroke_width`` / ``background``
+    Vector paints, including gradients and HDR/wide-gamut colors. Fill
+    defaults to black, stroke to ``none`` and stroke width to 1; text strokes
+    have round joins. Background is optional and fills each run's logical box.
+
+``underline`` / ``underline_color`` / ``strike`` / ``overline``
+    Underline style ``none`` (default), ``single``, ``double``, ``curly``,
+    ``dotted`` or ``dashed``; its optional paint defaults to the fill.
+    Strike and overline are booleans. Decorations are vector geometry and
+    accept the same HDR/wide-gamut paints and transforms as the glyphs.
+
+``x`` / ``y`` / ``angle``
+    Top-level baseline origin (default 0,0) and rotation in degrees (default
+    0). Positive rotation is clockwise in the scene's downward y axis.
+    ``\n`` starts another line. The record's affine transform and all parent
+    transforms apply afterward. Use group boxes to clip text to a viewport.
+
+Send the same layout object with ``"op":"measure"`` through ``a=v`` to
+measure without creating an image or rasterizing pixels. The result gives
+``width`` and ``height`` of the unrotated logical layout in user units,
+``advance:[x,y]`` before the origin/rotation, ``ascent`` and ``descent``,
+and ``ink:[left,top,right,bottom]`` after the layout origin/rotation, or
+``null`` for no painted geometry. Ink includes decorations, backgrounds and
+stroke reach; curve extrema are measured from the shaped outlines.
+``missing`` lists Unicode scalar indices for unresolved glyphs, across the
+concatenated runs. Rendering uses the same layout code. Measurement precedes
+scene transforms, gradient lookup, opacity and clipping; it reports the full
+string even when a window shows only a clipped part.
+
+Python client helpers
+----------------------
+
+``kittens.tui.vector`` provides ``service_request``, ``font_upload``,
+``measure_text``, ``parse_service_response``, ``text_record``, ``clip_group``
+and ``scene``. Transmission helpers yield correctly chunked graphics
+sequences for the application's output queue. The response parser accepts
+either a framed APC or the ``G``-prefixed body from an input parser and
+returns the request ID and decoded result. It raises ``ValueError`` for an
+error response. For example, after uploading ``body`` and receiving its
+successful reply::
+
+    from kittens.tui.vector import clip_group, measure_text, scene, text_record
+
+    layout = {"font": "@body", "size": 24, "text": "Window title",
+              "x": 8, "y": 28, "fill": "p3:1/0.3/0*200"}
+    for frame in measure_text(77, layout):
+        output_queue.write(frame)
+    # Handle request 77's result in the application's normal input loop.
+    records = [clip_group(100, [0, 0, 400, 240]),
+               clip_group(101, [4, 4, 392, 32], parent=100),
+               text_record(102, layout, group=101)]
+    for frame in scene(1, 400, 240, records):
+        output_queue.write(frame)
 
 Rendering
 ------------
@@ -179,7 +380,7 @@ changes, or the size it is shown at changes, with user units scaled so the
 intrinsic size fills the placement. Scenes count toward the image storage
 quota by the size of their elements, not by pixels.
 
-Kitty rasterizes on the CPU. Drawing all of a scene that covers a large window
+Silkie rasterizes on the CPU. Drawing all of a scene that covers a large window
 at a high pixel density takes tens to hundreds of milliseconds, which is what
 the first showing, a change of size and some patches cost. Most patches cost
 far less, because kitty works out the rectangle a patch can have changed and
@@ -189,7 +390,7 @@ drawing everything:
 * Appending to a pen stroke, or to a path that is stroked and has
   ``fill=none``, draws the rectangle around the appended geometry and not
   the one around the stroke. This is what live ink costs.
-* Adding, replacing or deleting a path, a use or a pen stroke draws the
+* Adding, replacing or deleting a path, text, a use or a pen stroke draws the
   rectangle around where the element was and where it now is. So does
   appending to a filled path, since a fill is closed across the gap between
   the ends of a subpath and more of it changes than was appended.
@@ -243,7 +444,8 @@ records are concatenated to the geometry of their target, and a transmission
 with ``a=t`` or ``a=T`` empties the table before adding. The table, written
 out as records, is the whole state of the image and can be sent to a fresh
 terminal after a reconnection, as one ``a=t`` transmission. The patches
-themselves need not be kept. A relay that does not understand the records can
+themselves need not be kept. Session font uploads must also be replayed before
+text records that reference them. A relay that does not understand the records can
 still forward them as opaque image data, keeping the transmissions and the
 patches in order.
 
@@ -257,3 +459,8 @@ To find out whether a terminal supports vector images, send a query with
 
 A terminal that does answers ``OK``, one that does not answers ``EINVAL`` or
 nothing at all, in which case the usual timeout applies.
+
+That query establishes base scene support. For shaped text, font resources,
+measurement, box clips and HDR paints, query ``a=v,f=200`` with
+``{"op":"fonts"}`` and inspect ``version`` and ``features``. An older vector
+implementation can accept base scenes while lacking these additions.

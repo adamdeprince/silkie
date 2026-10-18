@@ -34,6 +34,15 @@ After configuring the repository as described there::
 
 Launch ``silkie`` and use ``silkie-kitten`` for its companion tools.
 
+Fonts
+-------
+
+Install Iosevka for Silkie's default text and Iosevka Slab for the serif role.
+For CJK text, install a regional Sarasa Term or Noto Sans CJK family. Font
+files are separate from the application; when a preferred font is absent,
+the operating system substitutes an available face. The :doc:`font-protocol`
+reference links the font sources and explains regional glyph selection.
+
 Source builds
 ---------------
 
@@ -84,15 +93,3 @@ Next, read :doc:`configuration` for Silkie-specific options and the
 `kitty configuration manual <https://sw.kovidgoyal.net/kitty/conf/>`_ for the
 inherited settings. Applications should query :doc:`capabilities-protocol`
 before enabling extensions.
-
-Build this website
---------------------
-
-The website can be built without compiling the terminal. From the checkout::
-
-   python3 -m venv /tmp/silkie-site-venv
-   /tmp/silkie-site-venv/bin/python -m pip install -r docs/silkie/requirements.txt
-   make html SPHINXBUILD=/tmp/silkie-site-venv/bin/sphinx-build
-
-Open ``html/index.html`` for the project homepage and ``html/reference.html``
-for the extension reference. Website sources live in ``docs/silkie/``.

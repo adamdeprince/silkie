@@ -83,7 +83,7 @@ These dependencies are needed when building against system libraries only.
 Run-time dependencies:
 
 * ``python``
-* ``harfbuzz`` >= 2.2.0
+* ``harfbuzz`` >= 7.1.0 (in-memory OpenType shaping and vector glyph outlines)
 * ``zlib``
 * ``libpng``
 * ``liblcms2``

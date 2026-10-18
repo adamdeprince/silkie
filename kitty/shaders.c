@@ -433,10 +433,10 @@ copy_surface_texture_to_texture(bool rectangle, GLuint source_tex_id, GLuint *te
 
 // Replaces a rectangle of an RGBA image sent with send_image_to_gpu()
 void
-update_image_on_gpu(GLuint tex_id, const void *data, GLint x, GLint y, GLsizei width, GLsizei height) {
+update_image_on_gpu(GLuint tex_id, const void *data, GLint x, GLint y, GLsizei width, GLsizei height, bool is_float) {
     glBindTexture(GL_TEXTURE_2D, tex_id);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, is_float ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE, data);
 }
 
 // }}}

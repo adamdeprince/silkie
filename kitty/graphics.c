@@ -94,6 +94,8 @@ grman_alloc(bool for_paused_rendering) {
     self->render_data.capacity = 64;
     self->render_data.item = calloc(self->render_data.capacity, sizeof(self->render_data.item[0]));
     self->storage_limit = DEFAULT_STORAGE_LIMIT;
+    self->vector_font_session = PyDict_New();
+    if (!self->vector_font_session) { Py_CLEAR(self); return NULL; }
     if (self->render_data.item == NULL) {
         PyErr_NoMemory();
         Py_CLEAR(self);
@@ -224,7 +226,15 @@ dealloc(GraphicsManager *self) {
     free_all_images(self);
     free(self->render_data.item);
     Py_CLEAR(self->disk_cache);
+    free_load_data(&self->currently_loading);
+    Py_CLEAR(self->vector_response);
+    Py_CLEAR(self->vector_font_session);
     Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+void
+grman_share_vector_fonts(GraphicsManager *dest, GraphicsManager *source) {
+    Py_SETREF(dest->vector_font_session, Py_NewRef(source->vector_font_session));
 }
 
 static Image *
@@ -270,9 +280,19 @@ set_layers_dirty(GraphicsManager *self) {
 
 static image_map_itr
 remove_image_itr(GraphicsManager *self, image_map_itr i) {
+    const uint32_t id = i.data->val->client_id;
+    iter_images(self) if (i.data->val->vector) vector_doc_image_changed(i.data->val->vector, id);
     free_image(self, i.data->val);
     set_layers_dirty(self);
     return vt_erase_itr(&self->images_by_internal_id, i);
+}
+
+static bool
+invalidate_vector_users(GraphicsManager *self, uint32_t id) {
+    bool changed = false;
+    iter_images(self) if (i.data->val->vector && vector_doc_image_changed(i.data->val->vector, id)) changed = true;
+    if (changed) set_layers_dirty(self);
+    return changed;
 }
 
 static void
@@ -524,24 +544,32 @@ err:
 static bool
 inflate_zlib_unbounded(LoadData *load_data, uint8_t *buf, size_t bufsz) {
     bool ok = false;
-    z_stream z = {.avail_in = bufsz, .next_in = (Bytef *)buf};
-    size_t cap = MAX(4 * bufsz, (size_t)4096), used = 0;
+    z_stream z = {0};
+    size_t cap = 4096, used = 0, consumed = 0;
     uint8_t *decompressed = malloc(cap);
-    if (decompressed == NULL) fatal("Out of memory allocating decompression buffer");
+    if (decompressed == NULL) { set_command_failed_response("ENOMEM", "Out of memory allocating decompression buffer"); return false; }
     int ret;
     if ((ret = inflateInit(&z)) != Z_OK) ABRT(ENOMEM, "Failed to initialize inflate with error: %s", zlib_strerror(ret));
     do {
+        // zlib's per-call counters are uInt; the complete stream need not fit.
+        if (!z.avail_in && consumed < bufsz) {
+            const size_t part = MIN(bufsz-consumed, (size_t)UINT_MAX);
+            z.next_in = buf+consumed;
+            z.avail_in = (uInt)part;
+            consumed += part;
+        }
         if (used == cap) {
-            if (cap >= MAX_DATA_SZ) ABRT(EFBIG, "Too much data");
-            cap = MIN(2 * cap, (size_t)MAX_DATA_SZ);
+            if (cap >= PTRDIFF_MAX) ABRT(EOVERFLOW, "Decompressed vector exceeds address space");
+            cap = cap > PTRDIFF_MAX / 2 ? PTRDIFF_MAX : cap * 2;
             uint8_t *n = realloc(decompressed, cap);
-            if (n == NULL) fatal("Out of memory allocating decompression buffer");
+            if (n == NULL) ABRT(ENOMEM, "Out of memory allocating decompression buffer");
             decompressed = n;
         }
-        z.avail_out = cap - used;
+        const uInt available = (uInt)MIN(cap-used, (size_t)UINT_MAX);
+        z.avail_out = available;
         z.next_out = decompressed + used;
         ret = inflate(&z, Z_NO_FLUSH);
-        used = cap - z.avail_out;
+        used += available-z.avail_out;
     } while (ret == Z_OK);
     if (ret != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
     free_load_data(load_data);
@@ -881,20 +909,18 @@ load_image_data_from_file(
 static Image *
 load_image_data(
     GraphicsManager *self, Image *img, const GraphicsCommand *g, const unsigned char transmission_type, const uint32_t data_fmt, const uint8_t *payload) {
-    static char fname[2056] = {0};
     LoadData *load_data = &self->currently_loading;
+    const size_t limit = data_fmt == VECTOR ? (size_t)PTRDIFF_MAX : MAX_DATA_SZ;
 
     switch (transmission_type) {
         case 'd': // direct
             if (load_data->buf_capacity - load_data->buf_used < g->payload_sz) {
-                if (load_data->buf_used + g->payload_sz > MAX_DATA_SZ || (data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
-                load_data->buf_capacity = MAX(MIN(2 * load_data->buf_capacity, MAX_DATA_SZ), load_data->buf_used + g->payload_sz);
-                load_data->buf = realloc(load_data->buf, load_data->buf_capacity);
-                if (load_data->buf == NULL) {
-                    load_data->buf_capacity = 0;
-                    load_data->buf_used = 0;
-                    ABRT("ENOMEM", "Out of memory");
-                }
+                if (load_data->buf_used > limit || g->payload_sz > limit-load_data->buf_used || (data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
+                const size_t capacity = MAX(load_data->buf_capacity > limit/2 ? limit : 2*load_data->buf_capacity, load_data->buf_used+g->payload_sz);
+                void *next = realloc(load_data->buf, capacity);
+                if (!next) ABRT("ENOMEM", "Out of memory");
+                load_data->buf = next;
+                load_data->buf_capacity = capacity;
             }
             memcpy(load_data->buf + load_data->buf_used, payload, g->payload_sz);
             load_data->buf_used += g->payload_sz;
@@ -907,12 +933,15 @@ load_image_data(
         case 't': // temporary file
         case 's': // POSIX shared memory
         {
-            if (g->payload_sz > 2048) ABRT("EINVAL", "Filename too long");
-            snprintf(fname, sizeof(fname) / sizeof(fname[0]), "%.*s", (int)g->payload_sz, payload);
+            if (g->payload_sz >= PTRDIFF_MAX || memchr(payload, 0, g->payload_sz)) ABRT("EINVAL", "Invalid filename");
+            RAII_ALLOC(char, fname, malloc(g->payload_sz+1));
+            if (!fname) ABRT("ENOMEM", "Out of memory for filename");
+            memcpy(fname, payload, g->payload_sz);
+            fname[g->payload_sz] = 0;
             // When the data needs further processing the entire (possibly
             // compressed) payload is needed, otherwise reading more than the
             // expected number of bytes is pointless.
-            const size_t max_to_read = (g->compressed || data_fmt == PNG || data_fmt == VECTOR) ? MAX_DATA_SZ : load_data->data_sz;
+            const size_t max_to_read = (g->compressed || data_fmt == PNG || data_fmt == VECTOR) ? limit : load_data->data_sz;
             bool was_opened = false;
             const bool ok = load_image_data_from_file(self, g, transmission_type, fname, max_to_read, &was_opened);
             // Client created temporary files and shared memory objects that
@@ -970,7 +999,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         }
         ld->data = ld->buf;
         ld->data_sz = ld->buf_used;
-        ld->gamut = 0;  // the colors in the records are sRGB
+        ld->gamut = 0;  // scene paints carry their own gamut
         ld->loading_completed_successfully = true;
         return img;
     }
@@ -1031,7 +1060,7 @@ initialize_load_data(
     switch (data_fmt) {
         case PNG:
         case VECTOR:
-            if (g->data_sz > MAX_DATA_SZ) ABRT("EINVAL", "PNG data size too large");
+            if (data_fmt != VECTOR && g->data_sz > MAX_DATA_SZ) ABRT("EINVAL", "PNG data size too large");
             self->currently_loading.is_4byte_aligned = true;
             self->currently_loading.is_opaque = false;
             self->currently_loading.data_sz = g->data_sz ? g->data_sz : 1024 * 100;
@@ -1232,11 +1261,11 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->used_storage = 0;
         if (tt == 'g') {
             self->currently_loading.start_command = *g;
-            self->currently_loading.start_command.id = iid;
+            if (g->action != 'v') self->currently_loading.start_command.id = iid;
             return load_surface_image(self, g, img, payload, is_query);
         }
         if (!initialize_load_data(self, g, img, tt, fmt, 0)) return NULL;
-        self->currently_loading.start_command.id = iid;
+        if (g->action != 'v') self->currently_loading.start_command.id = iid;
     } else {
         INIT_CHUNKED_LOAD;
         img = img_by_internal_id(self, self->currently_loading.loading_for.image_id);
@@ -1252,9 +1281,18 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
     if (!img) return NULL;
     if (fmt == VECTOR) {
         LoadData *ld = &self->currently_loading;
+        if (g->action == 'v') {
+            if (ld->data_sz > PY_SSIZE_T_MAX) ABRT("EOVERFLOW", "Vector request too large");
+            RAII_PyObject(module, PyImport_ImportModule("kitty.fonts.vector"));
+            if (!module) { PyErr_Clear(); ABRT("ENOMEM", "Cannot load vector font service"); }
+            Py_XSETREF(self->vector_response, PyObject_CallMethod(module, "service", "Oy#I", self->vector_font_session, ld->data, (Py_ssize_t)ld->data_sz, g->id));
+            if (!self->vector_response) { PyErr_Clear(); ABRT("ENOMEM", "Vector font service failed"); }
+            return img;
+        }
         if (!ld->width || !ld->height) ABRT("EINVAL", "Zero width/height not allowed");
         VectorDoc *doc = vector_doc_new(ld->width, ld->height);
         if (!doc) ABRT("ENOMEM", "Out of memory");
+        vector_doc_set_font_session(doc, self->vector_font_session);
         const char *err = vector_doc_apply(doc, ld->data, ld->data_sz);
         if (err) {
             vector_doc_free(doc);
@@ -1263,7 +1301,8 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->width = ld->width;
         img->height = ld->height;
         img->root_frame = (const Frame){
-            .id = ++img->frame_id_counter, .is_4byte_aligned = true, .width = img->width, .height = img->height, .transient = (g->usage_hints & GRAPHICS_USAGE_HINT_TRANSIENT) != 0};
+            .id = ++img->frame_id_counter, .is_float = true, .is_4byte_aligned = true, .width = img->width, .height = img->height, .transient = (g->usage_hints & GRAPHICS_USAGE_HINT_TRANSIENT) != 0};
+        img->tone_map = g->tone_map == 1;
         img->gamut = 0;
         if (is_query) vector_doc_free(doc);
         else {
@@ -2147,11 +2186,14 @@ vector_lookup(void *ctx, uint32_t image_id, bool with_pixels, VectorImageData *o
     if (!img || img->vector || !img->root_frame_data_loaded) return false;
     out->width = img->width;
     out->height = img->height;
+    out->is_float = img->root_frame.is_float;
+    out->gamut = img->gamut;
     if (!with_pixels) return true;
     CoalescedFrameData cfd = get_coalesced_frame_data(self, img, &img->root_frame);
     if (!cfd.buf) return false;
     out->data = cfd.buf;
     out->is_opaque = cfd.is_opaque;
+    out->is_float = cfd.is_float;
     return true;
 }
 
@@ -2194,13 +2236,33 @@ update_vector_texture(GraphicsManager *self, Image *img, double width, double he
     uint32_t w = (uint32_t)lround(width), h = (uint32_t)lround(height);
     const bool has_pixels = img->texture && img->texture->id && w == img->vector_tex_width && h == img->vector_tex_height;
     VectorRect rect;
-    uint8_t *data = render_vector_damage(self, img, w, h, !has_pixels, &rect);
-    if (!data) return;
+    rect = (VectorRect){0, 0, w, h};
+    if (has_pixels && !vector_doc_damage(img->vector, w, h, &rect)) return;
+    float *linear = vector_doc_render_linear(img->vector, w, h, rect, vector_lookup, self);
+    if (!linear) return;
+    const size_t count = (size_t)rect.width * rect.height * 4;
+    uint16_t *data = malloc(count * sizeof(uint16_t));
+    if (!data) { free(linear); return; }
+    float peak = 0;
+    for (size_t i = 0; i < count; i++) {
+        // RGBA16F is the existing GPU transport format, so saturate only to
+        // its representable range, never to SDR or the display's headroom.
+        const float value = fminf(65504, fmaxf(-65504, linear[i]));
+        data[i] = float_to_half(value);
+        if ((i & 3) != 3) peak = fmaxf(peak, value);
+    }
+    free(linear);
+    img->peak = has_pixels ? MAX(img->peak, peak) : peak;
     if (img->texture) {
-        if (rect.width == w && rect.height == h) send_image_to_gpu(&img->texture->id, data, w, h, false, false, true, true, REPEAT_CLAMP);
-        else update_image_on_gpu(img->texture->id, data, rect.x, rect.y, rect.width, rect.height);
+        if (rect.width == w && rect.height == h) send_image_to_gpu(&img->texture->id, data, w, h, false, true, true, true, REPEAT_CLAMP);
+        else update_image_on_gpu(img->texture->id, data, rect.x, rect.y, rect.width, rect.height, true);
+    }
+    for (size_t i = 0; i < self->render_data.count; i++) if (self->render_data.item[i].image_id == img->internal_id) {
+        self->render_data.item[i].peak = img->peak;
+        self->render_data.item[i].texture_id = texture_id_for_img(img);
     }
     free(data);
+    vector_doc_clear_damage(img->vector);
     img->vector_tex_width = w;
     img->vector_tex_height = h;
 }
@@ -3226,6 +3288,7 @@ const char *
 grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_t *payload, Cursor *c, bool *is_dirty, CellPixelSize cell) {
     const char *ret = NULL;
     command_response[0] = 0;
+    Py_CLEAR(self->vector_response);
     self->context_made_current_for_this_command = false;
 
     if (g->id && g->image_number) {
@@ -3234,13 +3297,32 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
     }
 
     unsigned char action = g->action;
-    if (!action && self->currently_loading.loading_for.image_id && (self->currently_loading.start_command.action == 'f' || self->currently_loading.start_command.action == 'e')) {
+    if (!action && self->currently_loading.loading_for.image_id && (self->currently_loading.start_command.action == 'f' || self->currently_loading.start_command.action == 'e' || self->currently_loading.start_command.action == 'v')) {
         // A continuation chunk carries no action key, so when the chunked
         // load was started by an a=f or a=e command, route it to that
         // handler rather than the add handler
         action = self->currently_loading.start_command.action;
     }
     switch (action) {
+        case 'v': {
+            const GraphicsCommand *request = self->currently_loading.loading_for.image_id ? &self->currently_loading.start_command : g;
+            if (!request->id || request->format != VECTOR || request->image_number || request->transmission_type == 'g') {
+                set_command_failed_response("EINVAL", "Vector service requires a=v,f=200 and a request id");
+                ret = finish_command_response(request, false);
+                break;
+            }
+            GraphicsCommand vg = *request;
+            Image *image = handle_add_command(self, g, payload, is_dirty, 0, true);
+            if (!self->currently_loading.loading_for.image_id) {
+                free_load_data(&self->currently_loading);
+                if (self->vector_response) {
+                    const char *response = PyBytes_AS_STRING(self->vector_response);
+                    const char *body = strchr(response, ';');
+                    if (!vg.quiet || (vg.quiet == 1 && body && strncmp(body+1, "OK;", 3))) ret = response;
+                } else ret = finish_command_response(&vg, image != NULL);
+                remove_images(self, add_trim_predicate, 0);
+            }
+        } break;
         case 0:
         case 't':
         case 'T':
@@ -3255,6 +3337,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                 }
             }
             Image *image = handle_add_command(self, g, payload, is_dirty, iid, is_query);
+            if (!is_query && image && !image->vector && invalidate_vector_users(self, image->client_id)) *is_dirty = true;
             if (!self->currently_loading.loading_for.image_id) free_load_data(&self->currently_loading);
             GraphicsCommand *lg = &self->currently_loading.start_command;
             if (g->quiet) lg->quiet = g->quiet;
@@ -3290,6 +3373,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                         ag.image_number = self->currently_loading.start_command.image_number;
                     }
                     img = handle_animation_frame_load_command(self, &ag, img, payload, is_dirty);
+                    if (img && invalidate_vector_users(self, img->client_id)) *is_dirty = true;
                     if (!self->currently_loading.loading_for.image_id) free_load_data(&self->currently_loading);
                     if (!ag.frame_number) ag.frame_number = self->currently_loading.start_command.frame_number;
                     if (g->quiet) ag.quiet = g->quiet;
@@ -3362,6 +3446,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                 ret = finish_command_response(g, false);
             } else {
                 handle_compose_command(self, is_dirty, g, img);
+                if (invalidate_vector_users(self, img->client_id)) *is_dirty = true;
                 ret = finish_command_response(g, true);
             }
             break;
@@ -3571,6 +3656,20 @@ W(render_vector_image) {
     return ans;
 }
 
+// Native floats for checking the same unclipped output sent to the GPU.
+W(render_vector_linear) {
+    unsigned long id;
+    unsigned width, height;
+    PA("kII", &id, &width, &height);
+    Image *img = vector_image_for_tests(self, id);
+    if (!img) return NULL;
+    float *pixels = vector_doc_render_linear(img->vector, width, height, (VectorRect){0, 0, width, height}, vector_lookup, self);
+    if (!pixels) return PyErr_Format(PyExc_RuntimeError, "Vector render failed");
+    PyObject *ans = PyBytes_FromStringAndSize((char *)pixels, (Py_ssize_t)width * height * 4 * sizeof(float));
+    free(pixels);
+    return ans;
+}
+
 // For tests: what update_vector_texture() does, with a bytearray standing in
 // for the texture. Returns the rectangle that was drawn again, None when
 // there was nothing to draw.
@@ -3603,6 +3702,7 @@ static PyMethodDef methods[] = {
     M(image_for_client_number, METH_O),
     M(update_layers, METH_VARARGS),
     M(render_vector_image, METH_VARARGS),
+    M(render_vector_linear, METH_VARARGS),
     M(update_vector_pixels, METH_VARARGS),
     {NULL} /* Sentinel */
 };

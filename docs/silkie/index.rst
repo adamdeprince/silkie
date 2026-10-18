@@ -57,6 +57,14 @@ Silkie adds protocols that applications can discover and use as needed.
 Support depends on the operating system, input device, display, and compositor;
 each specification describes its capabilities and limits.
 
+Fonts and typography
+~~~~~~~~~~~~~~~~~~~~~
+
+Mix Iosevka's sans-serif and slab-serif faces, select weights from Thin to
+Heavy, and control slant in either direction. Regional CJK font preferences
+preserve character widths and the terminal grid. Font files are installed
+separately; see :doc:`font-protocol` for configuration and escape sequences.
+
 Pen, touch, and gestures
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -70,7 +78,8 @@ scrolling, and gesture events. Inspect what a device reports with the
 Vector graphics and ink
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Send paths and scenes for the terminal to render at the displayed size.
+Send paths, styled text and scenes for the terminal to render at the displayed
+size, with session fonts, text measurement, nested window clips and HDR color.
 Let the terminal draw pen strokes as input arrives, without waiting for
 each sample to make a round trip to the application.
 
@@ -127,10 +136,10 @@ upstream references to understand the terminal as a whole.
 Find the specifications
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Find the terminal standards, kitty and kitten manuals, Silkie extension
-specifications, and source on the ``silkie`` branch in the developer and LLM guide.
+The developer guide brings together terminal standards, kitty and kitten
+manuals, Silkie's extension specifications, and links to the source.
 
-:doc:`Developer & LLM guide <developer-guide>`
+:doc:`Developer guide <developer-guide>`
 
 Use the extension reference
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

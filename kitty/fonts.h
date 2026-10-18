@@ -88,6 +88,7 @@ bool read_features_from_font_table(const uint8_t *table, size_t table_len, PyObj
 FontFeatures *features_for_face(PyObject *);
 bool create_features_for_face(const char *psname, PyObject *features, FontFeatures *output);
 PyObject *font_features_as_dict(const FontFeatures *font_features);
+PyObject *text_style_module(void);  // borrowed reference
 bool has_cell_text(bool (*has_codepoint)(const void *, char_type ch), const void *face, bool do_debug, const ListOfChars *lc);
 
 static inline void

@@ -23,6 +23,12 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
 
 .. toctree::
    :maxdepth: 1
+   :caption: Text and typography
+
+   font-protocol
+
+.. toctree::
+   :maxdepth: 1
    :caption: Input and interaction
 
    tablet-protocol

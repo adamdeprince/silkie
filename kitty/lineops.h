@@ -49,6 +49,7 @@ clear_chars_in_line(CPUCell *cpu_cells, GPUCell *gpu_cells, index_type xnum, cha
         for (index_type i = 0; i < xnum; i++) {
             cpu_cells[i] = c;
             gpu_cells[i].attrs = empty;
+            gpu_cells[i].text_style = 0;
         }
     }
 }

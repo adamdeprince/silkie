@@ -99,6 +99,12 @@ To check whether a terminal supports ``f=64``, use the query action described
 in the graphics protocol with ``f=64`` and a single pixel of data, a terminal
 that does not know the format responds with ``EINVAL``.
 
+The :doc:`vector-protocol` uses the same HDR presentation path. Brightness
+suffixes and linear extended-sRGB paints work in every vector primitive,
+including styled text, strokes, gradients and symbols. Nested clips and
+group opacity preserve HDR values; embedded ``f=64`` images retain their
+linear colors. Vector images also accept ``T=1`` for tone mapping.
+
 Cursor
 ---------
 

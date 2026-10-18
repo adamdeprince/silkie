@@ -21,6 +21,8 @@ import kitty.types
 choices_for_allow_cloning = typing.Literal['yes', 'y', 'true', 'no', 'n', 'false', 'ask']
 choices_for_allow_remote_control = typing.Literal['password', 'socket-only', 'socket', 'no', 'n', 'false', 'yes', 'y', 'true']
 choices_for_background_image_layout = typing.Literal['mirror-tiled', 'scaled', 'tiled', 'clamped', 'centered', 'cscaled']
+choices_for_cjk_font_locale = typing.Literal['auto', 'jp', 'kr', 'sc', 'tc', 'hk']
+choices_for_color_scheme = typing.Literal['auto', 'light', 'dark']
 choices_for_default_pointer_shape = typing.Literal['arrow', 'beam', 'text', 'pointer', 'hand', 'help', 'wait', 'progress', 'crosshair', 'cell', 'vertical-text', 'move', 'e-resize', 'ne-resize', 'nw-resize', 'n-resize', 'se-resize', 'sw-resize', 's-resize', 'w-resize', 'ew-resize', 'ns-resize', 'nesw-resize', 'nwse-resize', 'zoom-in', 'zoom-out', 'alias', 'copy', 'not-allowed', 'no-drop', 'grab', 'grabbing']
 choices_for_focus_follows_mouse = typing.Literal['no', 'n', 'false', 'y', 'yes', 'true', 'drop']
 choices_for_hdr = typing.Literal['no', 'auto', 'always']
@@ -72,6 +74,8 @@ option_names = (
     'bold_font',
     'bold_italic_font',
     'box_drawing_scale',
+    'cjk_font',
+    'cjk_font_locale',
     'clear_all_mouse_actions',
     'clear_all_shortcuts',
     'clear_selection_on_clipboard_loss',
@@ -337,6 +341,7 @@ option_names = (
     'color253',
     'color254',
     'color255',
+    'color_scheme',
     'command_on_bell',
     'confirm_os_window_close',
     'copy_on_select',
@@ -366,6 +371,7 @@ option_names = (
     'draw_window_borders_for_single_window',
     'dynamic_background_opacity',
     'editor',
+    'eink_mode',
     'enable_audio_bell',
     'enabled_layouts',
     'env',
@@ -376,6 +382,7 @@ option_names = (
     'focus_follows_mouse',
     'font_family',
     'font_features',
+    'font_role',
     'font_size',
     'force_ltr',
     'foreground',
@@ -570,6 +577,8 @@ class Options:
     bold_font: FontSpec = FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='auto', axes=(), variable_name=None, features=(), created_from_string='auto')
     bold_italic_font: FontSpec = FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='auto', axes=(), variable_name=None, features=(), created_from_string='auto')
     box_drawing_scale: tuple[float, float, float, float] = (0.001, 1.0, 1.5, 2.0)
+    cjk_font: FontSpec = FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='auto', axes=(), variable_name=None, features=(), created_from_string='auto')
+    cjk_font_locale: choices_for_cjk_font_locale = 'auto'
     clear_all_mouse_actions: bool = False
     clear_all_shortcuts: bool = False
     clear_selection_on_clipboard_loss: bool = False
@@ -579,6 +588,7 @@ class Options:
     clone_source_strategies: frozenset[str] = frozenset({'conda', 'env_var', 'path', 'venv'})
     close_on_child_death: bool = False
     collapse_window_margins: bool = False
+    color_scheme: choices_for_color_scheme = 'auto'
     command_on_bell: list[str] = ['none']
     confirm_os_window_close: tuple[int, bool] = (-1, False)
     copy_on_select: str = ''
@@ -607,12 +617,13 @@ class Options:
     draw_window_borders_for_single_window: bool = False
     dynamic_background_opacity: bool = False
     editor: str = '.'
+    eink_mode: bool = False
     enable_audio_bell: bool = True
     enabled_layouts: list[str] = ['fat', 'grid', 'horizontal', 'splits', 'stack', 'tall', 'vertical']
     escape_limit: int = 0
     file_transfer_confirmation_bypass: str = ''
     focus_follows_mouse: choices_for_focus_follows_mouse = 'no'
-    font_family: FontSpec = FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='monospace', axes=(), variable_name=None, features=(), created_from_string='monospace')
+    font_family: FontSpec = FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka', axes=(), variable_name=None, features=(), created_from_string='Iosevka')
     font_size: float = 11.0
     force_ltr: bool = False
     foreground: Color = Color(221, 221, 221)
@@ -776,6 +787,7 @@ class Options:
     exe_search_path: dict[str, str] = {}
     filter_notification: dict[str, str] = {}
     font_features: dict[str, tuple[kitty.fast_data_types.ParsedFontFeature, ...]] = {}
+    font_role: dict[str, kitty.fonts.FontSpec] = {}
     kitten_alias: dict[str, str] = {}
     menu_map: dict[tuple[str, ...], str] = {}
     modify_font: dict[str, kitty.fonts.FontModification] = {}
@@ -906,6 +918,7 @@ defaults.env = {}
 defaults.exe_search_path = {}
 defaults.filter_notification = {}
 defaults.font_features = {}
+defaults.font_role = {'sans': FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka', axes=(), variable_name=None, features=(), created_from_string='Iosevka'), 'serif': FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka Slab', axes=(), variable_name=None, features=(), created_from_string='Iosevka Slab')}
 defaults.kitten_alias = {}
 defaults.menu_map = {}
 defaults.modify_font = {}
@@ -1049,6 +1062,10 @@ defaults.map = [
     KeyDefinition(trigger=SingleKey(mods=256, key=57364), definition='show_kitty_doc overview'),
     # command_palette
     KeyDefinition(trigger=SingleKey(mods=256, key=57366), definition='command_palette'),
+    # toggle_color_scheme
+    KeyDefinition(trigger=SingleKey(mods=256, key=57375), definition='set_color_scheme toggle'),
+    # toggle_eink_mode
+    KeyDefinition(trigger=SingleKey(mods=258, key=57375), definition='set_eink_mode toggle'),
     # toggle_fullscreen
     KeyDefinition(trigger=SingleKey(mods=256, key=57374), definition='toggle_fullscreen'),
     # toggle_maximized

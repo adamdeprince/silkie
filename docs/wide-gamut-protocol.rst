@@ -56,9 +56,11 @@ no key at all are sRGB. As for text, the components are encoded with the sRGB
 transfer curve in every gamut. The key applies to RGB and RGBA data, ``f=24``
 and ``f=32``, and belongs in the first chunk of a chunked transmission. It
 applies in the same way to the pixels of a GPU surface, ``t=g``. It is ignored
-for the two formats that have no gamut to choose: an HDR image, ``f=64``, is
-linear extended sRGB by definition, see the :doc:`hdr-protocol`, and the
-colors in the records of a vector image, ``f=200``, are sRGB.
+for ``f=64``, whose pixels are linear extended sRGB by definition, see the
+:doc:`hdr-protocol`. A vector image, ``f=200``, also ignores ``G``: each paint
+names its own color space in the :doc:`vector-protocol`. Vector text, paths,
+gradients and embedded images share a linear extended-sRGB compositor and
+retain wide-gamut and HDR values through clipping and blending.
 
 A PNG image, ``f=100``, says what its colors are by itself, and the key is
 ignored for it. A PNG is in Display P3 or Rec. 2020 when its embedded profile

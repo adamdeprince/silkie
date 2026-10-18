@@ -111,7 +111,7 @@ case gamut: value_state = UINT; break;
 
             case action: {
                 g.action = parser_buf[pos++];
-                if (g.action != 'T' && g.action != 'a' && g.action != 'c' && g.action != 'd' && g.action != 'e' && g.action != 'f' && g.action != 'p' && g.action != 'q' && g.action != 'r' && g.action != 't') {
+                if (g.action != 'T' && g.action != 'a' && g.action != 'c' && g.action != 'd' && g.action != 'e' && g.action != 'f' && g.action != 'p' && g.action != 'q' && g.action != 'r' && g.action != 't' && g.action != 'v') {
                     REPORT_ERROR("Malformed GraphicsCommand control block, unknown flag value for action: 0x%x", g.action);
                     return;
                 };

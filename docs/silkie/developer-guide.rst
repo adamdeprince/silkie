@@ -14,33 +14,34 @@ each source and the relevant implementation files.
 Source and version
 --------------------
 
-**Main branch:** `adamdeprince/silkie, branch silkie
-<https://github.com/adamdeprince/silkie/tree/silkie>`_. This is the HTML source
-browser for the implementation described here. Use this branch when inspecting
-code or preparing a change.
+Silkie's source is on the `silkie branch
+<https://github.com/adamdeprince/silkie/tree/silkie>`_.
 
-Upstream manuals describe upstream kitty and can evolve independently of this
-fork. For exact behavior, inspect the Silkie checkout you are targeting and
-record its commit. Runtime capability replies determine which extensions,
-versions, and optional features the running terminal supports; a project name
-or version string alone is insufficient.
+Upstream kitty manuals may describe behavior that differs from your Silkie
+build. The source for your version shows how a feature is implemented. Runtime
+capability queries tell your application which extensions, versions, and
+optional features are available.
 
-Reading order for developers and LLMs
--------------------------------------
+Getting started
+-----------------
 
-#. Read the `kitty overview <https://sw.kovidgoyal.net/kitty/>`_ and
-   `kitten overview <https://sw.kovidgoyal.net/kitty/kittens_intro/>`_ to
-   distinguish the terminal from its tools.
-#. Consult the `terminal foundations`_ and `inherited kitty protocols`_ below.
-   For the full protocol details, follow the upstream protocol index,
-   including its individual specifications; the index alone is not the spec.
-#. Read :doc:`capabilities-protocol` and :doc:`extension-framing`, then the
-   `Silkie extension map`_ below. For an overview of all Silkie behavior, read
-   every linked extension, including its discovery, cleanup, and platform limits.
-#. Read the relevant `kitten and application APIs`_ if writing a kitten, a TUI,
-   a remote-control client, or shell integration.
-#. Check the `implementation map`_ against the target commit. Implement feature
-   queries and fallbacks, then test in the target terminal and environment.
+If you are new to kitty, the `kitty overview <https://sw.kovidgoyal.net/kitty/>`_
+introduces the terminal, and the `kitten overview
+<https://sw.kovidgoyal.net/kitty/kittens_intro/>`_ introduces its tools and
+plugins. The `terminal foundations`_ and `inherited kitty protocols`_ below
+cover the standards and protocols that Silkie builds on.
+
+To add a Silkie feature to your application, start with
+:doc:`capabilities-protocol` and :doc:`extension-framing`, then choose the
+protocols you need from the `Silkie extension map`_. Each specification
+explains how to discover support, use the feature, and clean up afterward,
+including any platform limits. Test your application in the target terminal
+and provide a fallback when a feature is unavailable.
+
+For kittens, terminal user interfaces, remote-control clients, and shell
+integration, see `kitten and application APIs`_. The `implementation map`_
+points to the relevant code if you want to investigate behavior or contribute
+a change to Silkie.
 
 .. _terminal-foundations:
 
@@ -123,6 +124,9 @@ and implementation details. The :doc:`reference` also lists them by category.
    * - Color and transparency
      - :doc:`hdr-protocol`; :doc:`wide-gamut-protocol`; :doc:`cell-alpha-protocol`
      - SGR, kitty graphics, display information
+   * - Font families and typography
+     - :doc:`font-protocol`
+     - SGR, kitty font configuration and text sizing
    * - Image cursors
      - :doc:`pointer-image-protocol`
      - kitty pointer shapes and graphics
@@ -159,7 +163,7 @@ Kitten and application APIs
 Implementation map
 --------------------
 
-All links in this map open HTML views on the **silkie** branch.
+The source files below are on the **silkie** branch.
 
 .. list-table:: Source locations
    :header-rows: 1
@@ -176,6 +180,8 @@ All links in this map open HTML views on the **silkie** branch.
    * - Graphics, vectors, and ink
      - `kitty/graphics.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/graphics.c>`_;
        `kitty/vector.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/vector.c>`_;
+       `kitty/fonts/vector.py <https://github.com/adamdeprince/silkie/blob/silkie/kitty/fonts/vector.py>`_;
+       `kittens/tui/vector.py <https://github.com/adamdeprince/silkie/blob/silkie/kittens/tui/vector.py>`_;
        `kitty/ink.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/ink.c>`_
    * - Input and platform integration
      - `kitty/mouse.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/mouse.c>`_;

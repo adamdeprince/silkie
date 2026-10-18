@@ -1104,6 +1104,34 @@ PYWRAP1(set_options) {
     Py_RETURN_NONE;
 }
 
+PYWRAP1(set_eink_mode) {
+    int enabled;
+    PA("p", &enabled);
+    if (!global_state.options_object) {
+        PyErr_SetString(PyExc_RuntimeError, "Must call set_options() before changing e-paper mode");
+        return NULL;
+    }
+    if (PyObject_SetAttrString(global_state.options_object, "eink_mode", enabled ? Py_True : Py_False) < 0) return NULL;
+    if (OPT(eink_mode) == (bool)enabled) Py_RETURN_NONE;
+    OPT(eink_mode) = enabled;
+    // Report each explicit change immediately, including when toggled again before the next poll.
+    for (size_t i = 0; i < global_state.num_os_windows; i++) {
+        OSWindow *os_window = global_state.os_windows + i;
+        const char *previous_kind = os_window->display_info.kind;
+        os_window_display_info(os_window, &os_window->display_info);
+        const bool changed = os_window->display_info_at && previous_kind != os_window->display_info.kind;
+        os_window->display_info_at = monotonic();
+        if (!changed) continue;
+        for (size_t t = 0; t < os_window->num_tabs; t++) {
+            Tab *tab = os_window->tabs + t;
+            for (size_t w = 0; w < tab->num_windows; w++) {
+                if (tab->windows[w].render_data.screen) screen_display_changed(tab->windows[w].render_data.screen, &os_window->display_info);
+            }
+        }
+    }
+    Py_RETURN_NONE;
+}
+
 PYWRAP1(set_ignore_os_keyboard_processing) {
     set_ignore_os_keyboard_processing(PyObject_IsTrue(args));
     Py_RETURN_NONE;
@@ -2117,6 +2145,7 @@ static PyMethodDef module_methods[] = {
     MW(get_boss, METH_NOARGS),
     MW(apply_options_update, METH_NOARGS),
     MW(patch_global_colors, METH_VARARGS),
+    MW(set_eink_mode, METH_VARARGS),
     MW(create_mock_window, METH_VARARGS),
     MW(destroy_global_data, METH_NOARGS),
     MW(wakeup_main_loop, METH_NOARGS),

@@ -184,6 +184,7 @@ new_screen_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwds) {
             return NULL;
         }
         grman_set_window_id(self->main_grman, self->window_id);
+        grman_share_vector_fonts(self->alt_grman, self->main_grman);
         grman_set_window_id(self->alt_grman, self->window_id);
         self->alt_tabstops = self->main_tabstops + self->columns;
         self->tabstops = self->main_tabstops;
@@ -1520,6 +1521,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
         .cc = (CPUCell){.hyperlink_id = self->active_hyperlink_id},                                                                 \
         .g = (GPUCell){                                                                                                             \
             .attrs = attrs,                                                                                                         \
+            .text_style = self->cursor->sgr.text_style,                                                                               \
             .fg = self->cursor->sgr.fg & COL_MASK,                                                                                  \
             .bg = self->cursor->sgr.bg & COL_MASK,                                                                                  \
             .decoration_fg = force_underline ? ((OPT(url_color) & COL_MASK) << 8) | 2 : self->cursor->sgr.decoration_fg & COL_MASK, \

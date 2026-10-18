@@ -21,6 +21,29 @@ ColorSchemes = Literal['light', 'dark', 'no_preference']
 Colors = tuple[ColorsSpec, TransparentBackgroundColors]
 
 
+def color_scheme_spec(opts: Options) -> ColorsSpec | None:
+    scheme = opts.color_scheme
+    if scheme == 'auto':
+        if not opts.eink_mode:
+            return None
+        scheme = 'light'
+    fg, bg = (0, 0xFFFFFF) if scheme == 'light' else (0xFFFFFF, 0)
+    return {
+        'foreground': fg,
+        'background': bg,
+        'cursor': fg,
+        'cursor_text_color': bg,
+        'selection_foreground': bg,
+        'selection_background': fg,
+        'active_tab_foreground': bg,
+        'active_tab_background': fg,
+        'inactive_tab_foreground': fg,
+        'inactive_tab_background': bg,
+        'tab_bar_background': bg,
+        'tab_bar_margin_color': bg,
+    }
+
+
 class BackgroundImageOptions(TypedDict, total=False):
     background_image: Sequence[str] | None
     background_image_layout: str | None
@@ -42,6 +65,7 @@ class ThemeColors:
     applied_theme: Literal['light', 'dark', 'no_preference', ''] = ''
     default_colors: ColorsSpec | None = None
     default_background_image_options: BackgroundImageOptions | None = None
+    configured_colors: Colors | None = None
 
     def get_default_colors(self) -> ColorsSpec:
         if self.default_colors is None:
@@ -133,6 +157,15 @@ class ThemeColors:
     def patch_opts(self, opts: Options, debug_rendering: bool = False) -> None:
         from .utils import log_error
 
+        self.configured_colors = (
+            {k: None if (v := getattr(opts, k)) is None else int(v) for k in all_colors},
+            opts.transparent_background_colors,
+        )
+        self.applied_theme = ''
+        if (spec := color_scheme_spec(opts)) is not None:
+            patch_options_with_color_spec(opts, spec, ())
+            patch_global_colors(spec, True)
+            return
         if debug_rendering:
             log_error('Querying system for current color scheme')
         which = glfw_get_system_color_theme()
@@ -165,6 +198,8 @@ class ThemeColors:
     def apply_theme(self, new_value: ColorSchemes, notify_on_bg_change: bool = True) -> bool:
         from .utils import log_error
 
+        if color_scheme_spec(get_options()) is not None:
+            return False
         boss = get_boss()
         if new_value == 'dark' and self.has_dark_theme:
             patch_colors(
@@ -195,6 +230,17 @@ class ThemeColors:
                 log_error(f'Applied color theme {new_value}')
             return True
         return False
+
+    def apply_color_scheme(self) -> None:
+        opts = get_options()
+        if (spec := color_scheme_spec(opts)) is not None:
+            self.applied_theme = ''
+            patch_colors(spec, configured=True)
+        else:
+            self.refresh()
+            if not self.apply_theme(glfw_get_system_color_theme()) and self.configured_colors is not None:
+                self.applied_theme = ''
+                patch_colors(*self.configured_colors, configured=True)
 
 
 theme_colors = ThemeColors()
