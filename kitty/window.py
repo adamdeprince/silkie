@@ -951,7 +951,7 @@ class Window:
         if field in ('id', 'window_id'):
             return pat.pattern == str(self.id)
         if field == 'pid':
-            return pat.pattern == str(self.child.pid)
+            return pat.pattern == str(self.child.root_pid)
         if field == 'title':
             return pat.search(self.override_title or self.title) is not None
         if field in 'cwd':
@@ -2360,7 +2360,7 @@ class Window:
             'is_active': is_active,
             'title': self.title,
             'title_overridden': self.override_title is not None,
-            'pid': self.child.pid,
+            'pid': self.child.root_pid,
             'cwd': self.child.current_cwd or self.child.cwd,
             'cmdline': self.child.cmdline,
             'last_reported_cmdline': self.last_cmd_cmdline,
