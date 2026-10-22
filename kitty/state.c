@@ -382,7 +382,7 @@ initialize_window(Window *w, PyObject *title, bool init_gpu_resources) {
         if (PyErr_Occurred()) PyErr_Print();
     }
     if (init_gpu_resources) create_gpu_resources_for_window(w);
-    else { w->render_data.vao_idx = -1; }
+    else { w->render_data.vao_idx = w->window_title_render_data.vao_idx = -1; }
 }
 
 static id_type
@@ -1098,6 +1098,14 @@ PYWRAP1(set_options) {
     global_state.debug_rendering = debug_rendering ? true : false;
     global_state.debug_font_fallback = debug_font_fallback ? true : false;
     if (!convert_opts_from_python_opts(opts, &global_state.opts)) return NULL;
+    RAII_PyObject(config, PyImport_ImportModule("kitty.config"));
+    if (!config) return NULL;
+    RAII_PyObject(url_modifiers, PyObject_CallMethod(config, "mouse_url_modifiers", "O", opts));
+    if (!url_modifiers) return NULL;
+    for (size_t i = 0; i < arraysz(global_state.opts.url_mappings); i++) {
+        global_state.opts.url_mappings[i] = PyLong_AsUnsignedLongLong(PyTuple_GET_ITEM(url_modifiers, i));
+        if (PyErr_Occurred()) return NULL;
+    }
     push_modifier_remap_to_glfw();
     Py_XDECREF(global_state.options_object);
     global_state.options_object = Py_NewRef(opts);

@@ -130,6 +130,8 @@ typedef struct Options {
     // all remapped source bits, used as a fast path.
     int modifier_remap[8];
     int modifier_remap_mask;
+    // Bit i is set when a mouse button opens the hovered URL with modifiers i.
+    uint64_t url_mappings[2]; // ungrabbed, grabbed
     bool window_alert_on_bell;
     bool macos_dock_badge_on_bell;
     bool debug_keyboard;
