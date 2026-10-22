@@ -103,3 +103,53 @@ time.sleep(300)
             self.assertGreater(mem_walk, 0)
         finally:
             self._terminate(child)
+
+    def test_descendants_from_threads(self):
+        if is_macos:
+            self.skipTest('Per thread children lists are Linux only')
+        from kitty import child
+
+        # A process that starts its child from a non-main thread, as kitten does
+        code = """\
+import sys, threading, time
+def run_child(started):
+    import subprocess, sys, time
+    subprocess.Popen(
+        [sys.executable, '-c', 'import time; time.sleep(300)'],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    started.set()
+    time.sleep(300)  # keep the thread alive so the child stays its child
+started = threading.Event()
+threading.Thread(target=run_child, args=(started,), daemon=True).start()
+if not started.wait(10):
+    raise SystemExit('Failed to start child')
+sys.stdout.write("ready\\n")
+sys.stdout.flush()
+time.sleep(300)
+"""
+        p = subprocess.Popen([kitty_exe(), '+runpy', code], stdout=subprocess.PIPE)
+        assert p.stdout is not None
+        line = p.stdout.readline().strip()
+        p.stdout.close()
+        inner: list[int] = []
+        try:
+            self.ae(line, b'ready')
+            inner = child.children_of_process(p.pid)
+            self.ae(len(inner), 1)
+            self.ae(child._get_descendants_of(p.pid), set(inner))
+            # Kernels without /proc/<pid>/task/<tid>/children
+            orig = child.proc_children_supported
+            child.proc_children_supported = lambda: False  # type: ignore
+            try:
+                self.ae(child.children_of_process(p.pid), inner)
+                self.ae(child._get_descendants_of(p.pid), set(inner))
+            finally:
+                child.proc_children_supported = orig
+        finally:
+            p.terminate()
+            p.wait()
+            for c in inner:
+                try:
+                    os.kill(c, 15)
+                except ProcessLookupError:
+                    pass
