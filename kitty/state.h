@@ -790,6 +790,7 @@ void update_ime_position(Window *w, Screen *screen);
 bool update_ime_position_for_window(id_type window_id, bool force, int update_focus);
 void set_ignore_os_keyboard_processing(bool enabled);
 void push_modifier_remap_to_glfw(void);
+bool set_url_mappings(PyObject *py_opts, Options *opts);
 void update_menu_bar_title(PyObject *title UNUSED);
 void change_live_resize_state(OSWindow *, bool);
 bool render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images);
