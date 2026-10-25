@@ -4,7 +4,7 @@
 import os
 import subprocess
 import tempfile
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from kitty.constants import kitty_exe
 from kitty.rc.base import PayloadGetter, all_command_names, command_for_name
@@ -33,6 +33,24 @@ class Boss:
 
 
 class TestRemoteControl(BaseTest):
+    def test_cancel_async_auth_bypass(self):
+        from kitty.boss import Boss as KittyBoss
+        from kitty.remote_control import handle_cmd, is_cmd_allowed
+
+        self.set_options({'remote_control_password': {'secret': frozenset(('ls',))}})
+        base = {'cmd': 'send_text', 'version': [0, 26, 0], 'payload': {'data': 'text:x'}, 'cancel_async': True}
+        for extra in ({'async_id': 'x'}, {'async_id': 'x', 'password': 'wrong'}, {'async_id': 'x', 'password': 'secret'}, {'async': ''}):
+            with self.subTest(extra=extra):
+                self.assertIsNot(is_cmd_allowed({**base, **extra}, None, False, {}), True)
+        # a genuine cancellation is allowed without a password and must only cancel
+        pcmd = {**base, 'async': 'x'}
+        self.assertIs(is_cmd_allowed(pcmd, None, False, {}), True)
+        command = command_for_name('send_text')
+        with patch.object(command, 'response_from_kitty') as rfk, patch.object(command, 'cancel_async_request') as car:
+            self.assertIsNone(handle_cmd(Mock(spec=KittyBoss), None, pcmd, 0, None))
+        rfk.assert_not_called()
+        car.assert_called_once()
+
     def test_set_os_window_title_command_is_registered(self):
         self.assertIn('set_os_window_title', all_command_names())
         self.ae(command_for_name('set-os-window-title').name, 'set-os-window-title')
