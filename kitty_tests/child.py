@@ -10,13 +10,26 @@ from kitty.constants import is_macos, kitty_exe
 from .base import BaseTest
 
 
+def spawn_and_wait_for_ready(code: str, what: str) -> subprocess.Popen:
+    # Run code via kitty +runpy and wait for it to print ready. stderr is
+    # captured, as in test workers it is /dev/null, so that the reason the
+    # child failed is reported.
+    p = subprocess.Popen([kitty_exe(), '+runpy', code], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    line = p.stdout.readline().strip()
+    p.stdout.close()
+    if line != b'ready':
+        p.kill()
+        err = p.stderr.read().decode('utf-8', 'replace')
+        p.stderr.close()
+        raise AssertionError(f'Unexpected output from {what}: {line!r} exit code: {p.wait()} stderr:\n{err}')
+    p.stderr.close()
+    return p
+
+
 class ChildMemoryTest(BaseTest):
     def _spawn_allocating_child(self, alloc_bytes: int) -> subprocess.Popen:
-        p = subprocess.Popen(
-            [
-                kitty_exe(),
-                '+runpy',
-                f"""\
+        return spawn_and_wait_for_ready(
+            f"""\
 import sys, time
 buf = bytearray({alloc_bytes})
 for i in range(0, {alloc_bytes}, 4096):
@@ -25,16 +38,8 @@ sys.stdout.write("ready\\n")
 sys.stdout.flush()
 time.sleep(300)
 """,
-            ],
-            stdout=subprocess.PIPE,
+            'allocating child',
         )
-        line = p.stdout.readline().strip()
-        p.stdout.close()
-        if line != b'ready':
-            p.kill()
-            p.wait()
-            raise AssertionError(f'Unexpected output from allocating child: {line!r}')
-        return p
 
     def _terminate(self, p: subprocess.Popen) -> None:
         p.terminate()
@@ -127,13 +132,9 @@ sys.stdout.write("ready\\n")
 sys.stdout.flush()
 time.sleep(300)
 """
-        p = subprocess.Popen([kitty_exe(), '+runpy', code], stdout=subprocess.PIPE)
-        assert p.stdout is not None
-        line = p.stdout.readline().strip()
-        p.stdout.close()
+        p = spawn_and_wait_for_ready(code, 'wrapper')
         inner: list[int] = []
         try:
-            self.ae(line, b'ready')
             inner = child.children_of_process(p.pid)
             self.ae(len(inner), 1)
             self.ae(child._get_descendants_of(p.pid), set(inner))
