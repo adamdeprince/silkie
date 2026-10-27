@@ -1,6 +1,7 @@
 """Build only Silkie's extensions; link inherited behavior to upstream kitty."""
 
 import ast
+import time
 from pathlib import Path
 from textwrap import dedent, indent
 
@@ -11,7 +12,18 @@ from sphinx.errors import ConfigError
 
 project = 'Silkie'
 author = 'Adam DePrince'
-copyright = '2026, Adam DePrince'
+
+
+def copyright_years(start: int) -> str:
+    year = int(time.strftime('%Y'))
+    return f'{start}-{year}' if year > start else str(start)
+
+
+# Furo renders this as "Copyright © <copyright>" in every page footer.
+copyright = (
+    f'{copyright_years(2026)} Adam DePrince. Silkie is a fork of kitty, '
+    f'Copyright © {copyright_years(2016)} Kovid Goyal and contributors'
+)
 language = 'en'
 root_doc = 'index'
 html_theme = 'furo'
