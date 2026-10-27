@@ -1816,6 +1816,15 @@ MimeType=image/*;application/x-sh;application/x-shellscript;inode/directory;text
     os.symlink(os.path.relpath(launcher, os.path.dirname(in_src_launcher)), in_src_launcher)
 
 
+def macos_copyright() -> str:
+    year = int(time.strftime('%Y'))
+
+    def years(start: int) -> str:
+        return f'{start}-{year}' if year > start else str(start)
+
+    return f'Copyright © {years(2026)} Adam DePrince\nSilkie is a fork of kitty, Copyright © {years(2016)} Kovid Goyal and contributors'
+
+
 def macos_info_plist(for_quake: str = '') -> bytes:
     import plistlib
 
@@ -1964,8 +1973,8 @@ def macos_info_plist(for_quake: str = '') -> bytes:
         CFBundleVersion=VERSION,
         CFBundleShortVersionString=VERSION,
         CFBundleInfoDictionaryVersion='6.0',
-        NSHumanReadableCopyright=time.strftime('Copyright %Y, Kovid Goyal'),
-        CFBundleGetInfoString='kitty - The fast, feature-rich, GPU based terminal emulator. https://sw.kovidgoyal.net/kitty/',
+        NSHumanReadableCopyright=macos_copyright(),
+        CFBundleGetInfoString='Silkie - a terminal emulator with richer input and graphics, forked from kitty. https://silkie.goblinreactor.com/',
         # Operating System Version
         LSMinimumSystemVersion='12.0.0',
         # Categorization

@@ -287,6 +287,19 @@ PENDING(quit, QUIT)
 PENDING(paste_from_clipboard, PASTE_FROM_CLIPBOARD)
 PENDING(copy_or_noop, COPY_OR_NOOP)
 
+- (void)show_about_panel:(id)sender {
+    (void)sender;
+    NSString *url = @"https://silkie.goblinreactor.com/";
+    NSMutableParagraphStyle *centered = [[[NSParagraphStyle defaultParagraphStyle] mutableCopy] autorelease];
+    centered.alignment = NSTextAlignmentCenter;
+    NSAttributedString *credits = [[[NSAttributedString alloc] initWithString:url attributes:@{
+        NSLinkAttributeName: [NSURL URLWithString:url],
+        NSFontAttributeName: [NSFont systemFontOfSize:[NSFont smallSystemFontSize]],
+        NSParagraphStyleAttributeName: centered,
+    }] autorelease];
+    [NSApp orderFrontStandardAboutPanelWithOptions:@{NSAboutPanelOptionCredits: credits}];
+}
+
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     if (item.action == @selector(toggle_macos_secure_keyboard_entry:)) {
         item.state = [SecureKeyboardEntryController sharedInstance].isDesired ? NSControlStateValueOn : NSControlStateValueOff;
@@ -822,7 +835,8 @@ cocoa_create_global_menu(void) {
     NSMenu *appMenu = [[NSMenu alloc] init];
     [appMenuItem setSubmenu:appMenu];
 
-    [appMenu addItemWithTitle:[NSString stringWithFormat:@"About %@", app_name] action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+    NSString *about_title = [NSString stringWithFormat:@"About %@", app_name];
+    [[appMenu addItemWithTitle:about_title action:@selector(show_about_panel:) keyEquivalent:@""] setTarget:global_menu_target];
     [appMenu addItem:[NSMenuItem separatorItem]];
     MENU_ITEM(appMenu, @"Preferences…", edit_config_file);
     MENU_ITEM(appMenu, @"Reload Preferences", reload_config);
