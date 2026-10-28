@@ -1794,7 +1794,7 @@ send_visibility_report(Screen *self) {
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_frame_feedback(Screen *self, const char *data, size_t sz) {
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[128];
     const char *op;
     long long mode = -1, id = -1;
