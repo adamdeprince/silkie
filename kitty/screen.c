@@ -1805,7 +1805,7 @@ screen_haptic(Screen *self, const char *data, size_t sz) {
     // The taps, numbered as cocoa_haptic_feedback() takes them
     static const char *const taps[] = {"generic", "alignment", "level", "click", "complete"};
     // A frame from the program, see docs/extension-framing.rst for what is rejected
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[128];
     const char *op, *pattern, *target;
     long long id = -1, intensity = 100;
