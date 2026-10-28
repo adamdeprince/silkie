@@ -1772,7 +1772,7 @@ gesture_caps(void) {
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_gesture_osc(Screen *screen, const char *data, size_t sz) {
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[128];
     const char *op;
     long long mode = -1, id = -1;
