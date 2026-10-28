@@ -38,7 +38,7 @@ screen_reset_extension_modes(Screen *self UNUSED) {
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_caps_query(Screen *self, const char *data, size_t sz) {
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[512];
     const char *op;
     long long id = -1;
