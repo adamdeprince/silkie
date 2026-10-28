@@ -2261,7 +2261,7 @@ static struct {
     bool is_set;
     uint64_t device;
     int control, index;
-    char text[64];
+    char *text;  // malloc'd
 } last_pad_label;
 
 // A label is passed to the window system, which may show it to the user, when
@@ -2269,11 +2269,12 @@ static struct {
 static void
 pointer_pad_label(Screen *screen, uint64_t device, PointerPadControl control, int index, const char *text) {
     if (!(screen->pointer.mode & POINTER_MODE_PADS)) return;
-    last_pad_label.is_set = true;
+    free(last_pad_label.text);
+    last_pad_label.text = strdup(text);
+    last_pad_label.is_set = last_pad_label.text != NULL;
     last_pad_label.device = device;
     last_pad_label.control = control;
     last_pad_label.index = index;
-    snprintf(last_pad_label.text, sizeof(last_pad_label.text), "%s", text);
     const OSWindow *osw = os_window_for_kitty_window(screen->window_id);
     if (!osw || !osw->handle || !osw->num_tabs || !global_state.is_wayland || !glfwWaylandSetTabletPadLabel) return;
     const Tab *tab = osw->tabs + osw->active_tab;
@@ -2284,25 +2285,28 @@ pointer_pad_label(Screen *screen, uint64_t device, PointerPadControl control, in
     glfwWaylandSetTabletPadLabel(osw->handle, device, controls[control], (unsigned)index, text);
 }
 
-// Decodes the text of a label: base64 of at most 60 bytes of UTF-8 with no
-// control characters. Returns false when it is anything else
-static bool
-decode_pad_label(const char *src, char *dest, size_t dest_sz) {
-    uint8_t decoded[96];
-    size_t sz = sizeof(decoded);
+// Decodes the text of a label: base64 of UTF-8 with no control characters.
+// Returns NULL when it is anything else or there is no memory for it; the
+// caller frees the text
+static char *
+decode_pad_label(const char *src) {
     const size_t src_sz = strlen(src);
+    size_t sz = required_buffer_size_for_base64_decode(src_sz);
+    uint8_t *decoded = malloc(sz + 1);
+    if (!decoded) return NULL;
     if (!src_sz) sz = 0;
-    else if (src_sz > 80 || !base64_decode8_strict((const uint8_t *)src, src_sz, decoded, &sz) || sz > 60) return false;
-    if (sz >= dest_sz) return false;
+    else if (!base64_decode8_strict((const uint8_t *)src, src_sz, decoded, &sz)) goto fail;
     uint32_t state = 0, codep = 0;
     for (size_t i = 0; i < sz; i++) {
-        if (decode_utf8(&state, &codep, decoded[i]) == 1) return false;
-        if (state == 0 && (codep < 0x20 || codep == 0x7f)) return false;
+        if (decode_utf8(&state, &codep, decoded[i]) == 1) goto fail;
+        if (state == 0 && (codep < 0x20 || codep == 0x7f)) goto fail;
     }
-    if (state != 0) return false;
-    memcpy(dest, decoded, sz);
-    dest[sz] = 0;
-    return true;
+    if (state != 0) goto fail;
+    decoded[sz] = 0;
+    return (char *)decoded;
+fail:
+    free(decoded);
+    return NULL;
 }
 
 // A decimal integer of no more than max that is the whole of val, with no sign
@@ -2321,30 +2325,21 @@ pointer_uint(const char *val, unsigned long long max, unsigned long long *ans) {
 }
 
 // A frame from a program, framed as docs/extension-framing.rst says: one with a
-// duplicate key, a value out of range or fields longer than 127 bytes is
-// rejected as a whole, and a key that is not known is ignored
+// duplicate key or a value out of range is rejected as a whole, and a key that
+// is not known is ignored
 void
 screen_tablet_pointer(Screen *screen, const char *data, size_t sz) {
-    char buf[128], reply[128], *saveptr = NULL;
-    const char *op = "", *text = "", *keys[64];
+    EXTENSION_FIELDS(f);
+    char reply[128];
+    const char *op = "", *text = "";
     unsigned long long v = 0, x;
     int mode = -1, id = -1, num_controls = 0, control_index = -1;
-    size_t num_keys = 0;
     PointerPadControl control = PAD_BUTTON;
     unsigned long long device = 0;
     bool has_device = false;
-    if (sz >= sizeof(buf)) return;
-    memcpy(buf, data, sz);
-    buf[sz] = 0;
-    for (char *tok = strtok_r(buf, ":", &saveptr); tok; tok = strtok_r(NULL, ":", &saveptr)) {
-        char *val = strchr(tok, '=');
-        if (!val) return;
-        *val++ = 0;
-        for (size_t i = 0; i < num_keys; i++) {
-            if (!strcmp(keys[i], tok)) return;
-        }
-        if (num_keys >= arraysz(keys)) return;
-        keys[num_keys++] = tok;
+    if (!extension_fields_parse(&f, data, sz)) return;
+    for (unsigned i = 0; i < f.count; i++) {
+        const char *tok = f.keys[i], *val = f.values[i];
 #define CONTROL(name, which) \
     else if (!strcmp(tok, name)) { \
         if (!pointer_uint(val, 255, &x)) return; \
@@ -2367,9 +2362,11 @@ screen_tablet_pointer(Screen *screen, const char *data, size_t sz) {
     if (v != 1) return;
     if (!strcmp(op, "label")) {
         // Says what one control of a pad does at the moment. A label that is not well formed is dropped as a whole
-        char label[64];
-        if (!has_device || num_controls != 1 || control_index < 0 || control_index > 255 || !decode_pad_label(text, label, sizeof(label))) return;
+        if (!has_device || num_controls != 1 || control_index < 0 || control_index > 255) return;
+        char *label = decode_pad_label(text);
+        if (!label) return;
         pointer_pad_label(screen, device, control, control_index, label);
+        free(label);
     } else if (!strcmp(op, "query") && id >= 0) {
         const unsigned cw = MIN(4096u, MAX(1u, screen->cell_size.width)), ch = MIN(4096u, MAX(1u, screen->cell_size.height));
         snprintf(

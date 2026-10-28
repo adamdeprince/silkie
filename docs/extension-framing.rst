@@ -38,8 +38,8 @@ has
   as above,
 * no value for a field its page requires.
 
-Storage grows with the frame. There is no fixed field-length limit; a
-configured ``escape_limit`` can bound an entire OSC sequence.
+The fields have no length limit of their own. A frame is an escape code, and
+a configured ``escape_limit`` can bound an entire OSC sequence.
 
 No frame from a program, whether it is rejected, incomplete or accepted,
 ever reaches the program or anything else as keystrokes.

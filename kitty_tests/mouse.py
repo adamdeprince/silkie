@@ -868,13 +868,18 @@ class TestMouse(BaseTest):
         self.assertIn(b':id=2147483647:', c.wtcbuf)
         send('v=1:op=query:id=2147483648')
         self.ae(c.wtcbuf, b'')
-        # Fields are at most 127 bytes
+        # A frame with a field that is not key=value, an empty one among them, changes nothing
+        for bad in ('v=1::op=mode:mode=2', 'v=1:op=mode:mode=2:', 'v=1:op=mode:mode=2:=x'):
+            send(bad)
+            is_mode(1)
+        # Storage grows with the frame: the fields and the number of keys have no limit
         pad = 'v=1:op=mode:mode=2:x='
-        send(pad + 'a' * (127 - len(pad)))
-        is_mode(2)
-        send(pad + 'a' * (128 - len(pad)))
-        is_mode(2)
-        send('v=1:op=mode:mode=1:x=' + 'a' * 120)
+        for size in (127, 128, 1024, 8192):
+            send('v=1:op=mode:mode=1')
+            send(pad + 'a' * (size - len(pad)))
+            is_mode(2)
+        send('v=1:op=mode:mode=1')
+        send('v=1:op=mode:mode=2:' + ':'.join(f'k{i}=1' for i in range(200)))
         is_mode(2)
         # A label names one control with an index from 0 to 255
         send('v=1:op=mode:mode=4')
@@ -998,7 +1003,9 @@ class TestMouse(BaseTest):
         # Labels: what a control does at the moment, for the window system to show
         self.ae(label(f'device=9:button=2:text={b64("Undo")}'), (9, BUTTON, 2, 'Undo'))
         self.ae(label(f'text={b64("Größe")}:ring=0:device=9'), (9, RING, 0, 'Größe'))
-        self.ae(label(f'device=12:strip=1:text={b64("x" * 60)}'), (12, STRIP, 1, 'x' * 60))
+        # A label is as long as the program makes it
+        for size in (60, 61, 10000):
+            self.ae(label(f'device=12:strip=1:text={b64("é" * size)}'), (12, STRIP, 1, 'é' * size))
         # No text, or an empty one, takes the label away
         self.ae(label('device=9:dial=255'), (9, DIAL, 255, ''))
         self.ae(label('device=9:dial=0:text='), (9, DIAL, 0, ''))
@@ -1012,7 +1019,6 @@ class TestMouse(BaseTest):
             f'device=9:group=0:text={b64("Undo")}',  # a group is not a control
             'device=9:button=2:text=VW5kbw',  # not padded
             'device=9:button=2:text=!!!!',
-            f'device=9:button=2:text={b64("x" * 61)}',
             f'device=9:button=2:text={b64("a" + chr(10) + "b")}',  # a control character
             f'device=9:button=2:text={b64(bytes((0xC3, 0x28)))}',  # not UTF-8
             f'device=9:button=2:text={b64(bytes((0xE2, 0x82)))}',  # cut short

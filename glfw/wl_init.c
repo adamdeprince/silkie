@@ -1287,11 +1287,8 @@ tabletSeatHandlePadAdded(void *data UNUSED, struct zwp_tablet_seat_v2 *seat UNUS
 // can show to the user. Only the window the pad has the focus of can say, and
 // the compositor wants the serial of the last mode switch of the control's
 // group, since what a control does depends on the mode
-GLFWAPI bool
-glfwWaylandSetTabletPadLabel(GLFWwindow *handle, uint64_t device, int control, unsigned index, const char *text) {
-    const _GLFWwindow *window = (const _GLFWwindow *)handle;
-    if (!window) return false;
-    if (!text) text = "";
+static bool
+set_tablet_pad_label(const _GLFWwindow *window, uint64_t device, int control, unsigned index, const char *text) {
     for (_GLFWWaylandTabletPad *pad = _glfw.wl.tablet_pads; pad; pad = pad->next) {
         if (pad->device != device) continue;
         if (pad->window_id != window->id) return false;
@@ -1321,6 +1318,31 @@ glfwWaylandSetTabletPadLabel(GLFWwindow *handle, uint64_t device, int control, u
         return false;
     }
     return false;
+}
+
+GLFWAPI bool
+glfwWaylandSetTabletPadLabel(GLFWwindow *handle, uint64_t device, int control, unsigned index, const char *text) {
+    const _GLFWwindow *window = (const _GLFWwindow *)handle;
+    if (!window) return false;
+    if (!text) text = "";
+    // libwayland refuses a message longer than 4096 bytes and the connection
+    // dies with it. The longest of these requests carries the 8 byte header,
+    // two integers and the length of the string besides the string and its
+    // terminating NUL, so longer text is cut, at a character boundary
+    static const size_t max_text = 4096 - 8 - 4 * 3 - 1;
+    char *cut = NULL;
+    size_t len = strlen(text);
+    if (len > max_text) {
+        len = max_text;
+        while (len && ((unsigned char)text[len] & 0xC0) == 0x80) len--;
+        if (!(cut = malloc(len + 1))) return false;
+        memcpy(cut, text, len);
+        cut[len] = 0;
+        text = cut;
+    }
+    const bool ans = set_tablet_pad_label(window, device, control, index, text);
+    free(cut);
+    return ans;
 }
 
 static const struct zwp_tablet_seat_v2_listener tabletSeatListener = {
