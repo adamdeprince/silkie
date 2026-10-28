@@ -245,6 +245,9 @@ load_glfw(const char* path) {
     *(void **) (&glfwGetWindowHDRHeadroom_impl) = dlsym(handle, "glfwGetWindowHDRHeadroom");
     if (glfwGetWindowHDRHeadroom_impl == NULL) fail("Failed to load glfw function glfwGetWindowHDRHeadroom with error: %s", dlerror());
 
+    *(void **) (&glfwGetWindowHDRDefault_impl) = dlsym(handle, "glfwGetWindowHDRDefault");
+    if (glfwGetWindowHDRDefault_impl == NULL) fail("Failed to load glfw function glfwGetWindowHDRDefault with error: %s", dlerror());
+
     *(void **) (&glfwSetWindowHDRActive_impl) = dlsym(handle, "glfwSetWindowHDRActive");
     if (glfwSetWindowHDRActive_impl == NULL) fail("Failed to load glfw function glfwSetWindowHDRActive with error: %s", dlerror());
 

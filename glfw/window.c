@@ -861,6 +861,15 @@ glfwSetWindowHDRActive(GLFWwindow *handle, bool active) {
     _glfwPlatformSetWindowHDRActive(window, active);
 }
 
+GLFWAPI bool
+glfwGetWindowHDRDefault(GLFWwindow *handle) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    assert(window != NULL);
+
+    _GLFW_REQUIRE_INIT_OR_RETURN(false);
+    return _glfwPlatformGetWindowHDRDefault(window);
+}
+
 GLFWAPI float
 glfwSetWindowHDRRange(GLFWwindow *handle, float peak) {
     _GLFWwindow *window = (_GLFWwindow *)handle;

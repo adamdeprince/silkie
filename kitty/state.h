@@ -28,6 +28,7 @@
 typedef enum { LEFT_EDGE = 1, TOP_EDGE = 2, RIGHT_EDGE = 4, BOTTOM_EDGE = 8 } Edge;
 typedef enum { REPEAT_MIRROR, REPEAT_CLAMP, REPEAT_DEFAULT } RepeatStrategy;
 typedef enum { WINDOW_NORMAL, WINDOW_FULLSCREEN, WINDOW_MAXIMIZED, WINDOW_MINIMIZED, WINDOW_HIDDEN } WindowState;
+typedef enum { HDR_OFF, HDR_AUTO, HDR_ALWAYS, HDR_DETECT } HDRMode;
 
 typedef struct UrlPrefix {
     char_type string[16];
@@ -160,7 +161,8 @@ typedef struct Options {
         double outer, inner;
     } tab_bar_margin_height;
     long macos_menubar_title_max_length;
-    int macos_colorspace, wayland_colorspace, hdr;
+    int macos_colorspace, wayland_colorspace;
+    HDRMode hdr;
     struct {
         float val;
         AdjustmentUnit unit;
@@ -593,7 +595,7 @@ typedef struct OSWindow {
         bool os_forces_opaque, supports_transparency;
     } background_opacity;
     float hdr_headroom, hdr_white_level;
-    bool hdr_active, hdr_content, linear_output, linear_output_checked;
+    bool hdr_active, hdr_content, hdr_enabled_by_default, linear_output, linear_output_checked;
     FONTS_DATA_HANDLE fonts_data;
     id_type temp_font_group_id;
     enum RENDER_STATE render_state;
@@ -769,6 +771,7 @@ void send_image_to_gpu(uint32_t *, const void *, int32_t, int32_t, bool, bool, b
 void update_image_on_gpu(uint32_t, const void *, int32_t, int32_t, int32_t, int32_t, bool);
 void copy_surface_texture_to_texture(bool, uint32_t, uint32_t *, int32_t, int32_t);
 float effective_hdr_headroom(const OSWindow *w);
+bool hdr_should_be_active(const OSWindow *w);
 void scale_output_to_hdr_white_level(const OSWindow *w);
 bool backbuffer_is_float(void);
 void send_sprite_to_gpu(FONTS_DATA_HANDLE fg, sprite_index, pixel *, sprite_index);

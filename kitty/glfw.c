@@ -2544,9 +2544,9 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     glfwWindowHint(GLFW_BLUR_RADIUS, set_blur ? OPT(background_blur) : 0);
 #ifdef __APPLE__
     glfwWindowHint(GLFW_COCOA_COLOR_SPACE, OPT(macos_colorspace));
-    glfwWindowHint(GLFW_COCOA_HDR, OPT(hdr) != 0);
+    glfwWindowHint(GLFW_COCOA_HDR, OPT(hdr) != HDR_OFF);
 #else
-    glfwWindowHint(GLFW_WAYLAND_HDR, OPT(hdr) != 0);
+    glfwWindowHint(GLFW_WAYLAND_HDR, OPT(hdr) != HDR_OFF);
     glfwWindowHintString(GLFW_X11_INSTANCE_NAME, wm_class_name);
     glfwWindowHintString(GLFW_X11_CLASS_NAME, wm_class_class);
     glfwWindowHintString(GLFW_WAYLAND_APP_ID, wm_class_class);
@@ -2691,6 +2691,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     bind_shader_globals_to_current_context();
     OSWindow *w = add_os_window();
     w->handle = glfw_window;
+    w->hdr_enabled_by_default = glfwGetWindowHDRDefault(glfw_window);
     w->hdr_headroom = glfwGetWindowHDRHeadroom(glfw_window);
     w->hdr_white_level = 1.f;
     w->disallow_title_changes = disallow_override_title;

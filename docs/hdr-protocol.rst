@@ -135,7 +135,20 @@ a value obtained at startup is often smaller than one obtained a moment later.
 Configuration
 ----------------
 
-In Silkie, HDR output is off by default and enabled with the :opt:`hdr` option.
+In Silkie, :opt:`hdr` defaults to ``detect``. HDR stays enabled when the window's
+display offers it without a display mode switch. On macOS this uses the
+display's EDR capability, including built-in MacBook displays, even when the
+current headroom is temporarily ``1``. On Wayland it uses the HDR headroom
+already offered by the compositor. Detection is updated as the window moves
+between displays; unsupported displays use SDR.
+
+Silkie does not change a display's HDR mode. If an external monitor requires
+an HDR mode switch, enable HDR in the system's display settings first.
+``hdr no`` disables HDR, ``hdr auto`` requests it only while HDR content is
+visible, and ``hdr always`` requests it regardless of display detection.
+Restart Silkie after changing ``hdr``, since the framebuffer format is chosen
+when a window is created.
+
 The user can cap how bright anything gets with :opt:`hdr_max_headroom`, which
 the terminal applies before clamping to the headroom of the display, and that
 cap is what the query above reports.

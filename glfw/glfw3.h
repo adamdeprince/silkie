@@ -4484,6 +4484,14 @@ GLFWAPI int glfwSetWindowBlur(GLFWwindow *window, int value);
  */
 GLFWAPI float glfwGetWindowHDRHeadroom(GLFWwindow *window);
 
+/*! @brief Whether HDR can be enabled by default without changing display modes.
+ *  On macOS, uses the screen's potential EDR headroom, since current headroom
+ *  may be 1.0 until an application requests EDR. On Wayland, uses the headroom
+ *  the compositor currently offers. False on unsupported displays or windows
+ *  without an HDR framebuffer. Re-query when the window's display changes.
+ */
+GLFWAPI bool glfwGetWindowHDRDefault(GLFWwindow *window);
+
 /*! @brief Enable or disable display of HDR content in the window. Only
  *  effective when the window was created with the GLFW_COCOA_HDR hint.
  */

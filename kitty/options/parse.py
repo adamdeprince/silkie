@@ -1096,7 +1096,7 @@ class Parser:
             raise ValueError(f"The value {val} is not a valid choice for hdr")
         ans["hdr"] = val
 
-    choices_for_hdr = frozenset(('no', 'auto', 'always'))
+    choices_for_hdr = frozenset(('no', 'detect', 'auto', 'always'))
 
     def hdr_max_headroom(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['hdr_max_headroom'] = positive_float(val)
