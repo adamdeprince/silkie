@@ -14,7 +14,6 @@ import termios
 import time
 from contextlib import contextmanager, suppress
 from functools import wraps
-from pty import CHILD, STDIN_FILENO, STDOUT_FILENO, fork
 from unittest import TestCase
 
 from kitty.config import finalize_keys, finalize_mouse_mappings
@@ -23,7 +22,6 @@ from kitty.options.parse import merge_result_dicts
 from kitty.options.types import Options, defaults
 from kitty.rgb import to_color
 from kitty.types import MouseEvent
-from kitty.utils import read_screen_size
 from kitty.window import da1, decode_cmdline, process_remote_print, process_title_from_child
 
 from . import is_ci
@@ -324,7 +322,6 @@ class BaseTest(TestCase):
         cwd=None,
         env=None,
         stdin_fd=None,
-        stdout_fd=None,
         needs_da1=False,
     ):
         self.set_options(options)
@@ -338,7 +335,6 @@ class BaseTest(TestCase):
             cwd,
             env,
             stdin_fd=stdin_fd,
-            stdout_fd=stdout_fd,
             needs_da1=needs_da1,
         )
 
@@ -381,54 +377,72 @@ class PTY:
         cwd=None,
         env=None,
         stdin_fd=None,
-        stdout_fd=None,
         needs_da1=True,
         window_id=0,
         log_data_flow=False,
     ):
-        self.is_child = False
+        from kitty.child import openpty
+
         self.log_data_flow = log_data_flow
         if isinstance(argv, str):
             argv = shlex.split(argv)
         self.write_buf = b''
-        if argv is None:
-            from kitty.child import openpty
-
-            self.master_fd, self.slave_fd = openpty()
-            self.child_pid = 0
-            self.initial_termios_state = termios.tcgetattr(self.master_fd)
-        else:
-            self.child_pid, self.master_fd = fork()
-            self.is_child = self.child_pid == CHILD
+        self.child_pid = 0
         self.child_waited_for = False
-        if self.is_child:
-            while read_screen_size().width != columns * cell_width:
-                time.sleep(0.01)
-            if cwd:
-                os.chdir(cwd)
-            if stdin_fd is not None:
-                os.dup2(stdin_fd, STDIN_FILENO)
-                os.close(stdin_fd)
-            if stdout_fd is not None:
-                os.dup2(stdout_fd, STDOUT_FILENO)
-                os.close(stdout_fd)
-            signal.pthread_sigmask(signal.SIG_SETMASK, ())
-            env = os.environ if env is None else env
-            if debug_stdout > -1:
-                env['KITTY_STDIO_FORWARDED'] = str(debug_stdout)
-            os.execvpe(argv[0], argv, env)
-        if stdin_fd is not None:
-            os.close(stdin_fd)
-        if stdout_fd is not None:
-            os.close(stdout_fd)
-        os.set_blocking(self.master_fd, False)
         self.cell_width = cell_width
         self.cell_height = cell_height
-        self.set_window_size(rows=rows, columns=columns)
+        if argv is None:
+            self.master_fd, self.slave_fd = openpty()
+            self.initial_termios_state = termios.tcgetattr(self.master_fd)
+            self.set_window_size(rows=rows, columns=columns)
+        else:
+            self.spawn_child(argv, rows, columns, cwd, env, stdin_fd)
+        os.set_blocking(self.master_fd, False)
         self.needs_da1 = needs_da1
         self.callbacks = Callbacks(self)
         self.screen = Screen(self.callbacks, rows, columns, scrollback, cell_width, cell_height, window_id, self.callbacks)
         self.received_bytes = b''
+
+    def spawn_child(self, argv, rows, columns, cwd, env, stdin_fd):
+        # Fork and exec in C, as kitty does for its own children. A child forked
+        # by Python runs Python code before exec, which is unsafe once the test
+        # process has threads, and CoreText starts threads on macOS.
+        from kitty.child import openpty
+        from kitty.constants import kitten_exe
+        from kitty.fast_data_types import spawn
+
+        self.master_fd, slave_fd = openpty()
+        ready_read_fd, ready_write_fd = os.pipe()
+        env = dict(os.environ if env is None else env)
+        pass_fds = ()
+        if debug_stdout > -1:
+            env['KITTY_STDIO_FORWARDED'] = str(debug_stdout)
+            pass_fds = (debug_stdout,)
+        try:
+            self.child_pid = spawn(
+                argv[0],
+                cwd or os.getcwd(),
+                tuple(argv),
+                tuple(f'{k}={v}' for k, v in env.items()),
+                self.master_fd,
+                slave_fd,
+                -1 if stdin_fd is None else stdin_fd,
+                -1,
+                ready_read_fd,
+                ready_write_fd,
+                (),
+                kitten_exe(),
+                False,
+                pass_fds,
+            )
+        finally:
+            os.close(slave_fd)
+            os.close(ready_read_fd)
+            if stdin_fd is not None:
+                os.close(stdin_fd)
+        # The child waits for the ready pipe to close, so it starts with its final screen size
+        self.set_window_size(rows=rows, columns=columns)
+        os.close(ready_write_fd)
 
     def reset_termios_state(self):
         if s := getattr(self, 'initial_termios_state', None):
@@ -450,25 +464,24 @@ class PTY:
         self.__del__()
 
     def __del__(self):
-        if not self.is_child:
-            if hasattr(self, 'master_fd'):
-                os.close(self.master_fd)
-                del self.master_fd
-            if hasattr(self, 'slave_fd'):
-                os.close(self.slave_fd)
-                del self.slave_fd
-            if self.child_pid > 0 and not self.child_waited_for:
-                st = time.monotonic()
-                while time.monotonic() - st < 2:
-                    pid, ec = os.waitpid(self.child_pid, os.WNOHANG)
-                    if pid == self.child_pid:
-                        self.child_waited_for = True
-                        break
-                    time.sleep(0.1)
-                if not self.child_waited_for:
-                    os.kill(self.child_pid, signal.SIGKILL)
-                    os.waitpid(self.child_pid, 0)
+        if hasattr(self, 'master_fd'):
+            os.close(self.master_fd)
+            del self.master_fd
+        if hasattr(self, 'slave_fd'):
+            os.close(self.slave_fd)
+            del self.slave_fd
+        if self.child_pid > 0 and not self.child_waited_for:
+            st = time.monotonic()
+            while time.monotonic() - st < 2:
+                pid, ec = os.waitpid(self.child_pid, os.WNOHANG)
+                if pid == self.child_pid:
                     self.child_waited_for = True
+                    break
+                time.sleep(0.1)
+            if not self.child_waited_for:
+                os.kill(self.child_pid, signal.SIGKILL)
+                os.waitpid(self.child_pid, 0)
+                self.child_waited_for = True
 
     def write_to_child(self, data, flush=False):
         if isinstance(data, str):
