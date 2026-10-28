@@ -415,13 +415,20 @@ at the size it is shown.</p>
 <dl class="std opt">
 <dt class="sig sig-object std" id="opt-hdr">
 <span class="sig-name descname"><span class="pre">hdr</span></span><a class="headerlink" href="#opt-hdr" title="Link to this definition">¶</a></dt>
-<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">no</span></code>.</p>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">detect</span></code>.</p>
 <p>Allow colors brighter than SDR white on HDR displays. Normal (SDR) content is
 rendered exactly as it is with this option off, HDR only adds extra brightness
 requested by programs via the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>, by <a class="reference internal" href="#opt-cursor_brightness"><code class="xref std std-opt docutils literal notranslate"><span class="pre">cursor_brightness</span></code></a>
-and by HDR images. <code class="code docutils literal notranslate"><span class="pre">auto</span></code> enables the extended range of the display only
-while something brighter than SDR white is on screen, <code class="code docutils literal notranslate"><span class="pre">always</span></code> keeps it
-enabled. Supported on macOS, and on Wayland where the compositor implements
+and by HDR images. The default, <code class="code docutils literal notranslate"><span class="pre">detect</span></code>, keeps HDR enabled on displays
+where it is available without switching display modes: EDR-capable displays
+on macOS, including built-in MacBook displays, and displays already offering
+HDR headroom on Wayland. This follows the display as the window moves between
+screens. <code class="code docutils literal notranslate"><span class="pre">no</span></code> disables HDR. <code class="code docutils literal notranslate"><span class="pre">auto</span></code> enables the extended range only
+while something brighter than SDR white is on screen; <code class="code docutils literal notranslate"><span class="pre">always</span></code> keeps it
+enabled regardless of display detection. Silkie does not switch a display
+into HDR mode; an external display that requires this must be enabled in the
+system’s display settings. Restart Silkie after changing this option.
+Supported on macOS, and on Wayland where the compositor implements
 color management and the graphics driver has floating point window surfaces,
 see <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>.</p>
 </dd></dl>

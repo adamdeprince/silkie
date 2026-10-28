@@ -439,8 +439,19 @@ a value obtained at startup is often smaller than one obtained a moment later.</
 </section>
 <section id="configuration">
 <h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>
-<p>In Silkie, HDR output is off by default and enabled with the <a class="reference internal" href="configuration.html#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> option.
-The user can cap how bright anything gets with <a class="reference internal" href="configuration.html#opt-hdr_max_headroom"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr_max_headroom</span></code></a>, which
+<p>In Silkie, <a class="reference internal" href="configuration.html#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> defaults to <code class="docutils literal notranslate"><span class="pre">detect</span></code>. HDR stays enabled when the window’s
+display offers it without a display mode switch. On macOS this uses the
+display’s EDR capability, including built-in MacBook displays, even when the
+current headroom is temporarily <code class="docutils literal notranslate"><span class="pre">1</span></code>. On Wayland it uses the HDR headroom
+already offered by the compositor. Detection is updated as the window moves
+between displays; unsupported displays use SDR.</p>
+<p>Silkie does not change a display’s HDR mode. If an external monitor requires
+an HDR mode switch, enable HDR in the system’s display settings first.
+<code class="docutils literal notranslate"><span class="pre">hdr</span> <span class="pre">no</span></code> disables HDR, <code class="docutils literal notranslate"><span class="pre">hdr</span> <span class="pre">auto</span></code> requests it only while HDR content is
+visible, and <code class="docutils literal notranslate"><span class="pre">hdr</span> <span class="pre">always</span></code> requests it regardless of display detection.
+Restart Silkie after changing <code class="docutils literal notranslate"><span class="pre">hdr</span></code>, since the framebuffer format is chosen
+when a window is created.</p>
+<p>The user can cap how bright anything gets with <a class="reference internal" href="configuration.html#opt-hdr_max_headroom"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr_max_headroom</span></code></a>, which
 the terminal applies before clamping to the headroom of the display, and that
 cap is what the query above reports.</p>
 <p>HDR content is displayed on macOS, and on Wayland when two things hold:</p>
