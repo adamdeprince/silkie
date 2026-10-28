@@ -23,8 +23,6 @@
 
 #define DEFAULT_TOOLS (1u << 1 | 1u << 3 | 1u << 4 | 1u << 5)  // pen, brush, pencil, airbrush
 #define ALL_TOOLS 511u                                         // the tool values 0 to 8
-#define MAX_WIDTH 1e9
-#define MAX_EXPONENT 100.
 
 static bool
 parse_u32(const char *s, uint32_t *out) {
@@ -77,52 +75,65 @@ screen_ink_off(Screen *self) {
 void
 screen_ink_reset(Screen *self) {
     free(self->ink.strokes);
+    free(self->ink.brush.fill);
     zero_at_ptr(&self->ink);
 }
 
 static void
 set_brush(Screen *self, const ExtensionFields *f) {
-    InkBrush b = {.tools = DEFAULT_TOOLS, .remaining = 1, .exponent = 1, .w0 = -1, .w1 = -1, .fill = "#000000"};
+    InkBrush b = {.tools = DEFAULT_TOOLS, .remaining = 1, .exponent = 1, .w0 = -1, .w1 = -1};
+    char *fill = strdup("#000000");
     bool has_first = false;
+    if (!fill) return;
     for (size_t i = 0; i < f->count; i++) {
         const char *key = f->keys[i], *val = f->values[i];
         if (!strcmp(key, "i")) {
-            if (!parse_u32(val, &b.image)) return;
+            if (!parse_u32(val, &b.image)) goto fail;
         } else if (!strcmp(key, "g")) {
-            if (!parse_u32(val, &b.group)) return;
+            if (!parse_u32(val, &b.group)) goto fail;
         } else if (!strcmp(key, "k")) {
-            if (!parse_u32(val, &b.next_id)) return;
+            if (!parse_u32(val, &b.next_id)) goto fail;
             has_first = true;
         } else if (!strcmp(key, "n")) {
-            if (!parse_u32(val, &b.remaining)) return;
+            if (!parse_u32(val, &b.remaining)) goto fail;
         } else if (!strcmp(key, "tools")) {
             uint32_t tools;
-            if (!parse_u32(val, &tools) || !tools || tools > ALL_TOOLS) return;
+            if (!parse_u32(val, &tools) || !tools || tools > ALL_TOOLS) goto fail;
             b.tools = tools;
         } else if (!strcmp(key, "w0")) {
-            if (!parse_number(val, &b.w0) || b.w0 < 0 || b.w0 > MAX_WIDTH) return;
+            if (!parse_number(val, &b.w0) || !isfinite(b.w0) || b.w0 < 0) goto fail;
         } else if (!strcmp(key, "w1")) {
-            if (!parse_number(val, &b.w1) || b.w1 < 0 || b.w1 > MAX_WIDTH) return;
+            if (!parse_number(val, &b.w1) || !isfinite(b.w1) || b.w1 < 0) goto fail;
         } else if (!strcmp(key, "e")) {
-            if (!parse_number(val, &b.exponent) || !(b.exponent > 0) || b.exponent > MAX_EXPONENT) return;
+            if (!parse_number(val, &b.exponent) || !isfinite(b.exponent) || !(b.exponent > 0)) goto fail;
         } else if (!strcmp(key, "fill")) {
             const size_t len = strlen(val);
-            if (len >= sizeof(b.fill) || !vector_color_paints(val, len)) return;
-            memcpy(b.fill, val, len + 1);
+            char *next;
+            if (!vector_color_paints(val, len)) goto fail;
+            next = malloc(len + 1);
+            if (!next) goto fail;
+            memcpy(next, val, len + 1);
+            free(fill);
+            fill = next;
         }
     }
     // the image, the first of the ids and the width at full pressure have to be given
-    if (!b.image || !has_first || !b.next_id || !b.remaining || b.w1 < 0) return;
-    if (b.remaining - 1 > UINT32_MAX - b.next_id) return;  // the ids run past the largest there is
+    if (!b.image || !has_first || !b.next_id || !b.remaining || b.w1 < 0) goto fail;
+    if (b.remaining - 1 > UINT32_MAX - b.next_id) goto fail;  // the ids run past the largest there is
     if (b.w0 < 0) b.w0 = b.w1;
+    free(self->ink.brush.fill);
     self->ink.brush = b;
+    self->ink.brush.fill = fill;
     self->ink.on = true;
+    return;
+fail:
+    free(fill);
 }
 
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_ink(Screen *self, const char *data, size_t sz) {
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[320];
     const char *op;
     long long mode = -1, id = -1;

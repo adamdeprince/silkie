@@ -51,7 +51,7 @@ typedef struct InkBrush {
     uint32_t next_id, remaining;  // the element ids the program set aside that are left
     unsigned tools;               // the tools that draw, bit 1 << tool
     double w0, w1, exponent;      // the width at no pressure and at full pressure, and the curve between them
-    char fill[24];                // the color of the strokes, as a record writes it
+    char *fill;                   // the color of the strokes, as a record writes it; malloc'd, NULL when unset
 } InkBrush;
 
 typedef struct InkStroke {
