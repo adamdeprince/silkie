@@ -7,37 +7,84 @@
 
 #pragma once
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 // The fields of a frame a program sends to one of the OSC 777 extensions, see
 // docs/extension-framing.rst. The extensions share the rules, so this header is
 // the same on the branch of every extension
 typedef struct ExtensionFields {
-    char buf[128];
-    unsigned count;
-    const char *keys[64], *values[64];
+    char *buf;
+    unsigned count, cap;
+    const char **keys, **values;
 } ExtensionFields;
 
+static inline void
+extension_fields_free(ExtensionFields *f) {
+    free(f->buf);
+    free(f->keys);
+    free(f->values);
+    memset(f, 0, sizeof(*f));
+}
+
+static inline void
+extension_fields_cleanup(ExtensionFields *f) {
+    extension_fields_free(f);
+}
+
+// Zero-initialized, and freed on every return of the function that declares it.
+#define EXTENSION_FIELDS(name) ExtensionFields name __attribute__((cleanup(extension_fields_cleanup))) = {0}
+
 // Cuts a frame into its fields. False when the frame is to be rejected as a
-// whole: its fields are longer than 127 bytes, one of them is not key=value
-// with a key, or a key is given twice
+// whole: one of them is not key=value with a key, a key is given twice, or
+// storage for the frame cannot be allocated. f must be zeroed; a previous
+// frame in f is freed. There is no fixed size.
 static inline bool
 extension_fields_parse(ExtensionFields *f, const char *data, size_t sz) {
-    if (sz >= sizeof(f->buf)) return false;
+    extension_fields_free(f);
+    if (sz == SIZE_MAX) return false;
+    f->buf = malloc(sz + 1);
+    if (!f->buf) return false;
     memcpy(f->buf, data, sz);
     f->buf[sz] = 0;
-    f->count = 0;
+    f->cap = 8;
+    f->keys = malloc(f->cap * sizeof(*f->keys));
+    f->values = malloc(f->cap * sizeof(*f->values));
+    if (!f->keys || !f->values) {
+        extension_fields_free(f);
+        return false;
+    }
     for (char *p = f->buf;;) {
         char *end = strchr(p, ':'), *eq;
         if (end) *end = 0;
-        if (!(eq = strchr(p, '=')) || eq == p) return false;
+        if (!(eq = strchr(p, '=')) || eq == p) {
+            extension_fields_free(f);
+            return false;
+        }
         *eq = 0;
         for (unsigned i = 0; i < f->count; i++) {
-            if (!strcmp(f->keys[i], p)) return false;
+            if (!strcmp(f->keys[i], p)) {
+                extension_fields_free(f);
+                return false;
+            }
         }
-        if (f->count >= sizeof(f->keys) / sizeof(f->keys[0])) return false;
+        if (f->count == f->cap) {
+            unsigned cap = f->cap * 2u;
+            const char **keys = realloc(f->keys, cap * sizeof(*keys));
+            const char **values = realloc(f->values, cap * sizeof(*values));
+            if (!keys || !values) {
+                if (keys) f->keys = keys;
+                if (values) f->values = values;
+                extension_fields_free(f);
+                return false;
+            }
+            f->keys = keys;
+            f->values = values;
+            f->cap = cap;
+        }
         f->keys[f->count] = p;
         f->values[f->count++] = eq + 1;
         if (!end) break;
@@ -65,8 +112,9 @@ extension_int(const char *val, long long min, long long max, long long *ans) {
     if (*p < '0' || *p > '9') return false;
     long long v = 0;
     for (; *p >= '0' && *p <= '9'; p++) {
-        v = v * 10 + (*p - '0');
-        if (v > 1000000000000000ll) return false;
+        const int digit = *p - '0';
+        if (v > (LLONG_MAX - digit) / 10) return false;
+        v = v * 10 + digit;
     }
     if (*p) return false;
     if (negative) v = -v;
