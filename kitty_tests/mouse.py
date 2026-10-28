@@ -496,10 +496,11 @@ class TestMouse(BaseTest):
             'v=1::op=mode:mode=0', 'v=1:op=mode:mode=0:junk', 'v=1:op=mode:=0', 'op=mode:mode=0', 'v=1:mode=0', 'v=2:op=mode:mode=0',
         ):
             self.ae(send(body), on, body)
-        # Fields are at most 127 bytes
+        # Unknown fields grow with the frame, including beyond the old buffer size.
         body = 'v=1:op=mode:mode=0:p='
-        self.ae(send(body + 'x' * (128 - len(body))), on)
-        self.ae(send(body + 'x' * (127 - len(body))), off)
+        for size in (127, 128, 1024, 8192):
+            self.ae(send('v=1:op=mode:mode=1'), on)
+            self.ae(send(body + 'x' * (size - len(body))), off)
         # and a query with an id out of range is not answered
         c.clear()
         parse_bytes(s, b'\x1b]777;scroll;v=1:op=query:id=-1\x1b\\')
