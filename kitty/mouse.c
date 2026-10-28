@@ -1579,7 +1579,7 @@ pixel_scroll_enabled_for_screen(const Screen *screen) {
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_scroll_protocol(Screen *screen, const char *data, size_t sz) {
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[64];
     const char *op;
     long long mode = -1, id = -1;
