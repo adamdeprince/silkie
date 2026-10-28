@@ -556,9 +556,12 @@ class Rendering(FontBaseTest):
                 face = get_fallback_font(text, False, False)
             except ValueError:
                 continue
-            # one reference held by the FontGroup, one by face, one by the
-            # argument to getrefcount()
-            self.assertGreaterEqual(sys.getrefcount(face), 3, f'get_fallback_font() returned a borrowed reference for {text!r}')
+            # The FontGroup holds a reference in addition to face. Compare with
+            # an object held only by a local, since whether getrefcount() counts
+            # its own argument differs between Python versions.
+            only_local = object()
+            self.assertGreaterEqual(
+                sys.getrefcount(face), sys.getrefcount(only_local) + 1, f'get_fallback_font() returned a borrowed reference for {text!r}')
             del face
             # the Face must still be usable via the FontGroup
             self.assertIsInstance(get_fallback_font(text, False, False).postscript_name(), str)
