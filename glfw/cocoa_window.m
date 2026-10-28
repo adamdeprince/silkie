@@ -777,6 +777,7 @@ static void _glfwUpdateNotchCover(_GLFWwindow *);
         // is running for the new monitor
         requestRenderFrame(window, window->ns.renderFrameCallback);
     }
+    _glfwInputWindowDamage(window); // Re-evaluate HDR capability and headroom on the new screen.
 }
 
 - (void)request_delayed_cursor_update:(id)sender {
@@ -2614,6 +2615,14 @@ float
 _glfwPlatformGetWindowHDRHeadroom(_GLFWwindow *window) {
     NSScreen *screen = window->ns.hdr ? [window->ns.object screen] : nil;
     return screen ? (float)[screen maximumExtendedDynamicRangeColorComponentValue] : 1.f;
+}
+
+bool
+_glfwPlatformGetWindowHDRDefault(_GLFWwindow *window) {
+    NSScreen *screen = window->ns.hdr ? [window->ns.object screen] : nil;
+    // EDR is composited in the display's existing mode. Current headroom can
+    // stay at 1 until we request EDR, so it cannot be used to decide to opt in.
+    return screen && [screen maximumPotentialExtendedDynamicRangeColorComponentValue] > 1.0;
 }
 
 void

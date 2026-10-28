@@ -124,8 +124,19 @@ backbuffer_is_float(void) {
 
 float
 effective_hdr_headroom(const OSWindow *w) {
-    if (!OPT(hdr)) return 1.f;
+    if (OPT(hdr) == HDR_OFF || (OPT(hdr) == HDR_DETECT && !w->hdr_enabled_by_default)) return 1.f;
     return MAX(1.f, MIN(w->hdr_headroom, OPT(hdr_max_headroom)));
+}
+
+bool
+hdr_should_be_active(const OSWindow *w) {
+    switch (OPT(hdr)) {
+        case HDR_DETECT: return w->hdr_enabled_by_default;
+        case HDR_AUTO: return w->hdr_content;
+        case HDR_ALWAYS: return true;
+        case HDR_OFF: return false;
+    }
+    return false;
 }
 
 
@@ -3450,6 +3461,28 @@ sprite_map_set_limits(PyObject UNUSED *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+// Test only. Exercise the renderer's HDR policy across display and content
+// changes without a GPU context. Options use the normal configuration path.
+static PyObject *
+pysimulate_hdr_render_ticks(PyObject *self UNUSED, PyObject *states) {
+    RAII_PyObject(ticks, PySequence_Fast(states, "expected HDR display states"));
+    if (!ticks) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    RAII_PyObject(ans, PyList_New(0));
+    if (!ans) return NULL;
+    for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(ticks); i++) {
+        int enabled_by_default, has_content;
+        if (!PyArg_ParseTuple(PySequence_Fast_GET_ITEM(ticks, i), "pfp", &enabled_by_default, &w->hdr_headroom, &has_content)) return NULL;
+        w->hdr_enabled_by_default = enabled_by_default;
+        w->hdr_content = has_content;
+        w->hdr_active = hdr_should_be_active(w);
+        RAII_PyObject(state, Py_BuildValue("Of", w->hdr_active ? Py_True : Py_False, effective_hdr_headroom(w)));
+        if (!state || PyList_Append(ans, state) != 0) return NULL;
+    }
+    return Py_NewRef(ans);
+}
+
 // Test only. Wraps custom_shader_needs_render() so the redraw decision can be
 // exercised from the Python test suite without a GPU context. Each state is a
 // (has_active_shaders, min_step, next_end_at) tuple.
@@ -3513,6 +3546,7 @@ static PyMethodDef module_methods[] = {
     MW(unbind_program, METH_NOARGS),
     MW(custom_shader_needs_render, METH_VARARGS),
     MW(simulate_custom_shader_render_ticks, METH_VARARGS),
+    MW(simulate_hdr_render_ticks, METH_O),
 
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

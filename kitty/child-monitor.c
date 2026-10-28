@@ -862,7 +862,7 @@ prepare_to_render_os_window(
 #define WD w->render_data
         if (w->visible && WD.screen) {
             os_window->needs_layers = os_window->needs_layers || screen_needs_rendering_in_layers(os_window, w, WD.screen);
-            if (OPT(hdr) == 1 && !os_window->hdr_content) os_window->hdr_content = screen_has_hdr_content(WD.screen);
+            if (OPT(hdr) == HDR_AUTO && !os_window->hdr_content) os_window->hdr_content = screen_has_hdr_content(WD.screen);
             screen_check_pause_rendering(WD.screen, now);
             *num_visible_windows += 1;
             color_type window_bg =
@@ -1102,9 +1102,12 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
     w->render_calls++;
     make_os_window_context_current(w);
     if (!w->linear_output_checked) { w->linear_output = backbuffer_is_float(); w->linear_output_checked = true; }
+    const float previous_headroom = effective_hdr_headroom(w);
+    w->hdr_enabled_by_default = glfwGetWindowHDRDefault(w->handle);
     w->hdr_headroom = glfwGetWindowHDRHeadroom(w->handle);
     w->hdr_content = OPT(cursor_brightness) > 1;
     bool needs_render = w->redraw_count > 0 || w->live_resize.in_progress || global_state.thumbnail_callback.os_window == w->id;
+    if (effective_hdr_headroom(w) != previous_headroom) needs_render = true;
     if (w->viewport_size_dirty) {
         set_gpu_viewport(w->viewport_width, w->viewport_height);
         w->viewport_size_dirty = false;
@@ -1119,10 +1122,11 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
     }
     if (prepare_to_render_os_window(w, now, &active_window_id, &active_window_bg, &num_visible_windows, &all_windows_have_same_bg, scan_for_animated_images))
         needs_render = true;
-    const bool hdr_active = OPT(hdr) == 2 || (OPT(hdr) == 1 && w->hdr_content);
+    const bool hdr_active = hdr_should_be_active(w);
     if (hdr_active != w->hdr_active) {
         w->hdr_active = hdr_active;
         glfwSetWindowHDRActive(w->handle, hdr_active);
+        needs_render = true;
     }
     // Where SDR white lies in the framebuffer can depend on how bright the contents get, so a change of it needs a new frame
     const float hdr_white_level = glfwSetWindowHDRRange(w->handle, hdr_active ? effective_hdr_headroom(w) : 1.f);

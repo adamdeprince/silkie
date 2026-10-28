@@ -2709,16 +2709,23 @@ and zero means fully dimmed (i.e. invisible).
 
 opt(
     'hdr',
-    'no',
-    choices=('no', 'auto', 'always'),
+    'detect',
+    choices=('no', 'detect', 'auto', 'always'),
     ctype='hdr',
     long_text="""
 Allow colors brighter than SDR white on HDR displays. Normal (SDR) content is
 rendered exactly as it is with this option off, HDR only adds extra brightness
 requested by programs via the :doc:`/hdr-protocol`, by :opt:`cursor_brightness`
-and by HDR images. :code:`auto` enables the extended range of the display only
-while something brighter than SDR white is on screen, :code:`always` keeps it
-enabled. Supported on macOS, and on Wayland where the compositor implements
+and by HDR images. The default, :code:`detect`, keeps HDR enabled on displays
+where it is available without switching display modes: EDR-capable displays
+on macOS, including built-in MacBook displays, and displays already offering
+HDR headroom on Wayland. This follows the display as the window moves between
+screens. :code:`no` disables HDR. :code:`auto` enables the extended range only
+while something brighter than SDR white is on screen; :code:`always` keeps it
+enabled regardless of display detection. kitty does not switch a display
+into HDR mode; an external display that requires this must be enabled in the
+system's display settings. Restart kitty after changing this option.
+Supported on macOS, and on Wayland where the compositor implements
 color management and the graphics driver has floating point window surfaces,
 see :doc:`/hdr-protocol`.
 """,

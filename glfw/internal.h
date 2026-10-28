@@ -883,6 +883,7 @@ void _glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval,
 void _glfwPlatformRemoveTimer(unsigned long long timer_id);
 int _glfwPlatformSetWindowBlur(_GLFWwindow *handle, int value);
 float _glfwPlatformGetWindowHDRHeadroom(_GLFWwindow *window);
+bool _glfwPlatformGetWindowHDRDefault(_GLFWwindow *window);
 void _glfwPlatformSetWindowHDRActive(_GLFWwindow *window, bool active);
 float _glfwPlatformSetWindowHDRRange(_GLFWwindow *window, float peak);
 bool _glfwPlatformGetWindowPreferredColorDescription(_GLFWwindow *window, GLFWcolordescription *desc);

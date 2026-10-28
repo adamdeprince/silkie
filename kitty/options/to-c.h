@@ -433,11 +433,12 @@ dragging_pointer_shape(PyObject *parts, Options *opts) {
     opts->pointer_shape_when_dragging_rectangle = pointer_shape(PyTuple_GET_ITEM(parts, 1));
 }
 
-static inline int
+static inline HDRMode
 hdr(PyObject *val) {
-    if (PyUnicode_CompareWithASCIIString(val, "auto") == 0) return 1;
-    if (PyUnicode_CompareWithASCIIString(val, "always") == 0) return 2;
-    return 0;
+    if (PyUnicode_CompareWithASCIIString(val, "auto") == 0) return HDR_AUTO;
+    if (PyUnicode_CompareWithASCIIString(val, "always") == 0) return HDR_ALWAYS;
+    if (PyUnicode_CompareWithASCIIString(val, "detect") == 0) return HDR_DETECT;
+    return HDR_OFF;
 }
 
 static inline int

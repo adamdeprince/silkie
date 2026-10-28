@@ -3828,6 +3828,12 @@ _glfwPlatformGetWindowHDRHeadroom(_GLFWwindow *window) {
 void
 _glfwPlatformSetWindowHDRActive(_GLFWwindow *window UNUSED, bool active UNUSED) {}
 
+bool
+_glfwPlatformGetWindowHDRDefault(_GLFWwindow *window) {
+    // Use only the range already offered by the compositor, without requesting a display mode change.
+    return _glfwPlatformGetWindowHDRHeadroom(window) > 1.f;
+}
+
 float
 _glfwPlatformSetWindowHDRRange(_GLFWwindow *window, float peak) {
     if (!window->wl.hdr.enabled) return 1.f;

@@ -2316,6 +2316,10 @@ typedef float (*glfwGetWindowHDRHeadroom_func)(GLFWwindow*);
 GFW_EXTERN glfwGetWindowHDRHeadroom_func glfwGetWindowHDRHeadroom_impl;
 #define glfwGetWindowHDRHeadroom glfwGetWindowHDRHeadroom_impl
 
+typedef bool (*glfwGetWindowHDRDefault_func)(GLFWwindow*);
+GFW_EXTERN glfwGetWindowHDRDefault_func glfwGetWindowHDRDefault_impl;
+#define glfwGetWindowHDRDefault glfwGetWindowHDRDefault_impl
+
 typedef void (*glfwSetWindowHDRActive_func)(GLFWwindow*, bool);
 GFW_EXTERN glfwSetWindowHDRActive_func glfwSetWindowHDRActive_impl;
 #define glfwSetWindowHDRActive glfwSetWindowHDRActive_impl
