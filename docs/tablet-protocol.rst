@@ -611,13 +611,14 @@ of the pad::
 
 ``device`` is the pad and exactly one of ``button``, ``ring``, ``strip`` and
 ``dial`` names the control, with a number from ``0`` to ``255``. ``text`` is
-at most 60 bytes of UTF-8 without control characters, encoded as base64 with
-padding, so the frame stays within its 127 bytes; a ``text`` that is empty or
-left out takes the label away. A label belongs to the mode the group of the
-control is in, so a program sets its labels when the pad is described and
-again after each ``group`` report. It is accepted only from the program the
-pad is reporting to, there is no reply, and a terminal with nowhere to show
-labels ignores it.
+UTF-8 without control characters, encoded as base64 with padding; a ``text``
+that is empty or left out takes the label away. A window system may carry
+only so much of a label: a Wayland request holds 4075 bytes of it, and kitty
+cuts a longer one there, between characters. A label belongs to the mode
+the group of the control is in, so a program sets its labels when the pad is
+described and again after each ``group`` report. It is accepted only from
+the program the pad is reporting to, there is no reply, and a terminal with
+nowhere to show labels ignores it.
 
 Totems
 ~~~~~~~~~
