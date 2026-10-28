@@ -2295,6 +2295,11 @@ class TestGraphics(BaseTest):
             self.ae(ink('op=mode'), '\x1b]777;ink;v=1:op=mode:mode=0\x1b\\', bad)
         self.ae(ink('op=mode:mode=1'), '')  # there is no brush to turn on
         self.ae(ink('op=mode'), '\x1b]777;ink;v=1:op=mode:mode=0\x1b\\')
+        # nothing caps the length of the fill, the widths or the exponent, and a query reports them in full
+        fill = '#ff0000*1.' + '0' * 400
+        self.ae(ink(f'op=brush:i=1:k=100:fill={fill}:w0=2000000000:w1=3000000000:e=1000'), '')
+        self.ae(ink('op=query:id=6'), f'\x1b]777;ink;v=1:op=cap:id=6:caps=1:mode=1:i=1:g=0:k=100:n=1:fill={fill}:w0=2e+09:w1=3e+09:e=1e+03:tools=58\x1b\\')
+        self.ae(ink('op=mode:mode=0'), '')
 
         # a stroke: the report that begins it names the element, every report adds a point
         self.ae(ink('op=brush:i=1:k=100:n=3:fill=#ff0000c0:w0=1:w1=5'), '')

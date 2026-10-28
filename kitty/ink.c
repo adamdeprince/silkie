@@ -130,26 +130,44 @@ fail:
     free(fill);
 }
 
+// Answers a query. The fill is as long as the program wrote it, so the reply
+// is sized to fit
+static void
+send_cap(Screen *self, long long id) {
+    const InkBrush *b = &self->ink.brush;
+    if (!b->image) {
+        char reply[64];
+        snprintf(reply, sizeof(reply), "777;ink;v=1:op=cap:id=%lld:caps=1:mode=%d", id, self->ink.on);
+        write_escape_code_to_child(self, ESC_OSC, reply);
+        return;
+    }
+    char w0[32], w1[32], e[32];
+    number(b->w0, w0, sizeof(w0)), number(b->w1, w1, sizeof(w1)), number(b->exponent, e, sizeof(e));
+#define CAP(buf, sz)                                                                                                                                     \
+    snprintf(                                                                                                                                            \
+        buf, sz, "777;ink;v=1:op=cap:id=%lld:caps=1:mode=%d:i=%u:g=%u:k=%u:n=%u:fill=%s:w0=%s:w1=%s:e=%s:tools=%u", id, self->ink.on, b->image, b->group, \
+        b->next_id, b->remaining, b->fill, w0, w1, e, b->tools)
+    const int n = CAP(NULL, 0);
+    char *reply = n < 0 ? NULL : malloc((size_t)n + 1);
+    if (!reply) return;
+    CAP(reply, (size_t)n + 1);
+#undef CAP
+    write_escape_code_to_child(self, ESC_OSC, reply);
+    free(reply);
+}
+
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_ink(Screen *self, const char *data, size_t sz) {
     EXTENSION_FIELDS(f);
-    char reply[320];
+    char reply[64];
     const char *op;
     long long mode = -1, id = -1;
     if (!extension_fields_parse(&f, data, sz) || !extension_frame_header(&f, 1, &op)) return;
     if (!extension_field_int(&f, "mode", 0, INT32_MAX, &mode) || !extension_field_int(&f, "id", 0, INT32_MAX, &id)) return;
     const InkBrush *b = &self->ink.brush;
-    if (!strcmp(op, "query") && id >= 0) {
-        int n = snprintf(reply, sizeof(reply), "777;ink;v=1:op=cap:id=%lld:caps=1:mode=%d", id, self->ink.on);
-        if (b->image) {
-            char w0[32], w1[32], e[32];
-            snprintf(
-                reply + n, sizeof(reply) - n, ":i=%u:g=%u:k=%u:n=%u:fill=%s:w0=%s:w1=%s:e=%s:tools=%u", b->image, b->group, b->next_id, b->remaining, b->fill,
-                number(b->w0, w0, sizeof(w0)), number(b->w1, w1, sizeof(w1)), number(b->exponent, e, sizeof(e)), b->tools);
-        }
-        write_escape_code_to_child(self, ESC_OSC, reply);
-    } else if (!strcmp(op, "mode")) {
+    if (!strcmp(op, "query") && id >= 0) send_cap(self, id);
+    else if (!strcmp(op, "mode")) {
         if (mode < 0) {  // a read
             snprintf(reply, sizeof(reply), "777;ink;v=1:op=mode:mode=%d", self->ink.on);
             write_escape_code_to_child(self, ESC_OSC, reply);

@@ -31,7 +31,7 @@ Frames are ``OSC 777`` with the ``ink`` selector::
 
 They follow the rules every OSC 777 extension shares, which
 :doc:`extension-framing` gives: the syntax of the fields, which frames are
-rejected, among them every frame of more than 127 bytes, and the units.
+rejected, and the units.
 Values are decimal integers, except the widths and the exponent of a brush,
 which are numbers as the records of a vector image write them and may have a
 fraction, and its color. ``v``, the protocol version, is ``1``, and ``op`` is
@@ -82,14 +82,14 @@ A program turns ink on by giving the terminal a brush::
              the terminal, ``1`` by default. The last of them may not exceed
              4294967295. The program must not use these ids for anything else
 ``fill``     The color of the strokes, as vector records write a color,
-             ``#rrggbb``, ``#rrggbbaa`` or ``@`` and the id of a gradient, at
-             most 23 bytes. Black by default; ``none`` is refused
+             ``#rrggbb``, ``#rrggbbaa`` or ``@`` and the id of a gradient.
+             Black by default; ``none`` is refused
 ``w1``       Required. The width of the stroke under full pressure, in the
-             units of the group, from 0 to 1000000000
+             units of the group, a finite number from 0 up
 ``w0``       The width under no pressure, the same as ``w1`` by default, which
              gives a stroke of constant width
-``e``        The exponent of the curve between the two, greater than 0 and at
-             most 100, ``1`` by default
+``e``        The exponent of the curve between the two, a finite number
+             greater than 0, ``1`` by default
 ``tools``    The tools that draw, a bit set with bit ``1 << tool`` for each
              ``tool`` value of the tablet pointer protocol: pen ``2``, eraser
              ``4``, brush ``8``, pencil ``16``, airbrush ``32``, mouse ``64``,
@@ -100,10 +100,7 @@ A program turns ink on by giving the terminal a brush::
 A brush replaces the one before it, ids included, and turns ink on. The
 eraser is left out by default because what erasing means is the program's
 business; a program that wants the other end of the pen to paint, with the
-color of its page for instance, gives a brush that says so. The frame is
-limited to 127 bytes like every frame from a program; a brush with every id
-at its largest fits when the widths are written with a few digits, which is
-all they need.
+color of its page for instance, gives a brush that says so.
 
 Mode
 --------
