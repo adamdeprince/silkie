@@ -2169,6 +2169,96 @@ class TestGraphics(BaseTest):
         s.reset()
         self.ae(ink('op=query:id=9'), '\x1b]777;ink;v=1:op=cap:id=9:caps=1:mode=0\x1b\\')
 
+    def test_vector_growing_geometry(self):
+        s = self.create_screen()
+        g = s.grman
+
+        def command(records, action='t', image=1):
+            res = parse_full_response(send_command(s, f'a={action},f=200,s=10,v=10,i={image}', records))
+            self.ae(res.code, 'OK', res.msg)
+
+        # Numeric tokens can be longer than the old 63-character parsing buffer.
+        one = '1.' + '0' * 2048
+        command(f'k id=1 pts={one},1,1 fill=#ff0000')
+        command('k id=1 pts=1,1,1 fill=#ff0000', image=2)
+        self.ae(g.render_vector_image(1, 10, 10), g.render_vector_image(2, 10, 10))
+        # A stroke accumulates many small appends across multiple capacity changes.
+        points = ['1,1,1']
+        for j in range(2048):
+            point = f'{1 + j % 8},{1 + (j // 8) % 8},1'
+            points.append(point)
+            command(f'a id=1 pts={point}', action='e')
+        command('k id=1 pts=' + ','.join(points) + ' fill=#ff0000', image=2)
+        self.ae(g.render_vector_image(1, 10, 10), g.render_vector_image(2, 10, 10))
+
+    def test_vector_deep_groups(self):
+        s = self.create_screen()
+        g = s.grman
+
+        def command(records, action='t'):
+            res = parse_full_response(send_command(s, f'a={action},f=200,s=10,v=10,i=1', records))
+            self.ae(res.code, 'OK', res.msg)
+
+        # Heap-backed traversal and ancestor transforms must reach beyond the old depth 64.
+        groups = ''.join(f'g id={i} p={i - 1} t=1,0,0,1,0,0\n' for i in range(1, 2049))
+        command(groups + 'p id=3000 g=2048 d=M1,1L9,1L9,9L1,9Z fill=#ff0000')
+        pixels = g.render_vector_image(1, 10, 10)
+        self.ae(pixels[(5 * 10 + 5) * 4 : (5 * 10 + 5) * 4 + 4], b'\xff\x00\x00\xff')
+        command('g id=100 p=99 o=50', action='e')
+        pixels = g.render_vector_image(1, 10, 10)
+        self.ae(pixels[(5 * 10 + 5) * 4 + 3], 128)
+        command('x g=1', action='e')
+        self.ae(g.image_for_client_id(1)['vector_elements'], 0)
+        # Parent cycles remain harmless rather than becoming an infinite traversal.
+        command('g id=1 p=2\ng id=2 p=1\np id=3 g=1 d=M1,1L9,9 stroke=#ff0000')
+        self.ae(g.render_vector_image(1, 10, 10), bytes(10 * 10 * 4))
+
+    def test_vector_dash_limit(self):
+        # A dash pattern far finer than its path is long would cut it into more dashes than memory or time allow
+        import signal
+        s = self.create_screen()
+        g = s.grman
+
+        def draw(payload, image_id):
+            # the default action of the alarm ends the process, so a hang fails the run instead of stalling it
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.alarm(60)
+            try:
+                start = time.monotonic()
+                res = parse_full_response(send_command(s, f'a=T,f=200,s=20,v=20,i={image_id}', payload))
+                return res, time.monotonic() - start
+            finally:
+                signal.alarm(0)
+
+        def pixel(img, x, y):
+            o = (y * img['width'] + x) * 4
+            return tuple(img['data'][o:o + 4])
+
+        # Beyond the budget the stroke is solid: a pattern of a millionth of a unit along a line of a million units
+        res, took = draw('p id=1 d=M0,10L1000000,10 stroke=#000000 w=4 fill=none dash=0.000001,0.000001', 1)
+        self.ae((res.code, res.msg), ('OK', ''))
+        self.assertLess(took, 10)
+        img = g.image_for_client_id(1)
+        self.ae([pixel(img, x, 10)[3] for x in (0, 7, 13, 19)], [255] * 4)
+        # the step of the dashes vanishing against the position along the path
+        res, took = draw('p id=1 d=M1e15,10L-1e15,10 stroke=#000000 w=4 fill=none dash=1,1', 2)
+        self.ae((res.code, res.msg), ('OK', ''))
+        self.assertLess(took, 10)
+        # a budget for the whole path, not for each subpath: the first two of these are dashed, the rest is solid
+        many = ''.join(f'M0,{y}.5L1000,{y}.5' for y in range(0, 20, 2))
+        res, took = draw(f'p id=1 d={many} stroke=#000000 w=1 fill=none dash=0.01,0.01', 3)
+        self.ae((res.code, res.msg), ('OK', ''))
+        self.assertLess(took, 10)
+        img = g.image_for_client_id(3)
+        coverage = [pixel(img, 10, y)[3] for y in range(0, 20, 2)]
+        self.assertTrue(all(100 < a < 156 for a in coverage[:2]), coverage)
+        self.ae(coverage[2:], [255] * 8)
+        # below the budget the dashes are drawn as before
+        res, took = draw('p id=1 d=M0,10L20,10 stroke=#000000 w=4 fill=none dash=4,4 cap=butt', 4)
+        self.ae((res.code, res.msg), ('OK', ''))
+        img = g.image_for_client_id(4)
+        self.ae([pixel(img, x, 10)[3] for x in (1, 5, 9, 13)], [255, 0, 255, 0])
+
     def test_vector_image_damage(self):
         # A patch to a vector image draws only the part of it that changed.
         # The pixels kept up that way must be those of drawing all of it.

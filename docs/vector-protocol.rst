@@ -104,7 +104,12 @@ Replacing an element keeps its place in that order.
     ``rule`` is the fill rule, nonzero by default. ``w``, ``cap``, ``join``,
     ``ml`` (``4`` by default) and ``dash`` have their SVG meanings, with the
     stroke geometry computed in the element's own coordinate system, so a
-    stroke transformed non-uniformly is stretched like the path.
+    stroke transformed non-uniformly is stretched like the path. The stroke
+    of one path is cut into at most 262144 dashes: a subpath whose dashes
+    would take the count past that is stroked solid, as are the subpaths
+    after it that would too. A pattern that fine against a path that long
+    costs far more than it can show, and this keeps it from stalling the
+    terminal.
 
 ``s`` *symbol*
     ``s id= d=<path>``

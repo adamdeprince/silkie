@@ -21,10 +21,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-#define MAX_ELEMENTS (1u << 22)
-#define MAX_DEPTH 64
-#define TOLERANCE 0.25  // flattening error in device pixels
-#define SUBSAMPLES 16   // scanlines per pixel row
+#define MAX_DASHES (1u << 18) // dashes in the stroke of one path, beyond which a subpath is stroked solid
+#define TOLERANCE 0.25        // flattening error in device pixels
+#define SUBSAMPLES 16         // scanlines per pixel row
 
 // Geometry {{{
 
@@ -123,14 +122,31 @@ typedef struct {
     size_t count, capacity;
 } PolyList;
 
-#define GROW(arr, field, needed)                                                                 \
-    if ((arr)->count + (needed) > (arr)->capacity) {                                             \
-        size_t nc = (arr)->capacity ? (arr)->capacity * 2 : 16;                                  \
-        while (nc < (arr)->count + (needed)) nc *= 2;                                            \
-        void *np = realloc((arr)->field, nc * sizeof(*(arr)->field));                            \
-        if (!np) return false;                                                                   \
-        (arr)->field = np;                                                                       \
-        (arr)->capacity = nc;                                                                    \
+// Reserve storage without imposing a content limit or overflowing allocation sizes.
+static void *
+reserve_array(void *items, size_t *capacity, size_t needed, size_t item_size, size_t initial) {
+    const size_t max = SIZE_MAX / item_size;
+    if (needed > max) return NULL;
+    size_t nc = *capacity ? *capacity : initial;
+    while (nc < needed) {
+        if (nc > max / 2) {
+            nc = needed;
+            break;
+        }
+        nc *= 2;
+    }
+    if (nc > max) nc = needed;
+    void *np = realloc(items, nc * item_size);
+    if (np) *capacity = nc;
+    return np;
+}
+
+#define GROW(arr, field, needed)                                                                                      \
+    if ((needed) > SIZE_MAX - (arr)->count) return false;                                                             \
+    if ((arr)->count + (needed) > (arr)->capacity) {                                                                  \
+        void *np = reserve_array((arr)->field, &(arr)->capacity, (arr)->count + (needed), sizeof(*(arr)->field), 16); \
+        if (!np) return false;                                                                                        \
+        (arr)->field = np;                                                                                            \
     }
 
 static bool
@@ -153,12 +169,11 @@ poly_add(Poly *p, double x, double y) {
 
 static Poly *
 polylist_new(PolyList *pl) {
+    if (pl->count == SIZE_MAX) return NULL;
     if (pl->count + 1 > pl->capacity) {
-        size_t nc = pl->capacity ? pl->capacity * 2 : 8;
-        void *np = realloc(pl->item, nc * sizeof(Poly));
+        void *np = reserve_array(pl->item, &pl->capacity, pl->count + 1, sizeof(Poly), 8);
         if (!np) return NULL;
         pl->item = np;
-        pl->capacity = nc;
     }
     Poly *ans = pl->item + pl->count++;
     memset(ans, 0, sizeof(*ans));
@@ -561,13 +576,24 @@ stroke_polyline(StrokeOut *o, double *pts, size_t n, bool closed, double hw, int
     return true;
 }
 
-// Splits a polyline into the "on" pieces of the dash pattern
+// Splits a polyline into the "on" pieces of the dash pattern. budget is how
+// many more dashes the path may be cut into: a polyline that would need more
+// is not dashed at all, so that a pattern far finer than the path is long
+// cannot take the terminal with it
 static bool
-dash_polyline(const Poly *p, const double *dash, unsigned ndash, double phase, PolyList *out) {
+dash_polyline(const Poly *p, const double *dash, unsigned ndash, double phase, PolyList *out, size_t *budget) {
     double total = 0;
     for (unsigned i = 0; i < ndash; i++) total += dash[i];
     size_t n = p->count / 2;
-    if (total <= 0 || n < 2) {
+    double plen = 0;
+    if (total > 0 && n >= 2) {
+        for (size_t i = 0; i + 1 < n; i++) plen += hypot(p->pts[2 * i + 2] - p->pts[2 * i], p->pts[2 * i + 3] - p->pts[2 * i + 1]);
+        if (p->closed) plen += hypot(p->pts[0] - p->pts[2 * n - 2], p->pts[1] - p->pts[2 * n - 1]);
+    }
+    // each period of the pattern ends ndash dashes and gaps, and the phase and the ends of the path add a period at most
+    const double needed = total > 0 ? (plen / total + 2) * ndash : 0;
+    const bool solid = total <= 0 || n < 2 || !(needed <= (double)*budget);
+    if (solid) {
         Poly *q = polylist_new(out);
         if (!q) return false;
         q->closed = p->closed;
@@ -575,12 +601,16 @@ dash_polyline(const Poly *p, const double *dash, unsigned ndash, double phase, P
             if (!poly_add(q, p->pts[2 * i], p->pts[2 * i + 1])) return false;
         return true;
     }
+    *budget -= (size_t)needed;
+    // Rounding cannot make the loops below run much past the count above, this only guarantees they end
+    size_t steps = 2 * (size_t)needed + 16;
     unsigned idx = 0;
     double left = dash[0];
     bool on = true;
     phase = fmod(phase, total * (ndash & 1 ? 2 : 1));
     if (phase < 0) phase += total * (ndash & 1 ? 2 : 1);
     while (phase > 0) {
+        if (!steps--) return false;
         if (phase >= left) {
             phase -= left;
             idx = (idx + 1) % ndash;
@@ -601,6 +631,7 @@ dash_polyline(const Poly *p, const double *dash, unsigned ndash, double phase, P
             if (!(cur = polylist_new(out)) || !poly_add(cur, x0, y0)) return false;
         }
         while (len - pos > left) {
+            if (!steps--) return false;
             pos += left;
             double t = pos / len, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
             if (on) {
@@ -645,9 +676,9 @@ typedef struct {
     char type;
     bool has_t, visible, has_focus, in_progress;
     Mat t;
-    Path path;  // p and s
-    double *pts;  // k: x, y, width triples
-    size_t npts;
+    Path path;   // p and s
+    double *pts; // k: x, y, width triples
+    size_t npts, pts_capacity;
     Paint fill, stroke;
     double width, miter_limit, dash_phase;
     double *dash;
@@ -794,13 +825,11 @@ insert_elem(VectorDoc *d, Elem *e) {
         elem_free(old);
         d->live--;
     } else {
-        if (d->live >= MAX_ELEMENTS) return false;
         if (d->count + 1 > d->capacity) {
-            size_t nc = d->capacity ? d->capacity * 2 : 64;
-            void *np = realloc(d->order, nc * sizeof(Elem *));
+            if (d->count == SIZE_MAX) return false;
+            void *np = reserve_array(d->order, &d->capacity, d->count + 1, sizeof(Elem *), 64);
             if (!np) return false;
             d->order = np;
-            d->capacity = nc;
         }
         e->slot = d->count;
         d->order[d->count++] = e;
@@ -814,8 +843,8 @@ insert_elem(VectorDoc *d, Elem *e) {
 
 static bool
 is_descendant(const VectorDoc *d, const Elem *e, uint32_t gid) {
-    unsigned depth = 0;
-    for (uint32_t p = e->parent; depth < MAX_DEPTH; depth++) {
+    size_t remaining = d->live;
+    for (uint32_t p = e->parent; remaining; remaining--) {
         if (p == gid) return true;
         if (!p) return false;
         Elem *g = lookup(d, p);
@@ -913,13 +942,14 @@ stroke_reach(const Elem *style) {
 
 // The transform from the coordinate system of e to that of the image. Returns
 // 0 when e hangs off something that is not a group, so that it is not drawn,
-// and -1 when the groups nest too deep to follow.
+// and -1 when the parent chain contains a cycle.
 static int
 elem_matrix(const VectorDoc *d, const Elem *e, Mat *out) {
     Mat m = e->has_t ? e->t : identity;
     uint32_t p = e->parent;
-    for (unsigned depth = 0; p; depth++) {
-        if (depth > MAX_DEPTH) return -1;
+    size_t remaining = d->live;
+    while (p) {
+        if (!remaining--) return -1;
         const Elem *g = lookup(d, p);
         if (!g || g->type != 'g') return 0;
         if (g->has_t) m = mat_mul(g->t, m);
@@ -1037,18 +1067,26 @@ parse_num(const char **s, const char *end, double *out) {
     const char *p = *s;
     while (p < end && *p == ',') p++;
     if (p >= end) return false;
-    char buf[64];
-    size_t n = 0;
-    while (p < end && n < sizeof(buf) - 1 && (isdigit((unsigned char)*p) || *p == '-' || *p == '+' || *p == '.' || *p == 'e' || *p == 'E')) {
+    const char *start = p;
+    while (p < end && (isdigit((unsigned char)*p) || *p == '-' || *p == '+' || *p == '.' || *p == 'e' || *p == 'E')) {
         // a sign starts a new number unless it follows an exponent
-        if (n && (*p == '-' || *p == '+') && buf[n - 1] != 'e' && buf[n - 1] != 'E') break;
-        buf[n++] = *p++;
+        if (p > start && (*p == '-' || *p == '+') && p[-1] != 'e' && p[-1] != 'E') break;
+        p++;
     }
-    if (!n) return false;
+    const size_t n = p - start;
+    if (!n || n == SIZE_MAX) return false;
+    char *buf = malloc(n + 1);
+    if (!buf) {
+        parse_error = "Out of memory";
+        return false;
+    }
+    memcpy(buf, start, n);
     buf[n] = 0;
     char *e;
     *out = strtod(buf, &e);
-    if (*e || !isfinite(*out)) return false;
+    const bool ok = !*e && isfinite(*out);
+    free(buf);
+    if (!ok) return false;
     *s = p;
     return true;
 }
@@ -1352,7 +1390,7 @@ parse_field(Record *r, const char *key, size_t klen, const char *v, const char *
         e->pts = NULL;
         if (!parse_list(v, end, &e->pts, &n)) return false;
         if (n % 3) FAIL("Pen points must be x,y,width triples");
-        e->npts = n / 3;
+        e->npts = e->pts_capacity = n / 3;
         r->have_pts = true;
     } else if (IS("x1")) {
         NUM(e->g[0]);
@@ -1458,14 +1496,19 @@ append_geometry(VectorDoc *d, Elem *target, Elem *src) {
     }
     if (src->npts) {
         if (target->type != 'k') return false;
-        size_t n = (target->npts + src->npts) * 3;
-        void *np = realloc(target->pts, n * sizeof(double));
-        if (!np) return false;
-        target->pts = np;
+        if (src->npts > SIZE_MAX - target->npts) return false;
+        const size_t needed = target->npts + src->npts;
+        if (needed > target->pts_capacity) {
+            const size_t before = target->pts_capacity;
+            void *np = reserve_array(target->pts, &target->pts_capacity, needed, 3 * sizeof(double), 16);
+            if (!np) return false;
+            target->pts = np;
+            const size_t added = (target->pts_capacity - before) * 3 * sizeof(double);
+            d->used_bytes += added;
+            target->bytes += added;
+        }
         memcpy(target->pts + target->npts * 3, src->pts, src->npts * 3 * sizeof(double));
         target->npts += src->npts;
-        d->used_bytes += src->npts * 3 * sizeof(double);
-        target->bytes += src->npts * 3 * sizeof(double);
     }
     return true;
 }
@@ -1536,10 +1579,13 @@ vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
                     elem_box(e);  // leaves the cursor at the end of the path there is
                     const PathCursor before = e->cursor;
                     const size_t ncmds = e->path.count, npts = e->npts;
-                    if (append_geometry(d, e, r->elem)) damage_appended(d, e, ncmds, npts, before);
+                    const bool wrong_kind = (r->elem->path.count && e->type != 'p' && e->type != 's') || (r->elem->npts && e->type != 'k');
+                    if (wrong_kind) err = "Append to an element of another kind";
+                    else if (append_geometry(d, e, r->elem)) damage_appended(d, e, ncmds, npts, before);
                     else {
                         e->has_box = false;  // some of it may have been appended
-                        err = "Append to an element of another kind";
+                        d->damage_all = true;
+                        err = "Out of memory or geometry size overflow";
                     }
                 } break;
                 case 'g':
@@ -1797,9 +1843,10 @@ add_polys(const Render *r, const PolyList *polys, EdgeList *el) {
 static bool
 stroke_polys(PolyList *polys, const Elem *style, double hw, Mat m, Rect clip, double tol, EdgeList *el) {
     StrokeOut out = {el, m, clip};
+    size_t budget = MAX_DASHES;
     for (size_t i = 0; i < polys->count; i++) {
         PolyList pieces = {0};
-        bool ok = dash_polyline(polys->item + i, style->dash, style->ndash, style->dash_phase, &pieces);
+        bool ok = dash_polyline(polys->item + i, style->dash, style->ndash, style->dash_phase, &pieces, &budget);
         for (size_t k = 0; ok && k < pieces.count; k++)
             ok = stroke_polyline(&out, pieces.item[k].pts, pieces.item[k].count / 2, pieces.item[k].closed, hw, style->cap, style->join, style->miter_limit, tol);
         polylist_free(&pieces);
@@ -1924,37 +1971,97 @@ first_child(const Render *r, uint32_t gid) {
 // Draws the children of g. The blend mode of a group applies to every drawing
 // operation below it, as the PDF blend mode does; opacity composites the
 // group as a whole through a layer.
+typedef struct {
+    Elem *group;
+    Mat m;
+    Target parent, target;
+    Canvas *layer;
+    uint8_t *own_clip;
+    size_t child;
+    bool entered;
+} GroupFrame;
+
+// An explicit growing stack allows deeply nested groups without consuming the C stack.
 static void
-render_group(Render *r, Elem *g, Mat parent_m, Target parent, unsigned depth) {
-    if (!g->visible || depth > MAX_DEPTH || g->in_progress || r->failed) return;
-    g->in_progress = true;
-    Mat m = g->has_t ? mat_mul(parent_m, g->t) : parent_m;
-    Target t = parent;
-    uint8_t *own_clip = NULL;
-    if (g->ref) {
-        Elem *cp = lookup(r->doc, g->ref);
-        if (cp && (cp->type == 'p' || cp->type == 's')) {
-            if (outside(r, elem_box(cp), mat_mul(m, cp->t))) {  // all of the group is clipped away here
-                g->in_progress = false;
-                return;
+render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
+    size_t count = 1, capacity = 0;
+    GroupFrame *stack = reserve_array(NULL, &capacity, count, sizeof(GroupFrame), 16);
+    if (!stack) {
+        r->failed = true;
+        return;
+    }
+    stack[0] = (GroupFrame){.group = group, .m = parent_m, .parent = parent};
+    while (count && !r->failed) {
+        GroupFrame *f = stack + count - 1;
+        Elem *g = f->group;
+        if (!f->entered) {
+            if (!g->visible || g->in_progress) {
+                count--;
+                continue;
             }
-            t.clip = own_clip = make_clip(r, cp, m, t.clip);
+            f->entered = true;
+            g->in_progress = true;
+            f->m = g->has_t ? mat_mul(f->m, g->t) : f->m;
+            f->target = f->parent;
+            f->child = first_child(r, g->id);
+            if (g->ref) {
+                Elem *cp = lookup(r->doc, g->ref);
+                if (cp && (cp->type == 'p' || cp->type == 's')) {
+                    if (outside(r, elem_box(cp), mat_mul(f->m, cp->t))) {
+                        g->in_progress = false;
+                        count--;
+                        continue;
+                    }
+                    f->target.clip = f->own_clip = make_clip(r, cp, f->m, f->target.clip);
+                }
+            }
+            if (g->blend != BLEND_NORMAL) f->target.blend = g->blend;
+            if (g->opacity < 100) {
+                f->layer = calloc(1, sizeof(Canvas));
+                if (!f->layer) {
+                    r->failed = true;
+                    break;
+                }
+                f->layer->r = r->area;
+                f->layer->px = calloc(rect_size(r->area), 4);
+                if (!f->layer->px) {
+                    r->failed = true;
+                    break;
+                }
+                f->target.canvas = f->layer;
+            }
         }
-    }
-    if (g->blend != BLEND_NORMAL) t.blend = g->blend;
-    Canvas layer = {0};
-    if (g->opacity < 100) {
-        layer.r = r->area;
-        layer.px = calloc(rect_size(r->area), 4);
-        if (!layer.px) r->failed = true;
-        else t.canvas = &layer;
-    }
-    for (size_t i = first_child(r, g->id); i < r->nsorted && r->sorted[i]->parent == g->id && !r->failed; i++) {
-        Elem *e = r->sorted[i];
+        if (f->child >= r->nsorted || r->sorted[f->child]->parent != g->id) {
+            if (f->layer) {
+                composite_group(f->parent.canvas, f->layer, g->opacity / 100.f);
+                free(f->layer->px);
+                free(f->layer);
+            }
+            free(f->own_clip);
+            g->in_progress = false;
+            count--;
+            continue;
+        }
+        Elem *e = r->sorted[f->child++];
         if (e == g) continue;
-        Mat em = e->has_t ? mat_mul(m, e->t) : m;
+        const Mat m = f->m, em = e->has_t ? mat_mul(m, e->t) : m;
+        const Target t = f->target;
         switch (e->type) {
-            case 'g': render_group(r, e, m, t, depth + 1); break;
+            case 'g': {
+                if (count == capacity) {
+                    if (count == SIZE_MAX) {
+                        r->failed = true;
+                        break;
+                    }
+                    void *np = reserve_array(stack, &capacity, count + 1, sizeof(GroupFrame), 16);
+                    if (!np) {
+                        r->failed = true;
+                        break;
+                    }
+                    stack = np;
+                }
+                stack[count++] = (GroupFrame){.group = e, .m = m, .parent = t};
+            } break;
             case 'p':
                 if (!outside(r, box_grow(elem_box(e), stroke_reach(e)), em)) draw_path(r, e, &e->path, em, &t);
                 break;
@@ -1968,12 +2075,17 @@ render_group(Render *r, Elem *g, Mat parent_m, Target parent, unsigned depth) {
             case 'i': draw_image(r, e, em, &t); break;
         }
     }
-    if (layer.px) {
-        composite_group(parent.canvas, &layer, g->opacity / 100.f);
-        free(layer.px);
+    // Release every entered frame after a failed allocation or rasterization too.
+    while (count) {
+        GroupFrame *f = stack + --count;
+        if (f->layer) {
+            free(f->layer->px);
+            free(f->layer);
+        }
+        free(f->own_clip);
+        if (f->entered) f->group->in_progress = false;
     }
-    free(own_clip);
-    g->in_progress = false;
+    free(stack);
 }
 
 static int
@@ -2015,7 +2127,7 @@ vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect
     // every step from here on works out a pixel from the geometry over that
     // pixel alone, so the part comes out as it does when all of it is drawn
     Mat m = {(double)width / d->width, 0, 0, (double)height / d->height, 0, 0};
-    render_group(&r, &d->root, m, (Target){&canvas, NULL, BLEND_NORMAL}, 0);
+    render_group(&r, &d->root, m, (Target){&canvas, NULL, BLEND_NORMAL});
     if (r.failed) {
         free(canvas.px);
         return NULL;
