@@ -1807,7 +1807,7 @@ send_display_report(Screen *self, const char *op, int id, const DisplayInfo *d) 
 // A frame from the program, see docs/extension-framing.rst for what is rejected
 void
 screen_display_protocol(Screen *self, const char *data, size_t sz) {
-    ExtensionFields f;
+    EXTENSION_FIELDS(f);
     char reply[64];
     const char *op;
     long long mode = -1, id = -1;
