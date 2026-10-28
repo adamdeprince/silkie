@@ -124,6 +124,8 @@ def find_testable_go_packages() -> tuple[set[str], dict[str, list[str]]]:
     for dirpath, dirnames, filenames in os.walk(base):
         if 'b' in dirnames and os.path.basename(dirpath) == 'bypy':
             dirnames.remove('b')
+        # Skip what the go tool ignores, such as git worktrees in hidden directories
+        dirnames[:] = [d for d in dirnames if not d.startswith(('.', '_')) and d != 'testdata']
         for f in filenames:
             if f.endswith('_test.go'):
                 q = os.path.relpath(dirpath, base)
