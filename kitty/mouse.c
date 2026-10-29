@@ -422,6 +422,7 @@ handle_mouse_movement_in_kitty(Window *w, int button, bool mouse_cell_changed) {
 static void
 detect_url(Screen *screen, unsigned int x, unsigned int y) {
     int hid = screen_detect_url(screen, x, y);
+    const __typeof__(screen->current_hyperlink_under_mouse) previous = screen->current_hyperlink_under_mouse;
     zero_at_ptr(&screen->current_hyperlink_under_mouse);
     if (hid != 0) {
         mouse_cursor_shape = POINTER_POINTER;
@@ -432,6 +433,12 @@ detect_url(Screen *screen, unsigned int x, unsigned int y) {
             screen->current_hyperlink_under_mouse.y = y;
         }
     } else set_mouse_cursor_for_screen(screen);
+    // The position of the displayed hyperlink target depends on the hovered cell
+    if (OPT(show_hyperlink_targets) != SHOW_HYPERLINK_TARGETS_NEVER && global_state.callback_os_window &&
+        (previous.id || screen->current_hyperlink_under_mouse.id) &&
+        (previous.id != screen->current_hyperlink_under_mouse.id || previous.x != screen->current_hyperlink_under_mouse.x ||
+         previous.y != screen->current_hyperlink_under_mouse.y))
+        global_state.callback_os_window->needs_render = true;
 }
 
 static bool
