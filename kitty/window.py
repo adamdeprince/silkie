@@ -32,6 +32,7 @@ from .constants import (
     appname,
     clear_handled_signals,
     config_dir,
+    config_dir_files_ignored,
     is_macos,
     kitten_exe,
     unserialize_launch_flag,
@@ -508,6 +509,8 @@ def load_paste_filter() -> Callable[[str], str]:
     import runpy
     import traceback
 
+    if config_dir_files_ignored():
+        return lambda text: text
     try:
         m = runpy.run_path(os.path.join(config_dir, 'paste-actions.py'))
         func: Callable[[str], str] = m['filter_paste']

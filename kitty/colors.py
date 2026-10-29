@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, Literal, Optional, TypedDict, cast
 
 from .config import parse_config
-from .constants import config_dir
+from .constants import config_dir, config_dir_files_ignored
 from .fast_data_types import Color, get_boss, get_options, glfw_get_system_color_theme, patch_color_profiles, patch_global_colors, set_os_window_chrome
 from .options.types import Options, all_colors, nullable_colors, special_colors
 from .rgb import color_from_int
@@ -74,6 +74,8 @@ class ThemeColors:
 
     def refresh(self) -> bool:
         found = False
+        if config_dir_files_ignored():
+            return found
         d: BackgroundImageOptions
         with suppress(FileNotFoundError):
             for x in os.scandir(config_dir):
