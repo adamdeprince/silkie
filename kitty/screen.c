@@ -904,6 +904,15 @@ init_text_loop_line(Screen *self, text_loop_state *s) {
     init_segmentation_state(self, s);
 }
 
+// Used when the cursor is moved after the current char has already been
+// through grapheme segmentation, so the segmentation state must be preserved
+static void
+reinit_text_loop_line(Screen *self, text_loop_state *s) {
+    const GraphemeSegmentationResult seg = s->seg;
+    init_text_loop_line(self, s);
+    s->seg = seg;
+}
+
 static void
 zero_cells(text_loop_state *s, CPUCell *c, GPUCell *g) {
     *c = s->cc;
@@ -1434,7 +1443,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
         if (self->cursor->x < self->columns && s->cp[self->cursor->x].is_multicell) {
             if (s->cp[self->cursor->x].y) {
                 move_cursor_past_multicell(self, 1);
-                init_text_loop_line(self, s);
+                reinit_text_loop_line(self, s);
             } else nuke_multicell_char_at(self, self->cursor->x, self->cursor->y, s->cp[self->cursor->x].x != 0);
         }
 
@@ -1443,13 +1452,13 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
             if ((unsigned)char_width > self->columns) continue; // discard too wide character
             if (self->modes.mDECAWM) {
                 continue_to_next_line(self);
-                init_text_loop_line(self, s);
+                reinit_text_loop_line(self, s);
             } else self->cursor->x = self->columns - char_width;
             CPUCell *c = &s->cp[self->cursor->x];
             if (c->is_multicell) {
                 if (c->y) {
                     move_cursor_past_multicell(self, char_width);
-                    init_text_loop_line(self, s);
+                    reinit_text_loop_line(self, s);
                 }
                 nuke_multicell_char_at(self, self->cursor->x, self->cursor->y, c->x > 0);
             }
@@ -1466,7 +1475,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
                 if (second->y) {
                     self->cursor->x++;
                     move_cursor_past_multicell(self, 2);
-                    init_text_loop_line(self, s);
+                    reinit_text_loop_line(self, s);
                     fc = s->cp + self->cursor->x;
                     second = fc + 1;
                 } else nuke_multicell_char_at(self, self->cursor->x + 1, self->cursor->y, true);
