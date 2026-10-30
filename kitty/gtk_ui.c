@@ -266,9 +266,14 @@ give_input_focus(Page *p) {
     // The windows of the terminal read keyboard, pointer and tablet events directly from the X
     // server, which must therefore have the input focus for them.
     GdkDisplay *d = gdk_display_get_default();
+    Display *x = gdk_xdisplay();
     gdk_x11_display_error_trap_push(d);
-    XSetInputFocus(gdk_xdisplay(), p->xid, RevertToParent, CurrentTime);
-    XFlush(gdk_xdisplay());
+    // Focusing a window that is not viewable is an error, for instance while its page is still being shown
+    XWindowAttributes attrs;
+    if (XGetWindowAttributes(x, p->xid, &attrs) && attrs.map_state == IsViewable) XSetInputFocus(x, p->xid, RevertToParent, CurrentTime);
+    // Errors must arrive within the trap: glfw and GTK share the process wide X error handler, and when
+    // glfw has last touched it the handler that an error gets is the one that exits the process
+    XSync(x, False);
     gdk_x11_display_error_trap_pop_ignored(d);
 }
 
@@ -514,10 +519,13 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
     GdkWindow *gw = gtk_widget_get_window(p->area);
     gdk_window_ensure_native(gw);
     Display *d = gdk_xdisplay();
-    gdk_display_flush(gdk_display_get_default());
+    GdkDisplay *gd = gdk_display_get_default();
+    gdk_display_flush(gd);
+    gdk_x11_display_error_trap_push(gd);
     XReparentWindow(d, p->xid, gdk_x11_window_get_xid(gw), 0, 0);
     XMapWindow(d, p->xid);
     XSync(d, False);
+    gdk_x11_display_error_trap_pop_ignored(gd);
     update_window_title(hw);
     g_idle_add(focus_current_page, hw);
 }
