@@ -14,6 +14,7 @@ static const NativeUIBackend *backend = NULL;
 static bool backend_loaded = false;
 #ifndef __APPLE__
 static const char *native_ui_module_path = NULL;
+static bool native_ui_on_wayland = false, native_ui_share_wayland_display = false;
 #endif
 
 #ifndef __APPLE__
@@ -22,12 +23,14 @@ static const char *native_ui_module_path = NULL;
 static unsigned long long host_os_window_id(struct OSWindow *w) { return w->id; }
 static struct OSWindow *host_os_window_for_id(unsigned long long id) { return os_window_for_id(id); }
 static unsigned long host_x11_window(struct OSWindow *w) { return w->handle && !global_state.is_wayland ? glfwGetX11Window(w->handle) : 0; }
-static void host_get_size(struct OSWindow *w, int *width, int *height) { glfwGetWindowSize(w->handle, width, height); }
-static void host_set_size(struct OSWindow *w, int width, int height) { if (w->handle) glfwSetWindowSize(w->handle, width, height); }
-static const char *host_title(struct OSWindow *w) { return w->window_title ? PyUnicode_AsUTF8(w->window_title) : ""; }
+// A window can be gone by the time the toolkit gets around to something about it, hence the NULL checks
+static void host_get_size(struct OSWindow *w, int *width, int *height) { if (w && w->handle) glfwGetWindowSize(w->handle, width, height); }
+static void host_set_size(struct OSWindow *w, int width, int height) { if (w && w->handle) glfwSetWindowSize(w->handle, width, height); }
+static const char *host_title(struct OSWindow *w) { return w && w->window_title ? PyUnicode_AsUTF8(w->window_title) : ""; }
 
 static void
 host_request_close(struct OSWindow *w) {
+    if (!w) return;
     w->close_request = CONFIRMABLE_CLOSE_REQUESTED;
     global_state.has_pending_closes = true;
     wakeup_main_loop();
@@ -40,6 +43,18 @@ host_run_action(const char *action) {
     if (ret) Py_DECREF(ret);
     else PyErr_Print();
 }
+
+static void
+host_refresh(struct OSWindow *w) {
+    if (!w) return;
+    if (!w->redraw_count) w->redraw_count++;
+    wakeup_main_loop();
+}
+
+static void host_wayland_embed(struct OSWindow *w, void *parent) { if (w && w->handle) glfwWaylandEmbedSetParent(w->handle, parent); }
+static void host_wayland_set_position(struct OSWindow *w, int x, int y) { if (w && w->handle) glfwWaylandEmbedSetPosition(w->handle, x, y); }
+static void host_wayland_set_mapped(struct OSWindow *w, bool mapped) { if (w && w->handle) glfwWaylandEmbedSetMapped(w->handle, mapped); }
+static void host_wayland_activate(struct OSWindow *w) { if (w && w->handle) glfwWaylandEmbedActivate(w->handle); }
 
 static unsigned long long host_add_fd_watch(int fd, int events, void (*cb)(int, int, void *), void *data) { return glfwAddFDWatch(fd, events, cb, data); }
 
@@ -59,7 +74,7 @@ load_linux_backend(void) {
     if (!create) return NULL;
     static NativeUIHost host;
     host = (NativeUIHost){
-        .is_wayland = global_state.is_wayland,
+        .is_wayland = native_ui_on_wayland,
         .os_window_id = host_os_window_id,
         .os_window_for_id = host_os_window_for_id,
         .x11_window = host_x11_window,
@@ -72,6 +87,11 @@ load_linux_backend(void) {
         .add_fd_watch = host_add_fd_watch,
         .remove_fd_watch = glfwRemoveFDWatch,
         .set_event_loop_hook = glfwSetEventLoopHook,
+        .refresh = host_refresh,
+        .wayland_embed = host_wayland_embed,
+        .wayland_set_position = host_wayland_set_position,
+        .wayland_set_mapped = host_wayland_set_mapped,
+        .wayland_activate = host_wayland_activate,
     };
     return create(&host);
 }
@@ -88,6 +108,17 @@ native_ui_backend(void) {
 #endif
     }
     return backend;
+}
+
+void *
+native_ui_wayland_display(void) {
+#ifndef __APPLE__
+    if (!native_ui_share_wayland_display) return NULL;
+    const NativeUIBackend *b = native_ui_backend();
+    return b && b->wayland_display ? b->wayland_display() : NULL;
+#else
+    return NULL;
+#endif
 }
 
 bool
@@ -147,10 +178,15 @@ native_tabs_supported(PyObject *self UNUSED, PyObject *args UNUSED) {
 
 #ifndef __APPLE__
 static PyObject *
-set_native_ui_module_path(PyObject *self UNUSED, PyObject *path) {
+set_native_ui_module_path(PyObject *self UNUSED, PyObject *args) {
+    const char *path;
+    int on_wayland, want_tabs;
+    if (!PyArg_ParseTuple(args, "spp", &path, &on_wayland, &want_tabs)) return NULL;
     free((void *)native_ui_module_path);
-    native_ui_module_path = strdup(PyUnicode_AsUTF8(path));
+    native_ui_module_path = strdup(path);
     if (!native_ui_module_path) return PyErr_NoMemory();
+    native_ui_on_wayland = on_wayland;
+    native_ui_share_wayland_display = on_wayland && want_tabs;
     backend_loaded = false;
     backend = NULL;
     Py_RETURN_NONE;
@@ -267,7 +303,7 @@ static PyMethodDef methods[] = {
     {"native_ui_available", native_ui_available, METH_NOARGS, ""},
     {"native_tabs_supported", native_tabs_supported, METH_NOARGS, ""},
 #ifndef __APPLE__
-    {"set_native_ui_module_path", set_native_ui_module_path, METH_O, ""},
+    {"set_native_ui_module_path", set_native_ui_module_path, METH_VARARGS, ""},
 #endif
     {"native_saved_height_adjustment", native_saved_height_adjustment, METH_O, ""},
     {"native_tabs_attach", native_tabs_attach, METH_VARARGS, ""},

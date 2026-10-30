@@ -18,8 +18,12 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/XInput2.h>
 #endif
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 
 static const NativeUIHost *host = NULL;
+static bool shares_wayland_display = false;
 
 // The event loop {{{
 // GLib sources are serviced by the event loop of the terminal, once per iteration, before it prepares to read the
@@ -193,22 +197,36 @@ fill_menubar(GtkWidget *bar) {
 
 // Native windows and their tabs {{{
 #ifdef GDK_WINDOWING_X11
+struct Page;
 typedef struct HostWindow {
     GtkWidget *window, *menubar, *notebook;
     bool fullscreen, maximized;
     // The size asked for is that of the terminal, to which the menu bar has to be added once it has content
     int wanted_width, wanted_height;
     bool initial_size_done;
+    struct Page *shown_page; // Wayland: the page whose terminal is mapped
 } HostWindow;
 
 typedef struct Page {
-    struct OSWindow *os_window;
-    unsigned long long id;
+    unsigned long long id; // not a pointer, OS windows move in memory when others are added or removed
     Window xid;
     HostWindow *hw;
     GtkWidget *area, *label, *tab;
     int last_width, last_height;
 } Page;
+
+static struct OSWindow *
+os_window_of_page(const Page *p) {
+    return host->os_window_for_id(p->id);
+}
+
+static gboolean
+swallow_key_event(GtkWidget *w, GdkEventKey *e, gpointer data) {
+    // On Wayland the toolkit also gets the keys typed in the terminal, which is the keyboard focus of its window. They
+    // are for the terminal: without this F10 would open the menu bar.
+    (void)w; (void)e; (void)data;
+    return TRUE;
+}
 
 static GHashTable *pages = NULL;   // of Page by OS window id
 static GList *host_windows = NULL; // of HostWindow
@@ -283,17 +301,30 @@ apply_initial_size(HostWindow *hw) {
 static void
 on_area_allocate(GtkWidget *area, GdkRectangle *a, gpointer data) {
     Page *p = data;
+    if (host->is_wayland) {
+        // Terminal windows on Wayland are sized in the same units as the toolkit
+        gint x = 0, y = 0;
+        gtk_widget_translate_coordinates(area, gtk_widget_get_toplevel(area), 0, 0, &x, &y);
+        host->wayland_set_position(os_window_of_page(p), x, y);
+        if (a->width != p->last_width || a->height != p->last_height) {
+            p->last_width = a->width; p->last_height = a->height;
+            host->set_size(os_window_of_page(p), a->width, a->height);
+        }
+        // A position takes effect when the parent commits
+        gtk_widget_queue_draw(gtk_widget_get_toplevel(area));
+        return;
+    }
     const int scale = gtk_widget_get_scale_factor(area), w = a->width * scale, h = a->height * scale;
     if (w == p->last_width && h == p->last_height) return;
     p->last_width = w; p->last_height = h;
-    host->set_size(p->os_window, w, h);
+    host->set_size(os_window_of_page(p), w, h);
 }
 
 static void
 on_tab_close(GtkButton *b, gpointer data) {
     (void)b;
     Page *p = data;
-    host->request_close(p->os_window);
+    host->request_close(os_window_of_page(p));
 }
 
 static gboolean
@@ -303,7 +334,7 @@ on_window_delete(GtkWidget *w, GdkEvent *e, gpointer data) {
     const gint n = gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook));
     for (gint i = 0; i < n; i++) {
         Page *p = page_at(hw, i);
-        if (p) host->request_close(p->os_window);
+        if (p) host->request_close(os_window_of_page(p));
     }
     return TRUE; // destroyed when the last of its tabs is
 }
@@ -354,6 +385,17 @@ on_switch_page(GtkNotebook *nb, GtkWidget *child, guint n, gpointer data) {
     HostWindow *hw = data;
     Page *p = g_object_get_data(G_OBJECT(child), "page");
     if (p) gtk_window_set_title(GTK_WINDOW(hw->window), gtk_label_get_text(GTK_LABEL(p->label)));
+    if (host->is_wayland) {
+        // A subsurface is shown whatever the toolkit thinks of the page it is on
+        if (hw->shown_page && hw->shown_page != p) host->wayland_set_mapped(os_window_of_page(hw->shown_page), false);
+        hw->shown_page = p;
+        if (p) {
+            host->wayland_set_mapped(os_window_of_page(p), true);
+            host->wayland_activate(os_window_of_page(p));
+            host->refresh(os_window_of_page(p));
+        }
+        return;
+    }
     g_idle_add(focus_current_page, hw);
 }
 
@@ -389,6 +431,10 @@ new_host_window(struct OSWindow *size_from) {
     gtk_notebook_set_action_widget(nb, add, GTK_PACK_END);
     gtk_box_pack_start(GTK_BOX(vbox), hw->notebook, TRUE, TRUE, 0);
     gtk_container_add(GTK_CONTAINER(hw->window), vbox);
+    if (host->is_wayland) {
+        g_signal_connect(hw->window, "key-press-event", G_CALLBACK(swallow_key_event), NULL);
+        g_signal_connect(hw->window, "key-release-event", G_CALLBACK(swallow_key_event), NULL);
+    }
     g_signal_connect(hw->window, "delete-event", G_CALLBACK(on_window_delete), hw);
     g_signal_connect(hw->window, "window-state-event", G_CALLBACK(on_window_state), hw);
     g_signal_connect(hw->notebook, "switch-page", G_CALLBACK(on_switch_page), hw);
@@ -425,7 +471,7 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
     g_signal_connect(p->area, "size-allocate", G_CALLBACK(on_area_allocate), p);
 
     p->tab = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    const char *title = host->title(p->os_window);
+    const char *title = host->title(os_window_of_page(p));
     p->label = gtk_label_new(title && title[0] ? title : "Silkie");
     gtk_label_set_ellipsize(GTK_LABEL(p->label), PANGO_ELLIPSIZE_END);
     gtk_label_set_width_chars(GTK_LABEL(p->label), 16);
@@ -445,6 +491,19 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
     apply_initial_size(hw);
     gtk_notebook_set_current_page(nb, pos);
     gtk_widget_realize(p->area);
+#ifdef GDK_WINDOWING_WAYLAND
+    if (host->is_wayland) {
+        host->wayland_embed(os_window_of_page(p), gdk_wayland_window_get_wl_surface(gtk_widget_get_window(hw->window)));
+        host->wayland_set_mapped(os_window_of_page(p), true);
+        host->wayland_activate(os_window_of_page(p));
+        hw->shown_page = p;
+        GtkAllocation a;
+        gtk_widget_get_allocation(p->area, &a);
+        on_area_allocate(p->area, &a, p);
+        update_window_title(hw);
+        return;
+    }
+#endif
     GdkWindow *gw = gtk_widget_get_window(p->area);
     gdk_window_ensure_native(gw);
     Display *d = gdk_xdisplay();
@@ -458,15 +517,21 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
 
 static void
 unembed_page(Page *p) {
-    // The window must leave the page first, destroying the page would destroy all windows inside it
-    Display *d = gdk_xdisplay();
-    GdkDisplay *gd = gdk_display_get_default();
-    gdk_x11_display_error_trap_push(gd);
-    XUnmapWindow(d, p->xid);
-    XReparentWindow(d, p->xid, DefaultRootWindow(d), 0, 0);
-    XSync(d, False);
-    gdk_x11_display_error_trap_pop_ignored(gd);
     HostWindow *hw = p->hw;
+    if (host->is_wayland) {
+        if (hw->shown_page == p) hw->shown_page = NULL;
+        host->wayland_set_mapped(os_window_of_page(p), false);
+        host->wayland_embed(os_window_of_page(p), NULL);
+    } else {
+        // The window must leave the page first, destroying the page would destroy all windows inside it
+        Display *d = gdk_xdisplay();
+        GdkDisplay *gd = gdk_display_get_default();
+        gdk_x11_display_error_trap_push(gd);
+        XUnmapWindow(d, p->xid);
+        XReparentWindow(d, p->xid, DefaultRootWindow(d), 0, 0);
+        XSync(d, False);
+        gdk_x11_display_error_trap_pop_ignored(gd);
+    }
     gtk_notebook_remove_page(GTK_NOTEBOOK(hw->notebook), gtk_notebook_page_num(GTK_NOTEBOOK(hw->notebook), p->area));
     p->hw = NULL; p->area = NULL; p->label = NULL; p->tab = NULL;
     if (gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook)) == 0) destroy_host_window(hw);
@@ -479,16 +544,15 @@ unembed_page(Page *p) {
 
 static bool
 tabs_supported(void) {
-    // Sharing a surface with a toolkit on Wayland needs both to use one connection to the compositor, see native_ui_wayland
-    return !host->is_wayland;
+    // A subsurface can only go inside the window of a toolkit that uses the same connection to the compositor
+    return !host->is_wayland || shares_wayland_display;
 }
 
 static bool
 adopt_os_window(struct OSWindow *w, struct OSWindow *parent, const char *location) {
-    if (host->is_wayland) return false;
+    if (!tabs_supported()) return false;
     Page *pp = page_of(parent);
     Page *p = g_new0(Page, 1);
-    p->os_window = w;
     p->id = host->os_window_id(w);
     p->xid = host->x11_window(w);
     g_hash_table_insert(pages, &p->id, p);
@@ -1396,6 +1460,18 @@ snapshot_settings(const char *path) {
 }
 // }}}
 
+static void *
+wayland_display(void) {
+#ifdef GDK_WINDOWING_WAYLAND
+    GdkDisplay *d = gdk_display_get_default();
+    if (d && GDK_IS_WAYLAND_DISPLAY(d)) {
+        shares_wayland_display = true;
+        return gdk_wayland_display_get_wl_display(d);
+    }
+#endif
+    return NULL;
+}
+
 __attribute__((visibility("default"))) const NativeUIBackend *
 native_ui_gtk_backend(const NativeUIHost *h) {
     host = h;
@@ -1428,6 +1504,7 @@ native_ui_gtk_backend(const NativeUIHost *h) {
         .window_query = window_query,
         .saved_height_adjustment = saved_height_adjustment,
 #endif
+        .wayland_display = wayland_display,
         .show_settings = show_settings,
         .update_settings = update_settings,
         .update_menu = update_menu,

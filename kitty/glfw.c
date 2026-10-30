@@ -2445,6 +2445,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         initial_window_size_py_callback = get_window_size;
     }
     glfwGetError(NULL); // clear any stale error
+    if (global_state.is_wayland && native_host && glfwWaylandSetNextWindowEmbedded) glfwWaylandSetNextWindowEmbedded(true);
     GLFWwindow *glfw_window = glfwCreateWindow(width, height, title, NULL, temp_window ? temp_window : common_context, lsc);
     initial_window_size_py_callback = NULL;
     if (temp_window) {
@@ -2744,6 +2745,8 @@ glfw_init(PyObject UNUSED *self, PyObject *args) {
     if (glfwDBusSetUserNotificationHandler) { glfwDBusSetUserNotificationHandler(dbus_user_notification_activated); }
 #endif
     bool supports_window_occlusion = false;
+    void *shared_wayland_display = native_ui_wayland_display();
+    if (shared_wayland_display && glfwWaylandSetExternalDisplay) glfwWaylandSetExternalDisplay(shared_wayland_display);
     bool ok = glfwInit(monotonic_start_time, &supports_window_occlusion);
     if (ok) {
 #ifdef __APPLE__

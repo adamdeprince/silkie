@@ -42,6 +42,8 @@ typedef struct NativeUIBackend {
     void (*window_op)(struct OSWindow *w, enum NativeWindowOp op);
     bool (*window_query)(struct OSWindow *w, enum NativeWindowQuery q);
     int (*saved_height_adjustment)(struct OSWindow *w);
+    // Wayland: the connection to the compositor of the toolkit, for the terminal to share. Called before the terminal connects.
+    void *(*wayland_display)(void);
     void (*show_settings)(PyObject *model, PyObject *callback);
     void (*update_settings)(PyObject *model);
     void (*update_menu)(PyObject *model);
@@ -64,6 +66,11 @@ typedef struct NativeUIHost {
     unsigned long long (*add_fd_watch)(int fd, int events, void (*callback)(int, int, void *), void *data);
     void (*remove_fd_watch)(unsigned long long id);
     void (*set_event_loop_hook)(int64_t (*hook)(int64_t timeout));
+    void (*refresh)(struct OSWindow *w);
+    void (*wayland_embed)(struct OSWindow *w, void *parent_surface);
+    void (*wayland_set_position)(struct OSWindow *w, int x, int y);
+    void (*wayland_set_mapped)(struct OSWindow *w, bool mapped);
+    void (*wayland_activate)(struct OSWindow *w);
 } NativeUIHost;
 
 typedef const NativeUIBackend *(*NativeUIBackendCreator)(const NativeUIHost *);

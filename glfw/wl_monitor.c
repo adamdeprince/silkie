@@ -321,7 +321,7 @@ glfwGetWaylandCurrentMonitorFractionalScale(void) {
         for (int i = 0; i < _glfw.monitorCount; i++) {
             _GLFWmonitor *m = _glfw.monitors[i];
             while (m->wl.xdg_output && !(m->wl.xdg_size_received && m->wl.xdg_position_received)) {
-                if (wl_display_roundtrip(_glfw.wl.display) < 0) break;
+                if (wl_glfw_roundtrip() < 0) break;
             }
         }
         for (int i = 0; i < _glfw.monitorCount; i++) {
@@ -338,7 +338,7 @@ glfwGetWaylandCurrentMonitorFractionalScale(void) {
 
     // Block until the compositor has delivered xdg_output logical size and position.
     while (!(monitor->wl.xdg_size_received && monitor->wl.xdg_position_received)) {
-        if (wl_display_roundtrip(_glfw.wl.display) < 0) break;
+        if (wl_glfw_roundtrip() < 0) break;
     }
 
     if (monitor->wl.fractional_scale <= 0.0) computeXdgFractionalScale(monitor);

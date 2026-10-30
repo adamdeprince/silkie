@@ -503,6 +503,24 @@ load_glfw(const char* path) {
     *(void **) (&glfwCocoaSetWindowResizeCallback_impl) = dlsym(handle, "glfwCocoaSetWindowResizeCallback");
     if (glfwCocoaSetWindowResizeCallback_impl == NULL) dlerror(); // clear error indicator
 
+    *(void **) (&glfwWaylandSetExternalDisplay_impl) = dlsym(handle, "glfwWaylandSetExternalDisplay");
+    if (glfwWaylandSetExternalDisplay_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandSetNextWindowEmbedded_impl) = dlsym(handle, "glfwWaylandSetNextWindowEmbedded");
+    if (glfwWaylandSetNextWindowEmbedded_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedSetParent_impl) = dlsym(handle, "glfwWaylandEmbedSetParent");
+    if (glfwWaylandEmbedSetParent_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedSetPosition_impl) = dlsym(handle, "glfwWaylandEmbedSetPosition");
+    if (glfwWaylandEmbedSetPosition_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedSetMapped_impl) = dlsym(handle, "glfwWaylandEmbedSetMapped");
+    if (glfwWaylandEmbedSetMapped_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedActivate_impl) = dlsym(handle, "glfwWaylandEmbedActivate");
+    if (glfwWaylandEmbedActivate_impl == NULL) dlerror(); // clear error indicator
+
     *(void **) (&glfwGetX11Display_impl) = dlsym(handle, "glfwGetX11Display");
     if (glfwGetX11Display_impl == NULL) dlerror(); // clear error indicator
 

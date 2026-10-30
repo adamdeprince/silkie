@@ -2584,6 +2584,30 @@ typedef GLFWcocoarenderframefun (*glfwCocoaSetWindowResizeCallback_func)(GLFWwin
 GFW_EXTERN glfwCocoaSetWindowResizeCallback_func glfwCocoaSetWindowResizeCallback_impl;
 #define glfwCocoaSetWindowResizeCallback glfwCocoaSetWindowResizeCallback_impl
 
+typedef void (*glfwWaylandSetExternalDisplay_func)(void*);
+GFW_EXTERN glfwWaylandSetExternalDisplay_func glfwWaylandSetExternalDisplay_impl;
+#define glfwWaylandSetExternalDisplay glfwWaylandSetExternalDisplay_impl
+
+typedef void (*glfwWaylandSetNextWindowEmbedded_func)(bool);
+GFW_EXTERN glfwWaylandSetNextWindowEmbedded_func glfwWaylandSetNextWindowEmbedded_impl;
+#define glfwWaylandSetNextWindowEmbedded glfwWaylandSetNextWindowEmbedded_impl
+
+typedef void (*glfwWaylandEmbedSetParent_func)(GLFWwindow*, void*);
+GFW_EXTERN glfwWaylandEmbedSetParent_func glfwWaylandEmbedSetParent_impl;
+#define glfwWaylandEmbedSetParent glfwWaylandEmbedSetParent_impl
+
+typedef void (*glfwWaylandEmbedSetPosition_func)(GLFWwindow*, int, int);
+GFW_EXTERN glfwWaylandEmbedSetPosition_func glfwWaylandEmbedSetPosition_impl;
+#define glfwWaylandEmbedSetPosition glfwWaylandEmbedSetPosition_impl
+
+typedef void (*glfwWaylandEmbedSetMapped_func)(GLFWwindow*, bool);
+GFW_EXTERN glfwWaylandEmbedSetMapped_func glfwWaylandEmbedSetMapped_impl;
+#define glfwWaylandEmbedSetMapped glfwWaylandEmbedSetMapped_impl
+
+typedef void (*glfwWaylandEmbedActivate_func)(GLFWwindow*);
+GFW_EXTERN glfwWaylandEmbedActivate_func glfwWaylandEmbedActivate_impl;
+#define glfwWaylandEmbedActivate glfwWaylandEmbedActivate_impl
+
 typedef void* (*glfwGetX11Display_func)(void);
 GFW_EXTERN glfwGetX11Display_func glfwGetX11Display_impl;
 #define glfwGetX11Display glfwGetX11Display_impl

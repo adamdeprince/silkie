@@ -96,7 +96,14 @@ def load_all_shaders() -> None:
         raise SystemExit(err)
 
 
-def init_glfw_module(glfw_module: str = 'wayland', debug_keyboard: bool = False, debug_rendering: bool = False, wayland_enable_ime: bool = True) -> None:
+def init_glfw_module(
+    glfw_module: str = 'wayland', debug_keyboard: bool = False, debug_rendering: bool = False, wayland_enable_ime: bool = True, native_tabs: bool = False
+) -> None:
+    if not is_macos:
+        from .fast_data_types import set_native_ui_module_path
+
+        # Before connecting to the display: on Wayland the terminal and GTK share a connection
+        set_native_ui_module_path(native_ui_module_path(), glfw_module == 'wayland', native_tabs)
     ok, swo = glfw_init(glfw_path(glfw_module), edge_spacing, debug_keyboard, debug_rendering, wayland_enable_ime)
     if not ok:
         raise SystemExit('GLFW initialization failed')
@@ -105,11 +112,7 @@ def init_glfw_module(glfw_module: str = 'wayland', debug_keyboard: bool = False,
 
 def init_glfw(opts: Options, debug_keyboard: bool = False, debug_rendering: bool = False) -> str:
     glfw_module = 'cocoa' if is_macos else ('wayland' if is_wayland(opts) else 'x11')
-    init_glfw_module(glfw_module, debug_keyboard, debug_rendering, wayland_enable_ime=opts.wayland_enable_ime)
-    if not is_macos:
-        from .fast_data_types import set_native_ui_module_path
-
-        set_native_ui_module_path(native_ui_module_path())
+    init_glfw_module(glfw_module, debug_keyboard, debug_rendering, wayland_enable_ime=opts.wayland_enable_ime, native_tabs=opts.native_tabs)
     return glfw_module
 
 
