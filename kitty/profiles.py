@@ -196,7 +196,7 @@ def meta_fields(p: Profile) -> list[dict[str, Any]]:
         }
 
     return [
-        f('name', 'Name', p.name, 'The name shown in the Profiles menu'),
+        {**f('name', 'Name', p.name, 'The name shown in the Profiles menu'), 'is_set': False},  # has no default to go back to
         f('command', 'Command', p.command, 'The program to run. Leave empty to run your shell.'),
         f('directory', 'Working directory', p.directory, 'The directory the program starts in. Leave empty for the default.'),
         f('title', 'Tab title', p.title, 'A fixed title for tabs of this profile. Leave empty to follow the running program.'),

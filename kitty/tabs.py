@@ -795,7 +795,8 @@ class Tab:  # {{{
                 else:
                     cmd = command_of(profile) or resolved_shell(get_options())
                     check_for_suitability = False
-        if cwd is None and cwd_from is None and not self.cwd:
+        if cwd is None and cwd_from is None and self.cwd == self.args.directory:
+            # Not over a directory chosen for this tab by a session
             cwd = directory_of(profile)
         if check_for_suitability:
             old_exe = cmd[0]

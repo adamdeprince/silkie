@@ -88,10 +88,18 @@ insert_in_group(NSWindow *child, NSWindow *anchor, const char *location) {
     else [anchor addTabbedWindow:child ordered:NSWindowAbove];
 }
 
+static void new_window_for_tab(id self UNUSED, SEL _cmd UNUSED, id sender UNUSED);
+
 static bool
 adopt_os_window(OSWindow *w, OSWindow *parent, const char *location) {
     NSWindow *nw = ns_window(w);
     if (!nw) return false;
+    static bool plus_button_enabled = false;
+    if (!plus_button_enabled && [NSApp delegate]) {
+        // The responder chain answering this is what makes the tab bar show a + button
+        plus_button_enabled = true;
+        class_addMethod(object_getClass([NSApp delegate]), @selector(newWindowForTab:), (IMP)new_window_for_tab, "v@:@");
+    }
     // Tab groups form only when asked for below, never because of the system-wide "prefer tabs" setting. The
     // setting would otherwise put New Window, which the user asked to be separate, in the tab group.
     [NSWindow setAllowsAutomaticWindowTabbing:NO];
@@ -1084,10 +1092,5 @@ native_ui_cocoa_backend(void) {
         .update_menu = update_menu,
         .snapshot_settings = snapshot_settings,
     };
-    static bool installed = false;
-    if (!installed && [NSApp delegate]) {
-        installed = true;
-        class_addMethod(object_getClass([NSApp delegate]), @selector(newWindowForTab:), (IMP)new_window_for_tab, "v@:@");
-    }
     return &b;
 }
