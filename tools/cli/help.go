@@ -32,7 +32,7 @@ func ShowError(err error) {
 func (self *Command) version_string(formatter *markup.Context) string {
 	return fmt.Sprintln(
 		formatter.Italic(self.CommandStringForUsage()), formatter.Opt(kitty.VersionString),
-		"(Silkie) created by", formatter.Title("Adam DePrince")+", forked from kitty by", formatter.Title("Kovid Goyal"))
+		"created by", formatter.Title("Adam DePrince")+", forked from kitty by", formatter.Title("Kovid Goyal"))
 }
 
 func (self *Command) ShowVersion() {
