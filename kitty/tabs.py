@@ -18,7 +18,13 @@ from .borders import Border, Borders
 from .child import Child
 from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .constants import appname
+from .native_ui import native_tabs_active
+from .profiles import Profile, apply_to_os_window, command_of, directory_of, environment_of, parsed_options, profile_for_new_os_window
 from .fast_data_types import (
+    native_tabs_members,
+    native_tabs_select,
+    native_tabs_move,
+    set_os_window_title,
     GLFW_MOUSE_BUTTON_LEFT,
     GLFW_MOUSE_BUTTON_MIDDLE,
     GLFW_PRESS,
@@ -220,7 +226,9 @@ class Tab:  # {{{
             raise Exception(f'No OS window with id {self.os_window_id} found, or tab counter has wrapped')
         self.args = tab_manager.args
         self.name = getattr(session_tab, 'name', '')
-        self.enabled_layouts = [x.lower() for x in getattr(session_tab, 'enabled_layouts', None) or get_options().enabled_layouts]
+        self.enabled_layouts = [
+            x.lower() for x in getattr(session_tab, 'enabled_layouts', None) or parsed_options(tab_manager.profile).get('enabled_layouts') or get_options().enabled_layouts
+        ]
         self.borders = Borders(self.os_window_id, self.id)
         self.windows: WindowList = WindowList(self)
         self._last_used_layout: str | None = None
@@ -286,7 +294,7 @@ class Tab:  # {{{
         aw = self.active_window
         for window in self:
             window.apply_options(is_active and aw is window)
-        self.set_enabled_layouts(get_options().enabled_layouts)
+        self.set_enabled_layouts(parsed_options(self.profile).get('enabled_layouts') or get_options().enabled_layouts)
 
     def take_over_from(self, other_tab: 'Tab') -> None:
         self.name, self.cwd = other_tab.name, other_tab.cwd
@@ -570,9 +578,18 @@ class Tab:  # {{{
         w = self.active_window
         return w.get_exe_of_child(oldest) if w else None
 
+    @property
+    def profile(self) -> Profile:
+        tm = self.tab_manager_ref()
+        return tm.profile if tm is not None else profile_for_new_os_window()
+
     def set_title(self, title: str) -> None:
         self.name = title or ''
         self.mark_tab_bar_dirty()
+        tm = self.tab_manager_ref()
+        if tm is not None and tm.native_tabs:
+            # The native tab shows the title of the window that is the tab
+            set_os_window_title(self.os_window_id, self.name)
 
     def update_window_title_bars(self) -> None:
         active_group = self.windows.active_group
@@ -767,16 +784,19 @@ class Tab:  # {{{
         startup_command_via_shell_integration: Sequence[str] | str = (),
     ) -> Child:
         check_for_suitability = True
+        profile = self.profile
         if cmd is None:
             if use_shell:
-                cmd = resolved_shell(get_options())
+                cmd = command_of(profile) or resolved_shell(get_options())
                 check_for_suitability = False
             else:
                 if self.args.args:
                     cmd = list(self.args.args)
                 else:
-                    cmd = resolved_shell(get_options())
+                    cmd = command_of(profile) or resolved_shell(get_options())
                     check_for_suitability = False
+        if cwd is None and cwd_from is None and not self.cwd:
+            cwd = directory_of(profile)
         if check_for_suitability:
             old_exe = cmd[0]
             if not os.path.isabs(old_exe):
@@ -805,7 +825,7 @@ class Tab:  # {{{
                                     cmd[:0] = [resolved_shell(get_options())[0]]
                                 cmd[0] = which(cmd[0]) or cmd[0]
                                 cmd = cmdline_for_hold(cmd)
-        fenv: dict[str, str] = {}
+        fenv: dict[str, str] = environment_of(profile)
         if env:
             fenv.update(env)
         fenv['KITTY_WINDOW_ID'] = str(next_window_id())
@@ -899,6 +919,7 @@ class Tab:  # {{{
             bias=bias,
             hold_after_ssh=hold_after_ssh,
         )
+        override_title = override_title or self.profile.title or None
         child = self.launch_child(
             use_shell=use_shell,
             cmd=cmd,
@@ -1436,15 +1457,28 @@ class TabManager:  # {{{
     tab_drag_focus_before_hover: int = 0
     tab_drag_history_before_hover: tuple[int, ...] = ()
 
-    def __init__(self, os_window_id: int, args: CLIOptions, wm_class: str, wm_name: str, startup_session: SessionType | None = None):
+    def __init__(
+        self,
+        os_window_id: int,
+        args: CLIOptions,
+        wm_class: str,
+        wm_name: str,
+        startup_session: SessionType | None = None,
+        profile: Profile | None = None,
+        allow_native_tabs: bool = True,
+    ):
         self.os_window_id = os_window_id
+        self.profile = profile or profile_for_new_os_window()
+        self.native_tabs = allow_native_tabs and native_tabs_active()
+        if parsed_options(self.profile):
+            apply_to_os_window(self)
         self.wm_class = wm_class
         self.created_in_session_name = startup_session.session_name if startup_session else ''
         self.recent_tab_bar_mouse_events = MouseEvents()
         self.recent_title_bar_mouse_events = MouseEvents()
         self.wm_name = wm_name
         self.args = args
-        self.tab_bar_hidden = get_options().tab_bar_style == 'hidden'
+        self.tab_bar_hidden = self.native_tabs or get_options().tab_bar_style == 'hidden'
         self.tabs: list[Tab] = []
         self.active_tab_history: Deque[int] = deque()
         self.tab_bar = TabBar(self.os_window_id)
@@ -1453,8 +1487,33 @@ class TabManager:  # {{{
         if startup_session is not None:
             self.add_tabs_from_session(startup_session)
 
+    def add_native_tabs_from_session(self, session: SessionType, session_name: str) -> None:
+        added_tabs = []
+        for t in session.tabs:
+            tm = get_boss().new_native_tab_manager(self) if self.tabs else self
+            tab = Tab(tm, session_tab=t, session_name=session_name or self.created_in_session_name)
+            tm.tabs.append(tab)
+            tm._set_active_tab(0)
+            added_tabs.append(tab)
+            w = tab.active_window
+            for q in tab:
+                q.focus_changed(w is q)
+        chosen = added_tabs[session.active_tab_idx] if 0 <= session.active_tab_idx < len(added_tabs) else None
+        if session.focus_tab_spec is not None:
+            spec = session.focus_tab_spec.strip()
+            try:
+                chosen = added_tabs[max(0, min(int(spec), len(added_tabs) - 1))]
+            except ValueError:
+                chosen = next(iter(get_boss().match_tabs(spec, added_tabs)), chosen)
+        if chosen is not None:
+            chosen.make_active()
+            if w := chosen.active_window:
+                w.last_focused_at = monotonic()
+
     @update_tab_bar_visibility
     def add_tabs_from_session(self, session: SessionType, session_name: str = '') -> None:
+        if self.native_tabs:
+            return self.add_native_tabs_from_session(session, session_name)
         active_tab = self.active_tab
         added_tabs = []
         for i, t in enumerate(session.tabs):
@@ -1606,6 +1665,8 @@ class TabManager:  # {{{
             idx = self.tabs.index(tab)
         except Exception:
             return False
+        if self.native_tabs:
+            native_tabs_select(self.os_window_id)
         self.set_active_tab_idx(idx)
         h = self.active_tab_history
         if for_keep_focus and len(h) > 2 and h[-2] == for_keep_focus.id and h[-1] != for_keep_focus.id:
@@ -1622,7 +1683,28 @@ class TabManager:  # {{{
             return (t for t in self if t is at or t in m)
         return self.tabs
 
+    def native_tab_at(self, offset: int) -> 'TabManager | None':
+        ' The tab manager of the native tab offset places away in the same window '
+        ids = native_tabs_members(self.os_window_id)
+        if self.os_window_id not in ids:
+            return None
+        return get_boss().os_window_map.get(ids[(ids.index(self.os_window_id) + offset) % len(ids)])
+
+    def native_tabs_by_recency(self) -> 'list[TabManager]':
+        boss = get_boss()
+        tms = [tm for wid in native_tabs_members(self.os_window_id) if (tm := boss.os_window_map.get(wid)) is not None]
+
+        def key(tm: 'TabManager') -> float:
+            w = tm.active_window
+            return w.last_focused_at if w else 0.
+
+        return sorted(tms, key=key, reverse=True)
+
     def next_tab(self, delta: int = 1) -> None:
+        if self.native_tabs:
+            if (tm := self.native_tab_at(delta)) is not None:
+                native_tabs_select(tm.os_window_id)
+            return
         if (len(tabs := tuple(self.tabs_to_be_shown_in_tab_bar))) == len(self.tabs):
             if (num := len(tabs)) > 1:
                 self.set_active_tab_idx((self.active_tab_idx + num + delta) % num)
@@ -1647,6 +1729,14 @@ class TabManager:  # {{{
                 break
 
     def tab_at_location(self, loc: str) -> Tab | None:
+        if self.native_tabs:
+            tm = None
+            if loc == 'prev':
+                recent = self.native_tabs_by_recency()
+                tm = recent[1] if len(recent) > 1 else None
+            elif loc in ('left', 'right'):
+                tm = self.native_tab_at(-1 if loc == 'left' else 1)
+            return tm.active_tab if tm is not None else None
         tabs = tuple(self.tabs_to_be_shown_in_tab_bar)
         if loc == 'prev':
             if self.active_tab_history:
@@ -1663,6 +1753,16 @@ class TabManager:  # {{{
         return None
 
     def goto_tab(self, tab_num: int) -> None:
+        if self.native_tabs:
+            ids = native_tabs_members(self.os_window_id)
+            if tab_num >= 0:
+                if ids:
+                    native_tabs_select(ids[min(tab_num, len(ids) - 1)])
+            else:
+                recent = self.native_tabs_by_recency()
+                if recent:
+                    native_tabs_select(recent[min(-tab_num, len(recent) - 1)].os_window_id)
+            return
         tabs = tuple(self.tabs_to_be_shown_in_tab_bar)
         if tab_num >= len(tabs):
             tab_num = max(0, len(tabs) - 1)
@@ -1756,6 +1856,9 @@ class TabManager:  # {{{
         return None
 
     def move_tab(self, delta: int = 1) -> None:
+        if self.native_tabs:
+            native_tabs_move(self.os_window_id, delta)
+            return
         tabs = tuple(self.tabs_to_be_shown_in_tab_bar)
         if len(tabs) > 1:
             if (at := self.active_tab) is None:
@@ -1782,6 +1885,9 @@ class TabManager:  # {{{
         empty_tab: bool = False,
         location: str = 'last',
     ) -> Tab:
+        if self.native_tabs and self.tabs:
+            tm = get_boss().new_native_tab_manager(self, location='after' if as_neighbor else location)
+            return tm.new_tab(special_window=special_window, cwd_from=cwd_from, empty_tab=empty_tab)
         idx = len(self.tabs)
         tabs = tuple(self.tabs_to_be_shown_in_tab_bar)
         orig_active_tab_idx = 0
@@ -2423,7 +2529,7 @@ class TabManager:  # {{{
         at = self.active_tab
         for tab in self:
             tab.apply_options(at is tab)
-        self.tab_bar_hidden = get_options().tab_bar_style == 'hidden'
+        self.tab_bar_hidden = self.native_tabs or get_options().tab_bar_style == 'hidden'
         self.tab_bar.apply_options()
         self.update_tab_bar_data()
         self.layout_tab_bar()

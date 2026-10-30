@@ -973,6 +973,9 @@ class Parser:
 
     choices_for_default_pointer_shape = frozenset(('arrow', 'beam', 'text', 'pointer', 'hand', 'help', 'wait', 'progress', 'crosshair', 'cell', 'vertical-text', 'move', 'e-resize', 'ne-resize', 'nw-resize', 'n-resize', 'se-resize', 'sw-resize', 's-resize', 'w-resize', 'ew-resize', 'ns-resize', 'nesw-resize', 'nwse-resize', 'zoom-in', 'zoom-out', 'alias', 'copy', 'not-allowed', 'no-drop', 'grab', 'grabbing'))
 
+    def default_profile(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['default_profile'] = str(val)
+
     def detect_url_regex(self, val: str, ans: dict[str, typing.Any]) -> None:
         for k, v in store_multiple(val, ans["detect_url_regex"]):
             ans["detect_url_regex"][k] = v
@@ -1193,6 +1196,9 @@ class Parser:
     def narrow_symbols(self, val: str, ans: dict[str, typing.Any]) -> None:
         for k, v in narrow_symbols(val):
             ans["narrow_symbols"][k] = v
+
+    def native_tabs(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['native_tabs'] = to_bool(val)
 
     def notify_on_cmd_finish(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['notify_on_cmd_finish'] = notify_on_cmd_finish(val)

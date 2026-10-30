@@ -195,6 +195,7 @@ def set_cocoa_global_shortcuts(opts: Options) -> dict[str, SingleKey]:
             'close_os_window',
             'close_tab',
             'edit_config_file',
+            'open_settings',
             'previous_tab',
             'next_tab',
             'new_tab',

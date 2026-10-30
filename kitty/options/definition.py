@@ -2163,6 +2163,33 @@ egr()  # }}}
 agr('tabbar', 'Tab bar')
 
 opt(
+    'native_tabs',
+    'yes',
+    option_type='to_bool',
+    long_text="""
+Show tabs with the native tab bar of the operating system instead of drawing them
+inside the terminal. Every tab is then its own window: on macOS an
+:code:`NSWindow` in a window tab group, on Linux a page of a native GTK window
+that also carries the menu bar. Each tab can therefore use a different
+:ref:`profile <profiles>`. When the native tab bar is not available, for
+example on a Linux system without GTK 3, the tab bar drawn by the terminal is
+used and the other options in this section apply. Changing this option by
+reloading the config is not supported.
+""",
+)
+
+opt(
+    'default_profile',
+    'default',
+    long_text="""
+The identifier of the :ref:`profile <profiles>` used for new windows and tabs,
+which is the name of its file in the :file:`profiles` folder of the configuration
+directory, without the :file:`.conf`. Normally set with
+:guilabel:`Settings > Profiles > Set as Default`.
+""",
+)
+
+opt(
     'tab_bar_edge',
     'bottom',
     option_type='tab_bar_edge',
@@ -4583,8 +4610,8 @@ map(
     'edit_config_file kitty_mod+f2 edit_config_file',
 )
 map(
-    'Edit config file',
-    'edit_config_file cmd+, edit_config_file',
+    'Open Settings',
+    'open_settings cmd+, open_settings',
     only='macos',
 )
 

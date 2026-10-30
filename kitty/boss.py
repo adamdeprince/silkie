@@ -58,7 +58,24 @@ from .constants import (
     supports_primary_selection,
     website_url,
 )
+from .native_ui import open_settings
+from .profiles import (
+    DEFAULT_PROFILE_ID,
+    Profile,
+    apply_to_os_window,
+    load_profiles,
+    profile_for_new_os_window,
+    sizing_options,
+    wants_transparency,
+)
+from .profiles import clear_caches as clear_profile_caches
 from .fast_data_types import (
+    native_settings_snapshot,
+    native_tabs_attach,
+    native_tabs_detach,
+    native_tabs_members,
+    native_tabs_select,
+    native_ui_available,
     BOTTOM_EDGE,
     CLOSE_BEING_CONFIRMED,
     GLFW_FKEY_ESCAPE,
@@ -499,9 +516,13 @@ class Boss:
         override_title: str | None = None,
         x: int | None = None,
         y: int | None = None,
+        profile: Profile | None = None,
+        native_tab_parent: int = 0,
+        native_tab_location: str = 'last',
     ) -> int:
+        profile = profile or profile_for_new_os_window()
         if os_window_id is None:
-            size_data = get_os_window_sizing_data(opts_for_size or get_options(), startup_session)
+            size_data = get_os_window_sizing_data(opts_for_size or sizing_options(profile), startup_session)
             wclass = wclass or getattr(startup_session, 'os_window_class', None) or self.args.cls or appname
             wname = wname or getattr(startup_session, 'os_window_name', None) or self.args.name or wclass
             wtitle = override_title or getattr(startup_session, 'os_window_title', None) or self.args.title
@@ -518,11 +539,14 @@ class Boss:
                     disallow_override_title=bool(wtitle),
                     x=x,
                     y=y,
+                    native_tab_parent=native_tab_parent,
+                    native_tab_location=native_tab_location,
+                    want_transparency=wants_transparency(profile),
                 )
         else:
             wname = self.args.name or self.args.cls or appname
             wclass = self.args.cls or appname
-        tm = TabManager(os_window_id, self.args, wclass, wname, startup_session)
+        tm = TabManager(os_window_id, self.args, wclass, wname, startup_session, profile=profile)
         self.os_window_map[os_window_id] = tm
         return os_window_id
 
@@ -533,9 +557,52 @@ class Boss:
         wname = wname or appname
         size_data = get_os_window_sizing_data(get_options(), None)
         os_window_id = create_os_window(initial_window_size_func(size_data, {}), lambda *a: None, appname, wname, wclass, None, layer_shell_config=cfg)
-        tm = TabManager(os_window_id, self.args, wclass, wname, None)
+        tm = TabManager(os_window_id, self.args, wclass, wname, None, allow_native_tabs=False)
         self.os_window_map[os_window_id] = tm
         return os_window_id
+
+    def new_native_tab_manager(self, parent: TabManager, location: str = 'last', profile: Profile | None = None) -> TabManager:
+        ' With native tabs, every tab is an OS window of its own in the tab group of the window that opened it '
+        os_window_id = self.add_os_window(
+            wclass=parent.wm_class, wname=parent.wm_name, profile=profile or parent.profile, native_tab_parent=parent.os_window_id, native_tab_location=location
+        )
+        return self.os_window_map[os_window_id]
+
+    @ac('misc', """Open the native Settings window, optionally at the page specified by name, for example: open_settings profiles""")
+    def open_settings(self, page: str = '') -> None:
+        if native_ui_available():
+            open_settings(page)
+        else:
+            self.edit_config_file()
+
+    @ac('debug', 'Draw the native Settings window to the specified PNG file. It must be open.')
+    def debug_settings_snapshot(self, path: str) -> None:
+        native_settings_snapshot(path)
+
+    @ac('tab', 'Open a new tab using the specified :ref:`profile <profiles>`')
+    def new_tab_with_profile(self, profile_id: str = '') -> None:
+        profile = load_profiles().get(profile_id)
+        tm = self.active_tab_manager
+        if tm is None or not tm.native_tabs:
+            # Without native tabs an OS window has a single profile, so the profile needs its own
+            self.new_os_window_with_profile(profile_id)
+            return
+        self.new_native_tab_manager(tm, profile=profile).new_tab()
+
+    @ac('win', 'Open a new OS window using the specified :ref:`profile <profiles>`')
+    def new_os_window_with_profile(self, profile_id: str = '') -> None:
+        os_window_id = self.add_os_window(profile=load_profiles().get(profile_id))
+        self.os_window_map[os_window_id].new_tab()
+
+    @ac('win', 'Change the :ref:`profile <profiles>` used by the active OS window and the terminals in it')
+    def set_window_profile(self, profile_id: str = '') -> None:
+        tm = self.active_tab_manager
+        profile = load_profiles().get(profile_id)
+        if tm is not None and profile is not None:
+            tm.profile = profile
+            apply_to_os_window(tm)
+            tm.apply_options()
+            tm.resize()
 
     def list_os_windows(
         self, self_window: Window | None = None, tab_filter: Callable[[Tab], bool] | None = None, window_filter: Callable[[Window], bool] | None = None
@@ -1276,6 +1343,12 @@ class Boss:
     @ac('tab', 'Close all the tabs in the current OS window other than the currently active tab')
     def close_other_tabs_in_os_window(self) -> None:
         tm = self.active_tab_manager_with_dispatch
+        if tm is not None and tm.native_tabs:
+            for wid in native_tabs_members(tm.os_window_id):
+                if wid != tm.os_window_id and (other := self.os_window_map.get(wid)) is not None:
+                    for tab in other:
+                        self.close_tab(tab)
+            return
         if tm is not None and len(tm.tabs) > 1:
             active_tab = self.active_tab
             for tab in tm:
@@ -3113,7 +3186,8 @@ class Boss:
             tm.goto_tab(tab_num - 1)
 
     def set_active_tab(self, tab: Tab) -> bool:
-        tm = self.active_tab_manager
+        own = tab.tab_manager_ref()
+        tm = own if own is not None and own.native_tabs else self.active_tab_manager
         if tm is not None:
             return tm.set_active_tab(tab)
         return False
@@ -3494,9 +3568,12 @@ class Boss:
         from .fonts.render import set_font_family
 
         set_font_family(opts)
-        for os_window_id, tm in self.os_window_map.items():
+        clear_profile_caches()
+        profiles = load_profiles()
+        for tm in self.os_window_map.values():
             if tm is not None:
-                os_window_font_size(os_window_id, opts.font_size, True)
+                tm.profile = profiles.get(tm.profile.id) or profiles[DEFAULT_PROFILE_ID]
+                apply_to_os_window(tm)
                 tm.resize()
         # Update key bindings
         if is_macos:
@@ -3742,6 +3819,14 @@ class Boss:
         tab = tab or self.active_tab
         if tab is None:
             return None
+        src_tm = tab.tab_manager_ref()
+        if src_tm is not None and src_tm.native_tabs:
+            if target_os_window_id is None:
+                native_tabs_detach(src_tm.os_window_id)
+            else:
+                native_tabs_attach(src_tm.os_window_id, target_os_window_id, 'last')
+                native_tabs_select(src_tm.os_window_id)
+            return tab
         if target_os_window_id is None:
             target_os_window_id = self.add_os_window()
         tm = self.os_window_map[target_os_window_id]

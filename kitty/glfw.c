@@ -4,6 +4,7 @@
  * Distributed under terms of the GPL3 license.
  */
 
+#include "native_ui.h"
 #include "state.h"
 #include "cleanup.h"
 #include "monotonic.h"
@@ -2049,7 +2050,7 @@ calculate_layer_shell_window_size(
     OSWindow *os_window = os_window_for_glfw_window(window);
     double xdpi, ydpi;
     dpi_from_scale(xscale, yscale, &xdpi, &ydpi);
-    FONTS_DATA_HANDLE fonts_data = load_fonts_data(os_window ? os_window->fonts_data->font_sz_in_pts : OPT(font_size), xdpi, ydpi);
+    FONTS_DATA_HANDLE fonts_data = load_fonts_data(os_window ? os_window->fonts_data->font_sz_in_pts : OPT(font_size), xdpi, ydpi, os_window ? os_window->font_set : 0);
     *cell_width = fonts_data->fcm.cell_width;
     *cell_height = fonts_data->fcm.cell_height;
     double x_factor = xdpi / 72., y_factor = ydpi / 72.;
@@ -2165,7 +2166,7 @@ wayland_initial_size_callback(GLFWwindow *window UNUSED, float xscale, float ysc
     if (!initial_window_size_py_callback) return;
     double xdpi, ydpi;
     dpi_from_scale(xscale, yscale, &xdpi, &ydpi);
-    FONTS_DATA_HANDLE fonts_data = load_fonts_data(OPT(font_size), xdpi, ydpi);
+    FONTS_DATA_HANDLE fonts_data = load_fonts_data(OPT(font_size), xdpi, ydpi, 0);
     if (!fonts_data) return;
     PyObject *ret = PyObject_CallFunction(
         initial_window_size_py_callback,
@@ -2210,7 +2211,9 @@ set_window_creation_error(bool is_panel) {
 
 static PyObject *
 create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
-    int x = INT_MIN, y = INT_MIN, window_state = WINDOW_NORMAL, disallow_override_title = 0;
+    int x = INT_MIN, y = INT_MIN, window_state = WINDOW_NORMAL, disallow_override_title = 0, want_transparency = 0;
+    unsigned long long native_tab_parent = 0;
+    const char *native_tab_location = "last";
     char *title, *wm_class_class, *wm_class_name;
     PyObject *optional_window_state = NULL, *load_programs = NULL, *get_window_size, *pre_show_callback, *optional_x = NULL, *optional_y = NULL,
              *layer_shell_config = NULL;
@@ -2226,11 +2229,14 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         "y",
         "disallow_override_title",
         "layer_shell_config",
+        "native_tab_parent",
+        "native_tab_location",
+        "want_transparency",
         NULL};
     if (!PyArg_ParseTupleAndKeywords(
             args,
             kw,
-            "OOsss|OOOOpO",
+            "OOsss|OOOOpOKsp",
             (char **)kwlist,
             &get_window_size,
             &pre_show_callback,
@@ -2242,7 +2248,10 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
             &optional_x,
             &optional_y,
             &disallow_override_title,
-            &layer_shell_config))
+            &layer_shell_config,
+            &native_tab_parent,
+            &native_tab_location,
+            &want_transparency))
         return NULL;
     GLFWLayerShellConfig *lsc = NULL, lsc_stack = {0};
     if (optional_window_state && optional_window_state != Py_None) {
@@ -2327,7 +2336,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         PyErr_SetString(PyExc_ValueError, "Too many windows");
         return NULL;
     }
-    bool want_semi_transparent = (1.0 - OPT(background_opacity) >= 0.01) || OPT(dynamic_background_opacity);
+    bool want_semi_transparent = (1.0 - OPT(background_opacity) >= 0.01) || OPT(dynamic_background_opacity) || want_transparency;
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, want_semi_transparent);
     uint32_t bgcolor = OPT(background);
     uint32_t bgalpha = (uint32_t)((MAX(0.f, MIN((OPT(background_opacity) * 255), 255.f))));
@@ -2384,7 +2393,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         if (temp_window == NULL) glfw_failure(false);
         get_window_content_scale(temp_window, &xscale, &yscale, &xdpi, &ydpi);
     }
-    FONTS_DATA_HANDLE fonts_data = load_fonts_data(OPT(font_size), xdpi, ydpi);
+    FONTS_DATA_HANDLE fonts_data = load_fonts_data(OPT(font_size), xdpi, ydpi, 0);
     PyObject *ret = PyObject_CallFunction(
         get_window_size,
         "IIddff",
@@ -2446,7 +2455,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
             // called before the window is fully created
             xdpi = n_xdpi;
             ydpi = n_ydpi;
-            fonts_data = load_fonts_data(OPT(font_size), xdpi, ydpi);
+            fonts_data = load_fonts_data(OPT(font_size), xdpi, ydpi, 0);
         }
     }
     if (is_first_window) {
@@ -2534,6 +2543,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     // We do not call glfwWindowHint to set GLFW_MAXIMIZED before the window is created.
     // That would cause the window to be set to maximize immediately after creation and use the wrong initial size when restored.
     if (window_state != WINDOW_NORMAL) change_state_for_os_window(w, window_state);
+    if (!w->is_layer_shell) native_ui_adopt_os_window(w, native_tab_parent, native_tab_location);
 #ifdef __APPLE__
     // macOS: Show the window after it is ready
     if (window_state != WINDOW_HIDDEN) glfwShowWindow(glfw_window, false);
@@ -2548,7 +2558,7 @@ on_os_window_font_size_change(OSWindow *os_window, double new_sz) {
     double xdpi, ydpi;
     float xscale, yscale;
     get_os_window_content_scale(os_window, &xdpi, &ydpi, &xscale, &yscale);
-    os_window->fonts_data = load_fonts_data(new_sz, xdpi, ydpi);
+    os_window->fonts_data = load_fonts_data(new_sz, xdpi, ydpi, os_window->font_set);
     os_window_update_size_increments(os_window);
     if (os_window->is_layer_shell) set_layer_shell_config_for(os_window, NULL);
 }
@@ -2585,6 +2595,7 @@ cocoa_focus_last_window(id_type source_window_id, size_t *source_workspaces, siz
 
 void
 destroy_os_window(OSWindow *w) {
+    native_ui_os_window_closing(w);
 #ifdef __APPLE__
     static size_t source_workspaces[64];
     size_t source_workspace_count = 0;

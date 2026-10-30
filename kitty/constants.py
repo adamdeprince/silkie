@@ -128,6 +128,7 @@ def _get_config_dir() -> str:
 config_dir = _get_config_dir()
 del _get_config_dir
 defconf = os.path.join(config_dir, 'kitty.conf')
+settings_conf = os.path.join(config_dir, 'settings.conf')
 
 
 @run_once

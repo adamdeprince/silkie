@@ -352,6 +352,7 @@ option_names = (
     'cursor_underline_thickness',
     'custom_shaders',
     'default_pointer_shape',
+    'default_profile',
     'detect_url_regex',
     'detect_urls',
     'dim_opacity',
@@ -418,6 +419,7 @@ option_names = (
     'mouse_hide_wait',
     'mouse_map',
     'narrow_symbols',
+    'native_tabs',
     'notify_on_cmd_finish',
     'open_url_with',
     'padding_fill_strategy',
@@ -581,6 +583,7 @@ class Options:
     cursor_underline_thickness: float = 2.0
     custom_shaders: tuple[str, ...] = ()
     default_pointer_shape: choices_for_default_pointer_shape = 'beam'
+    default_profile: str = 'default'
     detect_urls: bool = True
     dim_opacity: float = 0.4
     disable_ligatures: int = 0
@@ -636,6 +639,7 @@ class Options:
     mark3_foreground: Color = Color(0, 0, 0)
     momentum_scroll: float = 0.96
     mouse_hide_wait: MouseHideWait = MouseHideWait(hide_wait=0.0, show_wait=0.0, show_threshold=40, scroll_show=True) if is_macos else MouseHideWait(hide_wait=3.0, show_wait=0.0, show_threshold=40, scroll_show=True)
+    native_tabs: bool = True
     notify_on_cmd_finish: NotifyOnCmdFinish = NotifyOnCmdFinish(when='never', duration=5.0, action='notify', cmdline=(), clear_on=('focus', 'next'))
     open_url_with: list[str] = ['default']
     padding_fill_strategy: choices_for_padding_fill_strategy = 'background'

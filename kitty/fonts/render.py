@@ -43,6 +43,9 @@ else:
 
 FontObject = Union[CoreTextFont, FontConfigPattern]
 current_faces: list[tuple[FontObject, bool, bool]] = []
+current_indices: dict[str, int] = {'medium': 0}
+font_sets: dict[tuple[object, ...], int] = {}
+font_set_faces: dict[int, dict[str, tuple[FontObject | str, bool, bool]]] = {}
 builtin_nerd_font_descriptor: FontObject | None = None
 
 
@@ -167,10 +170,32 @@ def create_narrow_symbols(opts: Options) -> tuple[tuple[int, int, int], ...]:
 descriptor_overrides: dict[int, tuple[str, bool, bool]] = {}
 
 
-def descriptor_for_idx(idx: int) -> tuple[FontObject | str, bool, bool]:
+def descriptor_for_idx(idx: int, font_set: int = 0) -> tuple[FontObject | str, bool, bool]:
     ans = descriptor_overrides.get(idx)
     if ans is None:
+        faces = font_set_faces.get(font_set) if font_set else None
+        if faces is not None:
+            # Symbol map fonts are shared by all font sets. A set without a bold or italic face
+            # is synthesized from its medium face, as happens for the global set.
+            for key, index in current_indices.items():
+                if idx == index:
+                    return faces.get(key) or (faces['medium'][0], 'b' in key, 'i' in key)
         return current_faces[idx]
+    return ans
+
+
+def font_set_for_options(opts: Options) -> int:
+    ' A set of faces for OS windows that do not use the global fonts, such as those of a profile '
+    key = opts.font_family, opts.bold_font, opts.italic_font, opts.bold_italic_font
+    ans = font_sets.get(key)
+    if ans is None:
+        font_map = get_font_files(opts)
+        faces: dict[str, tuple[FontObject | str, bool, bool]] = {'medium': (font_map['medium'], False, False)}
+        for k in ('bold', 'italic', 'bi'):
+            if k in font_map:
+                faces[k] = font_map[k], 'b' in k, 'i' in k
+        ans = font_sets[key] = len(font_sets) + 1
+        font_set_faces[ans] = faces
     return ans
 
 
@@ -198,8 +223,10 @@ def clear_font_caches() -> None:
 
 
 def set_font_family(opts: Options | None = None, override_font_size: float | None = None, add_builtin_nerd_font: bool = False) -> None:
-    global current_faces, builtin_nerd_font_descriptor
+    global current_faces, builtin_nerd_font_descriptor, current_indices
     opts = opts or defaults
+    font_sets.clear()
+    font_set_faces.clear()
     sz = override_font_size or opts.font_size
     font_map = get_font_files(opts)
     current_faces = [(font_map['medium'], False, False)]
@@ -209,6 +236,7 @@ def set_font_family(opts: Options | None = None, override_font_size: float | Non
         if k in font_map:
             indices[k] = len(current_faces)
             current_faces.append((font_map[k], 'b' in k, 'i' in k))
+    current_indices = {'medium': 0, **{k: v for k, v in indices.items() if v}}
     before = len(current_faces)
     if add_builtin_nerd_font:
         builtin_nerd_font_path = os.path.join(fonts_dir, 'SymbolsNerdFontMono-Regular.ttf')
