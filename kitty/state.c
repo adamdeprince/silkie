@@ -1495,6 +1495,16 @@ PYWRAP1(global_font_size) {
     return Py_BuildValue("d", OPT(font_size));
 }
 
+PYWRAP1(set_os_window_font_set) {
+    id_type os_window_id;
+    unsigned int font_set;
+    PA("KI", &os_window_id, &font_set);
+    WITH_OS_WINDOW(os_window_id)
+    os_window->font_set = font_set;
+    END_WITH_OS_WINDOW
+    Py_RETURN_NONE;
+}
+
 PYWRAP1(os_window_font_size) {
     id_type os_window_id;
     int force = 0;
@@ -2137,6 +2147,7 @@ static PyMethodDef module_methods[] = {
     MW(global_font_size, METH_VARARGS),
     {"set_background_image", (PyCFunction)(void (*)(void))pyset_background_image, METH_VARARGS | METH_KEYWORDS, ""},
     MW(os_window_font_size, METH_VARARGS),
+    MW(set_os_window_font_set, METH_VARARGS),
     MW(set_os_window_size, METH_VARARGS),
     MW(get_os_window_size, METH_VARARGS),
     MW(os_window_is_invisible, METH_O),

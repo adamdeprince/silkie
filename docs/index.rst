@@ -13,6 +13,7 @@ The fast, feature-rich, GPU based terminal emulator.
     faq
     support
     sessions
+    native-ui
     performance
     changelog
     integrations

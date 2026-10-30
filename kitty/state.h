@@ -597,6 +597,8 @@ typedef struct OSWindow {
     float hdr_headroom, hdr_white_level;
     bool hdr_active, hdr_content, hdr_enabled_by_default, linear_output, linear_output_checked;
     FONTS_DATA_HANDLE fonts_data;
+    bool hosted_in_native_window; // shown inside a native window, whose state is the state of this window
+    unsigned int font_set; // non-zero when this window does not use the global fonts, see font_set_for_options()
     id_type temp_font_group_id;
     enum RENDER_STATE render_state;
     monotonic_t last_render_frame_received_at, last_rendered_at;
@@ -778,7 +780,7 @@ void send_sprite_to_gpu(FONTS_DATA_HANDLE fg, sprite_index, pixel *, sprite_inde
 void blank_canvas(float, color_type, bool);
 void blank_os_window(OSWindow *);
 void set_os_window_chrome(OSWindow *w);
-FONTS_DATA_HANDLE load_fonts_data(double, double, double);
+FONTS_DATA_HANDLE load_fonts_data(double, double, double, unsigned int);
 void send_prerendered_sprites_for_window(OSWindow *w);
 #ifdef __APPLE__
 #include "cocoa_window.h"

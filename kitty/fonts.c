@@ -161,6 +161,7 @@ typedef struct {
     scaled_font_map_t scaled_font_map;
     decorations_index_map_t decorations_index_map;
     text_style_font_map_t text_style_fonts, text_style_descriptors;
+    unsigned int font_set;
 } FontGroup;
 
 static FontGroup *font_groups = NULL;
@@ -316,10 +317,11 @@ add_font_group(void) {
 }
 
 static FontGroup *
-font_group_for(double font_sz_in_pts, double logical_dpi_x, double logical_dpi_y) {
+font_group_for(double font_sz_in_pts, double logical_dpi_x, double logical_dpi_y, unsigned int font_set) {
     for (size_t i = 0; i < num_font_groups; i++) {
         FontGroup *fg = font_groups + i;
-        if (fg->font_sz_in_pts == font_sz_in_pts && fg->logical_dpi_x == logical_dpi_x && fg->logical_dpi_y == logical_dpi_y) return fg;
+        if (fg->font_sz_in_pts == font_sz_in_pts && fg->logical_dpi_x == logical_dpi_x && fg->logical_dpi_y == logical_dpi_y && fg->font_set == font_set)
+            return fg;
     }
     add_font_group();
     FontGroup *fg = font_groups + num_font_groups - 1;
@@ -327,6 +329,7 @@ font_group_for(double font_sz_in_pts, double logical_dpi_x, double logical_dpi_y
     fg->font_sz_in_pts = font_sz_in_pts;
     fg->logical_dpi_x = logical_dpi_x;
     fg->logical_dpi_y = logical_dpi_y;
+    fg->font_set = font_set;
     fg->id = ++font_group_id_counter;
     initialize_font_group(fg);
     return fg;
@@ -2465,7 +2468,7 @@ send_prerendered_sprites(FontGroup *fg) {
 
 static size_t
 initialize_font(FontGroup *fg, unsigned int desc_idx, const char *ftype) {
-    PyObject *d = PyObject_CallFunction(descriptor_for_idx, "I", desc_idx);
+    PyObject *d = PyObject_CallFunction(descriptor_for_idx, "II", desc_idx, fg->font_set);
     if (d == NULL) {
         PyErr_Print();
         fatal("Failed for %s font", ftype);
@@ -2540,8 +2543,8 @@ send_prerendered_sprites_for_window(OSWindow *w) {
 }
 
 FONTS_DATA_HANDLE
-load_fonts_data(double font_sz_in_pts, double dpi_x, double dpi_y) {
-    FontGroup *fg = font_group_for(font_sz_in_pts, dpi_x, dpi_y);
+load_fonts_data(double font_sz_in_pts, double dpi_x, double dpi_y, unsigned int font_set) {
+    FontGroup *fg = font_group_for(font_sz_in_pts, dpi_x, dpi_y, font_set);
     return (FONTS_DATA_HANDLE)fg;
 }
 
@@ -2789,7 +2792,7 @@ static PyObject *
 create_test_font_group(PyObject *self UNUSED, PyObject *args) {
     double sz, dpix, dpiy;
     if (!PyArg_ParseTuple(args, "ddd", &sz, &dpix, &dpiy)) return NULL;
-    FontGroup *fg = font_group_for(sz, dpix, dpiy);
+    FontGroup *fg = font_group_for(sz, dpix, dpiy, 0);
     if (!fg->sprite_map) send_prerendered_sprites(fg);
     return Py_BuildValue("III", fg->fcm.cell_width, fg->fcm.cell_height, fg->fcm.baseline);
 }

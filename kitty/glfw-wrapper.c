@@ -29,6 +29,15 @@ load_glfw(const char* path) {
     *(void **) (&glfwAddTimer_impl) = dlsym(handle, "glfwAddTimer");
     if (glfwAddTimer_impl == NULL) fail("Failed to load glfw function glfwAddTimer with error: %s", dlerror());
 
+    *(void **) (&glfwAddFDWatch_impl) = dlsym(handle, "glfwAddFDWatch");
+    if (glfwAddFDWatch_impl == NULL) fail("Failed to load glfw function glfwAddFDWatch with error: %s", dlerror());
+
+    *(void **) (&glfwRemoveFDWatch_impl) = dlsym(handle, "glfwRemoveFDWatch");
+    if (glfwRemoveFDWatch_impl == NULL) fail("Failed to load glfw function glfwRemoveFDWatch with error: %s", dlerror());
+
+    *(void **) (&glfwSetEventLoopHook_impl) = dlsym(handle, "glfwSetEventLoopHook");
+    if (glfwSetEventLoopHook_impl == NULL) fail("Failed to load glfw function glfwSetEventLoopHook with error: %s", dlerror());
+
     *(void **) (&glfwUpdateTimer_impl) = dlsym(handle, "glfwUpdateTimer");
     if (glfwUpdateTimer_impl == NULL) fail("Failed to load glfw function glfwUpdateTimer with error: %s", dlerror());
 
@@ -535,6 +544,24 @@ load_glfw(const char* path) {
 
     *(void **) (&glfwCocoaSetWindowResizeCallback_impl) = dlsym(handle, "glfwCocoaSetWindowResizeCallback");
     if (glfwCocoaSetWindowResizeCallback_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandSetExternalDisplay_impl) = dlsym(handle, "glfwWaylandSetExternalDisplay");
+    if (glfwWaylandSetExternalDisplay_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandSetNextWindowEmbedded_impl) = dlsym(handle, "glfwWaylandSetNextWindowEmbedded");
+    if (glfwWaylandSetNextWindowEmbedded_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedSetParent_impl) = dlsym(handle, "glfwWaylandEmbedSetParent");
+    if (glfwWaylandEmbedSetParent_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedSetPosition_impl) = dlsym(handle, "glfwWaylandEmbedSetPosition");
+    if (glfwWaylandEmbedSetPosition_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedSetMapped_impl) = dlsym(handle, "glfwWaylandEmbedSetMapped");
+    if (glfwWaylandEmbedSetMapped_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwWaylandEmbedActivate_impl) = dlsym(handle, "glfwWaylandEmbedActivate");
+    if (glfwWaylandEmbedActivate_impl == NULL) dlerror(); // clear error indicator
 
     *(void **) (&glfwGetX11Display_impl) = dlsym(handle, "glfwGetX11Display");
     if (glfwGetX11Display_impl == NULL) dlerror(); // clear error indicator

@@ -9,6 +9,7 @@
 #include "state.h"
 #include "cleanup.h"
 #include "cocoa_window.h"
+#include "native_ui.h"
 #include <Availability.h>
 #include <Carbon/Carbon.h>
 #include <Cocoa/Cocoa.h>
@@ -258,6 +259,7 @@ update_secure_input_menu_bar_indicator(BOOL enabled) {
 }
 
 PENDING(edit_config_file, PREFERENCES_WINDOW)
+PENDING(open_settings, OPEN_SETTINGS)
 PENDING(new_os_window, NEW_OS_WINDOW)
 PENDING(detach_tab, DETACH_TAB)
 PENDING(close_os_window, CLOSE_OS_WINDOW)
@@ -356,7 +358,7 @@ typedef struct {
     NSEventModifierFlags mods;
 } GlobalShortcut;
 typedef struct {
-    GlobalShortcut new_os_window, close_os_window, close_tab, edit_config_file, reload_config;
+    GlobalShortcut new_os_window, close_os_window, close_tab, edit_config_file, open_settings, reload_config;
     GlobalShortcut previous_tab, next_tab, new_tab, new_window, close_window, kill_window, reset_terminal;
     GlobalShortcut clear_terminal_and_scrollback, clear_screen, clear_scrollback, clear_last_command;
     GlobalShortcut toggle_macos_secure_keyboard_entry, toggle_fullscreen, open_kitty_website;
@@ -377,7 +379,7 @@ cocoa_set_global_shortcut(PyObject *self UNUSED, PyObject *args) {
     if (strcmp(name, #x) == 0) gs = &global_shortcuts.x
     Q(new_os_window);
     else Q(close_os_window); else Q(close_tab);
-    else Q(edit_config_file); else Q(new_tab);
+    else Q(edit_config_file); else Q(open_settings); else Q(new_tab);
     else Q(next_tab); else Q(previous_tab);
     else Q(new_window); else Q(close_window); else Q(kill_window);
     else Q(reset_terminal); else Q(clear_terminal_and_scrollback);
@@ -408,7 +410,7 @@ get_dock_menu(id self UNUSED, SEL _cmd UNUSED, NSApplication *sender UNUSED) {
     if (!dockMenu) {
         GlobalMenuTarget *global_menu_target = [GlobalMenuTarget shared_instance];
         dockMenu = [[NSMenu alloc] init];
-        [[dockMenu addItemWithTitle:@"New OS Window" action:@selector(new_os_window:) keyEquivalent:@""] setTarget:global_menu_target];
+        [[dockMenu addItemWithTitle:@"New Window" action:@selector(new_os_window:) keyEquivalent:@""] setTarget:global_menu_target];
     }
     return dockMenu;
 }
@@ -838,8 +840,9 @@ cocoa_create_global_menu(void) {
     NSString *about_title = [NSString stringWithFormat:@"About %@", app_name];
     [[appMenu addItemWithTitle:about_title action:@selector(show_about_panel:) keyEquivalent:@""] setTarget:global_menu_target];
     [appMenu addItem:[NSMenuItem separatorItem]];
-    MENU_ITEM(appMenu, @"Preferences…", edit_config_file);
-    MENU_ITEM(appMenu, @"Reload Preferences", reload_config);
+    MENU_ITEM(appMenu, @"Settings…", open_settings);
+    MENU_ITEM(appMenu, @"Edit Config File…", edit_config_file);
+    MENU_ITEM(appMenu, @"Reload Config", reload_config);
     [appMenu addItem:[NSMenuItem separatorItem]];
 
     NSMenu *servicesMenu = [[NSMenu alloc] init];
@@ -862,14 +865,14 @@ cocoa_create_global_menu(void) {
     NSMenuItem *shellMenuItem = [bar addItemWithTitle:@"Shell" action:NULL keyEquivalent:@""];
     NSMenu *shellMenu = [[NSMenu alloc] initWithTitle:@"Shell"];
     [shellMenuItem setSubmenu:shellMenu];
-    MENU_ITEM(shellMenu, @"New OS Window", new_os_window);
+    MENU_ITEM(shellMenu, @"New Window", new_os_window);
     MENU_ITEM(shellMenu, @"New Tab", new_tab);
-    MENU_ITEM(shellMenu, @"New Window", new_window);
+    MENU_ITEM(shellMenu, @"Split Pane", new_window);
     [shellMenu addItem:[NSMenuItem separatorItem]];
-    MENU_ITEM(shellMenu, @"Close OS Window", close_os_window);
+    MENU_ITEM(shellMenu, @"Close Window", close_os_window);
     MENU_ITEM(shellMenu, @"Close Tab", close_tab);
-    MENU_ITEM(shellMenu, @"Close Window", close_window);
-    MENU_ITEM(shellMenu, @"Kill Window", kill_window);
+    MENU_ITEM(shellMenu, @"Close Pane", close_window);
+    MENU_ITEM(shellMenu, @"Kill Pane", kill_window);
     [shellMenu addItem:[NSMenuItem separatorItem]];
     MENU_ITEM(shellMenu, @"Reset", reset_terminal);
     [shellMenu release];
@@ -893,8 +896,8 @@ cocoa_create_global_menu(void) {
     MENU_ITEM(windowMenu, @"Minimize", minimize_macos_window);
     [windowMenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
     [windowMenu addItem:[NSMenuItem separatorItem]];
-    MENU_ITEM(windowMenu, @"Cycle Through OS Windows", macos_cycle_through_os_windows);
-    MENU_ITEM(windowMenu, @"Cycle Through OS Windows backwards", macos_cycle_through_os_windows_backwards);
+    MENU_ITEM(windowMenu, @"Cycle Through Windows", macos_cycle_through_os_windows);
+    MENU_ITEM(windowMenu, @"Cycle Through Windows Backwards", macos_cycle_through_os_windows_backwards);
     [windowMenu addItem:[NSMenuItem separatorItem]];
     [windowMenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
 
@@ -902,11 +905,19 @@ cocoa_create_global_menu(void) {
     MENU_ITEM(windowMenu, @"Show Previous Tab", previous_tab);
     MENU_ITEM(windowMenu, @"Show Next Tab", next_tab);
     [[windowMenu addItemWithTitle:@"Move Tab to New Window" action:@selector(detach_tab:) keyEquivalent:@""] setTarget:global_menu_target];
+    if (native_ui_backend()) {
+        // Handled by the key window, these work on the native tab bar
+        [windowMenu addItemWithTitle:@"Merge All Windows" action:@selector(mergeAllWindows:) keyEquivalent:@""];
+        [windowMenu addItemWithTitle:@"Show Tab Bar" action:@selector(toggleTabBar:) keyEquivalent:@""];
+        [windowMenu addItemWithTitle:@"Show All Tabs" action:@selector(toggleTabOverview:) keyEquivalent:@""];
+    }
 
     [windowMenu addItem:[NSMenuItem separatorItem]];
     MENU_ITEM(windowMenu, @"Enter Full Screen", toggle_fullscreen);
     [NSApp setWindowsMenu:windowMenu];
     [windowMenu release];
+
+    native_ui_cocoa_add_menus(bar);
 
     NSMenuItem *helpMenuItem = [bar addItemWithTitle:@"Help" action:NULL keyEquivalent:@""];
     NSMenu *helpMenu = [[NSMenu alloc] initWithTitle:@"Help"];

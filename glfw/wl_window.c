@@ -579,9 +579,14 @@ _glfwWaylandSurfaceOutputsChanged(_GLFWwindow *window) {
     if (window->wl.frameCallbackData.callback) window->wl.frameCallbackData.callback(window->wl.frameCallbackData.id);
 }
 
+static _GLFWwindow *
+window_from_surface_ref(void *data) {
+    return ((_GLFWsurfaceRef *)data)->window;
+}
+
 static void
 surfaceHandleEnter(void *data, struct wl_surface *surface UNUSED, struct wl_output *output) {
-    _GLFWwindow *window = data;
+    _GLFWwindow *window = window_from_surface_ref(data);
     // output is NULL when the wl_output global it refers to was removed before
     // this event was dispatched. Wayland delivers destroyed objects as NULL even
     // for arguments declared non-nullable, so this must be handled.
@@ -608,7 +613,7 @@ surfaceHandleEnter(void *data, struct wl_surface *surface UNUSED, struct wl_outp
 
 static void
 surfaceHandleLeave(void *data, struct wl_surface *surface UNUSED, struct wl_output *output) {
-    _GLFWwindow *window = data;
+    _GLFWwindow *window = window_from_surface_ref(data);
     // output is NULL when the wl_output global it refers to was removed before
     // this event was dispatched, see the comment in surfaceHandleEnter(). In that
     // case registryHandleGlobalRemove() has already dropped the monitor from
@@ -631,7 +636,7 @@ surfaceHandleLeave(void *data, struct wl_surface *surface UNUSED, struct wl_outp
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
 static void
 surface_preferred_buffer_scale(void *data, struct wl_surface *surface UNUSED, int32_t scale) {
-    _GLFWwindow *window = data;
+    _GLFWwindow *window = window_from_surface_ref(data);
     window->wl.once.preferred_scale_received = true;
     if ((int)window->wl.integer_scale.preferred == scale && window->wl.window_fully_created) return;
     debug("Preferred integer buffer scale changed to: %d for window %llu\n", scale, window->id);
@@ -682,8 +687,8 @@ static bool
 create_surface(_GLFWwindow *window, const _GLFWwndconfig *wndconfig) {
     window->wl.surface = wl_compositor_create_surface(_glfw.wl.compositor);
     if (!window->wl.surface) return false;
-    wl_surface_add_listener(window->wl.surface, &surfaceListener, window);
-    wl_surface_set_user_data(window->wl.surface, window);
+    window->wl.surface_ref.window = window;
+    wl_surface_add_listener(window->wl.surface, &surfaceListener, &window->wl.surface_ref);
 
     // If we already have been notified of the primary monitor scale, assume
     // the window will be created on it and so avoid a rescale roundtrip in the common
@@ -1032,7 +1037,7 @@ loop_till_window_fully_created(_GLFWwindow *window) {
         debug("Waiting for compositor to send fractional scale for window %llu\n", window->id);
         monotonic_t start = monotonic();
         while (!window->wl.window_fully_created && monotonic() - start < ms_to_monotonic_t(300)) {
-            if (wl_display_roundtrip(_glfw.wl.display) == -1) { window->wl.window_fully_created = true; }
+            if (wl_glfw_roundtrip() == -1) { window->wl.window_fully_created = true; }
         }
         window->wl.window_fully_created = true;
         // If other OS windows were resized when this window is shown, the ctx might have been changed by
@@ -1285,7 +1290,7 @@ create_layer_shell_surface(_GLFWwindow *window) {
     layer_set_properties(window, true, window->wl.width, window->wl.height);
     if (window->wl.wp_viewport) wp_viewport_set_destination(window->wl.wp_viewport, window->wl.width, window->wl.height);
     commit_window_surface(window);
-    wl_display_roundtrip(_glfw.wl.display);
+    wl_glfw_roundtrip();
     window->wl.created = true;
 #undef ls
     return true;
@@ -1353,7 +1358,7 @@ create_window_desktop_surface(_GLFWwindow *window) {
     }
 
     commit_window_surface(window);
-    wl_display_roundtrip(_glfw.wl.display);
+    wl_glfw_roundtrip();
     window->wl.created = true;
 
     return true;
@@ -1429,9 +1434,11 @@ handleEvents(monotonic_t timeout) {
     struct wl_display *display = _glfw.wl.display;
     errno = 0;
     EVDBG("starting handleEvents(%.2f)", monotonic_t_to_s_double(timeout));
+    // Before preparing to read the display: the hook can run code that uses the display and would then wait for this read
+    if (_glfwEventLoopHook) timeout = _glfwEventLoopHook(timeout);
 
-    while (wl_display_prepare_read(display) != 0) {
-        if (wl_display_dispatch_pending(display) == -1) {
+    while (wl_glfw_prepare_read() != 0) {
+        if (wl_glfw_dispatch_pending() == -1) {
             abortOnFatalError(errno);
             return;
         }
@@ -1454,7 +1461,7 @@ handleEvents(monotonic_t timeout) {
     bool display_read_ok = pollForEvents(&_glfw.wl.eventLoopData, timeout, wayland_read_events);
     EVDBG("display_read_ok: %d", display_read_ok);
     if (display_read_ok) {
-        int num = wl_display_dispatch_pending(display);
+        int num = wl_glfw_dispatch_pending();
         (void)num;
         EVDBG("dispatched %d Wayland events", num);
     }
@@ -1580,10 +1587,20 @@ _glfwPlatformCreateWindow(
     strncpy(window->wl.appId, wndconfig->wl.appId, sizeof(window->wl.appId));
     window->swaps_disallowed = true;
 
+    window->wl.embedded.is_embedded = _glfw.wl.next_window_embedded;
+    _glfw.wl.next_window_embedded = false;
     if (!create_surface(window, wndconfig)) return false;
     if (wndconfig->title) window->wl.title = _glfw_strdup(wndconfig->title);
     if (wndconfig->maximized) window->wl.maximize_on_first_show = true;
-    if (wndconfig->visible) {
+    if (window->wl.embedded.is_embedded) {
+        // The toolkit window it goes inside has the title bar and takes the role of the toplevel
+        window->decorated = false;
+        window->wl.visible = true;
+        window->wl.created = true;
+        window->wl.window_fully_created = true;
+        window->wl.once.surface_configured = true;
+        window->swaps_disallowed = false;
+    } else if (wndconfig->visible) {
         if (!create_window_desktop_surface(window)) return false;
         window->wl.visible = true;
     } else {
@@ -1636,6 +1653,8 @@ _glfwPlatformDestroyWindow(_GLFWwindow *window) {
     if (window->wl.xdg.decoration) zxdg_toplevel_decoration_v1_destroy(window->wl.xdg.decoration);
 
     if (window->wl.native) wl_egl_window_destroy(window->wl.native);
+
+    if (window->wl.embedded.subsurface) wl_subsurface_destroy(window->wl.embedded.subsurface);
 
     if (window->wl.xdg.toplevel) xdg_toplevel_destroy(window->wl.xdg.toplevel);
 
@@ -2147,19 +2166,19 @@ _glfwPlatformRawMouseMotionSupported(void) {
 
 void
 _glfwPlatformPollEvents(void) {
-    wl_display_dispatch_pending(_glfw.wl.display);
+    wl_glfw_dispatch_pending();
     handleEvents(0);
 }
 
 void
 _glfwPlatformWaitEvents(void) {
-    monotonic_t timeout = wl_display_dispatch_pending(_glfw.wl.display) > 0 ? 0 : -1;
+    monotonic_t timeout = wl_glfw_dispatch_pending() > 0 ? 0 : -1;
     handleEvents(timeout);
 }
 
 void
 _glfwPlatformWaitEventsTimeout(monotonic_t timeout) {
-    if (wl_display_dispatch_pending(_glfw.wl.display) > 0) timeout = 0;
+    if (wl_glfw_dispatch_pending() > 0) timeout = 0;
     handleEvents(timeout);
 }
 
@@ -3412,7 +3431,7 @@ drag_start_confirmation_handle_done(void *data UNUSED, struct wl_callback *callb
     if (_glfw.wl.pointer_button_count > 0 && _glfw.wl.drag.sync_retries < 3) {
         _glfw.wl.drag.sync_retries++;
         debug_input("Drag session not yet confirmed, button still held; retrying sync (%u/3)\n", _glfw.wl.drag.sync_retries);
-        _glfw.wl.drag.start_confirmation = wl_display_sync(_glfw.wl.display);
+        _glfw.wl.drag.start_confirmation = wl_display_sync(wl_glfw_display_for_requests());
         if (_glfw.wl.drag.start_confirmation) wl_callback_add_listener(_glfw.wl.drag.start_confirmation, &drag_start_confirmation_listener, NULL);
         return;
     }
@@ -3876,7 +3895,7 @@ _glfwPlatformStartDrag(_GLFWwindow *window, const GLFWimage *thumbnail) {
     // produces events ordered before the sync callback.
     _glfw.wl.drag.session_confirmed = false;
     _glfw.wl.drag.sync_retries = 0;
-    _glfw.wl.drag.start_confirmation = wl_display_sync(_glfw.wl.display);
+    _glfw.wl.drag.start_confirmation = wl_display_sync(wl_glfw_display_for_requests());
     if (_glfw.wl.drag.start_confirmation) wl_callback_add_listener(_glfw.wl.drag.start_confirmation, &drag_start_confirmation_listener, NULL);
 
     return 0;
@@ -3981,5 +4000,59 @@ _glfwPlatformSetWindowHDRPrimaries(_GLFWwindow *window, GLFWcolorprimaries prima
     // the window has to go on being drawn in
     window->wl.hdr.wanted_primaries = before;
     return false;
+}
+// }}}
+
+// Windows inside the windows of a toolkit {{{
+GLFWAPI void
+glfwWaylandSetNextWindowEmbedded(bool embedded) {
+    _glfw.wl.next_window_embedded = embedded;
+}
+
+GLFWAPI void
+glfwWaylandEmbedSetParent(GLFWwindow *handle, void *parent_surface) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    if (window->wl.embedded.subsurface) wl_subsurface_destroy(window->wl.embedded.subsurface);
+    window->wl.embedded.subsurface = NULL;
+    window->wl.embedded.parent = parent_surface;
+    if (!parent_surface || !_glfw.wl.subcompositor) return;
+    window->wl.embedded.subsurface = wl_subcompositor_get_subsurface(_glfw.wl.subcompositor, window->wl.surface, parent_surface);
+    // The terminal draws at its own pace, not when the toolkit happens to redraw its menu bar
+    if (window->wl.embedded.subsurface) wl_subsurface_set_desync(window->wl.embedded.subsurface);
+}
+
+GLFWAPI void
+glfwWaylandEmbedSetPosition(GLFWwindow *handle, int x, int y) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    if (window->wl.embedded.subsurface) wl_subsurface_set_position(window->wl.embedded.subsurface, x, y);
+}
+
+GLFWAPI void
+glfwWaylandEmbedSetMapped(GLFWwindow *handle, bool mapped) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    if (mapped == window->wl.visible) return;
+    window->wl.visible = mapped;
+    window->swaps_disallowed = !mapped;
+    if (!mapped) {
+        wl_surface_attach(window->wl.surface, NULL, 0, 0);
+        commit_window_surface(window);
+    }
+}
+
+GLFWAPI void
+glfwWaylandEmbedActivate(GLFWwindow *handle) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    struct wl_surface *parent = window->wl.embedded.parent;
+    for (_GLFWwindow *w = _glfw.windowListHead; w; w = w->next) {
+        if (w->wl.embedded.is_embedded && w->wl.embedded.parent == parent) w->wl.embedded.is_active = w == window;
+    }
+    // Only the tab changes, the compositor sees the keyboard staying where it is
+    if (parent && _glfw.wl.keyboard_focus_parent == parent && _glfw.wl.keyboardFocusId != window->id) {
+        _GLFWwindow *old = _glfwWindowForId(_glfw.wl.keyboardFocusId);
+        if (old) _glfwInputWindowFocus(old, false);
+        _glfw.wl.keyboardFocusId = window->id;
+        _glfw.wl.lastKeyboardFocusId = window->id;
+        _glfwInputWindowFocus(window, true);
+    }
 }
 // }}}

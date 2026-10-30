@@ -11,6 +11,7 @@
 
 typedef enum {
     PREFERENCES_WINDOW,
+    OPEN_SETTINGS,
     NEW_OS_WINDOW,
     NEW_OS_WINDOW_WITH_WD,
     NEW_TAB_WITH_WD,

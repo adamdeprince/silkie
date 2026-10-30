@@ -11,7 +11,7 @@ from typing import Any, NoReturn, TypeVar, cast
 
 from .cli_stub import CLIOptions
 from .conf.utils import resolve_config
-from .constants import app_class, appname, clear_handled_signals, config_dir, default_pager_for_help, defconf, is_macos, str_version, website_url
+from .constants import app_class, appname, clear_handled_signals, config_dir, default_pager_for_help, defconf, is_macos, settings_conf, str_version, website_url
 from .fast_data_types import parse_cli_from_spec, wcswidth
 from .options.types import Options as KittyOpts
 from .simple_cli_definitions import (
@@ -718,7 +718,9 @@ SYSTEM_CONF = f'/etc/xdg/{appname}/{appname}.conf'
 
 
 def default_config_paths(conf_paths: Sequence[str]) -> tuple[str, ...]:
-    return tuple(resolve_config(SYSTEM_CONF, defconf, conf_paths))
+    ans = tuple(resolve_config(SYSTEM_CONF, defconf, conf_paths))
+    # What the Settings window stores is read last, so that it wins over kitty.conf
+    return ans + (settings_conf,) if not conf_paths else ans
 
 
 @run_once

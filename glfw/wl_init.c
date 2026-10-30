@@ -67,13 +67,9 @@
 static _GLFWwindow *
 get_window_from_surface(struct wl_surface *surface) {
     if (!surface) return NULL;
-    _GLFWwindow *ans = wl_surface_get_user_data(surface);
-    if (ans) {
-        const _GLFWwindow *w = _glfw.windowListHead;
-        while (w) {
-            if (w == ans) return ans;
-            w = w->next;
-        }
+    // Surfaces of a toolkit that shares the connection have user data that is none of our business
+    for (_GLFWwindow *w = _glfw.windowListHead; w; w = w->next) {
+        if (w->wl.surface == surface) return w;
     }
     return NULL;
 }
@@ -1426,6 +1422,13 @@ send_key_repeat_timer_event(id_type timer_id UNUSED, void *data UNUSED) {
 static void
 keyboardHandleEnter(void *data UNUSED, struct wl_keyboard *keyboard UNUSED, uint32_t serial, struct wl_surface *surface, struct wl_array *keys) {
     _GLFWwindow *window = get_window_from_surface(surface);
+    _glfw.wl.keyboard_focus_parent = window ? NULL : surface;
+    if (!window) {
+        // The keyboard focus is on the surface of a toolkit window, it belongs to the tab showing in it
+        for (_GLFWwindow *w = _glfw.windowListHead; w && !window; w = w->next) {
+            if (w->wl.embedded.is_embedded && w->wl.embedded.is_active && w->wl.embedded.parent == surface) window = w;
+        }
+    }
     if (!window) return;
 
     _glfw.wl.serial = serial;
@@ -1967,6 +1970,13 @@ glfwWaylandMissingCapabilities(void) {
     return get_compositor_missing_capabilities();
 }
 
+static struct wl_display *external_display = NULL;
+
+GLFWAPI void
+glfwWaylandSetExternalDisplay(void *display) {
+    external_display = display;
+}
+
 int
 _glfwPlatformInit(bool *supports_window_occlusion) {
     int i;
@@ -1993,7 +2003,17 @@ _glfwPlatformInit(bool *supports_window_occlusion) {
     glfw_dlsym(_glfw.wl.egl.window_destroy, _glfw.wl.egl.handle, "wl_egl_window_destroy");
     glfw_dlsym(_glfw.wl.egl.window_resize, _glfw.wl.egl.handle, "wl_egl_window_resize");
 
-    _glfw.wl.display = wl_display_connect(NULL);
+    if (external_display) {
+        _glfw.wl.display = external_display;
+        _glfw.wl.display_is_external = true;
+        _glfw.wl.queue = wl_display_create_queue(_glfw.wl.display);
+        _glfw.wl.display_wrapper = wl_proxy_create_wrapper(_glfw.wl.display);
+        if (!_glfw.wl.queue || !_glfw.wl.display_wrapper) {
+            _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: Failed to create an event queue on the shared display");
+            return false;
+        }
+        wl_proxy_set_queue((struct wl_proxy *)_glfw.wl.display_wrapper, _glfw.wl.queue);
+    } else _glfw.wl.display = wl_display_connect(NULL);
     if (!_glfw.wl.display) {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: Failed to connect to display");
         return false;
@@ -2010,17 +2030,17 @@ _glfwPlatformInit(bool *supports_window_occlusion) {
     _glfw.wl.cursorAnimationTimer =
         addTimer(&_glfw.wl.eventLoopData, "wayland-cursor-animation", ms_to_monotonic_t(500ll), 0, true, animateCursorImage, NULL, NULL);
 
-    _glfw.wl.registry = wl_display_get_registry(_glfw.wl.display);
+    _glfw.wl.registry = wl_display_get_registry(wl_glfw_display_for_requests());
     wl_registry_add_listener(_glfw.wl.registry, &registryListener, NULL);
 
     if (!glfw_xkb_create_context(&_glfw.wl.xkb)) return false;
 
     // Sync so we got all registry objects
-    wl_display_roundtrip(_glfw.wl.display);
+    wl_glfw_roundtrip();
     _glfwWaylandInitTextInput();
 
     // Sync so we got all initial output events
-    wl_display_roundtrip(_glfw.wl.display);
+    wl_glfw_roundtrip();
 
     for (i = 0; i < _glfw.monitorCount; ++i) {
         monitor = _glfw.monitors[i];
@@ -2133,9 +2153,11 @@ _glfwPlatformTerminate(void) {
         eglTerminate(_glfw.egl.display);
         _glfw.egl.display = EGL_NO_DISPLAY;
     }
+    if (_glfw.wl.display_wrapper) wl_proxy_wrapper_destroy(_glfw.wl.display_wrapper);
+    if (_glfw.wl.queue) wl_event_queue_destroy(_glfw.wl.queue);
     if (_glfw.wl.display) {
         wl_display_flush(_glfw.wl.display);
-        wl_display_disconnect(_glfw.wl.display);
+        if (!_glfw.wl.display_is_external) wl_display_disconnect(_glfw.wl.display);
         _glfw.wl.display = NULL;
     }
     if (_glfw.egl.handle) {

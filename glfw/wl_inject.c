@@ -27,8 +27,8 @@ glfwWaylandCreateVirtualDevices(void) {
         // Two roundtrips: first ensures the compositor has processed the creation
         // requests, second gives wlroots time to advertise the updated seat
         // capabilities (pointer/keyboard) to any client that connects next.
-        wl_display_roundtrip(_glfw.wl.display);
-        wl_display_roundtrip(_glfw.wl.display);
+        wl_glfw_roundtrip();
+        wl_glfw_roundtrip();
     }
     return _glfw.wl.virtual_pointer != NULL;
 }

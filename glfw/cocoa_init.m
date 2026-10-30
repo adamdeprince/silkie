@@ -1144,6 +1144,10 @@ schedule_timer(Timer *t) {
                                                   }];
 }
 
+// Only needed where an external toolkit shares the event loop, Cocoa is the event loop
+unsigned long long _glfwPlatformAddFDWatch(int fd UNUSED, int events UNUSED, GLFWfdwatchfun callback UNUSED, void *callback_data UNUSED) { return 0; }
+void _glfwPlatformRemoveFDWatch(unsigned long long watch_id UNUSED) {}
+
 unsigned long long
 _glfwPlatformAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callback, void *callback_data, GLFWuserdatafun free_callback) {
     static unsigned long long timer_counter = 0;

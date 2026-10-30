@@ -936,10 +936,12 @@ errorHandler(Display *display, XErrorEvent *event) {
 
 // Sets the X error handler callback
 //
+static int (*previous_error_handler)(Display *, XErrorEvent *) = NULL;
+
 void
 _glfwGrabErrorHandlerX11(void) {
     _glfw.x11.errorCode = Success;
-    XSetErrorHandler(errorHandler);
+    previous_error_handler = XSetErrorHandler(errorHandler);
 }
 
 // Clears the X error handler callback
@@ -948,7 +950,8 @@ void
 _glfwReleaseErrorHandlerX11(void) {
     // Synchronize to make sure all commands are processed
     XSync(_glfw.x11.display, False);
-    XSetErrorHandler(NULL);
+    // The handler is process wide, and a toolkit in this process depends on the one it has installed
+    XSetErrorHandler(previous_error_handler);
 }
 
 // Reports the specified error, appending information about the last X error

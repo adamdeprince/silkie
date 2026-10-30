@@ -2047,6 +2047,8 @@ typedef void (*GLFWmonitorfun)(GLFWmonitor *, int);
  */
 typedef void (*GLFWjoystickfun)(int, int);
 
+typedef void (* GLFWfdwatchfun)(int fd, int events, void *data);
+typedef monotonic_t (* GLFWeventloophookfun)(monotonic_t timeout);
 typedef void (*GLFWuserdatafun)(unsigned long long, void *);
 typedef void (*GLFWtickcallback)(void *);
 typedef void (*GLFWactivationcallback)(GLFWwindow *window, const char *token, void *data);
@@ -2356,6 +2358,18 @@ GFW_EXTERN glfwStopMainLoop_func glfwStopMainLoop_impl;
 typedef unsigned long long (*glfwAddTimer_func)(monotonic_t, bool, GLFWuserdatafun, void*, GLFWuserdatafun);
 GFW_EXTERN glfwAddTimer_func glfwAddTimer_impl;
 #define glfwAddTimer glfwAddTimer_impl
+
+typedef unsigned long long (*glfwAddFDWatch_func)(int, int, GLFWfdwatchfun, void*);
+GFW_EXTERN glfwAddFDWatch_func glfwAddFDWatch_impl;
+#define glfwAddFDWatch glfwAddFDWatch_impl
+
+typedef void (*glfwRemoveFDWatch_func)(unsigned long long);
+GFW_EXTERN glfwRemoveFDWatch_func glfwRemoveFDWatch_impl;
+#define glfwRemoveFDWatch glfwRemoveFDWatch_impl
+
+typedef void (*glfwSetEventLoopHook_func)(GLFWeventloophookfun);
+GFW_EXTERN glfwSetEventLoopHook_func glfwSetEventLoopHook_impl;
+#define glfwSetEventLoopHook glfwSetEventLoopHook_impl
 
 typedef void (*glfwUpdateTimer_func)(unsigned long long, monotonic_t, bool);
 GFW_EXTERN glfwUpdateTimer_func glfwUpdateTimer_impl;
@@ -3032,6 +3046,30 @@ GFW_EXTERN glfwCocoaRecreateGLDrawable_func glfwCocoaRecreateGLDrawable_impl;
 typedef GLFWcocoarenderframefun (*glfwCocoaSetWindowResizeCallback_func)(GLFWwindow*, GLFWcocoarenderframefun);
 GFW_EXTERN glfwCocoaSetWindowResizeCallback_func glfwCocoaSetWindowResizeCallback_impl;
 #define glfwCocoaSetWindowResizeCallback glfwCocoaSetWindowResizeCallback_impl
+
+typedef void (*glfwWaylandSetExternalDisplay_func)(void*);
+GFW_EXTERN glfwWaylandSetExternalDisplay_func glfwWaylandSetExternalDisplay_impl;
+#define glfwWaylandSetExternalDisplay glfwWaylandSetExternalDisplay_impl
+
+typedef void (*glfwWaylandSetNextWindowEmbedded_func)(bool);
+GFW_EXTERN glfwWaylandSetNextWindowEmbedded_func glfwWaylandSetNextWindowEmbedded_impl;
+#define glfwWaylandSetNextWindowEmbedded glfwWaylandSetNextWindowEmbedded_impl
+
+typedef void (*glfwWaylandEmbedSetParent_func)(GLFWwindow*, void*);
+GFW_EXTERN glfwWaylandEmbedSetParent_func glfwWaylandEmbedSetParent_impl;
+#define glfwWaylandEmbedSetParent glfwWaylandEmbedSetParent_impl
+
+typedef void (*glfwWaylandEmbedSetPosition_func)(GLFWwindow*, int, int);
+GFW_EXTERN glfwWaylandEmbedSetPosition_func glfwWaylandEmbedSetPosition_impl;
+#define glfwWaylandEmbedSetPosition glfwWaylandEmbedSetPosition_impl
+
+typedef void (*glfwWaylandEmbedSetMapped_func)(GLFWwindow*, bool);
+GFW_EXTERN glfwWaylandEmbedSetMapped_func glfwWaylandEmbedSetMapped_impl;
+#define glfwWaylandEmbedSetMapped glfwWaylandEmbedSetMapped_impl
+
+typedef void (*glfwWaylandEmbedActivate_func)(GLFWwindow*);
+GFW_EXTERN glfwWaylandEmbedActivate_func glfwWaylandEmbedActivate_impl;
+#define glfwWaylandEmbedActivate glfwWaylandEmbedActivate_impl
 
 typedef void* (*glfwGetX11Display_func)(void);
 GFW_EXTERN glfwGetX11Display_func glfwGetX11Display_impl;

@@ -13,6 +13,8 @@
 #include <hb.h>
 #pragma GCC diagnostic pop
 
+bool native_ui_is_loaded(void);
+
 typedef struct {
     uint8_t *canvas;
     size_t width, height;

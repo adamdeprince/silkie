@@ -1556,6 +1556,7 @@ set_cocoa_pending_action(CocoaPendingAction action, const char *data) {
 static void
 process_cocoa_pending_actions(void) {
     if (cocoa_pending_actions[PREFERENCES_WINDOW]) { call_boss(edit_config_file, NULL); }
+    if (cocoa_pending_actions[OPEN_SETTINGS]) { call_boss(open_settings, NULL); }
     if (cocoa_pending_actions[NEW_OS_WINDOW]) { call_boss(new_os_window, NULL); }
     if (cocoa_pending_actions[CLOSE_OS_WINDOW]) { call_boss(close_os_window, NULL); }
     if (cocoa_pending_actions[CLOSE_TAB]) { call_boss(close_tab, NULL); }

@@ -132,6 +132,7 @@ def _get_config_dir() -> str:
 config_dir = _get_config_dir()
 del _get_config_dir
 defconf = os.path.join(config_dir, 'kitty.conf')
+settings_conf = os.path.join(config_dir, 'settings.conf')
 
 
 @run_once
@@ -221,6 +222,11 @@ standard_sound_names = {
 def glfw_path(module: str) -> str:
     prefix = 'kitty.' if getattr(sys, 'frozen', False) else ''
     return os.path.join(extensions_dir, f'{prefix}glfw-{module}.so')
+
+
+def native_ui_module_path() -> str:
+    prefix = 'kitty.' if getattr(sys, 'frozen', False) else ''
+    return os.path.join(extensions_dir, f'{prefix}gtk_ui.so')
 
 
 def detect_if_wayland_ok() -> bool:

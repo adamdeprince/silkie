@@ -37,6 +37,7 @@ from .constants import (
     unserialize_launch_flag,
     wakeup_io_loop,
 )
+from .profiles import apply_to_window, parsed_options
 from .fast_data_types import (
     CURSOR_BEAM,
     CURSOR_BLOCK,
@@ -811,7 +812,11 @@ class Window:
         self.child = child
         cell_width, cell_height = cell_size_for_window(self.os_window_id)
         opts = get_options()
-        self.screen: Screen = Screen(self, 24, 80, opts.scrollback_lines, cell_width, cell_height, self.id)
+        profile = getattr(tab, 'profile', None)
+        scrollback_lines = parsed_options(profile).get('scrollback_lines', opts.scrollback_lines) if profile is not None else opts.scrollback_lines
+        self.screen: Screen = Screen(self, 24, 80, scrollback_lines, cell_width, cell_height, self.id)
+        if profile is not None:
+            apply_to_window(self, profile)
         if copy_colors_from is not None:
             self.screen.copy_colors_from(copy_colors_from.screen)
         self.remote_control_passwords = remote_control_passwords
@@ -902,6 +907,8 @@ class Window:
     def apply_options(self, is_active: bool) -> None:
         self.update_effective_padding()
         self.screen.color_profile.reload_from_opts()
+        if (tab := self.tabref()) is not None:
+            apply_to_window(self, tab.profile)
 
     @property
     def title(self) -> str:

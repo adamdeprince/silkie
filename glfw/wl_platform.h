@@ -172,7 +172,21 @@ enum _GLFWWaylandAxisEvent { AXIS_EVENT_UNKNOWN = 0, AXIS_EVENT_CONTINUOUS = 1, 
 
 // Wayland-specific per-window data
 //
+typedef struct _GLFWsurfaceRef {
+    // The user data of a surface. A toolkit a window can be embedded in looks at the user data of every surface
+    // and checks if it is a GObject, the first field being NULL is what makes that answer no.
+    void *null_for_gobject_checks;
+    struct _GLFWwindow *window;
+} _GLFWsurfaceRef;
+
 typedef struct _GLFWwindowWayland {
+    _GLFWsurfaceRef surface_ref;
+    // A window inside a window of a toolkit: a subsurface of it, with no toplevel of its own
+    struct {
+        bool is_embedded, is_active;
+        struct wl_subsurface *subsurface;
+        struct wl_surface *parent;
+    } embedded;
     int width, height;
     bool visible, created;
     bool hovered;
@@ -442,6 +456,12 @@ typedef struct _GLFWlibraryWayland {
     struct wl_registry *registry;
     struct wl_compositor *compositor;
     struct wl_subcompositor *subcompositor;
+    // When a toolkit owns the connection to the compositor, everything here uses a queue of its own, leaving the
+    // default queue to that toolkit. NULL when the connection is ours.
+    struct wl_event_queue *queue;
+    struct wl_display *display_wrapper; // the display with its proxies assigned to queue
+    bool display_is_external, next_window_embedded;
+    struct wl_surface *keyboard_focus_parent; // the surface of the toolkit that has the keyboard, for embedded windows
     struct wl_shm *shm;
     struct wl_seat *seat;
     struct wl_pointer *pointer;
@@ -675,3 +695,9 @@ typedef struct wayland_cursor_shape {
 } wayland_cursor_shape;
 
 wayland_cursor_shape glfw_cursor_shape_to_wayland_cursor_shape(GLFWCursorShape g);
+
+// The event loop functions for the queue this library uses, which differs when the display is shared with a toolkit
+#define wl_glfw_roundtrip() (_glfw.wl.queue ? wl_display_roundtrip_queue(_glfw.wl.display, _glfw.wl.queue) : wl_display_roundtrip(_glfw.wl.display))
+#define wl_glfw_dispatch_pending() (_glfw.wl.queue ? wl_display_dispatch_queue_pending(_glfw.wl.display, _glfw.wl.queue) : wl_display_dispatch_pending(_glfw.wl.display))
+#define wl_glfw_prepare_read() (_glfw.wl.queue ? wl_display_prepare_read_queue(_glfw.wl.display, _glfw.wl.queue) : wl_display_prepare_read(_glfw.wl.display))
+#define wl_glfw_display_for_requests() (_glfw.wl.display_wrapper ? _glfw.wl.display_wrapper : _glfw.wl.display)
