@@ -22,6 +22,13 @@
 #include <gdk/gdkwayland.h>
 #endif
 
+// A HarfBuzz built without GLib, as the terminal bundles where the system one is too old (Kylin), lacks these two
+// and the Pango of the system needs them to load. hb_script_t values are the ISO 15924 tags, so they are easy to provide.
+__attribute__((visibility("default"))) uint32_t hb_glib_script_to_script(GUnicodeScript script);
+__attribute__((visibility("default"))) GUnicodeScript hb_glib_script_from_script(uint32_t script);
+uint32_t hb_glib_script_to_script(GUnicodeScript script) { return g_unicode_script_to_iso15924(script); }
+GUnicodeScript hb_glib_script_from_script(uint32_t script) { return g_unicode_script_from_iso15924(script); }
+
 static const NativeUIHost *host = NULL;
 static bool shares_wayland_display = false;
 
