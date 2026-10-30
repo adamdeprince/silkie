@@ -18,7 +18,8 @@ from .colors import theme_colors
 from .conf.utils import BadLine
 from .config import cached_values_for
 from .constants import (
-    appname,
+    app_class,
+    app_display_name,
     beam_cursor_data_file,
     clear_handled_signals,
     glfw_path,
@@ -316,8 +317,8 @@ def _run_app(opts: Options, args: CLIOptions, bad_lines: Sequence[BadLine] = (),
             if getattr(args, 'session', ''):
                 args.session = ''
             startup_sessions = tuple(create_sessions(opts, args))
-        wincls = (startup_sessions[0].os_window_class if startup_sessions else '') or args.cls or appname
-        winname = (startup_sessions[0].os_window_name if startup_sessions else '') or args.name or wincls or appname
+        wincls = (startup_sessions[0].os_window_class if startup_sessions else '') or args.cls or app_class
+        winname = (startup_sessions[0].os_window_name if startup_sessions else '') or args.name or wincls or app_class
         window_state = (args.start_as if args.start_as and args.start_as != 'normal' else None) or (  # ty: ignore[redundant-condition]
             getattr(startup_sessions[0], 'os_window_state', None) if startup_sessions else None
         )
@@ -330,7 +331,7 @@ def _run_app(opts: Options, args: CLIOptions, bad_lines: Sequence[BadLine] = (),
             window_id = create_os_window(
                 run_app.initial_window_size_func(get_os_window_sizing_data(opts, startup_sessions[0] if startup_sessions else None), cached_values),
                 pre_show_callback,
-                args.title or appname,
+                args.title or app_display_name,
                 winname,
                 wincls,
                 wstate,
@@ -581,7 +582,7 @@ def kitty_main(called_from_panel: bool = False) -> None:
     cli_flags = None
     if getattr(sys, 'cmdline_args_for_open', False):
         usage: str | None = 'file_or_url ...'
-        appname: str | None = 'kitty +open'
+        appname: str | None = 'silkie +open'
         msg: str | None = (
             'Run kitty and open the specified files or URLs in it, using launch-actions.conf. For details'
             ' see https://sw.kovidgoyal.net/kitty/open_actions/#scripting-the-opening-of-files-with-kitty-on-macos'

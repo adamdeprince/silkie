@@ -29,7 +29,7 @@ from .child import ProcessDesc
 from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .clipboard import ClipboardRequestManager, set_clipboard_string
 from .constants import (
-    appname,
+    app_display_name,
     clear_handled_signals,
     config_dir,
     is_macos,
@@ -789,7 +789,7 @@ class Window:
         self.needs_attention = False
         self.ignore_focus_changes = self.initial_ignore_focus_changes
         self.override_title = override_title
-        self.default_title = os.path.basename(child.argv[0] or appname)
+        self.default_title = os.path.basename(child.argv[0] or app_display_name)
         self.child_title = self.default_title
         self.title_stack: Deque[str] = deque(maxlen=10)
         self.user_vars: dict[str, str] = {}

@@ -11,7 +11,7 @@ from typing import Any, NoReturn, TypeVar, cast
 
 from .cli_stub import CLIOptions
 from .conf.utils import resolve_config
-from .constants import appname, clear_handled_signals, config_dir, default_pager_for_help, defconf, is_macos, str_version, website_url
+from .constants import app_class, appname, clear_handled_signals, config_dir, default_pager_for_help, defconf, is_macos, str_version, website_url
 from .fast_data_types import parse_cli_from_spec, wcswidth
 from .options.types import Options as KittyOpts
 from .simple_cli_definitions import (
@@ -325,8 +325,8 @@ def version(add_rev: bool = False) -> str:
     if add_rev:
         if getattr(fast_data_types, 'KITTY_VCS_REV', ''):
             rev = f' ({fast_data_types.KITTY_VCS_REV[:10]})'
-    return '{} {}{} (Silkie) created by {}, forked from kitty by {}'.format(
-        italic(appname), green(str_version), rev, title('Adam DePrince'), title('Kovid Goyal'))
+    return '{} {}{} created by {}, forked from kitty by {}'.format(
+        italic(app_class), green(str_version), rev, title('Adam DePrince'), title('Kovid Goyal'))
 
 
 def wrap(text: str, limit: int = 80) -> Iterator[str]:

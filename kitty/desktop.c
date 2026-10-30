@@ -163,7 +163,7 @@ load_libcanberra(void) {
         dlclose(libcanberra_handle);
         libcanberra_handle = NULL;
     } else {
-        if (ca_context_change_props(canberra_ctx, "application.name", "kitty Terminal", "application.id", "kitty", NULL) != 0) {
+        if (ca_context_change_props(canberra_ctx, "application.name", "Silkie", "application.id", "silkie", NULL) != 0) {
             fprintf(stderr, "Failed to set basic properties on libcanberra context, cannot play beep sound\n");
         }
     }

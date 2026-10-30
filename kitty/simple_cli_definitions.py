@@ -384,7 +384,7 @@ def kitty_options_spec() -> str:
         OPTIONS = """
 --class --app-id
 dest=cls
-default={appname}
+default=silkie
 condition=not is_macos
 On Wayland set the :italic:`application id`. On X11 set the class part of the :italic:`WM_CLASS` window property.
 
@@ -582,7 +582,7 @@ panel_defaults = {
     'edge': 'top',
     'layer': 'bottom',
     'override': '',
-    'cls': f'{appname}-panel',
+    'cls': 'silkie-panel',
     'focus_policy': 'not-allowed',
     'exclusive_zone': '-1',
     'override_exclusive_zone': 'no',

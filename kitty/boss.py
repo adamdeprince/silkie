@@ -45,7 +45,8 @@ from .conf.utils import BadLine, KeyAction, to_cmdline
 from .config import common_opts_as_dict, prepare_config_file_for_editing, store_effective_config
 from .constants import (
     RC_ENCRYPTION_PROTOCOL_VERSION,
-    appname,
+    app_class,
+    app_display_name,
     cache_dir,
     clear_handled_signals,
     config_dir,
@@ -502,7 +503,7 @@ class Boss:
     ) -> int:
         if os_window_id is None:
             size_data = get_os_window_sizing_data(opts_for_size or get_options(), startup_session)
-            wclass = wclass or getattr(startup_session, 'os_window_class', None) or self.args.cls or appname
+            wclass = wclass or getattr(startup_session, 'os_window_class', None) or self.args.cls or app_class
             wname = wname or getattr(startup_session, 'os_window_name', None) or self.args.name or wclass
             wtitle = override_title or getattr(startup_session, 'os_window_title', None) or self.args.title
             window_state = window_state or getattr(startup_session, 'os_window_state', None)
@@ -511,7 +512,7 @@ class Boss:
                 os_window_id = create_os_window(
                     initial_window_size_func(size_data, self.cached_values),
                     pre_show_callback,
-                    wtitle or appname,
+                    wtitle or app_display_name,
                     wname,
                     wclass,
                     wstate,
@@ -520,19 +521,19 @@ class Boss:
                     y=y,
                 )
         else:
-            wname = self.args.name or self.args.cls or appname
-            wclass = self.args.cls or appname
+            wname = self.args.name or self.args.cls or app_class
+            wclass = self.args.cls or app_class
         tm = TabManager(os_window_id, self.args, wclass, wname, startup_session)
         self.os_window_map[os_window_id] = tm
         return os_window_id
 
-    def add_os_panel(self, cfg: LayerShellConfig, wclass: str | None = appname, wname: str | None = appname) -> int:
+    def add_os_panel(self, cfg: LayerShellConfig, wclass: str | None = app_class, wname: str | None = app_class) -> int:
         if not is_layer_shell_supported():
             raise RuntimeError('Creating desktop panels is not supported on this platform')
-        wclass = wclass or appname
-        wname = wname or appname
+        wclass = wclass or app_class
+        wname = wname or app_class
         size_data = get_os_window_sizing_data(get_options(), None)
-        os_window_id = create_os_window(initial_window_size_func(size_data, {}), lambda *a: None, appname, wname, wclass, None, layer_shell_config=cfg)
+        os_window_id = create_os_window(initial_window_size_func(size_data, {}), lambda *a: None, app_display_name, wname, wclass, None, layer_shell_config=cfg)
         tm = TabManager(os_window_id, self.args, wclass, wname, None)
         self.os_window_map[os_window_id] = tm
         return os_window_id

@@ -1767,22 +1767,27 @@ def create_linux_bundle_gunk(ddir: str, args: Options) -> None:
     for icdir, ext in {'256x256': 'png', 'scalable': 'svg'}.items():
         icdir = os.path.join(ddir, 'share', 'icons', 'hicolor', icdir, 'apps')
         safe_makedirs(icdir)
-        shutil.copy2(f'logo/kitty.{ext}', icdir)
+        shutil.copy2(f'logo/kitty.{ext}', os.path.join(icdir, f'silkie.{ext}'))
     deskdir = os.path.join(ddir, 'share', 'applications')
     safe_makedirs(deskdir)
-    with open(os.path.join(deskdir, 'kitty.desktop'), 'w') as f:
+    for name, target in (('silkie', 'kitty'), ('silkie-kitten', 'kitten')):
+        link = base / 'bin' / name
+        if not os.path.lexists(link):
+            link.symlink_to(target)
+    with open(os.path.join(deskdir, 'silkie.desktop'), 'w') as f:
         f.write(
             """\
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=kitty
+Name=Silkie
 GenericName=Terminal emulator
 Comment=Fast, feature-rich, GPU based terminal
-TryExec=kitty
+TryExec=silkie
 StartupNotify=true
-Exec=kitty
-Icon=kitty
+Exec=silkie --class silkie
+Icon=silkie
+StartupWMClass=silkie
 Categories=System;TerminalEmulator;
 X-TerminalArgExec=--
 X-TerminalArgTitle=--title
@@ -1791,19 +1796,19 @@ X-TerminalArgDir=--working-directory
 X-TerminalArgHold=--hold
 """
         )
-    with open(os.path.join(deskdir, 'kitty-open.desktop'), 'w') as f:
+    with open(os.path.join(deskdir, 'silkie-open.desktop'), 'w') as f:
         f.write(
             """\
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=kitty URL Launcher
+Name=Silkie URL Launcher
 GenericName=Terminal emulator
-Comment=Open URLs with kitty
+Comment=Open URLs with Silkie
 StartupNotify=true
-TryExec=kitty
-Exec=kitty +open %U
-Icon=kitty
+TryExec=silkie
+Exec=silkie +open %U
+Icon=silkie
 Categories=System;TerminalEmulator;
 NoDisplay=true
 MimeType=image/*;application/x-sh;application/x-shellscript;inode/directory;text/*;x-scheme-handler/kitty;x-scheme-handler/ssh;
@@ -1943,19 +1948,19 @@ def macos_info_plist(for_quake: str = '') -> bytes:
         if for_quake
         else [
             {
-                'NSMenuItem': {'default': f'New {appname} Tab Here'},
+                'NSMenuItem': {'default': 'New Silkie Tab Here'},
                 'NSMessage': 'openTab',
                 'NSRequiredContext': {'NSTextContent': 'FilePath'},
                 'NSSendTypes': ['NSFilenamesPboardType', 'public.plain-text'],
             },
             {
-                'NSMenuItem': {'default': f'New {appname} Window Here'},
+                'NSMenuItem': {'default': 'New Silkie Window Here'},
                 'NSMessage': 'openOSWindow',
                 'NSRequiredContext': {'NSTextContent': 'FilePath'},
                 'NSSendTypes': ['NSFilenamesPboardType', 'public.plain-text'],
             },
             {
-                'NSMenuItem': {'default': f'Open with {appname}'},
+                'NSMenuItem': {'default': 'Open with Silkie'},
                 'NSMessage': 'openFileURLs',
                 'NSRequiredContext': {'NSTextContent': 'FilePath'},
                 'NSSendTypes': ['NSFilenamesPboardType', 'public.plain-text'],
@@ -1965,10 +1970,10 @@ def macos_info_plist(for_quake: str = '') -> bytes:
 
     pl = dict(
         # Naming
-        CFBundleName=f'{appname}-quick-access' if for_quake else appname,
-        CFBundleDisplayName=f'{appname}-quick-access' if for_quake else appname,
+        CFBundleName='Silkie Quick Access' if for_quake else 'Silkie',
+        CFBundleDisplayName='Silkie Quick Access' if for_quake else 'Silkie',
         # Identification
-        CFBundleIdentifier=f'net.kovidgoyal.{appname}' + ('-quick-access' if for_quake else ''),
+        CFBundleIdentifier='com.goblinreactor.silkie' + ('-quick-access' if for_quake else ''),
         # Bundle Version Info
         CFBundleVersion=VERSION,
         CFBundleShortVersionString=VERSION,
@@ -1993,7 +1998,7 @@ def macos_info_plist(for_quake: str = '') -> bytes:
         TICapsLockLanguageSwitchCapable=True,
         # User Interface and Graphics
         CFBundleIconName=appname,
-        CFBundleIconFile=f'{appname}.icns',
+        CFBundleIconFile='silkie.icns',
         NSHighResolutionCapable=True,
         NSSupportsAutomaticGraphicsSwitching=True,
         # Needed for dark mode in Mojave when linking against older SDKs
@@ -2041,6 +2046,7 @@ def macos_info_plist(for_quake: str = '') -> bytes:
 def create_macos_app_icon(where: str = 'Resources') -> None:
     for x in (f'{appname}.icns', 'Assets.car'):
         shutil.copy(os.path.join('logo', x), os.path.join(where, x))
+    shutil.copy('logo/kitty.icns', os.path.join(where, 'silkie.icns'))
 
 
 quake_name = f'{appname}-quick-access'

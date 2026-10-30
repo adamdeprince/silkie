@@ -17,7 +17,7 @@ from typing import Any, Concatenate, Deque, Literal, NamedTuple, Optional, Param
 from .borders import Border, Borders
 from .child import Child
 from .cli_stub import CLIOptions, SaveAsSessionOptions
-from .constants import appname
+from .constants import app_class, app_display_name
 from .fast_data_types import (
     GLFW_MOUSE_BUTTON_LEFT,
     GLFW_MOUSE_BUTTON_MIDDLE,
@@ -499,7 +499,7 @@ class Tab:  # {{{
 
     def data_for_tab_bar(self, is_active: bool) -> TabBarData:
         t = self
-        title = t.name or t.title or appname
+        title = t.name or t.title or app_display_name
         needs_attention = False
         has_activity_since_last_focus = False
         for w in t:
@@ -556,7 +556,7 @@ class Tab:  # {{{
     @property
     def title(self) -> str:
         w = self.active_window
-        return w.title if w else appname
+        return w.title if w else app_display_name
 
     @property
     def effective_title(self) -> str:
@@ -1730,9 +1730,9 @@ class TabManager:  # {{{
             ans.extend(tab.serialize_state_as_session(session_path, matched_windows, ser_opts))
         if ans:
             prefix = [] if is_first else ['', '', 'new_os_window']
-            if self.wm_class and self.wm_class != appname:
+            if self.wm_class and self.wm_class != app_class:
                 prefix.append(f'os_window_class {self.wm_class}')
-            if self.wm_name and self.wm_name != appname:
+            if self.wm_name and self.wm_name != app_class:
                 prefix.append(f'os_window_name {self.wm_name}')
             ans = prefix + ans
             # Add focus_tab command to preserve the active tab

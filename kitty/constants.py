@@ -20,8 +20,12 @@ class Version(NamedTuple):
     patch: int
 
 
+# The name of files and of the executable, shared with kitty so that kitty.conf, shell integration and
+# programs that look for the kitty executable keep working. What people read is below.
 appname: str = 'kitty'
-kitty_face = '🐱'
+app_display_name: str = 'Silkie'
+app_class: str = 'silkie'
+kitty_face = '🐔'
 version: Version = Version(0, 49, 2)
 str_version: str = '.'.join(map(str, version))
 _plat = sys.platform.lower()

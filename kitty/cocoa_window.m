@@ -77,7 +77,7 @@ find_app_name(void) {
     if (progname && *progname) return @(*progname);
 
     // Really shouldn't get here
-    return @"kitty";
+    return @"Silkie";
 }
 
 #define debug_key(...)                \
@@ -912,7 +912,7 @@ cocoa_create_global_menu(void) {
     NSMenu *helpMenu = [[NSMenu alloc] initWithTitle:@"Help"];
     [helpMenuItem setSubmenu:helpMenu];
 
-    MENU_ITEM(helpMenu, @"Visit kitty Website", open_kitty_website);
+    MENU_ITEM(helpMenu, @"Visit Silkie Website", open_kitty_website);
     [NSApp setHelpMenu:helpMenu];
     [helpMenu release];
 
@@ -1099,7 +1099,7 @@ cocoa_set_url_handler(PyObject UNUSED *self, PyObject *args) {
         NSString *identifier = @"";
         if (!bundle_id) {
             identifier = [[NSBundle mainBundle] bundleIdentifier];
-            if (!identifier || identifier.length == 0) identifier = @"net.kovidgoyal.kitty";
+            if (!identifier || identifier.length == 0) identifier = @"com.goblinreactor.silkie";
         } else if (bundle_id[0] != '\0') {
             identifier = [NSString stringWithUTF8String:bundle_id];
         }
