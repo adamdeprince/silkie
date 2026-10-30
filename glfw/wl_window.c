@@ -1426,6 +1426,8 @@ handleEvents(monotonic_t timeout) {
     struct wl_display *display = _glfw.wl.display;
     errno = 0;
     EVDBG("starting handleEvents(%.2f)", monotonic_t_to_s_double(timeout));
+    // Before preparing to read the display: the hook can run code that uses the display and would then wait for this read
+    if (_glfwEventLoopHook) timeout = _glfwEventLoopHook(timeout);
 
     while (wl_display_prepare_read(display) != 0) {
         if (wl_display_dispatch_pending(display) == -1) {

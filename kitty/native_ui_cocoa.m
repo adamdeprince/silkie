@@ -88,10 +88,10 @@ insert_in_group(NSWindow *child, NSWindow *anchor, const char *location) {
     else [anchor addTabbedWindow:child ordered:NSWindowAbove];
 }
 
-static void
+static bool
 adopt_os_window(OSWindow *w, OSWindow *parent, const char *location) {
     NSWindow *nw = ns_window(w);
-    if (!nw) return;
+    if (!nw) return false;
     // Tab groups form only when asked for below, never because of the system-wide "prefer tabs" setting. The
     // setting would otherwise put New Window, which the user asked to be separate, in the tab group.
     [NSWindow setAllowsAutomaticWindowTabbing:NO];
@@ -99,6 +99,7 @@ adopt_os_window(OSWindow *w, OSWindow *parent, const char *location) {
     nw.tabbingIdentifier = @"silkie";
     NSWindow *np = ns_window(parent);
     if (np) insert_in_group(nw, np, location);
+    return false;  // the OS window is the native window
 }
 
 static void
@@ -626,7 +627,7 @@ matches(NSDictionary *field, NSString *query) {
         for (NSDictionary *p in self.pages) {
             for (NSDictionary *s in array_of(p, @"sections")) {
                 for (NSMutableDictionary *f in array_of(s, @"fields")) {
-                    if (matches(f, searchText) && shown < 200) {
+                    if (matches(f, searchText)) {
                         [self addRow:f prefix:[NSString stringWithFormat:@"%@ › %@", str_of(p, @"title"), str_of(s, @"title")]];
                         shown++;
                     }

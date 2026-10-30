@@ -44,6 +44,16 @@ _glfwPlatformAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafreefun ca
     return addTimer(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, "user timer", interval, 1, repeats, callback, callback_data, free_callback);
 }
 
+unsigned long long
+_glfwPlatformAddFDWatch(int fd, int events, void (*callback)(int, int, void *), void *callback_data) {
+    return addWatch(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, "external fd", fd, events, 1, callback, callback_data);
+}
+
+void
+_glfwPlatformRemoveFDWatch(unsigned long long watch_id) {
+    removeWatch(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, watch_id);
+}
+
 void
 _glfwPlatformRemoveTimer(unsigned long long timer_id) {
     removeTimer(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, timer_id);

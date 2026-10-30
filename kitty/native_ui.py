@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from .constants import is_macos
-from .fast_data_types import add_timer, get_boss, get_options, native_settings_show, native_settings_update, native_ui_available, remove_timer
+from .fast_data_types import add_timer, get_boss, get_options, native_settings_show, native_settings_update, native_tabs_supported, remove_timer
 from .profiles import (
     DEFAULT_PROFILE_ID,
     create_profile,
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 def native_tabs_active() -> bool:
     ' True when tabs are shown by the operating system. Fixed at startup, like the choice of window system. '
-    return bool(get_options().native_tabs and native_ui_available())
+    return bool(get_options().native_tabs and native_tabs_supported())
 
 
 # Menus {{{

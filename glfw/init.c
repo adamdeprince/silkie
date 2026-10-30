@@ -309,6 +309,23 @@ glfwStopMainLoop(void) {
     _glfwPlatformStopMainLoop();
 }
 
+GLFWeventloophookfun _glfwEventLoopHook = NULL;
+
+GLFWAPI void
+glfwSetEventLoopHook(GLFWeventloophookfun hook) {
+    _glfwEventLoopHook = hook;
+}
+
+GLFWAPI unsigned long long
+glfwAddFDWatch(int fd, int events, GLFWfdwatchfun callback, void *callback_data) {
+    return _glfwPlatformAddFDWatch(fd, events, callback, callback_data);
+}
+
+GLFWAPI void
+glfwRemoveFDWatch(unsigned long long watch_id) {
+    _glfwPlatformRemoveFDWatch(watch_id);
+}
+
 GLFWAPI unsigned long long
 glfwAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callback, void *callback_data, GLFWuserdatafun free_callback) {
     return _glfwPlatformAddTimer(interval, repeats, callback, callback_data, free_callback);

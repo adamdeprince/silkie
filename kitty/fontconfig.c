@@ -159,7 +159,7 @@ finalize(void) {
         Py_CLEAR(builtin_nerd_font.face);
         Py_CLEAR(builtin_nerd_font.descriptor);
         clear_fallback_candidates();
-        FcFini();
+        if (!native_ui_is_loaded()) FcFini();  // GTK keeps using fontconfig until the process is gone
         dlclose(libfontconfig_handle);
         libfontconfig_handle = NULL;
         initialized = false;

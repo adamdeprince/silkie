@@ -110,6 +110,7 @@ static bool render_drag_thumbnail_to_pixmap(const GLFWimage *thumbnail);
 static void
 handleEvents(monotonic_t timeout) {
     EVDBG("starting handleEvents(%.2f)", monotonic_t_to_s_double(timeout));
+    if (_glfwEventLoopHook) timeout = _glfwEventLoopHook(timeout);
     int display_read_ok = pollForEvents(&_glfw.x11.eventLoopData, timeout, NULL);
     EVDBG("display_read_ok: %d", display_read_ok);
     if (display_read_ok) {

@@ -12,25 +12,69 @@
 
 static const NativeUIBackend *backend = NULL;
 static bool backend_loaded = false;
+#ifndef __APPLE__
+static const char *native_ui_module_path = NULL;
+#endif
 
 #ifndef __APPLE__
+#include "glfw-wrapper.h"
+
+static unsigned long long host_os_window_id(struct OSWindow *w) { return w->id; }
+static struct OSWindow *host_os_window_for_id(unsigned long long id) { return os_window_for_id(id); }
+static unsigned long host_x11_window(struct OSWindow *w) { return w->handle && !global_state.is_wayland ? glfwGetX11Window(w->handle) : 0; }
+static void host_get_size(struct OSWindow *w, int *width, int *height) { glfwGetWindowSize(w->handle, width, height); }
+static void host_set_size(struct OSWindow *w, int width, int height) { if (w->handle) glfwSetWindowSize(w->handle, width, height); }
+static const char *host_title(struct OSWindow *w) { return w->window_title ? PyUnicode_AsUTF8(w->window_title) : ""; }
+
+static void
+host_request_close(struct OSWindow *w) {
+    w->close_request = CONFIRMABLE_CLOSE_REQUESTED;
+    global_state.has_pending_closes = true;
+    wakeup_main_loop();
+}
+
+static void
+host_run_action(const char *action) {
+    if (!global_state.boss) return;
+    PyObject *ret = PyObject_CallMethod(global_state.boss, "combine", "s", action);
+    if (ret) Py_DECREF(ret);
+    else PyErr_Print();
+}
+
+static unsigned long long host_add_fd_watch(int fd, int events, void (*cb)(int, int, void *), void *data) { return glfwAddFDWatch(fd, events, cb, data); }
+
 static const NativeUIBackend *
 load_linux_backend(void) {
     // The module links against GTK. Without GTK it cannot be loaded, which is not an error: the
-    // terminal then draws its own tab bar. Set by the Python code, see set_native_ui_module_path()
-    extern const char *native_ui_module_path;
+    // terminal then draws its own tab bar.
     if (!native_ui_module_path) return NULL;
     void *handle = dlopen(native_ui_module_path, RTLD_LAZY | RTLD_LOCAL);
     if (!handle) {
         const char *err = dlerror();
-        if (global_state.debug_rendering) log_error("Native UI not available: %s", err ? err : "unknown error");
+        if (global_state.debug_rendering) log_error("The native user interface is not available: %s", err ? err : "unknown error");
         return NULL;
     }
-    const NativeUIBackend *(*create)(void) = (const NativeUIBackend *(*)(void))dlsym(handle, "native_ui_gtk_backend");
-    return create ? create() : NULL;
+    NativeUIBackendCreator create = NULL;
+    *(void **)(&create) = dlsym(handle, "native_ui_gtk_backend");
+    if (!create) return NULL;
+    static NativeUIHost host;
+    host = (NativeUIHost){
+        .is_wayland = global_state.is_wayland,
+        .os_window_id = host_os_window_id,
+        .os_window_for_id = host_os_window_for_id,
+        .x11_window = host_x11_window,
+        .get_size = host_get_size,
+        .set_size = host_set_size,
+        .title = host_title,
+        .request_close = host_request_close,
+        .run_action = host_run_action,
+        .wakeup = wakeup_main_loop,
+        .add_fd_watch = host_add_fd_watch,
+        .remove_fd_watch = glfwRemoveFDWatch,
+        .set_event_loop_hook = glfwSetEventLoopHook,
+    };
+    return create(&host);
 }
-
-const char *native_ui_module_path = NULL;
 #endif
 
 const NativeUIBackend *
@@ -46,12 +90,31 @@ native_ui_backend(void) {
     return backend;
 }
 
+bool
+native_ui_is_loaded(void) {
+    return backend != NULL;
+}
+
 void
 native_ui_adopt_os_window(OSWindow *w, id_type parent, const char *location) {
     const NativeUIBackend *b = native_ui_backend();
     if (!b || !b->adopt_os_window) return;
     OSWindow *p = parent ? os_window_for_id(parent) : NULL;
-    b->adopt_os_window(w, p, location ? location : "last");
+    w->hosted_in_native_window = b->adopt_os_window(w, p, location ? location : "last");
+}
+
+bool
+native_ui_window_op(OSWindow *w, enum NativeWindowOp op) {
+    if (!w->hosted_in_native_window || !backend || !backend->window_op) return false;
+    backend->window_op(w, op);
+    return true;
+}
+
+bool
+native_ui_window_query(OSWindow *w, enum NativeWindowQuery q, bool *result) {
+    if (!w->hosted_in_native_window || !backend || !backend->window_query) return false;
+    *result = backend->window_query(w, q);
+    return true;
 }
 
 void
@@ -74,6 +137,12 @@ native_ui_title_changed(OSWindow *w, const char *title) {
 static PyObject *
 native_ui_available(PyObject *self UNUSED, PyObject *args UNUSED) {
     return Py_NewRef(native_ui_backend() ? Py_True : Py_False);
+}
+
+static PyObject *
+native_tabs_supported(PyObject *self UNUSED, PyObject *args UNUSED) {
+    const NativeUIBackend *b = native_ui_backend();
+    return Py_NewRef(b && (!b->tabs_supported || b->tabs_supported()) ? Py_True : Py_False);
 }
 
 #ifndef __APPLE__
@@ -187,11 +256,20 @@ native_settings_snapshot(PyObject *self UNUSED, PyObject *path) {
 
 #undef B
 
+static PyObject *
+native_saved_height_adjustment(PyObject *self UNUSED, PyObject *pyid) {
+    OSWindow *w = os_window_for_id(PyLong_AsUnsignedLongLong(pyid));
+    if (PyErr_Occurred()) return NULL;
+    return PyLong_FromLong(w && w->hosted_in_native_window && backend && backend->saved_height_adjustment ? backend->saved_height_adjustment(w) : 0);
+}
+
 static PyMethodDef methods[] = {
     {"native_ui_available", native_ui_available, METH_NOARGS, ""},
+    {"native_tabs_supported", native_tabs_supported, METH_NOARGS, ""},
 #ifndef __APPLE__
     {"set_native_ui_module_path", set_native_ui_module_path, METH_O, ""},
 #endif
+    {"native_saved_height_adjustment", native_saved_height_adjustment, METH_O, ""},
     {"native_tabs_attach", native_tabs_attach, METH_VARARGS, ""},
     {"native_tabs_select", native_tabs_select, METH_O, ""},
     {"native_tabs_detach", native_tabs_detach, METH_O, ""},

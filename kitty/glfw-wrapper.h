@@ -1740,6 +1740,8 @@ typedef void (*GLFWmonitorfun)(GLFWmonitor *, int);
  */
 typedef void (*GLFWjoystickfun)(int, int);
 
+typedef void (* GLFWfdwatchfun)(int fd, int events, void *data);
+typedef monotonic_t (* GLFWeventloophookfun)(monotonic_t timeout);
 typedef void (*GLFWuserdatafun)(unsigned long long, void *);
 typedef void (*GLFWtickcallback)(void *);
 typedef void (*GLFWactivationcallback)(GLFWwindow *window, const char *token, void *data);
@@ -1949,6 +1951,18 @@ GFW_EXTERN glfwStopMainLoop_func glfwStopMainLoop_impl;
 typedef unsigned long long (*glfwAddTimer_func)(monotonic_t, bool, GLFWuserdatafun, void*, GLFWuserdatafun);
 GFW_EXTERN glfwAddTimer_func glfwAddTimer_impl;
 #define glfwAddTimer glfwAddTimer_impl
+
+typedef unsigned long long (*glfwAddFDWatch_func)(int, int, GLFWfdwatchfun, void*);
+GFW_EXTERN glfwAddFDWatch_func glfwAddFDWatch_impl;
+#define glfwAddFDWatch glfwAddFDWatch_impl
+
+typedef void (*glfwRemoveFDWatch_func)(unsigned long long);
+GFW_EXTERN glfwRemoveFDWatch_func glfwRemoveFDWatch_impl;
+#define glfwRemoveFDWatch glfwRemoveFDWatch_impl
+
+typedef void (*glfwSetEventLoopHook_func)(GLFWeventloophookfun);
+GFW_EXTERN glfwSetEventLoopHook_func glfwSetEventLoopHook_impl;
+#define glfwSetEventLoopHook glfwSetEventLoopHook_impl
 
 typedef void (*glfwUpdateTimer_func)(unsigned long long, monotonic_t, bool);
 GFW_EXTERN glfwUpdateTimer_func glfwUpdateTimer_impl;

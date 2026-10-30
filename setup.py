@@ -1146,7 +1146,8 @@ def compile_c_extension(
 def find_c_files() -> Tuple[List[str], List[str]]:
     ans, headers = [], []
     d = 'kitty'
-    exclude = (
+    # gtk_ui.c is a separate module, see compile_native_ui()
+    exclude = {'gtk_ui.c'} | (
         {'fontconfig.c', 'freetype.c', 'desktop.c', 'freetype_render_ui_text.c'} if is_macos else {'core_text.m', 'cocoa_window.m', 'native_ui_cocoa.m', 'macos_process_info.c'}
     )
     for x in sorted(os.listdir(d)):
@@ -1289,6 +1290,22 @@ def compile_glfw(compilation_database: CompilationDatabase, build_dsym: bool = F
                 print(error('Disabling building of wayland backend'), file=sys.stderr)
                 continue
         compile_c_extension(genv, f'kitty/glfw-{module}', compilation_database, sources, all_headers, desc_prefix=f'[{module}] ', build_dsym=build_dsym)
+
+
+def compile_native_ui(compilation_database: CompilationDatabase) -> None:
+    # A module loaded at runtime, so that GTK is not a dependency of the terminal
+    if is_macos:
+        return
+    cflags = pkg_config('gtk+-3.0', '--cflags', fatal=False)
+    if not cflags:
+        print(error('Disabling the native user interface as GTK 3 development files were not found'), file=sys.stderr)
+        return
+    kenv = env.copy()
+    kenv.cflags.append('-fPIC')
+    kenv.cflags.extend(f.replace('-I', '-isystem', 1) if f.startswith('-I') else f for f in cflags)
+    kenv.cflags.extend(f'-I{p}' for p in get_python_include_paths())
+    kenv.ldpaths = pkg_config('gtk+-3.0', '--libs') + ['-lX11'] + kenv.ldpaths
+    compile_c_extension(kenv, 'kitty/gtk_ui', compilation_database, ['kitty/gtk_ui.c'], ['kitty/native_ui_api.h'])
 
 
 def kittens_env(args: Options) -> Env:
@@ -1436,6 +1453,7 @@ def build(args: Options, native_optimizations: bool = True, call_init: bool = Tr
         build_dsym=args.build_dsym,
     )
     compile_glfw(args.compilation_database, args.build_dsym)
+    compile_native_ui(args.compilation_database)
     compile_kittens(args)
     add_builtin_fonts(args)
 

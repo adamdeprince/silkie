@@ -2000,6 +2000,8 @@ typedef void (*GLFWmonitorfun)(GLFWmonitor *, int);
  */
 typedef void (*GLFWjoystickfun)(int, int);
 
+typedef void (* GLFWfdwatchfun)(int fd, int events, void *data);
+typedef monotonic_t (* GLFWeventloophookfun)(monotonic_t timeout);
 typedef void (*GLFWuserdatafun)(unsigned long long, void *);
 typedef void (*GLFWtickcallback)(void *);
 typedef void (*GLFWactivationcallback)(GLFWwindow *window, const char *token, void *data);
@@ -2187,6 +2189,12 @@ GLFWAPI int glfwInit(monotonic_t start_time, bool *supports_window_occlusion);
 GLFWAPI void glfwRunMainLoop(GLFWtickcallback callback, void *callback_data);
 GLFWAPI void glfwStopMainLoop(void);
 GLFWAPI unsigned long long glfwAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callback, void *callback_data, GLFWuserdatafun free_callback);
+/*! Watch a file descriptor in the event loop, for another library with its own event sources */
+GLFWAPI unsigned long long glfwAddFDWatch(int fd, int events, GLFWfdwatchfun callback, void *callback_data);
+GLFWAPI void glfwRemoveFDWatch(unsigned long long watch_id);
+/*! Called once per event loop iteration before it waits, not while a read of the display is being prepared. Returns
+ * the longest time to wait, given the time the loop intends to wait, in the units of monotonic_t, negative meaning forever. */
+GLFWAPI void glfwSetEventLoopHook(GLFWeventloophookfun hook);
 GLFWAPI void glfwUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool enabled);
 GLFWAPI void glfwRemoveTimer(unsigned long long);
 GLFWAPI GLFWdrawtextfun glfwSetDrawTextFunction(GLFWdrawtextfun function);

@@ -1772,6 +1772,11 @@ do_toggle_fullscreen(OSWindow *w, unsigned int flags, bool restore_sizes) {
 static bool
 toggle_fullscreen_for_os_window(OSWindow *w) {
     if (!w || !w->handle) return false;
+    if (native_ui_window_op(w, NATIVE_OP_TOGGLE_FULLSCREEN)) {
+        bool ans = false;
+        native_ui_window_query(w, NATIVE_QUERY_IS_FULLSCREEN, &ans);
+        return ans;
+    }
     if (!w->is_layer_shell) {
 #ifdef __APPLE__
         if (!OPT(macos_traditional_fullscreen)) return do_toggle_fullscreen(w, 1, false);
@@ -1816,6 +1821,8 @@ bool
 is_os_window_fullscreen(OSWindow *w) {
     unsigned int flags = 0;
     if (!w || !w->handle) return false;
+    bool hosted_answer = false;
+    if (native_ui_window_query(w, NATIVE_QUERY_IS_FULLSCREEN, &hosted_answer)) return hosted_answer;
     if (w->is_layer_shell) {
         const GLFWLayerShellConfig *c = glfwGetLayerShellConfig(w->handle);
         return c && c->was_toggled_to_fullscreen;
@@ -1829,6 +1836,10 @@ is_os_window_fullscreen(OSWindow *w) {
 static bool
 toggle_maximized_for_os_window(OSWindow *w) {
     bool maximized = false;
+    if (w && native_ui_window_op(w, NATIVE_OP_TOGGLE_MAXIMIZED)) {
+        native_ui_window_query(w, NATIVE_QUERY_IS_MAXIMIZED, &maximized);
+        return maximized;
+    }
     if (w && w->handle && !w->is_layer_shell) {
         if (glfwGetWindowAttrib(w->handle, GLFW_MAXIMIZED)) {
             glfwRestoreWindow(w->handle);
@@ -1843,6 +1854,18 @@ toggle_maximized_for_os_window(OSWindow *w) {
 static void
 change_state_for_os_window(OSWindow *w, int state) {
     if (!w || !w->handle) return;
+    if (w->hosted_in_native_window) {
+        switch (state) {
+            case WINDOW_MAXIMIZED: native_ui_window_op(w, NATIVE_OP_MAXIMIZE); break;
+            case WINDOW_MINIMIZED: native_ui_window_op(w, NATIVE_OP_MINIMIZE); break;
+            case WINDOW_FULLSCREEN:
+                if (!is_os_window_fullscreen(w)) native_ui_window_op(w, NATIVE_OP_TOGGLE_FULLSCREEN);
+                break;
+            case WINDOW_NORMAL: native_ui_window_op(w, NATIVE_OP_RESTORE); break;
+        }
+        update_os_window_visibility_reports(w);
+        return;
+    }
     switch (state) {
         case WINDOW_MAXIMIZED:
             if (!w->is_layer_shell) glfwMaximizeWindow(w->handle);
@@ -2211,7 +2234,7 @@ set_window_creation_error(bool is_panel) {
 
 static PyObject *
 create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
-    int x = INT_MIN, y = INT_MIN, window_state = WINDOW_NORMAL, disallow_override_title = 0, want_transparency = 0;
+    int x = INT_MIN, y = INT_MIN, window_state = WINDOW_NORMAL, disallow_override_title = 0, want_transparency = 0, native_host = 0;
     unsigned long long native_tab_parent = 0;
     const char *native_tab_location = "last";
     char *title, *wm_class_class, *wm_class_name;
@@ -2232,11 +2255,12 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         "native_tab_parent",
         "native_tab_location",
         "want_transparency",
+        "native_host",
         NULL};
     if (!PyArg_ParseTupleAndKeywords(
             args,
             kw,
-            "OOsss|OOOOpOKsp",
+            "OOsss|OOOOpOKspp",
             (char **)kwlist,
             &get_window_size,
             &pre_show_callback,
@@ -2251,7 +2275,8 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
             &layer_shell_config,
             &native_tab_parent,
             &native_tab_location,
-            &want_transparency))
+            &want_transparency,
+            &native_host))
         return NULL;
     GLFWLayerShellConfig *lsc = NULL, lsc_stack = {0};
     if (optional_window_state && optional_window_state != Py_None) {
@@ -2444,7 +2469,8 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     if (pret == NULL) return NULL;
     Py_DECREF(pret);
     if (x != INT_MIN && y != INT_MIN) glfwSetWindowPos(glfw_window, x, y);
-    if (!global_state.is_apple && !global_state.is_wayland && window_state != WINDOW_HIDDEN) glfwShowWindow(glfw_window, false);
+    // A window that goes inside a native window is shown by it, without ever being managed by the window manager
+    if (!global_state.is_apple && !global_state.is_wayland && window_state != WINDOW_HIDDEN && !native_host) glfwShowWindow(glfw_window, false);
     if (global_state.is_wayland || global_state.is_apple) {
         float n_xscale, n_yscale;
         double n_xdpi, n_ydpi;
@@ -2543,7 +2569,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     // We do not call glfwWindowHint to set GLFW_MAXIMIZED before the window is created.
     // That would cause the window to be set to maximize immediately after creation and use the wrong initial size when restored.
     if (window_state != WINDOW_NORMAL) change_state_for_os_window(w, window_state);
-    if (!w->is_layer_shell) native_ui_adopt_os_window(w, native_tab_parent, native_tab_location);
+    if (!w->is_layer_shell && native_host) native_ui_adopt_os_window(w, native_tab_parent, native_tab_location);
 #ifdef __APPLE__
     // macOS: Show the window after it is ready
     if (window_state != WINDOW_HIDDEN) glfwShowWindow(glfw_window, false);
@@ -2619,6 +2645,7 @@ destroy_os_window(OSWindow *w) {
 
 void
 focus_os_window(OSWindow *w, bool also_raise, const char *activation_token) {
+    if (native_ui_window_op(w, NATIVE_OP_FOCUS)) return;
     if (w->handle) {
 #ifdef __APPLE__
         if (!also_raise) cocoa_focus_window(glfwGetCocoaWindow(w->handle));
@@ -3158,6 +3185,7 @@ set_os_window_title(OSWindow *w, const char *title) {
     static char buf[2048];
     strip_csi_(title, buf, arraysz(buf));
     glfwSetWindowTitle(w->handle, buf);
+    if (title) native_ui_title_changed(w, title);
 }
 
 void

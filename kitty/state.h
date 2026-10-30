@@ -583,6 +583,7 @@ typedef struct OSWindow {
         bool os_forces_opaque, supports_transparency;
     } background_opacity;
     FONTS_DATA_HANDLE fonts_data;
+    bool hosted_in_native_window; // shown inside a native window, whose state is the state of this window
     unsigned int font_set; // non-zero when this window does not use the global fonts, see font_set_for_options()
     id_type temp_font_group_id;
     enum RENDER_STATE render_state;

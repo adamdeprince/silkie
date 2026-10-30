@@ -220,6 +220,11 @@ def glfw_path(module: str) -> str:
     return os.path.join(extensions_dir, f'{prefix}glfw-{module}.so')
 
 
+def native_ui_module_path() -> str:
+    prefix = 'kitty.' if getattr(sys, 'frozen', False) else ''
+    return os.path.join(extensions_dir, f'{prefix}gtk_ui.so')
+
+
 def detect_if_wayland_ok() -> bool:
     if not os.environ.get('WAYLAND_DISPLAY') and not os.environ.get('WAYLAND_SOCKET'):
         return False

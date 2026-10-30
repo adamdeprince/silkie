@@ -58,7 +58,7 @@ from .constants import (
     supports_primary_selection,
     website_url,
 )
-from .native_ui import open_settings
+from .native_ui import native_tabs_active, open_settings, update_native_menus
 from .profiles import (
     DEFAULT_PROFILE_ID,
     Profile,
@@ -70,6 +70,7 @@ from .profiles import (
 )
 from .profiles import clear_caches as clear_profile_caches
 from .fast_data_types import (
+    native_saved_height_adjustment,
     native_settings_snapshot,
     native_tabs_attach,
     native_tabs_detach,
@@ -542,6 +543,7 @@ class Boss:
                     native_tab_parent=native_tab_parent,
                     native_tab_location=native_tab_location,
                     want_transparency=wants_transparency(profile),
+                    native_host=native_tabs_active(),
                 )
         else:
             wname = self.args.name or self.args.cls or appname
@@ -1592,6 +1594,7 @@ class Boss:
             cocoa_minimize_os_window(osw_id)
 
     def start(self, first_os_window_id: int, startup_sessions: Iterable[Session]) -> None:
+        update_native_menus()
         if not getattr(self, 'io_thread_started', False):
             self.child_monitor.start()
             self.io_thread_started = True
@@ -2504,7 +2507,7 @@ class Boss:
             if opts.remember_window_position and not is_wayland() and not self.os_window_map:
                 self.cached_values['window-pos'] = x, y
                 self.cached_values['monitor-workarea'] = glfw_get_monitor_workarea()
-            self.cached_values['window-size'] = viewport_width, viewport_height
+            self.cached_values['window-size'] = viewport_width, viewport_height + native_saved_height_adjustment(os_window_id)
             self.cached_values['window-state'] = 'maximized' if was_maximized else 'normal'
         if tm is not None:
             tm.destroy()
@@ -3585,6 +3588,7 @@ class Boss:
             from .fast_data_types import cocoa_recreate_global_menu
 
             cocoa_recreate_global_menu()
+        update_native_menus()
         for tm in self.all_tab_managers:
             tm.apply_options()
         # Update colors

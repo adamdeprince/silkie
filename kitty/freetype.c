@@ -1683,7 +1683,8 @@ PyTypeObject Face_Type = {
 
 static void
 free_freetype(void) {
-    cairo_debug_reset_static_data();
+    // GTK keeps using cairo and fonts until the process is gone
+    if (!native_ui_is_loaded()) cairo_debug_reset_static_data();
     FT_Done_FreeType(library);
 }
 
