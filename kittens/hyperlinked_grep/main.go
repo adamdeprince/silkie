@@ -233,19 +233,22 @@ func parse_args(args ...string) (delegate_to_rg bool, sanitized_args []string, k
 					}
 				}
 			} else if x != "-" && strings.HasPrefix(x, "-") {
+				// rg semantics: everything after the first short option that
+				// takes a value is that value, with an optional leading = stripped
 				ok := true
 				chars := make([]string, 0, len(x)-1)
-				option_arg := ""
-				for i, ch := range x[1:] {
+				option_arg, has_option_arg := "", false
+				for j, ch := range x[1:] {
 					chars = append(chars, string(ch))
-					target, found := alias_map[string(ch)]
-					ok = found
-					if !ok {
+					var target string
+					if target, ok = alias_map[string(ch)]; !ok {
 						sanitized_args = append(sanitized_args, x)
 						break
 					}
 					if options_that_expect_args[target] {
-						option_arg = x[i+2:]
+						if rest := x[j+2:]; rest != "" {
+							option_arg, has_option_arg = strings.TrimPrefix(rest, "="), true
+						}
 						break
 					}
 				}
@@ -253,7 +256,7 @@ func parse_args(args ...string) (delegate_to_rg bool, sanitized_args []string, k
 					for _, ch := range chars {
 						target := alias_map[ch]
 						if options_that_expect_args[target] {
-							if option_arg == "" {
+							if !has_option_arg {
 								expecting_option_arg = target
 							} else if err = handle_option_arg(target, option_arg, false); err != nil {
 								return
