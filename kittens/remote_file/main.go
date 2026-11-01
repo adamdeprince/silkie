@@ -12,6 +12,7 @@ import (
 	"github.com/kovidgoyal/kitty/kittens/choose_files"
 	"github.com/kovidgoyal/kitty/tools/cli"
 	"github.com/kovidgoyal/kitty/tools/cli/markup"
+	"github.com/kovidgoyal/kitty/tools/tty"
 	"github.com/kovidgoyal/kitty/tools/tui"
 	"github.com/kovidgoyal/kitty/tools/tui/loop"
 	"github.com/kovidgoyal/kitty/tools/tui/readline"
@@ -27,8 +28,12 @@ var _ = fmt.Print
 // overwrite-prompt, and around the $EDITOR invocation) to clear whatever was
 // drawn by the previous phase/loop before drawing the next; we mirror those
 // call sites exactly so the two implementations look the same on screen.
+// It is a no-op when stdout is not a terminal, for example when output is
+// piped or captured by tests.
 func reset_terminal() {
-	fmt.Print("\x1b]\x1b\\\x1bc")
+	if tty.IsTerminal(os.Stdout.Fd()) {
+		fmt.Print("\x1b]\x1b\\\x1bc")
+	}
 }
 
 // get_key_press shows `draw` and waits for one of the runes in allowed.
