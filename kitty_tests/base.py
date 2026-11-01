@@ -524,9 +524,22 @@ class PTY:
         end_time = time.monotonic() + timeout
         while time.monotonic() <= end_time:
             si_pid, status = os.waitpid(self.child_pid, os.WNOHANG)
-            if si_pid == self.child_pid and os.WIFEXITED(status):
-                ec = os.waitstatus_to_exitcode(status) if hasattr(os, 'waitstatus_to_exitcode') else require_exit_code
+            if si_pid == self.child_pid:
+                # The child has been reaped, calling waitpid() on it again
+                # would fail with ECHILD, so handle every kind of termination
+                # here, not just a normal exit.
                 self.child_waited_for = True
+                with suppress(OSError):
+                    while self.process_input_from_child(timeout=0):
+                        pass
+                if os.WIFSIGNALED(status):
+                    sig = os.WTERMSIG(status)
+                    try:
+                        signame = signal.Signals(sig).name
+                    except ValueError:
+                        signame = str(sig)
+                    raise AssertionError(f'Child was killed by signal: {signame}. {self.screen_contents_for_error()}')
+                ec = os.waitstatus_to_exitcode(status)
                 if require_exit_code is not None and ec != require_exit_code:
                     raise AssertionError(f'Child exited with exit status: {status} code: {ec} != {require_exit_code}. {self.screen_contents_for_error()}')
                 return status
