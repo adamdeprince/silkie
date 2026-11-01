@@ -129,6 +129,7 @@ func TestPythonSplitExt(t *testing.T) {
 		}
 	}
 }
+
 func TestRemoteEditFinalUpload(t *testing.T) {
 	const ssh_script = `#!/bin/sh
 for arg in "$@"; do
@@ -194,7 +195,7 @@ printf '%s' "$1" > "$KITTY_TEST_EDITED_PATH"
 			}
 			err := func() error {
 				defer master.Close()
-				return edit_loop(master, []string{editor})
+				return edit_and_upload(master, []string{editor})
 			}()
 			if (err != nil) != tc.want_error {
 				t.Fatalf("edit_loop error: %v, want error: %v", err, tc.want_error)

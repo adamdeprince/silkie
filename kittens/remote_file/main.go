@@ -352,7 +352,7 @@ func handle_action(action string, opts *Options) (result string, err error) {
 			master_show_error(master, "Failed to download "+remote_path)
 			return "", nil
 		}
-		if err := edit_loop(master, get_editor()); err != nil {
+		if err := edit_and_upload(master, get_editor()); err != nil {
 			master_show_error(master, err.Error())
 		}
 	case "save":
