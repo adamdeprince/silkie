@@ -14,11 +14,12 @@ import (
 )
 
 type ControlMaster struct {
-	conn         *SSHConnectionData
-	remote_path  string
-	tdir         string
-	Dest         string
-	LastErrorLog string
+	conn            *SSHConnectionData
+	remote_path     string
+	tdir            string
+	keep_local_copy bool
+	Dest            string
+	LastErrorLog    string
 }
 
 func new_control_master(conn *SSHConnectionData, remote_path, dest string) *ControlMaster {
@@ -60,7 +61,7 @@ func (m *ControlMaster) Close() {
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
 		_ = cmd.Run()
 	}
-	if m.tdir != "" {
+	if m.tdir != "" && !m.keep_local_copy {
 		_ = os.RemoveAll(m.tdir)
 	}
 }
@@ -161,7 +162,7 @@ func get_editor() []string {
 	return []string{"vim"}
 }
 
-func edit_loop(master *ControlMaster, editor []string) error {
+func edit_loop(master *ControlMaster, editor []string) (err error) {
 	st, err := os.Stat(master.Dest)
 	if err != nil {
 		return err
@@ -177,6 +178,12 @@ func edit_loop(master *ControlMaster, editor []string) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	defer func() {
+		master.keep_local_copy = err != nil
+		if err != nil {
+			err = fmt.Errorf("%w\nYour edited file is saved at: %q", err, master.Dest)
+		}
+	}()
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	for {
