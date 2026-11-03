@@ -50,6 +50,22 @@ class TestRemoteControl(BaseTest):
             self.assertIsNone(handle_cmd(Mock(spec=KittyBoss), None, pcmd, 0, None))
         rfk.assert_not_called()
         car.assert_called_once()
+        # a cancellation must not register its stream, otherwise later requests
+        # on that stream would be allowed without authentication
+        from kitty.remote_control import active_streams, close_active_stream
+
+        sid = 'cancel-async-stream'
+        self.addCleanup(close_active_stream, sid)
+        pcmd = {'cmd': 'run', 'version': [0, 26, 0], 'stream_id': sid, 'async': 'y', 'cancel_async': True}
+        self.assertIs(is_cmd_allowed(pcmd, None, False, {}), True)
+        command = command_for_name('run')
+        with patch.object(command, 'response_from_kitty') as rfk, patch.object(command, 'cancel_async_request') as car:
+            self.assertIsNone(handle_cmd(Mock(spec=KittyBoss), None, pcmd, 0, None))
+        rfk.assert_not_called()
+        car.assert_called_once()
+        self.assertNotIn(sid, active_streams)
+        pcmd = {'cmd': 'run', 'version': [0, 26, 0], 'stream_id': sid, 'payload': {'cmdline': ['true'], 'data': ''}}
+        self.assertIsNot(is_cmd_allowed(pcmd, None, False, {}), True)
 
     def test_set_os_window_title_command_is_registered(self):
         self.assertIn('set_os_window_title', all_command_names())
