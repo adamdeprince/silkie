@@ -91,6 +91,15 @@ class TestSlang(BaseTest):
         # there are no shaders to draw.
         self.ae(simulate_custom_shader_render_ticks(8, 0xFF, True), [False] * 8)
 
+    def test_custom_shader_command_and_alternate_screen_events(self):
+        def group(spec: str):
+            return parse_pipeline_definition(['startgroup', *spec.splitlines(), 'shaders sample', 'endgroup'], 'test')['groups'][0]
+
+        g = group('animation_start command-start|alternate-screen-exit\nanimation_stop command-finish|alternate-screen-enter')
+        self.ae(g['animation_start'], ('command-start', 'alternate-screen-exit'))
+        self.ae(g['animation_end_events'], ('command-finish', 'alternate-screen-enter'))
+        self.assertRaises(ValueError, group, 'animation_start command-begin')
+
     def test_custom_shader_reenable(self):
         from kitty.fast_data_types import CUSTOM_END_PROGRAM
         from kitty.options.types import defaults

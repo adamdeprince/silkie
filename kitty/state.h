@@ -525,8 +525,14 @@ typedef enum {
     SHADER_ANIM_EVENT_USER_IDLE,
     SHADER_ANIM_EVENT_CURSOR_TRAIL_MOVE,
     SHADER_ANIM_EVENT_CURSOR_TRAIL_STOP,
+    SHADER_ANIM_EVENT_COMMAND_START,
+    SHADER_ANIM_EVENT_COMMAND_FINISH,
+    SHADER_ANIM_EVENT_ALTERNATE_SCREEN_ENTER,
+    SHADER_ANIM_EVENT_ALTERNATE_SCREEN_EXIT,
     NUM_SHADER_ANIM_EVENTS
 } ShaderAnimationEvent;
+// The registry of fired events is a bitmask in an unsigned int
+_Static_assert(NUM_SHADER_ANIM_EVENTS <= sizeof(unsigned) * 8, "Too many shader animation events for the event bitmask");
 
 typedef struct OSWindow {
     void *handle;
@@ -600,6 +606,8 @@ typedef struct OSWindow {
     } scroll;
     unsigned shader_anim_event_registry;
     id_type last_bell_window_id; // ID of the most recent window that received a bell event
+    // Time up to which command and alternate screen changes in the active window have been turned into shader events
+    monotonic_t screen_state_checked_at;
     struct {
         bool active;
         monotonic_t started_at;

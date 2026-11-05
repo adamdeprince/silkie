@@ -1171,6 +1171,10 @@ SHADER_ANIMATION_EVENTS: frozenset[str] = frozenset(
         'user-idle',
         'cursor-trail-move',
         'cursor-trail-stop',
+        'command-start',
+        'command-finish',
+        'alternate-screen-enter',
+        'alternate-screen-exit',
     }
 )
 
