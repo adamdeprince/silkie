@@ -289,7 +289,7 @@ class Tab:  # {{{
         self.set_enabled_layouts(get_options().enabled_layouts)
 
     def take_over_from(self, other_tab: 'Tab') -> None:
-        self.name, self.cwd = other_tab.name, other_tab.cwd
+        self.name, self.cwd, self.created_in_session_name = other_tab.name, other_tab.cwd, other_tab.created_in_session_name
         self.enabled_layouts = list(other_tab.enabled_layouts)
         self._last_used_layout = other_tab._last_used_layout
         if clname := other_tab._current_layout_name:
@@ -1787,11 +1787,7 @@ class TabManager:  # {{{
         orig_active_tab_idx = 0
         with suppress(ValueError):
             orig_active_tab_idx = tabs.index(self.active_tab)
-        session_name = ''
-        if cwd_from is not None and (sw := cwd_from.window):
-            session_name = sw.created_in_session_name
-            if not session_name and (sw_tab := sw.tabref()):
-                session_name = sw_tab.created_in_session_name
+        session_name = sw.effective_session_name if cwd_from is not None and (sw := cwd_from.window) else ''
         t = (
             Tab(self, no_initial_window=True, session_name=session_name)
             if empty_tab

@@ -743,10 +743,8 @@ class Boss:
         startup_session.session_name = ''
         ans = self.add_os_window(startup_session)
         if cwd_from is not None and (sow := cwd_from.window) and (tm := self.os_window_map.get(ans)):
-            session_name = sow.created_in_session_name
-            if not session_name and (sow_tab := sow.tabref()):
-                session_name = sow_tab.created_in_session_name
-            if session_name:
+            if session_name := sow.effective_session_name:
+                tm.created_in_session_name = session_name
                 for tab in tm:
                     tab.created_in_session_name = session_name
                     for w in tab:
@@ -1814,9 +1812,7 @@ class Boss:
     @property
     def active_session(self) -> str:
         if t := self.active_tab:
-            if w := t.active_window:
-                return w.created_in_session_name or t.created_in_session_name
-            return t.created_in_session_name
+            return w.effective_session_name if (w := t.active_window) else t.created_in_session_name
         return ''
 
     @property
@@ -3402,10 +3398,7 @@ class Boss:
         else:
             w = tab.new_window(cwd_from=cwd_from, location=location, allow_remote_control=allow_remote_control)
         if cwd_from is not None and (sw := cwd_from.window):
-            session_name = sw.created_in_session_name
-            if not session_name and (sw_tab := sw.tabref()):
-                session_name = sw_tab.created_in_session_name
-            w.created_in_session_name = session_name
+            w.created_in_session_name = sw.effective_session_name
         return w
 
     @ac('win', 'Create a new window')
@@ -3676,6 +3669,12 @@ class Boss:
         pd = cast(dict[str, Any], payload if isinstance(payload, dict) else {})
         c.response_from_kitty(self, self.window_for_dispatch or self.active_window, PayloadGetter(c, pd))
 
+    def _new_os_window_for_session(self, session_name: str) -> TabManager:
+        "An empty OS window for tabs and windows moved out of session_name"
+        tm = self.os_window_map[self.add_os_window()]
+        tm.created_in_session_name = session_name
+        return tm
+
     def _move_window_to(self, window: Window | None = None, target_tab_id: str | int | None = None, target_os_window_id: str | int | None = None) -> None:
         window = window or self.active_window
         if not window:
@@ -3683,11 +3682,17 @@ class Boss:
         src_tab = window.tabref()
         if src_tab is None:
             return
+        # A tab or OS window created for the window belongs to its session
+        session_name = window.effective_session_name
+
+        def new_tab(tm: TabManager, location: str = 'last') -> Tab:
+            ans = tm.new_tab(empty_tab=True, location=location)
+            ans.created_in_session_name = session_name
+            return ans
+
         with self.suppress_focus_change_events():
             if target_os_window_id == 'new':
-                target_os_window_id = self.add_os_window()
-                tm = self.os_window_map[target_os_window_id]
-                target_tab = tm.new_tab(empty_tab=True)
+                target_tab = new_tab(self._new_os_window_for_session(session_name))
             else:
                 target_os_window_id = target_os_window_id or current_os_window()
                 if isinstance(target_tab_id, str):
@@ -3699,9 +3704,9 @@ class Boss:
                         tm = self.os_window_map[target_os_window_id]
                     if target_tab_id.startswith('new'):
                         # valid values for target_tab_id are 'new', 'new_after' and 'new_before'
-                        target_tab = tm.new_tab(empty_tab=True, location=(target_tab_id[4:] or 'last'))
+                        target_tab = new_tab(tm, location=(target_tab_id[4:] or 'last'))
                     else:
-                        target_tab = tm.tab_at_location(target_tab_id) or tm.new_tab(empty_tab=True)
+                        target_tab = tm.tab_at_location(target_tab_id) or new_tab(tm)
                 else:
                     for tab in self.all_tabs:
                         if tab.id == target_tab_id:
@@ -3747,9 +3752,7 @@ class Boss:
         tab = tab or self.active_tab
         if tab is None:
             return None
-        if target_os_window_id is None:
-            target_os_window_id = self.add_os_window()
-        tm = self.os_window_map[target_os_window_id]
+        tm = self._new_os_window_for_session(tab.created_in_session_name) if target_os_window_id is None else self.os_window_map[target_os_window_id]
         target_tab = tm.new_tab(empty_tab=True)
         target_tab.take_over_from(tab)
         self._cleanup_tab_after_window_removal(tab)
