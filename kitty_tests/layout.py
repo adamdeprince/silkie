@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # License: GPL v3 Copyright: 2018, Kovid Goyal <kovid at kovidgoyal.net>
 
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from kitty.borders import Border, BorderColor, add_borders
 from kitty.config import defaults
 from kitty.fast_data_types import BOTTOM_EDGE, LEFT_EDGE, RIGHT_EDGE, TOP_EDGE, Region
@@ -1566,3 +1569,31 @@ class TestProportionalSplits(BaseTest):
         self.check_weights(q, dict.fromkeys((1, 2, 3), 1 / 3))
         self.ae(q.balanced_add_window(4).horizontal, q.pairs_root.horizontal)
         self.check_weights(q, dict.fromkeys((1, 2, 3, 4), 0.25))
+
+
+class TestWindowHelpers(BaseTest):
+    def test_quit_close_event(self):
+        from kitty import fast_data_types as f
+        from kitty.boss import Boss
+
+        boss = SimpleNamespace(desktop_session_ending=False, quit_confirmed=False)
+
+        def ev(cause):
+            with patch('kitty.boss.current_application_quit_cause', lambda: cause):
+                return Boss.quit_close_event(boss)
+
+        for cause, name in (
+            (f.QUIT_CAUSE_ACTION, 'action'),
+            (f.QUIT_CAUSE_OS_REQUEST, 'os_request'),
+            (f.QUIT_CAUSE_LOGOUT, 'logout'),
+            (f.QUIT_CAUSE_SIGNAL, 'signal'),
+            (f.QUIT_CAUSE_FATAL_ERROR, 'fatal_error'),
+            (f.QUIT_CAUSE_NONE, 'unknown'),
+        ):
+            self.ae(ev(cause), {'reason': 'quit', 'cause': name, 'confirmed': False})
+        boss.quit_confirmed = True
+        self.ae(ev(f.QUIT_CAUSE_ACTION), {'reason': 'quit', 'cause': 'action', 'confirmed': True})
+        # being killed by a signal while the desktop session is ending is a logout
+        boss.desktop_session_ending = True
+        self.ae(ev(f.QUIT_CAUSE_SIGNAL)['cause'], 'logout')
+        self.ae(ev(f.QUIT_CAUSE_FATAL_ERROR)['cause'], 'fatal_error')

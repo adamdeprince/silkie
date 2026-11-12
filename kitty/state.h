@@ -468,6 +468,8 @@ typedef struct Tab {
 
 enum RENDER_STATE { RENDER_FRAME_NOT_REQUESTED, RENDER_FRAME_REQUESTED, RENDER_FRAME_READY };
 typedef enum { NO_CLOSE_REQUESTED, CONFIRMABLE_CLOSE_REQUESTED, CLOSE_BEING_CONFIRMED, IMPERATIVE_CLOSE_REQUESTED } CloseRequest;
+// What caused kitty to quit, reported to on_close watchers
+typedef enum { QUIT_CAUSE_NONE, QUIT_CAUSE_ACTION, QUIT_CAUSE_OS_REQUEST, QUIT_CAUSE_LOGOUT, QUIT_CAUSE_SIGNAL, QUIT_CAUSE_FATAL_ERROR } QuitCause;
 
 typedef struct LiveResizeInfo {
     monotonic_t last_resize_event_at;
@@ -637,6 +639,7 @@ typedef struct GlobalState {
     int active_drag_button, tracked_drag_button;
     int mods_at_last_key_or_button_event;
     CloseRequest quit_request;
+    QuitCause quit_cause;
     bool redirect_mouse_handling;
     WindowLogoTable *all_window_logos;
     int gl_version;

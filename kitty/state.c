@@ -1230,14 +1230,19 @@ PYWRAP1(mark_os_window_for_close) {
 
 PYWRAP1(set_application_quit_request) {
     CloseRequest cr = IMPERATIVE_CLOSE_REQUESTED;
-    PA("|i", &cr);
+    int cause = -1;
+    PA("|ii", &cr, &cause);
     global_state.quit_request = cr;
+    if (cr == NO_CLOSE_REQUESTED) global_state.quit_cause = QUIT_CAUSE_NONE;
+    else if (cause >= QUIT_CAUSE_NONE && cause <= QUIT_CAUSE_FATAL_ERROR) global_state.quit_cause = cause;
     global_state.has_pending_closes = true;
     request_tick_callback();
     Py_RETURN_NONE;
 }
 
 PYWRAP0(current_application_quit_request) { return Py_BuildValue("i", global_state.quit_request); }
+
+PYWRAP0(current_application_quit_cause) { return Py_BuildValue("i", global_state.quit_cause); }
 
 PYWRAP1(focus_os_window) {
     id_type os_window_id;
@@ -2083,6 +2088,7 @@ static PyMethodDef module_methods[] = {
     MW(mark_os_window_for_close, METH_VARARGS),
     MW(set_application_quit_request, METH_VARARGS),
     MW(current_application_quit_request, METH_NOARGS),
+    MW(current_application_quit_cause, METH_NOARGS),
     MW(set_os_window_chrome, METH_VARARGS),
     MW(focus_os_window, METH_VARARGS),
     MW(mark_tab_bar_dirty, METH_VARARGS),
@@ -2155,6 +2161,12 @@ init_state(PyObject *module) {
     Py_INCREF((PyObject *)&RegionType);
     PyModule_AddObject(module, "Region", (PyObject *)&RegionType);
     PyModule_AddIntConstant(module, "IMPERATIVE_CLOSE_REQUESTED", IMPERATIVE_CLOSE_REQUESTED);
+    PyModule_AddIntConstant(module, "QUIT_CAUSE_NONE", QUIT_CAUSE_NONE);
+    PyModule_AddIntConstant(module, "QUIT_CAUSE_ACTION", QUIT_CAUSE_ACTION);
+    PyModule_AddIntConstant(module, "QUIT_CAUSE_OS_REQUEST", QUIT_CAUSE_OS_REQUEST);
+    PyModule_AddIntConstant(module, "QUIT_CAUSE_LOGOUT", QUIT_CAUSE_LOGOUT);
+    PyModule_AddIntConstant(module, "QUIT_CAUSE_SIGNAL", QUIT_CAUSE_SIGNAL);
+    PyModule_AddIntConstant(module, "QUIT_CAUSE_FATAL_ERROR", QUIT_CAUSE_FATAL_ERROR);
     PyModule_AddIntConstant(module, "NO_CLOSE_REQUESTED", NO_CLOSE_REQUESTED);
     PyModule_AddIntConstant(module, "CLOSE_BEING_CONFIRMED", CLOSE_BEING_CONFIRMED);
     PyModule_AddIntMacro(module, WINDOW_NORMAL);

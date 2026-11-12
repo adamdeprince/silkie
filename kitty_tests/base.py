@@ -93,6 +93,9 @@ class Callbacks:
     def title_changed(self, data, is_base64=False) -> None:
         self.titlebuf.append(process_title_from_child(data, is_base64, ''))
 
+    def on_cwd_change(self, raw_url) -> None:
+        self.cwd_changes.append(raw_url)
+
     def osc_context(self, data):
         pass
 
@@ -140,6 +143,7 @@ class Callbacks:
         self.wtcbuf = b''
         self.iconbuf = self.colorbuf = self.ctbuf = ''
         self.titlebuf = []
+        self.cwd_changes = []
         self.printbuf = []
         self.color_control_responses = []
         self.notifications = []
