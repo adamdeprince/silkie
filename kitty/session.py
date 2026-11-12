@@ -678,6 +678,7 @@ If specified, only save all windows (and their parent tabs/OS Windows) that matc
 search expression. See :ref:`search_syntax` for details on the search language. In particular if
 you want to only save windows that are present in the currently active session,
 use :code:`--match=session:.`.
+If no matching windows can be saved, the action reports an error and cancels the save.
 
 
 --base-dir
@@ -704,6 +705,9 @@ def save_as_session_part2(boss: BossType, opts: SaveAsSessionOptions, path: str,
     if path_input_by_user and '.' not in os.path.basename(path):
         path += '.kitty-session'
     session = '\n'.join(boss.serialize_state_as_session(path, opts))
+    if opts.match and not session:
+        boss.show_error(_('No windows to save'), _('No windows matching {0} could be saved.').format(opts.match))
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     atomic_save(session.encode(), path)
     if not opts.save_only:
