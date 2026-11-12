@@ -4,6 +4,7 @@ package dnd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -118,26 +119,40 @@ func (dnd *dnd) setup_base_dir(base_dir string) (err error) {
 	if dnd.drop_output_dir != nil {
 		dnd.drop_output_dir.Close()
 	}
-	if dnd.drop_output_dir, err = os.Open(base_dir); err != nil {
-		return err
+	dnd.drop_output_dir, err = os.Open(base_dir)
+	return err
+}
+
+// Create the base temporary directory used for staging drops. This is done
+// lazily, on the first drop, so that the kitten works in directories that are
+// not writable when no drop into them is performed.
+func (dnd *dnd) ensure_base_tempdir() (err error) {
+	if dnd.base_tempdir != nil {
+		return nil
 	}
+	base_dir := dnd.drop_output_dir.Name()
 	base_tdir, err := os.MkdirTemp(base_dir, ".dnd-kitten-drop-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temporary directory for drop in %s with error: %w", base_dir, err)
 	}
 	bf, err := os.Open(base_tdir)
 	if err != nil {
-		os.RemoveAll(base_tdir)
+		if rerr := os.RemoveAll(base_tdir); rerr != nil {
+			return errors.Join(err, rerr)
+		}
 		return err
 	}
 	dnd.base_tempdir = bf
 	if _, serr := os.Stat(filepath.Join(base_dir, strings.ToUpper(filepath.Base(base_tdir)))); serr == nil {
 		dnd.is_case_sensitive_filesystem = false
 	}
-	return err
+	return nil
 }
 
 func (dnd *dnd) remove_tdir() error {
+	if dnd.base_tempdir == nil {
+		return nil
+	}
 	path := dnd.base_tempdir.Name()
 	dnd.base_tempdir.Close()
 	dnd.base_tempdir = nil
