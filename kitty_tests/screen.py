@@ -6,7 +6,8 @@ import tempfile
 
 from kitty.fast_data_types import DECAWM, DECCOLM, DECOM, IRM, VT_PARSER_BUFFER_SIZE, Color, ColorProfile, Cursor
 from kitty.marks import marker_from_function, marker_from_regex, marker_from_text
-from kitty.window import pagerhist
+from kitty.utils import path_from_osc7_url
+from kitty.window import is_conemu_osc9_command, pagerhist
 
 from .base import BaseTest, draw_multicell, parse_bytes
 
@@ -2384,6 +2385,29 @@ class TestScreen(BaseTest):
         s.draw('cd')
         s.cursor.x = 1
         self.ae(s.ime_text_around_cursor(), ('c', 'd'))
+
+    def test_conemu_osc9(self):
+        s = self.create_screen()
+        c = s.callbacks
+        # ConEmu OSC 9;9 cwd reporting
+        c.notifications = []
+        parse_bytes(s, b'\x1b]9;9;/x/y z\x1b\\')
+        self.ae(s.last_reported_cwd, b'kitty-shell-cwd:///x/y z')
+        parse_bytes(s, b'\x1b]9;9;"/q/r"\x07')
+        self.ae(s.last_reported_cwd, b'kitty-shell-cwd:///q/r')
+        # relative and windows paths are ignored
+        parse_bytes(s, b'\x1b]9;9;C:\\x\x07')
+        parse_bytes(s, b'\x1b]9;9;\x07')
+        self.ae(s.last_reported_cwd, b'kitty-shell-cwd:///q/r')
+        self.ae(c.notifications, [])
+        # other OSC 9 payloads still go to desktop_notify
+        parse_bytes(s, b'\x1b]9;hello\x07')
+        self.ae(c.notifications, [(9, 'hello')])
+        self.ae(path_from_osc7_url(s.last_reported_cwd), '/q/r')
+        for x in ('1;10', '2;msg', '5', '9;9;/a', '12', '10;1'):
+            self.assertTrue(is_conemu_osc9_command(x), x)
+        for x in ('hello', '13;x', '0;x', '1x', '', '42'):
+            self.assertFalse(is_conemu_osc9_command(x), x)
 
 
 def detect_url(self, scale=1):
