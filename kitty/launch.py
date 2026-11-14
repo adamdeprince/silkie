@@ -15,6 +15,7 @@ from .cli_stub import LaunchCLIOptions
 from .clipboard import set_clipboard_string, set_primary_selection
 from .constants import is_wayland
 from .fast_data_types import add_timer, get_boss, get_options, get_os_window_title, patch_color_profiles
+from .launch_wrapper import LaunchRequest
 from .options.utils import env as parse_env
 from .tabs import Tab, TabManager
 from .types import DockSpec, LayerShellConfig, OverlayType, dock_edges, parse_dock_spec, run_once
@@ -701,6 +702,7 @@ def _launch(
     base_env: dict[str, str] | None = None,
     child_death_callback: Callable[[int, Exception | None], None] | None = None,
     startup_command_via_shell_integration: Sequence[str] | str = (),
+    use_launch_wrapper: bool = True,
 ) -> Window | None:
     source_window = boss.active_window_for_cwd
     if opts.source_window:
@@ -896,6 +898,7 @@ def _launch(
             if owner_window is None or (dock_owner := tab.windows.group_for_window(owner_window)) is None:
                 raise ValueError('A window-dock can only be created in a tab that has a window to dock it to')
         watchers = load_watch_modules(opts.watcher)
+        launch_request = LaunchRequest(opts.type, source_window.id if source_window else None, tuple(parse_var(opts.var))) if use_launch_wrapper else None
         with Window.set_ignore_focus_changes_for_new_windows(opts.keep_focus):
             new_window: Window = tab.new_window(
                 env=env or None,
@@ -904,6 +907,7 @@ def _launch(
                 next_to=next_to,
                 startup_command_via_shell_integration=startup_command_via_shell_integration,
                 dock_owner=dock_owner,
+                launch_request=launch_request,
                 **kw,
             )
             new_window.created_in_session_name = add_to_session
@@ -951,6 +955,7 @@ def launch(
     base_env: dict[str, str] | None = None,
     child_death_callback: Callable[[int, Exception | None], None] | None = None,
     startup_command_via_shell_integration: Sequence[str] | str = (),
+    use_launch_wrapper: bool = True,
 ) -> Window | None:
     active = boss.active_window
     if opts.keep_focus and active:
@@ -967,6 +972,7 @@ def launch(
             base_env,
             child_death_callback,
             startup_command_via_shell_integration,
+            use_launch_wrapper,
         )
     finally:
         if opts.keep_focus and active:
@@ -1369,7 +1375,9 @@ def remote_edit(msg: str, window: Window) -> None:
         return
     cmdline = get_editor(path_to_edit=c.file_localpath, line_number=c.line_number)
     c.opts.source_window = c.opts.next_to = f'id:{window.id}'
-    w = launch(get_boss(), c.opts, cmdline)
+    # The editor edits a temporary file kitty creates locally, so it must not
+    # be run via the user's launch wrapper, which might run it in a container
+    w = launch(get_boss(), c.opts, cmdline, use_launch_wrapper=False)
     if w is not None:
         c.source_window_id = window.id
         c.editor_window_id = w.id

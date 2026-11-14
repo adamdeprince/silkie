@@ -55,6 +55,7 @@ from .fast_data_types import (
     swap_tabs,
     sync_os_window_title,
 )
+from .launch_wrapper import LaunchRequest, user_launch_request
 from .layout.base import DragOverlayMode, Layout
 from .layout.interface import all_layouts, create_layout_object_for, evict_cached_layouts
 from .progress import ProgressState
@@ -157,6 +158,8 @@ class SpecialWindowInstance(NamedTuple):
     watchers: Watchers | None
     overlay_behind: bool
     hold: bool
+    # Set for windows launched at the user's request, see launch_wrapper.py
+    launch_request: LaunchRequest | None = None
 
 
 def SpecialWindow(
@@ -170,8 +173,9 @@ def SpecialWindow(
     watchers: Watchers | None = None,
     overlay_behind: bool = False,
     hold: bool = False,
+    launch_request: LaunchRequest | None = None,
 ) -> SpecialWindowInstance:
-    return SpecialWindowInstance(cmd, stdin, override_title, cwd_from, cwd, overlay_for, env, watchers, overlay_behind, hold)
+    return SpecialWindowInstance(cmd, stdin, override_title, cwd_from, cwd, overlay_for, env, watchers, overlay_behind, hold, launch_request)
 
 
 def add_active_id_to_history(items: Deque[int], item_id: int, maxlen: int = 64) -> None:
@@ -235,7 +239,7 @@ class Tab:  # {{{
             sl = self.enabled_layouts[0]
             self._set_current_layout(sl)
             if special_window is None:
-                self.new_window(cwd_from=cwd_from)
+                self.new_window(cwd_from=cwd_from, launch_request=user_launch_request('tab', cwd_from))
             else:
                 self.new_special_window(special_window)
         else:
@@ -765,6 +769,7 @@ class Tab:  # {{{
         remote_control_fd: int = -1,
         hold_after_ssh: bool = False,
         startup_command_via_shell_integration: Sequence[str] | str = (),
+        launch_request: LaunchRequest | None = None,
     ) -> Child:
         check_for_suitability = True
         if cmd is None:
@@ -825,6 +830,7 @@ class Tab:  # {{{
             remote_control_fd=remote_control_fd,
             hold_after_ssh=hold_after_ssh,
             startup_command_via_shell_integration=startup_command_via_shell_integration,
+            launch_request=launch_request,
         )
         ans.fork()
         return ans
@@ -877,6 +883,7 @@ class Tab:  # {{{
         startup_command_via_shell_integration: Sequence[str] | str = (),
         dock: DockSpec | None = None,
         dock_owner: WindowGroup | None = None,
+        launch_request: LaunchRequest | None = None,
     ) -> Window:
         "Create a new window. When dock is specified, the window is docked to dock_owner or to the tab if dock_owner is None."
         cs = WindowCreationSpec(
@@ -913,6 +920,7 @@ class Tab:  # {{{
             remote_control_fd=remote_control_fd,
             hold_after_ssh=hold_after_ssh,
             startup_command_via_shell_integration=startup_command_via_shell_integration,
+            launch_request=launch_request,
         )
         window = Window(
             self,
@@ -967,6 +975,7 @@ class Tab:  # {{{
             remote_control_passwords=remote_control_passwords,
             pass_fds=pass_fds,
             remote_control_fd=remote_control_fd,
+            launch_request=special_window.launch_request,
         )
 
     @ac('win', 'Close all windows in the tab other than the currently active window')
