@@ -619,3 +619,5 @@ be combined with ``|`` — any one of them will trigger the action.
 Note that if both a start event and a focus-out event fire in the same frame
 (for example, a mouse click that simultaneously moves focus away), the
 focus-out takes priority and the animation is not (re-)started.
+When focus changes more than once before the OS window is next drawn, for
+example, while it is hidden, only the last change counts.
