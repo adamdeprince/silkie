@@ -990,17 +990,17 @@ defaults.map = [
     # next_layout
     KeyDefinition(trigger=SingleKey(mods=256, key=108), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='next_layout'),
     # increase_font_size
-    KeyDefinition(trigger=SingleKey(mods=256, key=61), definition='change_font_size all +2.0'),
+    KeyDefinition(trigger=SingleKey(mods=256, key=61), definition='change_font_size current +2.0'),
     # increase_font_size
-    KeyDefinition(trigger=SingleKey(mods=256, key=43), definition='change_font_size all +2.0'),
+    KeyDefinition(trigger=SingleKey(mods=256, key=43), definition='change_font_size current +2.0'),
     # increase_font_size
-    KeyDefinition(trigger=SingleKey(mods=256, key=57413), definition='change_font_size all +2.0'),
+    KeyDefinition(trigger=SingleKey(mods=256, key=57413), definition='change_font_size current +2.0'),
     # decrease_font_size
-    KeyDefinition(trigger=SingleKey(mods=256, key=45), definition='change_font_size all -2.0'),
+    KeyDefinition(trigger=SingleKey(mods=256, key=45), definition='change_font_size current -2.0'),
     # decrease_font_size
-    KeyDefinition(trigger=SingleKey(mods=256, key=57412), definition='change_font_size all -2.0'),
+    KeyDefinition(trigger=SingleKey(mods=256, key=57412), definition='change_font_size current -2.0'),
     # reset_font_size
-    KeyDefinition(trigger=SingleKey(mods=256, key=57347), definition='change_font_size all 0'),
+    KeyDefinition(trigger=SingleKey(mods=256, key=57347), definition='change_font_size current 0'),
     # open_url
     KeyDefinition(trigger=SingleKey(mods=256, key=101), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='open_url_with_hints'),
     # insert_selected_path
@@ -1082,18 +1082,18 @@ if is_macos:
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=119), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='close_tab'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=119), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='close_os_window'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=105), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='set_tab_title'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=43), definition='change_font_size all +2.0'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=61), definition='change_font_size all +2.0'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=61), definition='change_font_size all +2.0'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=45), definition='change_font_size all -2.0'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=45), definition='change_font_size all -2.0'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=48), definition='change_font_size all 0'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=43), definition='change_font_size current +2.0'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=61), definition='change_font_size current +2.0'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=61), definition='change_font_size current +2.0'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=45), definition='change_font_size current -2.0'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=45), definition='change_font_size current -2.0'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=48), definition='change_font_size current 0'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=12, key=102), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='toggle_fullscreen'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=10, key=115), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='toggle_macos_secure_keyboard_entry'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=96), definition='macos_cycle_through_os_windows'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=96), definition='macos_cycle_through_os_windows_backwards'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=12, key=32), definition='kitten unicode_input'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=44), definition='edit_config_file'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=44), definition='open_settings'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=10, key=114), definition='clear_terminal reset active'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=107), definition='clear_terminal to_cursor active'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=10, key=107), definition='clear_terminal scrollback active'))

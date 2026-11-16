@@ -83,9 +83,9 @@ def profile_items(shortcuts: dict[str, 'SingleKey']) -> list[dict[str, Any]]:
 
 def view_items(s: dict[str, 'SingleKey']) -> list[dict[str, Any]]:
     return [
-        menu_item(s, 'Make Text Bigger', 'change_font_size all +2.0', when='window'),
-        menu_item(s, 'Make Text Smaller', 'change_font_size all -2.0', when='window'),
-        menu_item(s, 'Actual Size', 'change_font_size all 0', when='window'),
+        menu_item(s, 'Make Text Bigger', 'change_font_size current +2.0', when='window'),
+        menu_item(s, 'Make Text Smaller', 'change_font_size current -2.0', when='window'),
+        menu_item(s, 'Actual Size', 'change_font_size current 0', when='window'),
         SEPARATOR,
         menu_item(s, 'Next Layout', 'next_layout', when='window'),
         SEPARATOR,
