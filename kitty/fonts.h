@@ -80,6 +80,16 @@ StringCanvas render_simple_text_impl(PyObject *s, const char *text, unsigned int
 StringCanvas render_simple_text(FONTS_DATA_HANDLE fg_, const char *text);
 bool face_apply_scaling(PyObject *face, const FONTS_DATA_HANDLE fg);
 
+// Lines whose thickness is specified in pts (box drawing, cursors, etc.) are
+// scaled by this factor so that they scale along with the text when the font
+// size is changed from the configured font size, unless the user turned that
+// off with scale_line_thickness_with_font_size.
+static inline double
+line_thickness_scale_for_font_size(const FONTS_DATA_HANDLE fg) {
+    if (!OPT(scale_line_thickness_with_font_size)) return 1.0;
+    return OPT(font_size) > 0 && fg->font_sz_in_pts > 0 ? fg->font_sz_in_pts / OPT(font_size) : 1.0;
+}
+
 bool add_font_name_record(
     PyObject *table, uint16_t platform_id, uint16_t encoding_id, uint16_t language_id, uint16_t name_id, const char *string, uint16_t string_len);
 PyObject *get_best_name_from_name_table(PyObject *table, PyObject *name_id);
