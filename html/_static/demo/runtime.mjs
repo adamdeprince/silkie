@@ -35,7 +35,7 @@ export async function readGuestManifest(url, fetcher = fetch, language = 'en') {
     return {...manifest, image: image.href};
 }
 
-export const DEMO_GAMES = Object.freeze(['presidential', 'silkie-loophole', 'silkie-sprint', 'silkie-scramble']);
+export const DEMO_GAMES = Object.freeze(['presidential', 'silkie-loophole', 'ground-stop', 'silkie-sprint', 'silkie-scramble']);
 
 function checkedGame(game) {
     if (game !== null && !DEMO_GAMES.includes(game)) throw new Error(`Choose a game: ${DEMO_GAMES.join(', ')}.`);
