@@ -3527,6 +3527,8 @@ class Boss:
                 w.report_color_scheme_preference_if_wanted()
             w.refresh(reload_all_gpu_data=True)
         load_shader_programs.recompile_if_needed()
+        # Errors such as a misspelled custom_shader_var are otherwise only shown at startup
+        self.show_custom_shader_errors()
 
     @ac(
         'misc',
