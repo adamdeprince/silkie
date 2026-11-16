@@ -736,8 +736,9 @@ cocoa_send_notification(PyObject *self UNUSED, PyObject *args, PyObject *kw) {
     // otherwise macOS refuses to show the preference checkbox for enable/disable notification sound.
     [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge)
                           completionHandler:^(BOOL granted, NSError *_Nullable error) {
-                            if (!granted && error != nil) {
-                                log_error("Failed to request permission for showing notification: %s", [[error localizedDescription] UTF8String]);
+                            if (!granted) {
+                                if (error != nil) log_error("Failed to request permission for showing notification: %s", [[error localizedDescription] UTF8String]);
+                                else log_error("Desktop notification permission denied. Enable notifications for Silkie in System Settings > Notifications.");
                             }
                             dispatch_async(dispatch_get_main_queue(), ^{ drain_pending_notifications(granted); });
                           }];

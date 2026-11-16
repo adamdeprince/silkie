@@ -1410,17 +1410,17 @@ class Window:
                 log_error(f'Ignoring unknown OSC 777: {raw_data}')
                 return  # unknown OSC 777
             raw_data = raw_data[len('notify;') :]
-        if osc_code == 9 and raw_data.startswith('4;'):
-            # This is probably the ConEmu "progress reporting" conflicting
-            # implementation which sadly some thoughtless people have
-            # implemented in unix CLI programs.
-            # See for example: https://github.com/kovidgoyal/kitty/issues/8011
+        if osc_code == 9 and (raw_data == '4' or raw_data.startswith('4;')):
+            # OSC 9;4 reports progress rather than a desktop notification.
+            # An omitted state (OSC 9;4 ST) clears the progress indicator.
+            state, _, percent = raw_data.partition(';')[2].partition(';')
             try:
-                parts = tuple(map(int, raw_data.split(';')))[1:]
-            except Exception:
+                st = int(state or '0')
+                pr = int(percent) if percent else -1
+            except ValueError:
                 log_error(f'Ignoring malformed OSC 9;4 progress report: {raw_data!r}')
                 return
-            self.progress.update(*parts[:2])
+            self.progress.update(st, pr)
             self.screen.set_progress(self.progress.state.value, self.progress.percent)
             if (tab := self.tabref()) is not None:
                 tab.update_progress()

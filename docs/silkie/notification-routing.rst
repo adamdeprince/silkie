@@ -7,6 +7,35 @@ request a notification, ask to focus their terminal when it is activated,
 and receive the notification ID and selected button. The `notify kitten
 <https://sw.kovidgoyal.net/kitty/kittens/notify/>`_ provides a command-line sender.
 
+OSC 9 and AI completion alerts
+------------------------------
+
+Silkie also accepts the iTerm2-style ``OSC 9 ; message ST`` notification,
+terminated by either BEL or ``ESC \\``. The entire message, including any
+semicolons, becomes the notification title. Clicking it focuses the originating
+terminal without sending input to the application. See the `iTerm2 escape-code
+manual <https://iterm2.com/documentation-escape-codes.html>`_ for the wire format.
+
+The ``OSC 9 ; 4 ; state ; percent ST`` form reports progress instead. Clearing
+or completing a progress bar does not request a desktop notification. The
+abbreviated ``OSC 9 ; 4 ST`` form clears progress as well.
+
+To test desktop notification delivery, run this in a Silkie shell::
+
+   printf '\033]9;Silkie notification test\007'
+
+On macOS, allow Silkie notifications when prompted. If no banner appears,
+check System Settings → Notifications → Silkie, banner settings, and Focus.
+Notification permission failures are logged to Silkie's standard error.
+Configured notification filters also apply to OSC 9.
+
+Claude Code must emit a notification sequence for Silkie to display one.
+If automatic terminal detection does not select a compatible protocol, set
+``"preferredNotifChannel": "iterm2"`` for OSC 9 or ``"kitty"`` for OSC 99 in
+``~/.claude/settings.json``. See `Claude Code's terminal notification setup
+<https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification>`_
+for notification timing and multiplexer configuration.
+
 Return paths through multiplexers
 ---------------------------------
 
