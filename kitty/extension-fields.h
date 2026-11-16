@@ -38,6 +38,38 @@ extension_fields_cleanup(ExtensionFields *f) {
 // Zero-initialized, and freed on every return of the function that declares it.
 #define EXTENSION_FIELDS(name) ExtensionFields name __attribute__((cleanup(extension_fields_cleanup))) = {0}
 
+// True when no two of the n keys are the same. They are sorted, so that the
+// same keys are next to each other, with a merge sort, which takes n log n
+// comparisons whatever the order of the keys a program sends; comparing each
+// key with every other would let one frame of many fields stall the parser.
+// False as well when the storage for the sort cannot be allocated.
+static inline bool
+extension_keys_unique(const char *const *keys, size_t n) {
+    if (n < 2) return true;
+    // a and b each hold n keys; this also keeps lo + 2 * width below in range
+    if (n > SIZE_MAX / 2u / sizeof(*keys)) return false;
+    const char **storage = malloc(2u * n * sizeof(*keys)), **a = storage, **b = storage + n;
+    if (!storage) return false;
+    memcpy(a, keys, n * sizeof(*keys));
+    for (size_t width = 1; width < n; width *= 2u) {
+        // merges the runs of width keys in a, two at a time, into b
+        for (size_t lo = 0; lo < n; lo += 2u * width) {
+            const size_t mid = lo + width < n ? lo + width : n, hi = lo + 2u * width < n ? lo + 2u * width : n;
+            size_t i = lo, j = mid, k = lo;
+            while (i < mid && j < hi) b[k++] = strcmp(a[j], a[i]) < 0 ? a[j++] : a[i++];
+            while (i < mid) b[k++] = a[i++];
+            while (j < hi) b[k++] = a[j++];
+        }
+        const char **t = a;
+        a = b;
+        b = t;
+    }
+    bool unique = true;
+    for (size_t i = 1; i < n && unique; i++) unique = strcmp(a[i - 1], a[i]) != 0;
+    free(storage);
+    return unique;
+}
+
 // Cuts a frame into its fields. False when the frame is to be rejected as a
 // whole: one of them is not key=value with a key, a key is given twice, or
 // storage for the frame cannot be allocated. f must be zeroed; a previous
@@ -65,14 +97,18 @@ extension_fields_parse(ExtensionFields *f, const char *data, size_t sz) {
             return false;
         }
         *eq = 0;
-        for (unsigned i = 0; i < f->count; i++) {
-            if (!strcmp(f->keys[i], p)) {
+        if (f->count == f->cap) {
+            // count is unsigned, which is what the callers loop over, so a
+            // frame of more than UINT_MAX fields cannot be stored
+            if (f->cap == UINT_MAX) {
                 extension_fields_free(f);
                 return false;
             }
-        }
-        if (f->count == f->cap) {
-            unsigned cap = f->cap * 2u;
+            unsigned cap = f->cap > UINT_MAX / 2u ? UINT_MAX : f->cap * 2u;
+            if (sizeof(*f->keys) > SIZE_MAX / cap) {
+                extension_fields_free(f);
+                return false;
+            }
             const char **keys = realloc(f->keys, cap * sizeof(*keys));
             const char **values = realloc(f->values, cap * sizeof(*values));
             if (!keys || !values) {
@@ -89,6 +125,10 @@ extension_fields_parse(ExtensionFields *f, const char *data, size_t sz) {
         f->values[f->count++] = eq + 1;
         if (!end) break;
         p = end + 1;
+    }
+    if (!extension_keys_unique(f->keys, f->count)) {
+        extension_fields_free(f);
+        return false;
     }
     return true;
 }
