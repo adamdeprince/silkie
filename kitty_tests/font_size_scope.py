@@ -27,7 +27,10 @@ class TestFontSizeScope(BaseTest):
 
     def test_view_menu_changes_the_current_os_window(self):
         set_options(load_config())
-        actions = [item['action'] for item in view_items({}) if item.get('action', '').startswith('change_font_size')]
+        # the menu can depend on the active window, there is none here
+        with mock.patch('kitty.native_ui.get_boss', return_value=SimpleNamespace(active_window=None), create=True):
+            items = view_items({})
+        actions = [item['action'] for item in items if item.get('action', '').startswith('change_font_size')]
         self.ae(actions, ['change_font_size current +2.0', 'change_font_size current -2.0', 'change_font_size current 0'])
 
     def test_changing_the_current_os_window_leaves_the_others(self):
