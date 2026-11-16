@@ -4,6 +4,8 @@
 # The rules every OSC 777 extension shares for the frames a program sends, see
 # docs/extension-framing.rst. The same file is on the branch of every extension.
 
+import string
+
 from .base import parse_bytes
 
 
@@ -36,3 +38,13 @@ def assert_extension_frames(test, screen, selector, query='op=query', key='id'):
     body = f'v=1:{query}:{key}=5:p='
     for size in (127, 128, 4096, 16384):
         test.ae(reply(body + 'x' * (size - len(body))), good, f'{selector}: {size} bytes')
+    # Duplicate keys are found without comparing every key with every other, so
+    # a frame of very many fields does not stall the parser: it is answered, and
+    # rejected when its last key repeats an earlier one. The keys are three
+    # characters starting with a digit or a capital, which no extension uses, and
+    # the values empty, so that the frame fits the 1 MiB the parser of kitty
+    # takes at once
+    first, rest = string.digits + string.ascii_uppercase, string.digits + string.ascii_letters
+    many = ':'.join(f'{first[i // 3844]}{rest[i // 62 % 62]}{rest[i % 62]}=' for i in range(130000))
+    test.ae(reply(f'v=1:{query}:{key}=5:{many}'), good, f'{selector}: many fields')
+    test.ae(reply(f'v=1:{query}:{key}=5:{many}:000='), b'', f'{selector}: many fields, one twice')
