@@ -457,6 +457,7 @@ option_names = (
     'resize_debounce_time',
     'resize_in_steps',
     'scale_line_thickness_with_font_size',
+    'restore_session_after_logout',
     'scrollback_fill_enlarged_window',
     'scrollback_lines',
     'scrollback_pager',
@@ -705,6 +706,7 @@ class Options:
     resize_debounce_time: tuple[float, float] = (0.1, 0.5)
     resize_in_steps: bool = False
     scale_line_thickness_with_font_size: bool = True
+    restore_session_after_logout: bool = False
     scrollback_fill_enlarged_window: bool = False
     scrollback_lines: int = 2000
     scrollback_pager: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']

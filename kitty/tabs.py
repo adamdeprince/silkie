@@ -12,12 +12,12 @@ from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from contextlib import suppress
 from functools import wraps
 from gettext import gettext as _
-from typing import Any, Concatenate, Deque, Literal, NamedTuple, Optional, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Concatenate, Deque, Literal, NamedTuple, Optional, ParamSpec, TypeVar, cast
 
 from .borders import Border, Borders
 from .child import Child
 from .cli_stub import CLIOptions, SaveAsSessionOptions
-from .constants import app_class, app_display_name
+from .constants import app_class, app_display_name, is_wayland
 from .native_ui import native_tabs_active
 from .profiles import Profile, apply_to_os_window, command_of, directory_of, environment_of, parsed_options, profile_for_new_os_window
 from .fast_data_types import (
@@ -29,6 +29,9 @@ from .fast_data_types import (
     GLFW_MOUSE_BUTTON_MIDDLE,
     GLFW_PRESS,
     GLFW_RELEASE,
+    WINDOW_FULLSCREEN,
+    WINDOW_MAXIMIZED,
+    WINDOW_MINIMIZED,
     add_tab,
     add_timer,
     attach_window,
@@ -39,6 +42,7 @@ from .fast_data_types import (
     get_boss,
     get_click_interval,
     get_options,
+    get_os_window_geometry,
     get_tab_being_dragged,
     get_window_being_dragged,
     is_tab_bar_visible,
@@ -71,6 +75,9 @@ from .typing_compat import EdgeLiteral, SessionTab, SessionType, TypedDict
 from .utils import cmdline_for_hold, color_as_int, log_error, platform_window_id, resolved_shell, shlex_split, which
 from .window import CwdRequest, Watchers, Window, WindowCreationSpec, WindowDict, global_watchers
 from .window_list import WindowGroup, WindowList
+
+if TYPE_CHECKING:
+    from .fast_data_types import OSWindowGeometry
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -179,6 +186,29 @@ def SpecialWindow(
     hold: bool = False,
 ) -> SpecialWindowInstance:
     return SpecialWindowInstance(cmd, stdin, override_title, cwd_from, cwd, overlay_for, env, watchers, overlay_behind, hold)
+
+
+def os_window_geometry_as_session(g: 'OSWindowGeometry', include_position: bool = True) -> list[str]:
+    ans = [f'os_window_size {g["width"]} {g["height"]}']
+    if include_position:
+        ans.append(f'os_window_position {g["x"]}x{g["y"]}')
+    state = {WINDOW_FULLSCREEN: 'fullscreen', WINDOW_MAXIMIZED: 'maximized', WINDOW_MINIMIZED: 'minimized'}.get(g['state'], 'normal')
+    ans.append(f'os_window_state {state}')
+    return ans
+
+
+def index_of_tab_to_focus_in_session(active_tab_idx: int, last_focused_at: Sequence[float]) -> int:
+    """
+    The focus_tab index for a saved session, which counts only the tabs the session
+    creates. active_tab_idx is the index of the active tab among the saved tabs, or
+    -1 if it was not saved, in which case the saved tab with the most recently
+    focused saved window is used. With --match=session:NAME that is the tab
+    goto_session switches to while the session is open. last_focused_at has one
+    entry per saved tab.
+    """
+    if 0 <= active_tab_idx < len(last_focused_at):
+        return active_tab_idx
+    return max(range(len(last_focused_at)), key=last_focused_at.__getitem__, default=0)
 
 
 def add_active_id_to_history(items: Deque[int], item_id: int, maxlen: int = 64) -> None:
@@ -379,7 +409,9 @@ class Tab:  # {{{
                     target_tab=target_tab,
                     force_target_tab=True,
                     startup_command_via_shell_integration=window.run_command_at_shell_startup,
+                    restored_scrollback=window.restored_scrollback,
                 )
+                window.restored_scrollback = b''  # free the memory, it is no longer needed
                 if launched_window is not None:
                     launched_window.serialized_id = window.serialized_id
             if launched_window is not None:
@@ -449,11 +481,13 @@ class Tab:  # {{{
         session_path: str,
         matched_windows: frozenset[Window] | None,
         ser_opts: SaveAsSessionOptions,
+        saved_windows: list[Window] | None = None,
         os_window_docks: Sequence[WindowGroup] = (),
     ) -> list[str]:
         """
-        The os_window_docks are written after the windows of this tab, but only
-        if this tab has some windows to write.
+        If saved_windows is not None, the windows written to the session are
+        appended to it. The os_window_docks are written after the windows of this
+        tab, but only if this tab has some windows to write.
         """
         import shlex
 
@@ -511,6 +545,8 @@ class Tab:  # {{{
                 )
                 if lc:
                     gw.append(shlex.join(lc))
+                    if saved_windows is not None:
+                        saved_windows.append(window)
             if gw:
                 emitted_group_ids.add(g.id)
                 launch_cmds.extend(gw)
@@ -1004,6 +1040,7 @@ class Tab:  # {{{
         dock: DockSpec | None = None,
         dock_owner: WindowGroup | None = None,
         os_window_dock: bool = False,
+        restored_scrollback: bytes = b'',
     ) -> Window:
         """
         Create a new window. When dock is specified, the window is docked to
@@ -1058,6 +1095,7 @@ class Tab:  # {{{
             remote_control_passwords=remote_control_passwords,
         )
         window.creation_spec = cs
+        window.restored_scrollback = restored_scrollback
         # Must add child before laying out so that resize_pty succeeds
         get_boss().add_child(window)
         self._add_window(
@@ -2017,15 +2055,18 @@ class TabManager:  # {{{
         self, session_path: str, matched_windows: frozenset[Window] | None, ser_opts: SaveAsSessionOptions, is_first: bool = False
     ) -> list[str]:
         ans: list[str] = []
-        active_tab_index = -1
+        active_tab_idx = -1
+        last_focused_at: list[float] = []
         # The OS window docks are written in the first tab that has windows
         # to write. When restored, they are moved to the active tab.
         os_window_docks: Sequence[WindowGroup] = self.os_window_docks
-        for i, tab in enumerate(self.tabs):
-            if tab is self.active_tab:
-                active_tab_index = i
-            if lines := tab.serialize_state_as_session(session_path, matched_windows, ser_opts, os_window_docks):
+        for tab in self.tabs:
+            saved_windows: list[Window] = []
+            if lines := tab.serialize_state_as_session(session_path, matched_windows, ser_opts, saved_windows, os_window_docks):
                 os_window_docks = ()
+                if tab is self.active_tab:
+                    active_tab_idx = len(last_focused_at)
+                last_focused_at.append(max((w.last_focused_at for w in saved_windows), default=0))
                 ans.extend(lines)
         if ans:
             prefix = [] if is_first else ['', '', 'new_os_window']
@@ -2033,12 +2074,16 @@ class TabManager:  # {{{
                 prefix.append(f'os_window_class {self.wm_class}')
             if self.wm_name and self.wm_name != app_class:
                 prefix.append(f'os_window_name {self.wm_name}')
+            if ser_opts.os_window_geometry:
+                prefix.extend(self.serialize_geometry_as_session())
             ans = prefix + ans
-            # Add focus_tab command to preserve the active tab
-            if active_tab_index >= 0:
-                ans.append('')
-                ans.append(f'focus_tab {active_tab_index}')
+            ans.append('')
+            ans.append(f'focus_tab {index_of_tab_to_focus_in_session(active_tab_idx, last_focused_at)}')
         return ans
+
+    def serialize_geometry_as_session(self) -> list[str]:
+        g = get_os_window_geometry(self.os_window_id)
+        return [] if g is None else os_window_geometry_as_session(g, include_position=not is_wayland())
 
     @property
     def active_tab(self) -> Tab | None:

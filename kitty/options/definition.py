@@ -3357,6 +3357,26 @@ arguments specifying a command to run, this option is ignored.
 )
 
 opt(
+    'restore_session_after_logout',
+    'no',
+    option_type='to_bool',
+    long_text="""
+If enabled, when you log out, restart or shut down the computer while kitty is running,
+kitty saves its current state as a :ref:`session <sessions>`, including the size, position
+and state of every :term:`OS Window <os_window>` and the scrollback of every window. The next
+time kitty is started, it restores that session, instead of using :opt:`startup_session`.
+If several kitty instances were running, each is restored as a separate kitty instance, with the
+command line arguments and environment it originally had. Programs that were running in windows,
+other than the shell, are not started again. The saved session is used only once, and only when
+kitty is started without :option:`kitty --session` or a command to run. The saved state is deleted
+once it has been restored. On macOS, it is encrypted, with a key stored in your login keychain. Note
+that despite the encryption any process that runs as you can access the stored session data.
+On Linux, it is not encrypted and this requires a desktop portal that supports monitoring the
+session state. See :ref:`restore_after_logout` for details.
+""",
+)
+
+opt(
     'clipboard_control',
     'write-clipboard write-primary read-clipboard-ask read-primary-ask',
     option_type='clipboard_control',

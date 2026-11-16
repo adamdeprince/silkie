@@ -572,6 +572,7 @@ def dbus_send_notification(
     pass
 
 def dbus_close_notification(dbus_notification_id: int) -> bool: ...
+def dbus_monitor_session_state(callback: Callable[[int], None]) -> bool: ...
 def cocoa_send_notification(
     appname: str,
     identifier: str,
@@ -875,6 +876,9 @@ def set_application_quit_request(cr_type: int = 2) -> None:
 def current_application_quit_request() -> int:
     pass
 
+def application_logout_requested_at() -> float:
+    pass
+
 def global_font_size(val: float = -1.0) -> float:
     pass
 
@@ -905,10 +909,32 @@ def last_focused_os_window_id() -> int:
 def current_focused_os_window_id() -> int:
     pass
 
+def cocoa_keychain_store_secret(service: str, account: str, label: str, secret: Secret) -> None:
+    pass
+
+def cocoa_keychain_read_secret(service: str, account: str) -> Optional[Secret]:
+    pass
+
+def cocoa_keychain_delete(service: str, account: str) -> bool:
+    pass
+
+def cocoa_keychain_list_accounts(service: str) -> List[str]:
+    pass
+
 def cocoa_set_menubar_title(title: str) -> None:
     pass
 
 def change_os_window_state(state: int, os_window_id: Optional[int] = 0) -> None:
+    pass
+
+class OSWindowGeometry(TypedDict):
+    x: int
+    y: int
+    width: int
+    height: int
+    state: int
+
+def get_os_window_geometry(os_window_id: int) -> Optional[OSWindowGeometry]:
     pass
 
 def change_background_opacity(os_window_id: int, opacity: float) -> bool:
@@ -1158,6 +1184,9 @@ class Screen:
     def cursor_at_prompt(self) -> bool:
         pass
 
+    def cursor_prompt_line(self) -> int:
+        pass
+
     def ignore_bells_for(self, duration: float = 1) -> None:
         pass
 
@@ -1174,6 +1203,9 @@ class Screen:
         pass
 
     def draw(self, text: str) -> None:
+        pass
+
+    def restore_scrollback(self, data: bytes) -> None:
         pass
 
     def dump_lines_with_attrs(self, acc: Callable[[str], None], which_screen: int = -1) -> None:
@@ -1572,6 +1604,9 @@ SHA384_HASH: int
 SHA512_HASH: int
 
 class Secret:
+    pass
+
+def random_secret(length: int = 32) -> Secret:
     pass
 
 class EllipticCurveKey:

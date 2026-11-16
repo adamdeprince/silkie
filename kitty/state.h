@@ -665,6 +665,10 @@ typedef struct GlobalState {
     int active_drag_button, tracked_drag_button;
     int mods_at_last_key_or_button_event;
     CloseRequest quit_request;
+    struct {
+        bool requested;
+        monotonic_t at;
+    } logout_quit;
     bool redirect_mouse_handling;
     WindowLogoTable *all_window_logos;
     int gl_version;

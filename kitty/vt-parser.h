@@ -34,6 +34,8 @@ void reset_vt_parser(Parser *);
 
 // The following are thread safe, using an internal lock
 uint8_t *vt_parser_create_write_buffer(Parser *, size_t *);
+// Same as vt_parser_create_write_buffer() except that it returns NULL instead of aborting if a write buffer already exists
+uint8_t *vt_parser_create_write_buffer_if_none(Parser *, size_t *);
 bool vt_parser_commit_write(Parser *, size_t);
 bool vt_parser_has_space_for_input(const Parser *);
 void parse_worker(void *p, ParseData *data, bool flush);
