@@ -130,6 +130,8 @@ class TestColorSchemeResize(BaseTest):
     def test_config_and_settings_reload_coalesce_color_layers(self):
         themes = ThemeColors()
         self.boss.mappings = SimpleNamespace(update_keymap=Mock())
+        self.boss.monitor_desktop_session_if_needed = Mock()
+        self.boss.show_custom_shader_errors = Mock()
         self.boss.all_tab_managers = [SimpleNamespace(
             apply_options=lambda: self.screen.color_profile.reload_from_opts(),
             tab_bar=Mock(), mark_tab_bar_dirty=Mock(), active_tab=None, os_window_id=3,

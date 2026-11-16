@@ -834,7 +834,7 @@ class TestDocks(BaseTest):
             def __init__(self, num_windows):
                 self.num_windows = num_windows
 
-            def serialize_state_as_session(self, session_path, matched_windows, ser_opts, os_window_docks=()):
+            def serialize_state_as_session(self, session_path, matched_windows, ser_opts, saved_windows=None, os_window_docks=()):
                 received.append((self, tuple(os_window_docks)))
                 if not self.num_windows:
                     return []
@@ -842,11 +842,13 @@ class TestDocks(BaseTest):
 
         empty, first, second = SessionTab(0), SessionTab(1), SessionTab(2)
         tm = SimpleNamespace(tabs=[empty, first, second], active_tab=second, os_window_docks=docks, wm_class='', wm_name='')
-        lines = RealTabManager.serialize_state_as_session(tm, '', None, None, is_first=True)
+        ser_opts = SimpleNamespace(os_window_geometry=False)
+        lines = RealTabManager.serialize_state_as_session(tm, '', None, ser_opts, is_first=True)
         # The docks are offered to every tab until one has windows to write, then never again
         self.ae(received, [(empty, (docks[0],)), (first, (docks[0],)), (second, ())])
-        self.ae(lines, ['launch 0', 'launch dock 1', 'launch 0', 'launch 1', '', 'focus_tab 2'])
+        # focus_tab counts only the saved tabs, the empty one is not written
+        self.ae(lines, ['launch 0', 'launch dock 1', 'launch 0', 'launch 1', '', 'focus_tab 1'])
         # An OS window with nothing to write writes nothing, not even its docks
         received.clear()
         tm.tabs, tm.active_tab = [empty], empty
-        self.ae(RealTabManager.serialize_state_as_session(tm, '', None, None), [])
+        self.ae(RealTabManager.serialize_state_as_session(tm, '', None, ser_opts), [])
