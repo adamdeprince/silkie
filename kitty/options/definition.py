@@ -4798,74 +4798,77 @@ agr(
     'Font sizes',
     """
 You can change the font size for all top-level kitty OS windows at a time or
-only the current one.
+only the current one. The default shortcuts change only the current OS window.
+Every native tab is an OS window of its own, so changing the font size in one
+tab leaves the other tabs as they are. When the terminal draws its own tab bar,
+the tabs of an OS window share its font size.
 """,
 )
 
 map(
     'Increase font size',
-    'increase_font_size kitty_mod+equal change_font_size all +2.0',
+    'increase_font_size kitty_mod+equal change_font_size current +2.0',
 )
 map(
     'Increase font size',
-    'increase_font_size kitty_mod+plus change_font_size all +2.0',
+    'increase_font_size kitty_mod+plus change_font_size current +2.0',
 )
 map(
     'Increase font size',
-    'increase_font_size kitty_mod+kp_add change_font_size all +2.0',
+    'increase_font_size kitty_mod+kp_add change_font_size current +2.0',
 )
 map(
     'Increase font size',
-    'increase_font_size cmd+plus change_font_size all +2.0',
+    'increase_font_size cmd+plus change_font_size current +2.0',
     only='macos',
 )
 map(
     'Increase font size',
-    'increase_font_size cmd+equal change_font_size all +2.0',
+    'increase_font_size cmd+equal change_font_size current +2.0',
     only='macos',
 )
 map(
     'Increase font size',
-    'increase_font_size shift+cmd+equal change_font_size all +2.0',
+    'increase_font_size shift+cmd+equal change_font_size current +2.0',
     only='macos',
 )
 
 map(
     'Decrease font size',
-    'decrease_font_size kitty_mod+minus change_font_size all -2.0',
+    'decrease_font_size kitty_mod+minus change_font_size current -2.0',
 )
 map(
     'Decrease font size',
-    'decrease_font_size kitty_mod+kp_subtract change_font_size all -2.0',
+    'decrease_font_size kitty_mod+kp_subtract change_font_size current -2.0',
 )
 map(
     'Decrease font size',
-    'decrease_font_size cmd+minus change_font_size all -2.0',
+    'decrease_font_size cmd+minus change_font_size current -2.0',
     only='macos',
 )
 map(
     'Decrease font size',
-    'decrease_font_size shift+cmd+minus change_font_size all -2.0',
+    'decrease_font_size shift+cmd+minus change_font_size current -2.0',
     only='macos',
 )
 
 map(
     'Reset font size',
-    'reset_font_size kitty_mod+backspace change_font_size all 0',
+    'reset_font_size kitty_mod+backspace change_font_size current 0',
 )
 map(
     'Reset font size',
-    'reset_font_size cmd+0 change_font_size all 0',
+    'reset_font_size cmd+0 change_font_size current 0',
     only='macos',
 )
 egr("""
 To setup shortcuts for specific font sizes::
 
-    map kitty_mod+f6 change_font_size all 10.0
-
-To setup shortcuts to change only the current OS window's font size::
-
     map kitty_mod+f6 change_font_size current 10.0
+
+To setup shortcuts to change the font size of every OS window at once::
+
+    map kitty_mod+f6 change_font_size all 10.0
 
 To setup shortcuts to multiply/divide the font size::
 
