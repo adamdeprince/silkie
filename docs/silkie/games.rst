@@ -7,7 +7,7 @@ Games for Silkie and kitty
    ScreenCaptureKit helper in silkie-scramble/docs/tools/capture.swift.
    Both videos are silent H.264 MP4 window recordings, without added art.
 
-Play all four games in the website's Linux terminal, or run them in native
+Play all five games in the website's Linux terminal, or run them in native
 Silkie and kitty terminals. Each browser link opens a terminal filling its
 own window and starts the game automatically. Use **Fullscreen** to hide
 the browser controls. Each game keeps its own files and saves in this
@@ -18,6 +18,7 @@ browser's local storage; reopening its link returns to the running window.
    <ul>
      <li><a href="browser-demo.html?game=presidential" target="silkie-presidential">Play Presidential full screen</a></li>
      <li><a href="browser-demo.html?game=silkie-loophole" target="silkie-silkie-loophole">Play Silkie Loophole full screen</a></li>
+     <li><a href="browser-demo.html?game=ground-stop" target="silkie-ground-stop">Play Ground Stop full screen</a></li>
      <li><a href="browser-demo.html?game=silkie-sprint" target="silkie-silkie-sprint">Play Silkie Sprint full screen</a></li>
      <li><a href="browser-demo.html?game=silkie-scramble" target="silkie-silkie-scramble">Play Silkie Scramble full screen</a></li>
    </ul>
@@ -34,6 +35,7 @@ Campaigns save after each day and when you quit.
 Build from the ``presidential`` checkout with
 ``cargo install --path crates/terminal-ui``, then run ``presidential``.
 The economic data and world map are embedded, so the game works offline.
+See the `Presidential source <https://github.com/adamdeprince/presidential>`_.
 
 Silkie Loophole
 ----------------
@@ -48,6 +50,34 @@ Install it from the repositories described under Install Sprint and Scramble bel
 or ``sudo apt-get install silkie-loophole`` on Ubuntu 26.04 amd64 or Kylin V10 SP1
 old-world LoongArch64. Then run ``silkie-loophole``. See the
 `Loophole source and manual <https://github.com/adamdeprince/loophole>`_.
+
+Ground Stop
+-------------
+
+*The last airport in America is in Montpelier, Vermont.*
+
+A software update has grounded every airport in America except Montpelier
+Municipal, which still runs on floppy disks, and every aircraft in the
+region is coming there. Bring them down in an endless air traffic control
+game on a sweeping radar. Every aircraft flies a real flight model, with
+drag, engines, fuel, ice, and wind.
+
+Click an aircraft to select it. W and S set its speed, A and D its heading,
+and Z and X its altitude. Press Enter to take the landing it offers, or
+click a runway, road, or field to send it there. Tab selects the next
+aircraft, Space pauses, and ? shows help. Press Q twice to quit.
+
+.. raw:: html
+
+   <figure class="gameplay">
+     <img src="_static/games/ground-stop.png" width="1600" height="1000" alt="The Ground Stop radar over Montpelier, with aircraft, their data blocks, predicted paths, and the places they can land">
+     <figcaption>Ground Stop in Silkie, drawing its radar with retained vector graphics.</figcaption>
+   </figure>
+
+Build from the ``ground-stop`` checkout with ``cargo install --path .``,
+then run ``ground-stop``. Silkie draws the radar as retained vectors;
+plain kitty receives the same radar as pixels. See the
+`Ground Stop source and manual <https://github.com/adamdeprince/ground-stop>`_.
 
 Sprint and Scramble
 ---------------------

@@ -80,6 +80,13 @@ class GuestBuilderTests(unittest.TestCase):
             self.assertGreater(after - before, 256 * 1024 * 1024)
             self.assertEqual(after % guest.BLOCK, 0)
 
+    def test_guest_math_defines_every_wrapped_function(self):
+        shim = (Path(guest.__file__).parent / 'guest/math/src/lib.rs').read_text()
+        for game, functions in guest.GUEST_MATH.items():
+            self.assertIn(game, guest.GAMES)
+            for function in functions:
+                self.assertRegex(shim, rf'\b__wrap_{function}\b', f'{game} wraps {function}')
+
     def test_game_wrapper_keeps_launcher_alive_through_input_handoff(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -118,6 +125,7 @@ class GuestBuilderTests(unittest.TestCase):
             presidential = (root / 'usr/local/bin/presidential').read_text()
             self.assertEqual(presidential, '#!/bin/sh\nexec /usr/local/libexec/silkie-console-session /usr/local/libexec/presidential "$@"\n')
             self.assertIn('silkie-loophole --no-tempfile "$@"', (root / 'usr/local/bin/silkie-loophole').read_text())
+            self.assertIn('ground-stop --no-tempfile "$@"', (root / 'usr/local/bin/ground-stop').read_text())
             bundled = root / 'usr/share/silkie/sources'
             self.assertTrue((bundled / 'presidential/crates/terminal-ui/src/main.rs').is_file())
             self.assertFalse((bundled / 'presidential/crates/terminal-ui/target').exists())

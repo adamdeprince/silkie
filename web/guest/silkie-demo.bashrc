@@ -11,4 +11,5 @@ case "${SILKIE_DEMO_GAME:-}" in
     silkie-scramble) exec /usr/local/bin/silkie-scramble ;;
     presidential) exec /usr/local/bin/presidential ;;
     silkie-loophole) exec /usr/local/bin/silkie-loophole ;;
+    ground-stop) exec /usr/local/bin/ground-stop ;;
 esac

@@ -33,6 +33,17 @@ GAMES = {
     'silkie-scramble': ('--no-tempfile',),
     'presidential': (),  # Charts and maps already use inline graphics.
     'silkie-loophole': ('--no-tempfile',),
+    'ground-stop': ('--no-tempfile',),
+}
+# Math functions each game links from guest/math rather than i386 musl, whose
+# versions use x87 instructions that are slow under CheerpX. Only functions a
+# game's measured hot paths use are listed; results keep full precision.
+GUEST_MATH = {
+    'presidential': ('exp', 'log', 'pow', 'expf', 'logf', 'powf'),
+    'ground-stop': ('exp', 'exp2', 'log', 'log2', 'log10', 'pow', 'powf',
+                    'asin', 'acos', 'atan', 'atan2', 'acosf', 'atan2f',
+                    'floor', 'ceil', 'trunc', 'floorf', 'ceilf', 'truncf',
+                    'fmod', 'fmodf', 'hypot', 'hypotf', 'ldexp', 'scalbn'),
 }
 
 
@@ -170,13 +181,13 @@ def build_game(name: str, source: Path, cache: Path) -> Path:
     })
     command = [cargo, 'build', '--locked', '--release', '--target', TARGET,
                '--manifest-path', source / 'Cargo.toml', '--bin', name]
-    if name == 'presidential':
+    if name in GUEST_MATH:
         # Link only this guest executable against the math shim. Passing the
         # flags to the final crate avoids recompiling unrelated dependencies.
         library = build_guest_math(cache)
         command[1] = 'rustc'
         command.extend(['-p', name, '--', '-C', f'link-arg={library}'])
-        for function in ('exp', 'log', 'pow', 'expf', 'logf', 'powf'):
+        for function in GUEST_MATH[name]:
             command.extend(['-C', f'link-arg=--wrap={function}'])
     run(*command, env=env)
     return cache / 'cargo-target' / TARGET / 'release' / name

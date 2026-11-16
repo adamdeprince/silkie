@@ -17,7 +17,8 @@ the cross-compilation targets::
    rustup target add wasm32-unknown-unknown i686-unknown-linux-musl
 
 Keep the game checkouts beside Silkie as ``../silkie-sprint``,
-``../silkie-scramble``, ``../presidential``, and ``../silkie-loophole``, then run::
+``../silkie-scramble``, ``../presidential``, ``../silkie-loophole``, and
+``../ground-stop``, then run::
 
    make browser-demo
    make browser-serve
@@ -31,17 +32,17 @@ and games execute locally without Tailscale. External SSH uses the visitor's opt
 is no Silkie-operated relay, auth key, or server-side shell.
 
 The game links below the terminal open ``browser-demo.html?game=silkie-sprint``
-or the equivalent ``?game=silkie-scramble``, ``?game=presidential``, and
-``?game=silkie-loophole`` in a dedicated terminal filling its window and
+or the equivalent ``?game=silkie-scramble``, ``?game=presidential``,
+``?game=silkie-loophole``, and ``?game=ground-stop`` in a dedicated terminal filling its window and
 launch the selected game automatically. Each game has separate persistent
-browser storage, so all four can run beside the homepage shell. Repeated clicks
+browser storage, so all five can run beside the homepage shell. Repeated clicks
 return to the existing game window. Only these allowlisted game names can auto-launch.
 Direct links work without going through the homepage. The Fullscreen button
 enters browser fullscreen after a click, as required by browsers.
 Presidential opens its normal campaign menu and uses inline graphics without
 extra arguments; the other games receive ``--no-tempfile``. The guest includes
-Presidential's workspace crates and embedded data, and Loophole's asset and
-license notices alongside their sources.
+Presidential's workspace crates and embedded data, and Loophole's and Ground
+Stop's asset and license notices alongside their sources.
 The homepage keeps its gameplay screenshot above the fold, including on phones.
 
 ``silkie-features`` reads the current tty width whenever it prints the report.
@@ -65,11 +66,14 @@ PNG encoding, and compression during startup. Prepared art is cached by the
 source and asset hashes; missing entries retain the normal rendering path. The ext2
 image includes every resolution; HTTP range reads fetch only the art in use.
 
-Presidential's browser executable links ``guest/math`` for logarithms, powers,
-and exponentials. It uses the pinned Rust ``libm`` implementations compiled for
-SSE2, avoiding expensive i386 musl x87 routines under CheerpX. The simulation
-retains full floating-point precision; native releases use their ordinary math
-library. The shim's sources and lockfile ship with the guest's other sources.
+Presidential's and Ground Stop's browser executables link ``guest/math`` for the
+math functions their simulations call most: logarithms, powers and exponentials,
+and for Ground Stop also inverse trigonometry, rounding, ``fmod``, ``hypot`` and
+scaling. ``GUEST_MATH`` in ``build-guest.py`` lists each game's functions. The
+shim uses the pinned Rust ``libm`` implementations compiled for SSE2, avoiding
+expensive i386 musl x87 routines under CheerpX. The simulations retain full
+floating-point precision; native releases use their ordinary math library. The
+shim's sources and lockfile ship with the guest's other sources.
 
 Individual build targets are ``make wasm``, ``make browser-guest``, and
 ``make html``. The HTML target stages browser JavaScript and CSS but does
@@ -171,7 +175,7 @@ rapid quits, keys held across application boundaries, and shell typeahead sent
 immediately after the handoff acknowledgement. These checks also run in the
 complete browser suite.
 
-Use ``node web/browser-smoke.mjs --mode launch`` to check all four game launch
+Use ``node web/browser-smoke.mjs --mode launch`` to check all five game launch
 links, concurrent homepage/game windows, repeated clicks, and report formatting
 at desktop and phone widths.
 

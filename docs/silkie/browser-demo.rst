@@ -4,7 +4,7 @@ Try Silkie in your browser
 .. container:: hero-lead
 
    A real Linux shell, running locally in this tab. Try basic commands,
-   play Presidential, Silkie Loophole, Sprint, and Scramble, or connect to your own machines
+   play Presidential, Silkie Loophole, Ground Stop, Sprint, and Scramble, or connect to your own machines
    over SSH. The terminal starts automatically.
 
    Click in the terminal to type. Drag to select text, then copy it as usual.
@@ -29,10 +29,13 @@ Try these commands
    silkie-scramble
    presidential
    silkie-loophole
+   ground-stop
 
 Click inside the terminal to type. Sprint and Scramble use arrows or WASD;
 press P to pause, then Q to quit. In Loophole, walk with arrows or WASD,
-press Space to interact, and ? for help. Presidential opens a campaign menu;
+press Space to interact, and ? for help. In Ground Stop, click an aircraft,
+steer it with WASD, Z, and X, and press Enter to land it; press Q twice to quit.
+Presidential opens a campaign menu;
 use F1–F9 to explore the panels and ? for help. The homepage shell and each game window can
 run together, with separate files and saves in this browser's local storage.
 Clicking a game link again returns to its existing window. Keep one window

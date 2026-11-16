@@ -127,9 +127,11 @@ Games
 
 Play **Presidential**, a political satire and economic simulation, or
 **Silkie Loophole**, a raccoon's trick-or-treating adventure in Montpelier.
-**Silkie Sprint** crosses roads and rivers; **Silkie Scramble** gathers
-chicks while outwitting garden predators. All four run in the browser's
-Linux terminal and support native Silkie and kitty terminals.
+**Ground Stop** brings every aircraft in America down at Montpelier's
+last working airport. **Silkie Sprint** crosses roads and rivers;
+**Silkie Scramble** gathers chicks while outwitting garden predators.
+All five run in the browser's Linux terminal and support native Silkie
+and kitty terminals.
 
 :doc:`Play the games, watch gameplay, and find installation instructions <games>`.
 

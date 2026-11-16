@@ -1,7 +1,7 @@
 {
   "image": "guest.ext2",
-  "sha256": "a9ac7ac3df6d61b68eff3add5120ff51b073734b97f73ff6df92a3a3e48eb5fb",
-  "bytes": 989216768,
+  "sha256": "555691a559518d148857ffb7714a4fd318015edd4d99211982280aef3c65937b",
+  "bytes": 1005158400,
   "architecture": "i386",
   "distribution": "Alpine Linux 3.23.7",
   "entry": "/usr/local/bin/silkie-demo-shell",
@@ -20,6 +20,9 @@
     },
     "silkie-loophole": {
       "sha256": "bebe99cdaa713b5a82b3bd9ae82f3a0ef2455a701ea76f172e70f2c40a56a394"
+    },
+    "ground-stop": {
+      "sha256": "2a082f4ac84db94c3ec061204737fb5854659bb62d171205ebd7dc3894886669"
     }
   },
   "console_session": {

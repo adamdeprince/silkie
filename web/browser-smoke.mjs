@@ -9,6 +9,15 @@ import {fileURLToPath} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
 import {DEMO_GAMES} from './runtime.mjs';
 
+// Text each game shows on its title screen, during play, and when paused.
+const GAME_TEXT = {
+    presidential: {title: 'New campaign', play: 'Control room'},
+    'silkie-loophole': {title: 'SILKIE LOOPHOLE', play: 'breath', paused: 'Paused'},
+    'ground-stop': {title: 'Enter or click to start', play: 'TRAFFIC', paused: 'PAUSED'},
+    'silkie-sprint': {title: 'Enter:', play: 'Level 1', paused: 'Paused'},
+    'silkie-scramble': {title: 'Enter:', play: 'Level 1', paused: 'Paused'},
+};
+
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const options = {
     chrome: process.env.CHROME_BIN || (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : 'chromium'),
@@ -251,7 +260,7 @@ try {
     await until(async () => /\r?\n__SILKIE_SMOKE_READY__\r?\n/.test(await output()), 'shell test setup');
 
     await test('basic Linux commands', async () => {
-        const text = await command("printf 'GUEST_OS:'; uname -m; id -u; command -v ssh silkie-sprint silkie-scramble presidential silkie-loophole; ssh -V; printf 'FILE_TEST' > smoke.txt; cat smoke.txt; rm smoke.txt");
+        const text = await command("printf 'GUEST_OS:'; uname -m; id -u; command -v ssh silkie-sprint silkie-scramble presidential silkie-loophole ground-stop; ssh -V; printf 'FILE_TEST' > smoke.txt; cat smoke.txt; rm smoke.txt");
         assert.match(text, /GUEST_OS:i[3-6]86/);
         assert.match(text, /1000/);
         assert.match(text, /FILE_TEST/);
@@ -262,7 +271,7 @@ try {
         for (const game of DEMO_GAMES) {
             assert(hashes.includes(`${manifest[game].sha256}  /usr/local/libexec/${game}`), `${game} differs from the published manifest`);
         }
-        return 'i386 shell, user 1000, OpenSSH executable ran, all four game commands installed';
+        return 'i386 shell, user 1000, OpenSSH executable ran, all game commands installed';
     });
     await test('shell newline rendering', async () => {
         const text = await command("printf 'NEWLINE_ONE\\nNEWLINE_TWO\\n'");
@@ -420,7 +429,7 @@ try {
                 await cdp.send('Runtime.enable'); await cdp.send('Page.enable');
                 await cdp.send('Target.activateTarget', {targetId:gameTarget});
                 await cdp.send('Page.bringToFront');
-                const title = game === 'presidential' ? 'New campaign' : game === 'silkie-loophole' ? 'SILKIE LOOPHOLE' : 'Enter:';
+                const title = GAME_TEXT[game].title;
                 await until(()=>cdp.evaluate(`globalThis.silkieDemo?.terminal.keyboardFlags > 0 && document.querySelector('#silkie-terminal canvas').textContent.includes(${JSON.stringify(title)})`), `${game} title`);
                 if (game !== 'presidential') await until(()=>cdp.evaluate('silkieDemo.terminal.graphicsStatistics.placements > 0'), `${game} title graphics`);
                 assert.equal(await cdp.evaluate('document.documentElement.dataset.demoGame'), game);
@@ -516,7 +525,7 @@ try {
             await cdp.send('Runtime.enable'); await cdp.send('Page.enable');
             await cdp.send('Target.activateTarget', {targetId:popup.targetId});
             await cdp.send('Page.bringToFront');
-            const readyText = game === 'presidential' ? 'New campaign' : game === 'silkie-loophole' ? 'SILKIE LOOPHOLE' : 'Enter:';
+            const readyText = GAME_TEXT[game].title;
             await until(()=>cdp.evaluate(`globalThis.silkieDemo?.terminal.keyboardFlags > 0 && document.querySelector("#silkie-terminal canvas").textContent.includes(${JSON.stringify(readyText)})`),'automatic game start '+game);
             console.log('PASS automatic game start', game);
             await cdp.evaluate(`(() => {
@@ -536,7 +545,7 @@ try {
                 await until(()=>cdp.evaluate('document.querySelector("#silkie-terminal canvas").textContent.includes("NEW CAMPAIGN")'),'campaign setup');
                 await key('Enter','Enter',13);
             }
-            const playText = game === 'presidential' ? 'Control room' : game === 'silkie-loophole' ? 'breath' : 'Level 1';
+            const playText = GAME_TEXT[game].play;
             await until(async () => {
                 const panic = await cdp.evaluate(`__gameOutput.join('').match(/(?:thread[^\\n]*panicked|fatal runtime error|memory allocation of)[\\s\\S]*/)?.[0]`);
                 if (panic) throw new Error(`${game} crashed: ${panic}`);
@@ -562,7 +571,7 @@ try {
             console.log('PASS game launch window',game,JSON.stringify(state));
             if (game !== 'presidential') {
                 await key('p','KeyP',80);
-                await until(()=>cdp.evaluate('document.querySelector("#silkie-terminal canvas").textContent.includes("Paused")'),'pause background game '+game);
+                await until(()=>cdp.evaluate(`document.querySelector("#silkie-terminal canvas").textContent.includes(${JSON.stringify(GAME_TEXT[game].paused)})`),'pause background game '+game);
             }
         }
         cdp.sessionId=mainSession;
