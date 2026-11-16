@@ -274,13 +274,17 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
@@ -329,21 +333,32 @@
         <article role="main" id="furo-main-content">
           <section id="games-for-silkie-and-kitty">
 <h1>Silkie 与 kitty 游戏<a class="headerlink" href="#games-for-silkie-and-kitty" title="链接到此标题。">¶</a></h1>
-<p>在网站的 Linux 终端中试玩全部四款游戏，或在原生 Silkie 和 kitty 终端中运行。每个浏览器链接都会在独立窗口中打开终端，并自动启动游戏。使用 <strong>全屏</strong> 隐藏浏览器控件。各游戏的文件和存档分别保存在浏览器本地存储中；再次打开链接会返回已有窗口。</p>
+<p>在网站的 Linux 终端中试玩全部五款游戏，或在原生 Silkie 和 kitty 终端中运行。每个浏览器链接都会在独立窗口中打开终端，并自动启动游戏。使用 <strong>全屏</strong> 隐藏浏览器控件。各游戏的文件和存档分别保存在浏览器本地存储中；再次打开链接会返回已有窗口。</p>
 <ul>
 <li><a href="browser-demo.html?game=presidential" target="silkie-presidential">全屏游玩 Presidential</a></li>
 <li><a href="browser-demo.html?game=silkie-loophole" target="silkie-silkie-loophole">全屏游玩 Silkie Loophole</a></li>
+<li><a href="browser-demo.html?game=ground-stop" target="silkie-ground-stop">全屏游玩 Ground Stop</a></li>
 <li><a href="browser-demo.html?game=silkie-sprint" target="silkie-silkie-sprint">全屏游玩 Silkie Sprint</a></li>
 <li><a href="browser-demo.html?game=silkie-scramble" target="silkie-silkie-scramble">全屏游玩 Silkie Scramble</a></li>
 </ul><section id="presidential">
 <h2>Presidential<a class="headerlink" href="#presidential" title="链接到此标题。">¶</a></h2>
 <p>你是美国总统。在全球经济模拟中阅读每日简报、起草命令，再按 GO 推进一天。探索贸易、金融、政府、外交以及政策的影响。用 F1–F9 切换面板，B 查看简报，? 查看帮助。竞选进度会在每天结束后和退出时保存。</p>
-<p>在 <code class="docutils literal notranslate"><span class="pre">presidential</span></code> 检出目录中运行 <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">install</span> <span class="pre">--path</span> <span class="pre">crates/terminal-ui</span></code> 构建，再运行 <code class="docutils literal notranslate"><span class="pre">presidential</span></code>。经济数据和世界地图已内嵌，游戏可离线运行。</p>
+<p>在 <code class="docutils literal notranslate"><span class="pre">presidential</span></code> 检出目录中运行 <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">install</span> <span class="pre">--path</span> <span class="pre">crates/terminal-ui</span></code> 构建，再运行 <code class="docutils literal notranslate"><span class="pre">presidential</span></code>。经济数据和世界地图已内嵌，游戏可离线运行。参阅 <a class="reference external" href="https://github.com/adamdeprince/presidential">Presidential 源码</a>。</p>
 </section>
 <section id="silkie-loophole">
 <h2>Silkie Loophole<a class="headerlink" href="#silkie-loophole" title="链接到此标题。">¶</a></h2>
 <p>一只披着床单的浣熊，在佛蒙特州蒙彼利埃四处讨糖。收集糖果、发现邻居们的作息，并努力维持伪装。方向键或 WASD 行走，空格或 Enter 交互，M 打开地图，J 查看日记，? 查看帮助，Ctrl+C 退出。</p>
 <p>按下文“安装 Sprint 和 Scramble”配置软件仓库后安装：运行 macOS 26 Tahoe 的 Apple Silicon 机器使用 <code class="docutils literal notranslate"><span class="pre">brew</span> <span class="pre">install</span> <span class="pre">goblinreactor/tap/silkie-loophole</span></code>，Ubuntu 26.04 amd64 或麒麟 V10 SP1 旧世界 LoongArch64 使用 <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">silkie-loophole</span></code>。然后运行 <code class="docutils literal notranslate"><span class="pre">silkie-loophole</span></code>。参阅 <a class="reference external" href="https://github.com/adamdeprince/loophole">Loophole 源码与手册</a>。</p>
+</section>
+<section id="ground-stop">
+<h2>Ground Stop<a class="headerlink" href="#ground-stop" title="链接到此标题。">¶</a></h2>
+<p><em>美国最后一座机场在佛蒙特州蒙彼利埃。</em></p>
+<p>一次软件更新让美国所有机场停摆，只有仍在使用软盘的蒙彼利埃市立机场幸免，这一地区的所有飞机都在朝它飞来。在扫描雷达上引导它们降落，这是一款没有尽头的空中交通管制游戏。每架飞机都有真实的飞行模型，包括阻力、发动机、燃油、结冰和风。</p>
+<p>点击飞机将其选中。W 和 S 设定速度，A 和 D 设定航向，Z 和 X 设定高度。按 Enter 接受它提供的着陆方案，或点击跑道、道路或田野，让它在那里降落。Tab 选择下一架飞机，空格键暂停，? 显示帮助。连按两次 Q 退出。</p>
+<figure class="gameplay">
+  <img src="../_static/games/ground-stop.png" width="1600" height="1000" alt="蒙彼利埃上空的 Ground Stop 雷达，显示飞机、数据块、预测航迹以及可以降落的地点">
+  <figcaption>Ground Stop 在 Silkie 中运行，用保留式矢量图形绘制雷达。</figcaption>
+</figure><p>在 <code class="docutils literal notranslate"><span class="pre">ground-stop</span></code> 检出目录中运行 <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">install</span> <span class="pre">--path</span> <span class="pre">.</span></code> 构建，再运行 <code class="docutils literal notranslate"><span class="pre">ground-stop</span></code>。Silkie 以保留式矢量图形绘制雷达；普通 kitty 则以像素接收同样的雷达画面。参阅 <a class="reference external" href="https://github.com/adamdeprince/ground-stop">Ground Stop 源码与手册</a>。</p>
 </section>
 <section id="sprint-and-scramble">
 <h2>Sprint 与 Scramble<a class="headerlink" href="#sprint-and-scramble" title="链接到此标题。">¶</a></h2>
@@ -447,6 +462,7 @@
 <li><a class="reference internal" href="#">Silkie 与 kitty 游戏</a><ul>
 <li><a class="reference internal" href="#presidential">Presidential</a></li>
 <li><a class="reference internal" href="#silkie-loophole">Silkie Loophole</a></li>
+<li><a class="reference internal" href="#ground-stop">Ground Stop</a></li>
 <li><a class="reference internal" href="#sprint-and-scramble">Sprint 与 Scramble</a></li>
 <li><a class="reference internal" href="#install-sprint-and-scramble">安装 Sprint 和 Scramble</a></li>
 <li><a class="reference internal" href="#silkie-sprint">Silkie Sprint</a></li>

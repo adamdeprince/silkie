@@ -275,13 +275,17 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">Haptic feedback protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">Image pointer extension</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU surfaces (zero-copy)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR brightness protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">Wide gamut colors</a></li>
@@ -330,7 +334,7 @@
         <article role="main" id="furo-main-content">
           <section id="games-for-silkie-and-kitty">
 <h1>Games for Silkie and kitty<a class="headerlink" href="#games-for-silkie-and-kitty" title="Link to this heading">¶</a></h1>
-<p>Play all four games in the website’s Linux terminal, or run them in native
+<p>Play all five games in the website’s Linux terminal, or run them in native
 Silkie and kitty terminals. Each browser link opens a terminal filling its
 own window and starts the game automatically. Use <strong>Fullscreen</strong> to hide
 the browser controls. Each game keeps its own files and saves in this
@@ -338,6 +342,7 @@ browser’s local storage; reopening its link returns to the running window.</p>
 <ul>
   <li><a href="browser-demo.html?game=presidential" target="silkie-presidential">Play Presidential full screen</a></li>
   <li><a href="browser-demo.html?game=silkie-loophole" target="silkie-silkie-loophole">Play Silkie Loophole full screen</a></li>
+  <li><a href="browser-demo.html?game=ground-stop" target="silkie-ground-stop">Play Ground Stop full screen</a></li>
   <li><a href="browser-demo.html?game=silkie-sprint" target="silkie-silkie-sprint">Play Silkie Sprint full screen</a></li>
   <li><a href="browser-demo.html?game=silkie-scramble" target="silkie-silkie-scramble">Play Silkie Scramble full screen</a></li>
 </ul><section id="presidential">
@@ -349,7 +354,8 @@ Use F1–F9 to switch panels, B for the briefing, and ? for help.
 Campaigns save after each day and when you quit.</p>
 <p>Build from the <code class="docutils literal notranslate"><span class="pre">presidential</span></code> checkout with
 <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">install</span> <span class="pre">--path</span> <span class="pre">crates/terminal-ui</span></code>, then run <code class="docutils literal notranslate"><span class="pre">presidential</span></code>.
-The economic data and world map are embedded, so the game works offline.</p>
+The economic data and world map are embedded, so the game works offline.
+See the <a class="reference external" href="https://github.com/adamdeprince/presidential">Presidential source</a>.</p>
 </section>
 <section id="silkie-loophole">
 <h2>Silkie Loophole<a class="headerlink" href="#silkie-loophole" title="Link to this heading">¶</a></h2>
@@ -362,6 +368,26 @@ M for the map, J for the journal, and ? for help. Ctrl+C quits.</p>
 or <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">silkie-loophole</span></code> on Ubuntu 26.04 amd64 or Kylin V10 SP1
 old-world LoongArch64. Then run <code class="docutils literal notranslate"><span class="pre">silkie-loophole</span></code>. See the
 <a class="reference external" href="https://github.com/adamdeprince/loophole">Loophole source and manual</a>.</p>
+</section>
+<section id="ground-stop">
+<h2>Ground Stop<a class="headerlink" href="#ground-stop" title="Link to this heading">¶</a></h2>
+<p><em>The last airport in America is in Montpelier, Vermont.</em></p>
+<p>A software update has grounded every airport in America except Montpelier
+Municipal, which still runs on floppy disks, and every aircraft in the
+region is coming there. Bring them down in an endless air traffic control
+game on a sweeping radar. Every aircraft flies a real flight model, with
+drag, engines, fuel, ice, and wind.</p>
+<p>Click an aircraft to select it. W and S set its speed, A and D its heading,
+and Z and X its altitude. Press Enter to take the landing it offers, or
+click a runway, road, or field to send it there. Tab selects the next
+aircraft, Space pauses, and ? shows help. Press Q twice to quit.</p>
+<figure class="gameplay">
+  <img src="_static/games/ground-stop.png" width="1600" height="1000" alt="The Ground Stop radar over Montpelier, with aircraft, their data blocks, predicted paths, and the places they can land">
+  <figcaption>Ground Stop in Silkie, drawing its radar with retained vector graphics.</figcaption>
+</figure><p>Build from the <code class="docutils literal notranslate"><span class="pre">ground-stop</span></code> checkout with <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">install</span> <span class="pre">--path</span> <span class="pre">.</span></code>,
+then run <code class="docutils literal notranslate"><span class="pre">ground-stop</span></code>. Silkie draws the radar as retained vectors;
+plain kitty receives the same radar as pixels. See the
+<a class="reference external" href="https://github.com/adamdeprince/ground-stop">Ground Stop source and manual</a>.</p>
 </section>
 <section id="sprint-and-scramble">
 <h2>Sprint and Scramble<a class="headerlink" href="#sprint-and-scramble" title="Link to this heading">¶</a></h2>
@@ -512,6 +538,7 @@ for tmux or screen.</p>
 <li><a class="reference internal" href="#">Games for Silkie and kitty</a><ul>
 <li><a class="reference internal" href="#presidential">Presidential</a></li>
 <li><a class="reference internal" href="#silkie-loophole">Silkie Loophole</a></li>
+<li><a class="reference internal" href="#ground-stop">Ground Stop</a></li>
 <li><a class="reference internal" href="#sprint-and-scramble">Sprint and Scramble</a></li>
 <li><a class="reference internal" href="#install-sprint-and-scramble">Install Sprint and Scramble</a></li>
 <li><a class="reference internal" href="#silkie-sprint">Silkie Sprint</a></li>
