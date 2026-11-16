@@ -2621,6 +2621,7 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
         float active_window_command_running;
         float active_window_alternate_screen_age;
         float active_window_command_state_age;
+        float pixels_per_pt;
     };
     // This struct is a hand written mirror of the std140 layout of
     // KittyCustomShaderData in types.slang, so check that they match once.
@@ -2657,6 +2658,8 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
     WindowGeometry active_win_geom = {0};
     d->active_window_alternate_screen_age = -1.f;
     d->active_window_command_state_age = -1.f;
+    // The same conversion as for kitty's options in pts, such as font_size
+    d->pixels_per_pt = (float)(dpi_for_os_window(os_window) / 72.0);
     if (os_window->num_tabs > 0) {
         Tab *t = os_window->tabs + os_window->active_tab;
         if (t->num_windows) {

@@ -83,7 +83,7 @@ GlobalState global_state = {{0}};
         }                                                                                     \
     }
 
-static double
+double
 dpi_for_os_window(const OSWindow *os_window) {
     double dpi = (os_window->fonts_data->logical_dpi_x + os_window->fonts_data->logical_dpi_y) / 2.;
     if (dpi == 0) dpi = (global_state.default_dpi.x + global_state.default_dpi.y) / 2.;

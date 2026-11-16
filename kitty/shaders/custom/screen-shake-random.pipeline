@@ -6,7 +6,7 @@ startgroup
     animation_curve linear
     animation_step 16
     var int SHAKE_MODE = 1
-    var float AMPLITUDE_PIXELS = 10
+    var float SHAKE_AMPLITUDE = 7.5
     var float SHAKES = 6
     shaders screen-shake
 endgroup

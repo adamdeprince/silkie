@@ -1536,7 +1536,8 @@ You can specify different easing functions for the fade-in and fade-out parts, l
 :code:`2.0 ease-in linear`. kitty
 supports all the :link:`CSS easing functions <https://developer.mozilla.org/en-US/docs/Web/CSS/easing-function>`.
 For different effects, such as shaking the screen on a bell, you can instead use :opt:`custom_shaders`, for example,
-:code:`custom_shaders screen-shake`.
+:code:`custom_shaders screen-shake`. Set the size of the shake with :opt:`custom_shader_var`, for example,
+:code:`custom_shader_var SHAKE_AMPLITUDE 4` for a shake of 4 pts, or zero for no shake.
 """,
 )
 
@@ -3022,6 +3023,28 @@ loaded in order and concatenated. You can use shell syntax to quote or escape sp
 The exact loading algorithm is described in :ref:`custom_shader_load_order`.
 See :doc:`/custom-shaders` for details on how custom shaders work. For a quick demo, try setting
 this to :code:`inside-the-matrix`.
+    """,
+)
+
+opt(
+    '+custom_shader_var',
+    '',
+    option_type='custom_shader_var',
+    add_to_default=False,
+    long_text="""
+Change a setting of the :opt:`custom_shaders`, without editing the shaders or
+their pipelines. Specify the name of the setting and its value, for example, to
+make the shake of :code:`custom_shaders screen-shake` smaller::
+
+    custom_shader_var SHAKE_AMPLITUDE 4
+
+The settings each shader has are described at the top of its source file, see :ref:`custom_shader_settings`.
+A setting is a :code:`static const` in the shader source, and this applies to every
+loaded shader that declares one with that name, keeping the type it is declared with.
+It overrides the shader's own value and any :code:`var` in its pipeline file. The value
+can be a number, :code:`true`, :code:`false` or a vector such as :code:`float2(1, 0.5)`.
+Use this option once for each setting. Changing it and reloading the config recompiles
+the shaders, and a name that no loaded shader declares is reported as an error.
     """,
 )
 

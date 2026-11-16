@@ -13,14 +13,21 @@
 // having the shell print a BEL character when that happens. Set
 // visual_bell_duration to zero in kitty.conf to disable the builtin visual
 // bell flash, the shake is triggered regardless.
+//
+// Any of the settings below can be changed from kitty.conf, without editing
+// this file, with custom_shader_var, for example:
+//     custom_shader_var SHAKE_AMPLITUDE 4
 
 import kitty_custom_shader_types;
 
 // 0 = HORIZONTAL — a side to side shake, like a head shaking "no"
 // 1 = RANDOM     — a jittery shake in random directions, both horizontally and vertically
 static const int SHAKE_MODE = 0;
-// Maximum displacement of the window contents in pixels, at the start of the shake.
-static const float AMPLITUDE_PIXELS = 12.0;
+// Maximum displacement of the window contents at the start of the shake, in
+// points (1/72 of an inch), like kitty's other sizes, so that the shake is the
+// same size relative to the text on high and low DPI screens. Zero turns the
+// shake off.
+static const float SHAKE_AMPLITUDE = 9.0;
 // Number of back and forth movements over the duration of the animation. Keep
 // this low enough that each movement lasts at least a few frames, otherwise
 // the shake becomes a flicker.
@@ -72,6 +79,7 @@ shake_offset(float p) {
 
 public float4
 fragment_main(float4 color, KittyTextures t, KittyCustomShaderData d) {
+    if (!(SHAKE_AMPLITUDE > 0.0)) return color;
     float4 g = SHAKE_ENTIRE_TAB ? d.central_area : d.bell_window_geometry;
     // Nothing to shake before the first bell
     if (g.z <= 0.0 || g.w <= 0.0) return color;
@@ -81,7 +89,7 @@ fragment_main(float4 color, KittyTextures t, KittyCustomShaderData d) {
 
     float2 px = float2(d.viewport_size_pixels) * t.viewport.zw;
     if (px.x <= 0.0 || px.y <= 0.0) return color;
-    float2 offset = shake_offset(t.animation_progress) * AMPLITUDE_PIXELS / px;
+    float2 offset = shake_offset(t.animation_progress) * (SHAKE_AMPLITUDE * d.pixels_per_pt) / px;
     float2 src = t.pos - offset;
 
     if (REPEAT_EDGE) {

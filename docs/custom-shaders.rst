@@ -66,9 +66,48 @@ Bell effects
 These shaders run when a bell (the BEL character) is received in a window.
 The ``screen-shake`` shader shakes only the window in which the bell occurred,
 other windows in the tab are left alone. Use ``screen-shake-random`` for a
-jittery shake in random directions instead of side to side. The amount, speed
-and style of the shake can be changed, as explained at the top of the
-:repo_file:`shader file <kitty/shaders/custom/screen-shake.slang>`.
+jittery shake in random directions instead of side to side. Change how much
+the window shakes with :opt:`custom_shader_var` in :file:`kitty.conf`, for
+example::
+
+    custom_shaders screen-shake
+    custom_shader_var SHAKE_AMPLITUDE 4
+
+The settings of the shake are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Setting
+     - Meaning
+   * - ``SHAKE_AMPLITUDE``
+     - How far the window contents move at the start of the shake, in pts
+       (1/72 of an inch), like :opt:`font_size`, so the shake is the same size
+       relative to the text on Retina and other high DPI screens as on low DPI
+       ones. ``0`` turns the shake off. The default is ``9``, and ``7.5`` for
+       ``screen-shake-random``.
+   * - ``SHAKES``
+     - The number of back and forth movements, default ``4``, and ``6`` for
+       ``screen-shake-random``.
+   * - ``DECAY_POWER``
+     - How quickly the shake dies down, higher values die down faster and
+       ``1`` is linear. The default is ``2``.
+   * - ``SHAKE_MODE``
+     - ``0`` to shake from side to side and ``1`` to shake in random
+       directions, as ``screen-shake-random`` does.
+   * - ``REPEAT_EDGE``
+     - What to show in the strip uncovered at the edge of the window as its
+       contents move: ``false``, the default, for the window background and
+       ``true`` to repeat the pixels at the edge of the window.
+   * - ``SHAKE_ENTIRE_TAB``
+     - ``true`` to shake the whole tab rather than only the window that rang
+       the bell. The default is ``false``.
+
+How long the shake lasts is set in the pipeline, as ``animation_stop 300`` in
+milliseconds, see :repo_file:`screen-shake.pipeline
+<kitty/shaders/custom/screen-shake.pipeline>`. To change it, copy that file to
+the :file:`shaders` folder in your kitty config directory and edit it.
 
 To shake the window whenever a shell command fails, have your shell print a
 bell character when the last command exits with an error.
@@ -162,6 +201,31 @@ window's title bar, margin, border and padding in its unchanged area. Explicit c
 and images are blended together with text, while transparency and colors reported to
 terminal applications are preserved. ``animation_step 0`` makes this static
 effect redraw only when content or shader events change.
+
+.. _custom_shader_settings:
+
+Changing settings from kitty.conf
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``static const`` settings of the shaders can also be changed directly in
+:file:`kitty.conf` with :opt:`custom_shader_var`, without writing a pipeline
+file. Give the name of the setting and its value::
+
+    custom_shaders screen-shake
+    custom_shader_var SHAKE_AMPLITUDE 4
+    custom_shader_var SHAKES 3
+
+The settings each shader has are described at the top of its :repo_folder:`source
+file <kitty/shaders/custom>`. A setting from :file:`kitty.conf` applies to every
+loaded shader that declares a ``static const`` with that name and keeps the type it
+is declared with, so no type is given. It takes precedence over the value in the
+shader and over any ``var`` for it in a pipeline file. Changing it and reloading
+the config recompiles the shaders. A name that none of the loaded shaders declares
+is reported as an error, to catch misspellings.
+
+Sizes in shaders are best given in pts, like kitty's own options, and converted to
+pixels with ``d.pixels_per_pt``, so that the effect is the same size relative to the
+text whatever the DPI of the screen.
 
 
 Anatomy of a custom shader

@@ -121,6 +121,15 @@ public struct KittyCustomShaderData {
     // negative if none has. Use with the command-start and command-finish events.
     public float active_window_command_state_age;
 
+    // Pixels of viewport_size_pixels per point (1/72 of an inch) in this OS
+    // window. Multiply sizes in points by this to get pixels, so that an effect
+    // is the same size relative to the text on high and low DPI screens. This is
+    // the conversion kitty uses for font_size and all its other options in
+    // points: the framebuffer scale the OS asks for, the backing scale factor on
+    // macOS, and the DPI the OS asks for divided by 72 elsewhere. It is not the
+    // physical pixel density of the screen.
+    public float pixels_per_pt;
+
     // Seconds since kitty was started, wrapped to [0, period_seconds). Unlike
     // timestamp, this keeps sub-millisecond precision however long kitty runs,
     // as long as period_seconds is at most an hour or so. The value jumps back

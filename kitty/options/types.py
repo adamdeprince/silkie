@@ -350,6 +350,7 @@ option_names = (
     'cursor_trail_decay',
     'cursor_trail_start_threshold',
     'cursor_underline_thickness',
+    'custom_shader_var',
     'custom_shaders',
     'default_pointer_shape',
     'detect_url_regex',
@@ -743,6 +744,7 @@ class Options:
     window_title_bar_min_windows: int = 0
     window_title_template: str = '{fmt.fg.red}{bell_symbol}{activity_symbol}{fmt.fg.window}{progress_percent}{title}'
     action_alias: dict[str, str] = {}
+    custom_shader_var: dict[str, str] = {}
     detect_url_regex: dict[str, str] = {}
     env: dict[str, str] = {}
     exe_search_path: dict[str, str] = {}
@@ -873,6 +875,7 @@ class Options:
 defaults = Options()
 
 defaults.action_alias = {}
+defaults.custom_shader_var = {}
 defaults.detect_url_regex = {}
 defaults.env = {}
 defaults.exe_search_path = {}
