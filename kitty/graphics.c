@@ -791,22 +791,54 @@ get_free_client_id(const GraphicsManager *self) {
     }
 
 #define MAX_DATA_SZ (4u * 100000000u)
-enum FORMATS { GRAY1 = 1, GRAY2 = 2, GRAY4 = 4, GRAY8 = 8, RGB565 = 16, RGB = 24, RGBA = 32, RGBA16F = 64, PNG = 100, VECTOR = 200 };
+// Silkie's packed formats (docs/silkie/packed-image-protocol.rst) are 300 plus
+// their bits per pixel, which keeps them clear of the formats of the kitty
+// graphics protocol, such as its indexed color formats f=8 and f=16
+#define PACKED_FORMAT_BASE 300u
+enum FORMATS {
+    RGB = 24,
+    RGBA = 32,
+    RGBA16F = 64,
+    PNG = 100,
+    VECTOR = 200,
+    GRAY1 = PACKED_FORMAT_BASE + 1,
+    GRAY2 = PACKED_FORMAT_BASE + 2,
+    GRAY4 = PACKED_FORMAT_BASE + 4,
+    GRAY8 = PACKED_FORMAT_BASE + 8,
+    RGB565 = PACKED_FORMAT_BASE + 16
+};
+
+static bool
+is_gray_format(uint32_t format) {
+    return format == GRAY1 || format == GRAY2 || format == GRAY4 || format == GRAY8;
+}
 
 static bool
 is_packed_format(uint32_t format) {
-    return format == GRAY1 || format == GRAY2 || format == GRAY4 || format == GRAY8 || format == RGB565;
+    return is_gray_format(format) || format == RGB565;
+}
+
+// The bits per pixel of a raw format, 0 for one that is not raw pixels
+static unsigned
+bits_per_pixel(uint32_t format) {
+    if (is_packed_format(format)) return format - PACKED_FORMAT_BASE;
+    switch (format) {
+        case RGB: case RGBA: case RGBA16F: return format;
+        default: return 0;
+    }
 }
 
 static bool
 raw_image_data_size(uint32_t format, uint32_t width, uint32_t height, size_t *size) {
     if (!width || !height) return false;
     size_t row;
-    if (format < 8) {
-        const unsigned per_byte = 8 / format;
+    const unsigned bits = bits_per_pixel(format);
+    if (!bits) return false;
+    if (bits < 8) {
+        const unsigned per_byte = 8 / bits;
         row = (size_t)width / per_byte + (width % per_byte != 0);
     } else {
-        const unsigned per_pixel = format / 8;
+        const unsigned per_pixel = bits / 8;
         if ((size_t)width > SIZE_MAX / per_pixel) return false;
         row = (size_t)width * per_pixel;
     }
@@ -1040,9 +1072,9 @@ unpack_image_data(GraphicsManager *self, Image *img, uint32_t format) {
                 dst[2] = ((value & 31) * 255 + 15) / 31;
             }
         } else {
-            const unsigned per_byte = 8 / format, maximum = (1u << format) - 1;
+            const unsigned bits = bits_per_pixel(format), per_byte = 8 / bits, maximum = (1u << bits) - 1;
             for (uint32_t x = 0; x < ld->width; x++, dst += 3) {
-                const unsigned shift = 8 - format - (x % per_byte) * format;
+                const unsigned shift = 8 - bits - (x % per_byte) * bits;
                 const unsigned value = (src[x / per_byte] >> shift) & maximum;
                 dst[0] = dst[1] = dst[2] = value * (255 / maximum);
             }
@@ -1080,7 +1112,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
     }
     bool needs_processing = g->compressed || data_fmt == PNG;
     // An HDR image is linear extended sRGB whatever the command says, see docs/hdr-protocol.rst
-    self->currently_loading.gamut = data_fmt == RGBA16F || data_fmt <= GRAY8 ? 0 : gamut_of_command(g);
+    self->currently_loading.gamut = data_fmt == RGBA16F || is_gray_format(data_fmt) ? 0 : gamut_of_command(g);
     if (needs_processing) {
         uint8_t *buf;
         size_t bufsz;

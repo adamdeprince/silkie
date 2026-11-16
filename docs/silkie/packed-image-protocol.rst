@@ -17,21 +17,33 @@ Discovery
 ---------
 
 The :doc:`capabilities-protocol` lists accepted graphics formats in its
-``format`` field, including ``1,2,4,8,16`` for the formats below. This listing
+``format`` field, including ``301,302,304,308,316`` for the formats below. This listing
 does not depend on the display's color model or precision. The graphics
 protocol's ``a=q`` action also probes support for a particular image::
 
-    <ESC>_Ga=q,i=42,f=1,s=8,v=1;VQ==<ESC>\
+    <ESC>_Ga=q,i=42,f=301,s=8,v=1;VQ==<ESC>\
 
 The one-byte payload is hexadecimal ``55``: eight alternating black and white
 pixels. A terminal accepting it replies ``<ESC>_Gi=42;OK<ESC>\`` without
 keeping the image. Applications should handle rejection or timeout and fall
-back to an accepted format.
+back to an accepted format. A :ref:`feature query <graphics_query_features>`,
+for example ``<ESC>_Ga=q,i=42,e=t,f=301<ESC>\``, asks the same without sending
+pixels.
 
-Grayscale: ``f=1``, ``f=2``, ``f=4``, ``f=8``
----------------------------------------------
+Format numbers
+--------------
 
-The ``f`` value is the number of bits per grayscale pixel. Values are unsigned
+Each packed format is ``300`` plus its number of bits per pixel, so that the
+numbers stay clear of those of the kitty graphics protocol, which uses ``f=8``
+and ``f=16`` for its indexed color formats. Earlier development versions of
+Silkie used ``f=1``, ``f=2``, ``f=4``, ``f=8`` and ``f=16`` for these formats;
+those numbers are no longer accepted for them.
+
+Grayscale: ``f=301``, ``f=302``, ``f=304``, ``f=308``
+-----------------------------------------------------
+
+The number of bits per grayscale pixel, ``bits``, is ``f - 300``: one, two,
+four or eight. Values are unsigned
 intensities: zero is black, and the largest value is white. Pixels are opaque;
 there is no alpha channel or palette. The values have the sRGB transfer curve,
 not linear-light intensity. The ``G`` gamut key is ignored for grayscale.
@@ -41,23 +53,23 @@ pixel uses the most significant bits. Each row starts at a byte boundary;
 unused low bits in its last byte are ignored. There is no additional stride
 or padding between rows.
 
-For width ``s``, height ``v``, and format ``f``, the decoded payload size is::
+For width ``s``, height ``v``, and ``bits`` as above, the decoded payload size is::
 
-    row_bytes = ceil(s * f / 8)
+    row_bytes = ceil(s * bits / 8)
     payload_bytes = row_bytes * v
 
 For example, nine one-bit pixels require two bytes per row. A final byte
 ``80`` or ``ff`` gives the same ninth white pixel; its seven padding bits do
-not begin the next row. In ``f=2``, byte ``1b`` contains four pixels at levels
+not begin the next row. In ``f=302``, byte ``1b`` contains four pixels at levels
 ``0,1,2,3``, corresponding to RGB byte values ``0,85,170,255``.
 
 Silkie expands each intensity equally into red, green, and blue internally.
 For these four formats, the exact byte value is
-``sample * (255 / ((1 << f) - 1))``. No output-dependent quantization is
+``sample * (255 / ((1 << bits) - 1))``. No output-dependent quantization is
 applied to the stored image.
 
-RGB565: ``f=16``
-----------------
+RGB565: ``f=316``
+-----------------
 
 Each opaque pixel is a little-endian 16-bit word: red occupies bits 15–11,
 green bits 10–5, and blue bits 4–0. Each row is exactly ``s * 2`` bytes, with

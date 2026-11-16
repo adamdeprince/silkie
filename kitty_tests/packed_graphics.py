@@ -11,6 +11,9 @@ from kitty.fast_data_types import shm_unlink, shm_write
 from .base import BaseTest, parse_bytes
 from .graphics import parse_full_response, send_command
 
+# The packed formats are 300 plus their bits per pixel, see docs/silkie/packed-image-protocol.rst
+PACKED_FORMAT_BASE = 300
+
 
 class TestPackedGraphics(BaseTest):
 
@@ -49,7 +52,16 @@ class TestPackedGraphics(BaseTest):
         ):
             with self.subTest(bits=bits):
                 expected = bytes(channel for value in values for channel in (value, value, value))
-                self.image(screen, encoded, expected, f=bits, s=width, v=2)
+                self.image(screen, encoded, expected, f=PACKED_FORMAT_BASE + bits, s=width, v=2)
+
+    def test_kitty_format_numbers_are_not_packed_formats(self):
+        # f=1 to f=16 were the packed formats before they moved to 300 plus
+        # their bits per pixel. f=8 and f=16 are kitty's indexed color formats.
+        screen = self.create_screen()
+        for f in (1, 2, 4, 8, 16):
+            with self.subTest(f=f):
+                response = self.transmit(screen, b'\x00\x00', f=f, s=1, v=1)
+                self.ae(response.code, 'EINVAL', response.msg)
 
     def test_all_rgb565_words_and_gamut(self):
         screen = self.create_screen()
@@ -59,9 +71,9 @@ class TestPackedGraphics(BaseTest):
             (((word >> 5) & 63) * 255 + 31) // 63,
             ((word & 31) * 255 + 15) // 31,
         ))
-        image = self.image(screen, encoded, expected, f=16, s=256, v=256, G=1)
+        image = self.image(screen, encoded, expected, f=316, s=256, v=256, G=1)
         self.ae(image['gamut'], 1)
-        image = self.image(screen, b'\x7f\xff', b'\x7f' * 3 + b'\xff' * 3, f=8, s=2, v=1, G=2)
+        image = self.image(screen, b'\x7f\xff', b'\x7f' * 3 + b'\xff' * 3, f=308, s=2, v=1, G=2)
         self.ae(image['gamut'], 0)
 
     def test_formats_are_independent_of_display(self):
@@ -69,11 +81,11 @@ class TestPackedGraphics(BaseTest):
             screen = self.create_screen(options={'display_info': display})
             screen.callbacks.clear()
             parse_bytes(screen, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-            self.assertIn(b':format=1,2,4,8,16,24,32,64,100,200\x1b\\', screen.callbacks.wtcbuf)
+            self.assertIn(b':format=24,32,64,100,200,301,302,304,308,316\x1b\\', screen.callbacks.wtcbuf)
             for fmt, encoded, expected in (
-                (1, b'\x40', b'\x00' * 3 + b'\xff' * 3),
-                (8, b'\x00\xff', b'\x00' * 3 + b'\xff' * 3),
-                (16, b'\x00\xf8\x1f\x00', b'\xff\0\0\0\0\xff'),
+                (301, b'\x40', b'\x00' * 3 + b'\xff' * 3),
+                (308, b'\x00\xff', b'\x00' * 3 + b'\xff' * 3),
+                (316, b'\x00\xf8\x1f\x00', b'\xff\0\0\0\0\xff'),
                 (24, b'\xff\0\0\0\0\xff', b'\xff\0\0\0\0\xff'),
                 (32, b'\xff\0\0\xff\0\0\xff\x80', b'\xff\0\0\xff\0\0\xff\x80'),
                 (64, struct.pack('eeeeeeee', 2, .25, -.1, .5, 0, 0, 1, 1),
@@ -85,7 +97,7 @@ class TestPackedGraphics(BaseTest):
 
     def test_packed_queries_sizes_and_recovery(self):
         screen = self.create_screen()
-        for fmt, size in ((1, 4), (2, 6), (4, 10), (8, 18), (16, 36)):
+        for fmt, size in ((301, 4), (302, 6), (304, 10), (308, 18), (316, 36)):
             response = self.transmit(screen, bytes(size), a='q', f=fmt, s=9, v=2)
             self.ae(response.code, 'OK', response.msg)
             self.ae(screen.grman.image_count, 0)
@@ -93,7 +105,7 @@ class TestPackedGraphics(BaseTest):
             self.ae(response.code, 'ENODATA')
             response = self.transmit(screen, b'\xff', f=fmt, s=0, v=1)
             self.ae(response.code, 'EINVAL')
-            self.image(screen, b'\x80', b'\xff' * 3, f=1, s=1, v=1)
+            self.image(screen, b'\x80', b'\xff' * 3, f=301, s=1, v=1)
             self.transmit(screen, b'', a='d', d='I')
         self.ae(self.transmit(screen, b'\xff', f=3, s=1, v=1).code, 'EINVAL')
 
@@ -102,12 +114,12 @@ class TestPackedGraphics(BaseTest):
         encoded = b'\xaa\xff\x55\x00'
         values = (255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0)
         expected = bytes(channel for value in values for channel in (value, value, value))
-        self.image(screen, zlib.compress(encoded), expected, f=1, s=9, v=2, o='z')
+        self.image(screen, zlib.compress(encoded), expected, f=301, s=9, v=2, o='z')
         for transport in ('f', 't'):
             with tempfile.NamedTemporaryFile(prefix='tty-graphics-protocol-packed-', delete=False) as stream:
                 stream.write(b'prefix' + encoded + b'suffix')
             try:
-                self.image(screen, stream.name, expected, f=1, s=9, v=2, t=transport, O=6, S=len(encoded))
+                self.image(screen, stream.name, expected, f=301, s=9, v=2, t=transport, O=6, S=len(encoded))
                 self.ae(os.path.exists(stream.name), transport == 'f')
             finally:
                 if os.path.exists(stream.name):
@@ -115,14 +127,14 @@ class TestPackedGraphics(BaseTest):
         name = f'/silkie-packed-{os.getpid()}'
         shm_write(name, b'pad' + encoded)
         try:
-            self.image(screen, name, expected, f=1, s=9, v=2, t='s', O=3, S=len(encoded))
+            self.image(screen, name, expected, f=301, s=9, v=2, t='s', O=3, S=len(encoded))
             self.assertRaises(FileNotFoundError, shm_unlink, name)
         finally:
             try:
                 shm_unlink(name)
             except FileNotFoundError:
                 pass
-        response = self.transmit(screen, encoded, a='f', f=1, s=9, v=2)
+        response = self.transmit(screen, encoded, a='f', f=301, s=9, v=2)
         self.ae(response.code, 'OK', response.msg)
         self.ae(screen.grman.image_for_client_id(1)['extra_frames'][0]['data'], expected)
 
@@ -130,7 +142,7 @@ class TestPackedGraphics(BaseTest):
         screen = self.create_screen()
         for iteration in range(96):
             value = iteration % 16
-            self.image(screen, bytes((value * 17,)) * 57, bytes((value * 17,)) * (37 * 3 * 3), f=4, s=37, v=3)
+            self.image(screen, bytes((value * 17,)) * 57, bytes((value * 17,)) * (37 * 3 * 3), f=304, s=37, v=3)
             self.ae(screen.grman.image_count, 1)
         # A zlib stream can exceed its raw size by more than an arbitrary
         # header allowance; transport chunks must keep growing until complete.
@@ -138,19 +150,19 @@ class TestPackedGraphics(BaseTest):
         compressed = zlib.compress(raw, 1)
         self.assertGreater(len(compressed), len(raw) + 1024)
         expected = bytes(channel for value in raw for channel in (value, value, value))
-        self.image(screen, compressed, expected, f=8, s=2048, v=2048, o='z')
+        self.image(screen, compressed, expected, f=308, s=2048, v=2048, o='z')
 
     def test_packed_frame_chunks_and_vector_references(self):
         screen = self.create_screen()
         root = bytes(438 * 2)
-        self.image(screen, root, bytes(3500 * 2 * 3), f=1, s=3500, v=2)
+        self.image(screen, root, bytes(3500 * 2 * 3), f=301, s=3500, v=2)
         frame = bytes(i % 256 for i in range(3500 * 2))
-        response = self.transmit(screen, frame, a='f', f=8, s=3500, v=2)
+        response = self.transmit(screen, frame, a='f', f=308, s=3500, v=2)
         self.ae(response.code, 'OK', response.msg)
         expected = bytes(channel for value in frame for channel in (value, value, value))
         self.ae(screen.grman.image_for_client_id(1)['extra_frames'][0]['data'], expected)
 
-        self.image(screen, b'\x80', b'\xff' * 3 + b'\x00' * 3, f=1, s=2, v=1, i=10)
+        self.image(screen, b'\x80', b'\xff' * 3 + b'\x00' * 3, f=301, s=2, v=1, i=10)
         self.image(screen, b'\xff' * 3 + b'\x00' * 3, b'\xff' * 3 + b'\x00' * 3, f=24, s=2, v=1, i=11)
         for image, raster in ((20, 10), (21, 11)):
             response = self.transmit(screen, f'i id=1 img={raster} t=4,0,0,4,0,0', f=200, s=8, v=4, i=image)

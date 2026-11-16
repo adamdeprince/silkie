@@ -77,7 +77,7 @@ static const char *const media[] = {"d", "f", "t", "s",
     "g",
 #endif
 };
-static const char *const formats[] = {"1", "2", "4", "8", "16", "24", "32", "64", "100", "200"};
+static const char *const formats[] = {"24", "32", "64", "100", "200", "301", "302", "304", "308", "316"};
 
 static bool
 append_list(PyObject **reply, const char *key, const char *const *items, size_t count) {

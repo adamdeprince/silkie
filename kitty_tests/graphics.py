@@ -613,8 +613,10 @@ class TestGraphics(BaseTest):
         self.ae(g.image_count, 0)
         # keys are interpreted according to the action being queried
         self.ae(q('p', c=2, r=3, U=1, C=1, s=1), r(',e=p,c=2,r=3,C=1,U=1'))
-        # f=8 is 8-bit grayscale in Silkie, which animation frames can use
-        self.ae(q('f', c=2, r=3, z=40, X=1, f=8, s=1), r(',e=f,f=8,s=1,c=2,r=3,z=40,X=1'))
+        # f=8 is kitty's indexed color, which Silkie does not have
+        self.ae(q('f', c=2, r=3, z=40, X=1, f=8, s=1), r(',e=f,s=1,c=2,r=3,z=40,X=1'))
+        # Silkie's packed formats can be animation frames
+        self.ae(q('f', f=308, s=1), r(',e=f,f=308,s=1'))
         self.ae(q('a', s=3, v=1, r=2, c=1, z=-1), r(',e=a,s=3,v=1,r=2,c=1,z=-1'))
         self.ae(q('c', r=1, c=2, w=3, X=1, C=1, U=1), r(',e=c,r=1,c=2,w=3,X=1,C=1'))
         self.ae(q('d', d='F', p=2, s=1), r(',e=d,d=F,p=2'))
@@ -624,8 +626,9 @@ class TestGraphics(BaseTest):
         self.ae(q('a', s=4), r(',e=a'))
         # Silkie's formats, gamuts, tone mapping, GPU surfaces and actions
         self.ae(q('T', s=1, v=1, f=64, G=1, T=1), r(',e=T,f=64,G=1,T=1,s=1,v=1'))
-        self.ae(q('t', s=8, v=1, f=1), r(',e=t,f=1,s=8,v=1'))
-        self.ae(q('t', s=1, v=1, f=16, G=3, T=2), r(',e=t,f=16,s=1,v=1'))
+        self.ae(q('t', s=8, v=1, f=301), r(',e=t,f=301,s=8,v=1'))
+        self.ae(q('t', s=8, v=1, f=1), r(',e=t,s=8,v=1'))
+        self.ae(q('t', s=1, v=1, f=316, G=3, T=2), r(',e=t,f=316,s=1,v=1'))
         self.ae(q('t', f=200), r(',e=t,f=200'))
         self.ae(q('f', f=200, G=2, T=1), r(',e=f,G=2'))
         if is_macos or sys.platform.startswith('linux'):
