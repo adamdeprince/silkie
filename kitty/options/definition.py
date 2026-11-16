@@ -237,8 +237,26 @@ opt(
 The sizes of the lines used for the box drawing Unicode characters. These values
 are in pts. They will be scaled by the monitor DPI to arrive at a pixel value.
 There must be four values corresponding to thin, normal, thick, and very thick
-lines. The values apply at the configured :opt:`font_size`, when the font size
-is changed, for example by zooming, the lines are scaled proportionally.
+lines. The values apply at the configured :opt:`font_size`. When the font size
+is changed, for example by zooming, the lines are scaled proportionally, unless
+:opt:`scale_line_thickness_with_font_size` is turned off.
+""",
+)
+
+opt(
+    'scale_line_thickness_with_font_size',
+    'yes',
+    option_type='to_bool',
+    ctype='bool',
+    long_text="""
+Scale the thickness of lines specified in pts, the box drawing characters of
+:opt:`box_drawing_scale`, the cursors of :opt:`cursor_beam_thickness` and
+:opt:`cursor_underline_thickness`, the hollow cursor and the border of window
+title bars, by the ratio of the current font size to the configured
+:opt:`font_size`. This keeps lines from looking too thin when zoomed in or too
+thick when zoomed out. At the configured :opt:`font_size` it makes no
+difference. Turn it off to keep these lines the same thickness at every font
+size.
 """,
 )
 
@@ -413,7 +431,7 @@ opt(
     '1.5',
     option_type='positive_float',
     ctype='float',
-    long_text='The thickness of the beam cursor (in pts). Scaled proportionally when the font size is changed from :opt:`font_size`.',
+    long_text='The thickness of the beam cursor (in pts). Scaled proportionally when the font size is changed from :opt:`font_size`, see :opt:`scale_line_thickness_with_font_size`.',
 )
 
 opt(
@@ -421,7 +439,7 @@ opt(
     '2.0',
     option_type='positive_float',
     ctype='float',
-    long_text='The thickness of the underline cursor (in pts). Scaled proportionally when the font size is changed from :opt:`font_size`.',
+    long_text='The thickness of the underline cursor (in pts). Scaled proportionally when the font size is changed from :opt:`font_size`, see :opt:`scale_line_thickness_with_font_size`.',
 )
 
 opt(

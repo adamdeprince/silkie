@@ -356,11 +356,12 @@ class Rendering(FontBaseTest):
         from kitty.fast_data_types import create_test_font_group, render_box_char
         from kitty.fonts.render import set_font_family
 
-        options = {'font_size': self.font_size}
-        opts = self.set_options(options)
         chars = '─│╭┃'
 
-        def check(factor):
+        def check(factor, scale_lines=True):
+            options = {'font_size': self.font_size, 'scale_line_thickness_with_font_size': scale_lines}
+            opts = self.set_options(options)
+            line_scale = factor if scale_lines else 1
             set_font_family(opts)  # resets font groups so that the first one is at the specified size
             cell_width, cell_height, _ = create_test_font_group(factor * self.font_size, self.dpi, self.dpi)
             s = self.create_screen(cols=len(chars) + 1, lines=1, scrollback=0, options=options)
@@ -373,16 +374,19 @@ class Rendering(FontBaseTest):
                 return bytes(p & 0xFF for p in pixels)
 
             for i, ch in enumerate(chars):
-                expected = render_box_char(ord(ch), cell_width, cell_height, factor, self.dpi, self.dpi)
-                self.ae(alpha(line.sprite_at(i)), expected, f'{ch!r} not rendered with line thickness scale: {factor}')
+                expected = render_box_char(ord(ch), cell_width, cell_height, line_scale, self.dpi, self.dpi)
+                self.ae(alpha(line.sprite_at(i)), expected, f'{ch!r} not rendered with line thickness scale: {line_scale}')
             beam = alpha(2)
             mid = (cell_height // 2) * cell_width
             # dpi is 72 so 1pt == 1px
-            self.ae(sum(1 for x in range(cell_width) if beam[mid + x]), round(factor * opts.cursor_beam_thickness))
+            self.ae(sum(1 for x in range(cell_width) if beam[mid + x]), round(line_scale * opts.cursor_beam_thickness))
 
         check(1)
         check(2)
         check(4)
+        # with scaling turned off, lines keep their configured thickness at every font size
+        check(2, scale_lines=False)
+        check(4, scale_lines=False)
 
     def test_scaled_box_drawing(self):
         self.scaled_drawing_test()

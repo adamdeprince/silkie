@@ -80,9 +80,11 @@ bool face_apply_scaling(PyObject *face, const FONTS_DATA_HANDLE fg);
 
 // Lines whose thickness is specified in pts (box drawing, cursors, etc.) are
 // scaled by this factor so that they scale along with the text when the font
-// size is changed from the configured font size.
+// size is changed from the configured font size, unless the user turned that
+// off with scale_line_thickness_with_font_size.
 static inline double
 line_thickness_scale_for_font_size(const FONTS_DATA_HANDLE fg) {
+    if (!OPT(scale_line_thickness_with_font_size)) return 1.0;
     return OPT(font_size) > 0 && fg->font_sz_in_pts > 0 ? fg->font_sz_in_pts / OPT(font_size) : 1.0;
 }
 

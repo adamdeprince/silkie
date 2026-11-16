@@ -188,6 +188,7 @@ typedef struct Options {
         int unit;
     } underline_exclusion;
     float box_drawing_scale[4];
+    bool scale_line_thickness_with_font_size;
     double momentum_scroll;
     double window_drag_tolerance;
     bool generate_256_palette;

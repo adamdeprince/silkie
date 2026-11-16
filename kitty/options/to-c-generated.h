@@ -4,6 +4,7 @@
 #include "to-c.h"
 
 
+
 static void
 convert_from_python_font_size(PyObject *val, Options *opts) {
     opts->font_size = PyFloat_AsDouble(val);
@@ -79,6 +80,19 @@ convert_from_opts_box_drawing_scale(PyObject *py_opts, Options *opts) {
     PyObject *ret = PyObject_GetAttrString(py_opts, "box_drawing_scale");
     if (ret == NULL) return;
     convert_from_python_box_drawing_scale(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_scale_line_thickness_with_font_size(PyObject *val, Options *opts) {
+    opts->scale_line_thickness_with_font_size = PyObject_IsTrue(val);
+}
+
+static void
+convert_from_opts_scale_line_thickness_with_font_size(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "scale_line_thickness_with_font_size");
+    if (ret == NULL) return;
+    convert_from_python_scale_line_thickness_with_font_size(ret, opts);
     Py_DECREF(ret);
 }
 
@@ -1590,6 +1604,8 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_modify_font(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_box_drawing_scale(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_scale_line_thickness_with_font_size(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_undercurl_style(py_opts, opts);
     if (PyErr_Occurred()) return false;
