@@ -12,21 +12,21 @@ from kitty.options.utils import (
     box_drawing_scale, clear_all_mouse_actions, clear_all_shortcuts, clipboard_control,
     clone_source_strategies, config_or_absolute_path, confirm_close, copy_on_select,
     cursor_blink_interval, cursor_text_color, cursor_trail_decay, cursor_trail_start_threshold,
-    custom_shader_var, custom_shaders, deprecated_adjust_line_height, deprecated_hide_window_decorations_aliases,
-    deprecated_macos_show_window_title_in_menubar_alias, deprecated_scrollback_indicator_opacity,
-    deprecated_send_text, disable_ligatures, edge_width, env, filter_notification, font_features,
-    font_role, hdr_multiplier, hide_window_decorations, macos_option_as_alt, macos_titlebar_color,
-    menu_map, modify_font, mouse_hide_wait, narrow_symbols, notify_on_cmd_finish, optional_edge_width,
-    parse_font_spec, parse_map, parse_mouse_map, paste_actions, pointer_shape_when_dragging,
-    remap_modifiers, remote_control_password, resize_debounce_time, scrollback_lines,
-    scrollback_pager_history_size, scrollbar_color, shell_integration, show_hyperlink_targets,
-    spatial_angle, spatial_divergence, spatial_exponent, spatial_phase_limit, spatial_scale,
-    store_multiple, symbol_map, tab_activity_symbol, tab_bar_edge, tab_bar_margin_height,
-    tab_bar_min_tabs, tab_fade, tab_font_style, tab_separator, tab_title_template, tab_title_wrap,
-    text_fg_override_threshold, titlebar_color, to_cursor_shape, to_cursor_unfocused_shape,
-    to_font_size, to_layout_names, to_modifiers, transparent_background_colors, underline_exclusion,
-    url_prefixes, url_style, visual_bell_duration, visual_window_select_characters, window_border_width,
-    window_logo_scale, window_size
+    custom_shader_var, custom_shaders, deprecated_adjust_line_height,
+    deprecated_hide_window_decorations_aliases, deprecated_macos_show_window_title_in_menubar_alias,
+    deprecated_scrollback_indicator_opacity, deprecated_send_text, disable_ligatures, edge_width, env,
+    filter_notification, font_features, font_role, hdr_multiplier, hide_window_decorations,
+    macos_option_as_alt, macos_titlebar_color, menu_map, modify_font, mouse_hide_wait, narrow_symbols,
+    notify_on_cmd_finish, optional_edge_width, parse_font_spec, parse_map, parse_mouse_map,
+    paste_actions, pointer_shape_when_dragging, remap_modifiers, remote_control_password,
+    resize_debounce_time, scrollback_lines, scrollback_pager_history_size, scrollbar_color,
+    shell_integration, show_hyperlink_targets, spatial_angle, spatial_divergence, spatial_exponent,
+    spatial_phase_limit, spatial_scale, store_multiple, symbol_map, tab_activity_symbol, tab_bar_edge,
+    tab_bar_margin_height, tab_bar_min_tabs, tab_fade, tab_font_style, tab_separator,
+    tab_title_template, tab_title_wrap, text_fg_override_threshold, titlebar_color, to_cursor_shape,
+    to_cursor_unfocused_shape, to_font_size, to_layout_names, to_modifiers,
+    transparent_background_colors, underline_exclusion, url_prefixes, url_style, visual_bell_duration,
+    visual_window_select_characters, window_border_width, window_logo_scale, window_size
 )
 
 
@@ -1337,10 +1337,11 @@ class Parser:
     def resize_in_steps(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['resize_in_steps'] = to_bool(val)
 
-    def scale_line_thickness_with_font_size(self, val: str, ans: dict[str, typing.Any]) -> None:
-        ans['scale_line_thickness_with_font_size'] = to_bool(val)
     def restore_session_after_logout(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['restore_session_after_logout'] = to_bool(val)
+
+    def scale_line_thickness_with_font_size(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['scale_line_thickness_with_font_size'] = to_bool(val)
 
     def scrollback_fill_enlarged_window(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['scrollback_fill_enlarged_window'] = to_bool(val)

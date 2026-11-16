@@ -785,6 +785,7 @@ def kitty_env(args: Options) -> Env:
             'IOKit',
             '-framework',
             'IOSurface',
+            '-framework',
             'Security',
         ]
         test_program_src = """#include <UserNotifications/UserNotifications.h>
