@@ -21,6 +21,8 @@ class Version(NamedTuple):
 
 
 appname: str = 'kitty'
+app_display_name: str = 'Silkie'
+app_class: str = 'silkie'
 kitty_face = '🐱'
 version: Version = Version(0, 49, 2)
 str_version: str = '.'.join(map(str, version))

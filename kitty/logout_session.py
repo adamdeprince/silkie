@@ -35,7 +35,7 @@ from contextlib import suppress
 from gettext import gettext as _
 from typing import TYPE_CHECKING, NamedTuple, Protocol
 
-from .constants import cache_dir, clear_handled_signals, is_macos, kitty_exe
+from .constants import app_class, app_display_name, cache_dir, clear_handled_signals, is_macos, kitty_exe
 from .fast_data_types import AES256GCMDecrypt, AES256GCMEncrypt, Screen, Secret, application_logout_requested_at, get_options, monotonic, random_secret
 from .options.types import Options
 from .typing_compat import BossType
@@ -51,7 +51,9 @@ ATTEMPTS_FILE = 'attempts'
 KEY_ID_FILE = 'key-id'
 SAVER_LOCK_FILE = 'saver.lock'
 KEY_ID_BYTES = 16
-KEYCHAIN_SERVICE = 'net.kovidgoyal.kitty.session-saved-at-logout'
+# Silkie keeps appname, and with it cache_dir(), the same as kitty's, so the snapshots directory and the Keychain service are named
+# after app_class. Otherwise Silkie and kitty would restore each other's snapshots and delete each other's keys as orphans.
+KEYCHAIN_SERVICE = f'{app_class}.session-saved-at-logout'
 ENCRYPTED_FILE_MAGIC = b'kitty-snapshot-1'
 IV_SIZE, TAG_SIZE = 12, 16
 CLAIMED_MARKER = '.claimed-by-'
@@ -120,7 +122,7 @@ class MacOSKeychain:
     def store(self, key_id: str, key: Secret) -> None:
         from .fast_data_types import cocoa_keychain_store_secret
 
-        cocoa_keychain_store_secret(KEYCHAIN_SERVICE, key_id, _('kitty session saved at logout'), key)
+        cocoa_keychain_store_secret(KEYCHAIN_SERVICE, key_id, _('{} session saved at logout').format(app_display_name), key)
 
     def read(self, key_id: str) -> Secret | None:
         from .fast_data_types import cocoa_keychain_read_secret
@@ -295,7 +297,7 @@ def is_saver_running(path: str) -> bool:
 
 
 def snapshots_dir() -> str:
-    return os.path.join(cache_dir(), 'saved-at-logout')
+    return os.path.join(cache_dir(), f'{app_class}-saved-at-logout')
 
 
 def lock_path(base: str) -> str:

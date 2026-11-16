@@ -176,6 +176,21 @@ class TestSessions(BaseTest):
             with self.subTest(unsafe=unsafe):
                 self.ae(s(f'a{unsafe}b'), expected)
 
+    def test_logout_snapshot_names(self) -> None:
+        # Silkie shares cache_dir() with kitty, as appname is kept as kitty, so the state saved at logout must be named after app_class,
+        # otherwise Silkie and kitty would restore each other's snapshots and delete each other's keys
+        import os
+        from unittest.mock import patch
+
+        from kitty.constants import app_class, appname
+        from kitty.logout_session import KEYCHAIN_SERVICE, snapshots_dir
+
+        self.assertNotEqual(app_class, appname)
+        with patch('kitty.logout_session.cache_dir', return_value='/cache'):
+            self.ae(snapshots_dir(), os.path.join('/cache', f'{app_class}-saved-at-logout'))
+        self.ae(KEYCHAIN_SERVICE, f'{app_class}.session-saved-at-logout')
+        self.assertNotIn('kovidgoyal', KEYCHAIN_SERVICE)
+
     def test_logout_snapshots(self) -> None:
         from .crypto import is_rlimit_memlock_too_low
 
