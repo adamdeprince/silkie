@@ -48,9 +48,12 @@ streq(const char *a, const char *b) {
 
 static bool
 set_string(char **dest, const char *src) {
-    // Replaces *dest with a copy of src, leaving *dest unchanged if there is not enough memory
-    char *copy = strdup(src);
+    // Replaces *dest with a copy of src, leaving *dest unchanged if there is not enough memory.
+    // Not strdup(), which strict C11 does not declare.
+    const size_t sz = strlen(src) + 1;
+    char *copy = malloc(sz);
     if (!copy) return false;
+    memcpy(copy, src, sz);
     free(*dest);
     *dest = copy;
     return true;
