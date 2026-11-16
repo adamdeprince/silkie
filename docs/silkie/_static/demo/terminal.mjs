@@ -4,7 +4,7 @@ import {createTranslator} from './i18n.mjs';
 import {TextSelection} from './selection.mjs';
 import {VectorScene} from './vector.mjs';
 import {createColorContext, cellPaint, decodeGraphicsPixels, parseVectorPaint, respondColorOSC} from './color.mjs';
-import {BrowserInput, parseOSC, integer} from './input.mjs';
+import {BrowserInput, bracketedPaste, parseOSC, integer} from './input.mjs';
 import {InkController} from './ink.mjs';
 
 const encoder = new TextEncoder();
@@ -479,7 +479,7 @@ export async function createTerminal(element, { wasmUrl = new URL('silkie-termin
     });
     listen(input, 'compositionstart', () => { selection.clear(); input.value = ''; });
     listen(input, 'input', () => { if (input.value) send(input.value); input.value = ''; });
-    listen(input, 'paste', event => { const text = event.clipboardData?.getData('text'); if (text === undefined) return; event.preventDefault(); send(core.modes() & 2 ? `${ESC}[200~${text}${ESC}[201~` : text); });
+    listen(input, 'paste', event => { const text = event.clipboardData?.getData('text'); if (text === undefined) return; event.preventDefault(); send(core.modes() & 2 ? bracketedPaste(text) : text); });
     listen(input, 'compositionend', () => { if (input.value) send(input.value); input.value = ''; });
     listen(input, 'focus', () => { if (core.modes() & 1024) send(`${ESC}[I`); schedule(); });
     listen(input, 'blur', () => {

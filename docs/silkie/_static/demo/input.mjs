@@ -12,6 +12,19 @@ export function integer(value, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) {
     return Number.isSafeInteger(number) && number >= minimum && number <= maximum ? number : null;
 }
 
+// The text of a paste for a program that turned on bracketed paste mode. An end
+// marker inside the text would end the paste early and let the rest of the text
+// run as typed input, so every one is removed, also those that only appear once
+// another is removed, as kitty does in sanitize_for_bracketed_paste().
+const PASTE_END = /(?:\x1b\[|\x9b)201~/g;
+export function bracketedPaste(text) {
+    for (let previous = null; previous !== text;) {
+        previous = text;
+        text = text.replace(PASTE_END, '');
+    }
+    return `\x1b[200~${text}\x1b[201~`;
+}
+
 export function parseOSC(payload) {
     if (typeof payload !== 'string') return null;
     if (payload.startsWith(`${ESC}]`)) payload = payload.slice(2).replace(/(?:\x1b\\|\x07)$/, '');

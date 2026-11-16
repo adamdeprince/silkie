@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {BrowserInput, BrowserHaptics, parseOSC, integer} from '../input.mjs';
+import {BrowserInput, BrowserHaptics, bracketedPaste, parseOSC, integer} from '../input.mjs';
 import {InkController} from '../ink.mjs';
 
 const decode = text => parseOSC(text).fields;
@@ -194,4 +194,17 @@ test('ink accepts finite widths and pressure exponents beyond former arbitrary c
         assert.equal(ink.brush, accepted, invalid);
         assert.equal(ink.mode, 0, invalid);
     }
+});
+
+test('bracketed paste cannot end early', () => {
+    const wrap = text => `\x1b[200~${text}\x1b[201~`;
+    assert.equal(bracketedPaste('ls -l'), wrap('ls -l'));
+    // an end marker in the text would run the rest as typed input
+    assert.equal(bracketedPaste('a\x1b[201~rm -rf ~\r'), wrap('arm -rf ~\r'));
+    assert.equal(bracketedPaste('a\x9b201~b'), wrap('ab'));
+    // markers that only appear once another is removed are removed too
+    assert.equal(bracketedPaste('\x1b[20\x1b[201~1~x'), wrap('x'));
+    assert.equal(bracketedPaste('\x1b[201~'.repeat(1000)), wrap(''));
+    // other escape codes are left as they are, the program sees them as pasted text
+    assert.equal(bracketedPaste('\x1b[200~\x1b[1m'), wrap('\x1b[200~\x1b[1m'));
 });
