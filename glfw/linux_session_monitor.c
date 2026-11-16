@@ -19,7 +19,9 @@
 // loop by DBUS activation.
 
 #include "linux_session_monitor.h"
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define PORTAL_SERVICE "org.freedesktop.portal.Desktop"
@@ -34,39 +36,74 @@ static uint32_t current_session_state = GLFW_SESSION_STATE_RUNNING;
 static bool monitoring = false;
 // Whether the portal reported that the monitor was created
 static bool established = false;
-// The unique name of the portal that replied to CreateMonitor, empty until it replies
-static char portal_name[256];
-static char request_path[512], session_path[512];
+// The unique name of the portal that replied to CreateMonitor, NULL until it replies. These strings are allocated to fit what the
+// portal sends, as object paths have no maximum length.
+static char *portal_name = NULL;
+static char *request_path = NULL, *session_path = NULL;
 
 static bool
-portal_object_path(DBusConnection *conn, const char *kind, char *buf, size_t sz) {
+streq(const char *a, const char *b) {
+    return a && b && strcmp(a, b) == 0;
+}
+
+static bool
+set_string(char **dest, const char *src) {
+    // Replaces *dest with a copy of src, leaving *dest unchanged if there is not enough memory
+    char *copy = strdup(src);
+    if (!copy) return false;
+    free(*dest);
+    *dest = copy;
+    return true;
+}
+
+static char *
+join3(const char *a, const char *b, const char *c) {
+    // Returns a newly allocated a + b + c, or NULL if there is not enough memory
+    const size_t la = strlen(a), lb = strlen(b), lc = strlen(c);
+    if (lb > SIZE_MAX - 1 - la || lc > SIZE_MAX - 1 - la - lb) return NULL;
+    char *ans = malloc(la + lb + lc + 1);
+    if (!ans) return NULL;
+    memcpy(ans, a, la);
+    memcpy(ans + la, b, lb);
+    memcpy(ans + la + lb, c, lc + 1);
+    return ans;
+}
+
+static char *
+portal_object_path(DBusConnection *conn, const char *prefix) {
     // The portal creates objects at PORTAL_PATH/kind/SENDER/TOKEN where SENDER is the unique name of the connection without
-    // the leading colon and with dots replaced by underscores
+    // the leading colon and with dots replaced by underscores. prefix is PORTAL_PATH/kind/. Returns a newly allocated path, or NULL.
     const char *unique_name = dbus_bus_get_unique_name(conn);
-    if (!unique_name || unique_name[0] != ':') return false;
-    const int prefix_len = snprintf(buf, sz, PORTAL_PATH "/%s/", kind);
-    if (prefix_len < 0 || (size_t)prefix_len >= sz) return false;
-    const int n = snprintf(buf + prefix_len, sz - prefix_len, "%s/" HANDLE_TOKEN, unique_name + 1);
-    if (n < 0 || (size_t)n >= sz - prefix_len) return false;
-    for (char *p = buf + prefix_len; *p && *p != '/'; p++) {
+    if (!unique_name || unique_name[0] != ':') return NULL;
+    char *ans = join3(prefix, unique_name + 1, "/" HANDLE_TOKEN);
+    if (!ans) return NULL;
+    for (char *p = ans + strlen(prefix); *p && *p != '/'; p++) {
         if (*p == '.') *p = '_';
     }
+    return ans;
+}
+
+static bool
+set_portal_object_path(DBusConnection *conn, const char *prefix, char **dest) {
+    char *path = portal_object_path(conn, prefix);
+    if (!path) return false;
+    free(*dest);
+    *dest = path;
     return true;
 }
 
 static bool
 add_response_match(DBusConnection *conn) {
-    char rule[sizeof(request_path) + 128];
-    const int n = snprintf(rule, sizeof(rule), "type='signal',interface='" REQUEST_INTERFACE "',member='Response',path='%s'", request_path);
-    if (n < 0 || (size_t)n >= sizeof(rule)) return false;
+    char *rule = join3("type='signal',interface='" REQUEST_INTERFACE "',member='Response',path='", request_path, "'");
+    if (!rule) return false;
     dbus_bus_add_match(conn, rule, NULL);
+    free(rule);
     return true;
 }
 
 static bool
 is_from_portal(DBusMessage *msg) {
-    const char *sender = dbus_message_get_sender(msg);
-    return portal_name[0] && sender && strcmp(sender, portal_name) == 0;
+    return streq(dbus_message_get_sender(msg), portal_name);
 }
 
 static bool
@@ -99,7 +136,7 @@ on_state_changed(DBusConnection *conn, DBusMessage *msg) {
         return;
     }
     dbus_message_iter_get_basic(&iter, &session_handle);
-    if (strcmp(session_handle, session_path) != 0) return;
+    if (!streq(session_handle, session_path)) return;
     if (!dbus_message_iter_next(&iter) || dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_ARRAY) {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: StateChanged signal does not have a state dictionary");
         return;
@@ -152,7 +189,8 @@ on_monitor_response(DBusMessage *msg) {
         const int type = dbus_message_iter_get_arg_type(&value);
         if (type != DBUS_TYPE_STRING && type != DBUS_TYPE_OBJECT_PATH) continue;
         dbus_message_iter_get_basic(&value, &handle);
-        if (strlen(handle) < sizeof(session_path)) memcpy(session_path, handle, strlen(handle) + 1);
+        // Keeps the expected session path if there is not enough memory, which is correct unless the portal ignored the token
+        if (!set_string(&session_path, handle)) _glfwInputError(GLFW_OUT_OF_MEMORY, "Inhibit portal: Not enough memory to store the session handle");
         break;
     }
 }
@@ -163,12 +201,13 @@ static void
 on_name_owner_changed(DBusConnection *conn, DBusMessage *msg) {
     const char *name, *old_owner, *new_owner;
     if (!dbus_message_get_args(msg, NULL, DBUS_TYPE_STRING, &name, DBUS_TYPE_STRING, &old_owner, DBUS_TYPE_STRING, &new_owner, DBUS_TYPE_INVALID)) return;
-    if (strcmp(name, PORTAL_SERVICE) != 0 || !portal_name[0] || strcmp(old_owner, portal_name) != 0) return;
+    if (strcmp(name, PORTAL_SERVICE) != 0 || !streq(old_owner, portal_name)) return;
     // The portal that created the monitor has exited, which ends the monitor session
     const bool restart = monitoring && established;
     monitoring = false;
     established = false;
-    portal_name[0] = 0;
+    free(portal_name);
+    portal_name = NULL;
     if (restart) {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: The desktop portal exited, monitoring the session state again");
         start_monitoring(conn);
@@ -183,7 +222,7 @@ message_filter(DBusConnection *conn, DBusMessage *msg, void *user_data UNUSED) {
     }
     if (!monitoring || !is_from_portal(msg)) return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     if (dbus_message_is_signal(msg, INHIBIT_INTERFACE, "StateChanged")) on_state_changed(conn, msg);
-    else if (dbus_message_is_signal(msg, REQUEST_INTERFACE, "Response") && dbus_message_has_path(msg, request_path)) on_monitor_response(msg);
+    else if (dbus_message_is_signal(msg, REQUEST_INTERFACE, "Response") && request_path && dbus_message_has_path(msg, request_path)) on_monitor_response(msg);
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
@@ -199,21 +238,24 @@ monitor_created(DBusMessage *msg, const DBusError *err, void *data UNUSED) {
         return;
     }
     const char *sender = dbus_message_get_sender(msg), *handle = NULL;
-    if (!sender || strlen(sender) >= sizeof(portal_name) || !dbus_message_get_args(msg, NULL, DBUS_TYPE_OBJECT_PATH, &handle, DBUS_TYPE_INVALID)) {
+    if (!sender || !dbus_message_get_args(msg, NULL, DBUS_TYPE_OBJECT_PATH, &handle, DBUS_TYPE_INVALID)) {
         monitoring = false;
         _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: Invalid reply to CreateMonitor");
         return;
     }
-    memcpy(portal_name, sender, strlen(sender) + 1);
-    if (strcmp(handle, request_path) != 0) {
+    if (!set_string(&portal_name, sender)) {
+        monitoring = false;
+        _glfwInputError(GLFW_OUT_OF_MEMORY, "Inhibit portal: Not enough memory to store the name of the portal");
+        return;
+    }
+    if (!streq(handle, request_path)) {
         // Portals that ignore handle_token use a different request path, its Response signal could be missed if it was sent before
         // the match below is added
-        if (strlen(handle) >= sizeof(request_path)) {
+        if (!set_string(&request_path, handle)) {
             monitoring = false;
-            _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: The request path returned by CreateMonitor is too long");
+            _glfwInputError(GLFW_OUT_OF_MEMORY, "Inhibit portal: Not enough memory to store the request path returned by CreateMonitor");
             return;
         }
-        memcpy(request_path, handle, strlen(handle) + 1);
         if (!add_response_match(glfw_dbus_session_bus())) {
             monitoring = false;
             _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: Failed to watch for the response to CreateMonitor");
@@ -251,9 +293,9 @@ create_monitor(DBusConnection *session_bus) {
 static bool
 start_monitoring(DBusConnection *session_bus) {
     static bool filter_added = false;
-    if (!portal_object_path(session_bus, "request", request_path, sizeof(request_path)) ||
-        !portal_object_path(session_bus, "session", session_path, sizeof(session_path))) {
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: Failed to get the unique name of the DBUS connection");
+    if (!set_portal_object_path(session_bus, PORTAL_PATH "/request/", &request_path) ||
+        !set_portal_object_path(session_bus, PORTAL_PATH "/session/", &session_path)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "Inhibit portal: Failed to get the unique name of the DBUS connection or out of memory");
         return false;
     }
     if (!filter_added) {
@@ -270,7 +312,8 @@ start_monitoring(DBusConnection *session_bus) {
         }
         filter_added = true;
     }
-    portal_name[0] = 0;
+    free(portal_name);
+    portal_name = NULL;
     established = false;
     // Reset without running the callback, so that state the application saved for a logout that was in progress when the portal
     // exited is not discarded

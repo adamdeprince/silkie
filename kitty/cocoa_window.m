@@ -1551,13 +1551,13 @@ keychain_query(const char *service, const char *account) {
 
 static PyObject *
 set_keychain_error(OSStatus status, const char *action) {
-    char msg[512] = {0};
-    CFStringRef m = SecCopyErrorMessageString(status, NULL);
-    if (m) {
-        CFStringGetCString(m, msg, sizeof(msg), kCFStringEncodingUTF8);
-        CFRelease(m);
+    @autoreleasepool {
+        // The message is copied whole, however long it is
+        CFStringRef m = SecCopyErrorMessageString(status, NULL);
+        const char *msg = m ? [(NSString *)m UTF8String] : NULL;
+        PyErr_Format(PyExc_OSError, "Failed to %s the keychain: %s (error code: %d)", action, msg ? msg : "", (int)status);
+        if (m) CFRelease(m);
     }
-    PyErr_Format(PyExc_OSError, "Failed to %s the keychain: %s (error code: %d)", action, msg, (int)status);
     return NULL;
 }
 
@@ -1662,10 +1662,13 @@ cocoa_keychain_list_accounts(PyObject *self UNUSED, PyObject *args) {
         if (!item || CFGetTypeID(item) != CFDictionaryGetTypeID()) continue;
         CFTypeRef account = CFDictionaryGetValue((CFDictionaryRef)item, kSecAttrAccount);
         if (!account || CFGetTypeID(account) != CFStringGetTypeID()) continue;
-        char buf[1024];
-        if (!CFStringGetCString((CFStringRef)account, buf, sizeof(buf), kCFStringEncodingUTF8)) continue;
-        RAII_PyObject(a, PyUnicode_FromString(buf));
-        if (!a || PyList_Append(ans, a) != 0) Py_CLEAR(ans);
+        @autoreleasepool {
+            // UTF8String is sized to fit the account name, however long it is
+            const char *name = [(NSString *)account UTF8String];
+            if (!name) continue;
+            RAII_PyObject(a, PyUnicode_FromString(name));
+            if (!a || PyList_Append(ans, a) != 0) Py_CLEAR(ans);
+        }
     }
     CFRelease(result);
     return ans;
