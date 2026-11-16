@@ -47,6 +47,8 @@ class FloatEdges(NamedTuple):
 
 
 DockEdge = Literal['left', 'top', 'right', 'bottom']
+# What a dock is docked to: a window, a tab or an OS window
+DockScope = Literal['window', 'tab', 'os-window']
 dock_edges: tuple[DockEdge, ...] = ('left', 'top', 'right', 'bottom')
 opposite_dock_edge: dict[DockEdge, DockEdge] = {'left': 'right', 'right': 'left', 'top': 'bottom', 'bottom': 'top'}
 
@@ -67,7 +69,7 @@ class DockSpec(NamedTuple):
     def size_as_string(self) -> str:
         return f'{self.size:g}%' if self.size_is_percent else str(int(self.size))
 
-    def as_launch_args(self, scope: Literal['window', 'tab']) -> list[str]:
+    def as_launch_args(self, scope: DockScope) -> list[str]:
         ans = [f'--type={scope}-dock', f'--dock-edge={self.edge}', f'--dock-size={self.size_as_string}']
         if not self.focusable:
             ans.append('--dock-skip-focus')
@@ -311,6 +313,8 @@ class WindowResizeDragData(NamedTuple):
     width_increases_rightwards: bool = True
     vertical_id: int | None = None
     height_increases_downwards: bool = True
+    # The ids are window ids of a docked window, rather than layout specific ids
+    is_dock: bool = False
 
 
 class WindowResizeDrag(NamedTuple):
