@@ -137,6 +137,7 @@ class TestColorSchemeResize(BaseTest):
         with (
             patch('kitty.boss.theme_colors', themes), patch.object(themes, 'refresh', return_value=False),
             patch('kitty.boss.is_macos', False), patch('kitty.boss.apply_options_update'), patch('kitty.boss.set_layout_options'),
+            patch('kitty.boss.is_wayland', return_value=False),
             patch('kitty.boss.set_default_env'), patch('kitty.boss.clear_profile_caches'), patch('kitty.boss.load_profiles'),
             patch('kitty.boss.update_native_menus'), patch('kitty.fonts.render.set_font_family'),
             patch('kitty.boss.load_shader_programs'), patch('kitty.colors.set_os_window_chrome'),
@@ -164,10 +165,10 @@ class TestColorSchemeResize(BaseTest):
 import os, signal
 initial = os.get_terminal_size(0)
 def resized(sig, frame, initial=initial, get_size=os.get_terminal_size):
-    print('WINCH_SAME_SIZE', get_size(0) == initial, flush=True)
+    os.write(1, b'WINCH_SAME_SIZE ' + str(get_size(0) == initial).encode() + b'\\n')
     raise SystemExit(0)
 signal.signal(signal.SIGWINCH, resized)
-print('READY', flush=True)
+os.write(1, b'READY\\n')
 signal.pause()
 '''
         with self.create_pty([kitty_exe(), '+runpy', code], cols=5, lines=5) as pty:

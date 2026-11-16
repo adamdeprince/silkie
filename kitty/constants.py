@@ -51,7 +51,12 @@ def slangc() -> tuple[str, ...]:
         if DEVELOP_ROOT:
             _slangc = (os.path.join(DEVELOP_ROOT, 'bin', 'slangc'),)
         else:
-            _slangc = tuple(Shlex(os.environ.get('SLANGC', 'slangc'), False))
+            compiler = 'slangc'
+            if bundle_dir := kitty_run_data.get('bundle_exe_dir'):
+                bundled = os.path.join(bundle_dir, compiler)
+                if os.path.isfile(bundled):
+                    compiler = bundled
+            _slangc = tuple(Shlex(os.environ.get('SLANGC', compiler), False))
     return _slangc
 
 
