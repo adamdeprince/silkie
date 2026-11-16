@@ -4,13 +4,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="OSC 777 extension framing" href="extension-framing.html"><link rel="prev" title="Silkie extension reference" href="reference.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/capabilities-protocol.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Extension capabilities protocol - Silkie</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -92,7 +93,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="capabilities-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/capabilities-protocol.html">
+</head>
   <body>
     
     <script>
@@ -244,11 +250,15 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
   <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
   <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/capabilities-protocol.html" lang="zh-CN">简体中文</a>
 </nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -257,6 +267,9 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Extension capabilities protocol</a></li>
@@ -269,6 +282,7 @@
 <li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">Image pointer extension</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU surfaces (zero-copy)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR brightness protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">Wide gamut colors</a></li>
@@ -374,13 +388,19 @@ then fall back to probing the selectors it needs one at a time.</p>
 lists the values of the <code class="docutils literal notranslate"><span class="pre">t</span></code> key: <code class="docutils literal notranslate"><span class="pre">d</span></code> direct, <code class="docutils literal notranslate"><span class="pre">f</span></code> a file, <code class="docutils literal notranslate"><span class="pre">t</span></code> a
 temporary file, <code class="docutils literal notranslate"><span class="pre">s</span></code> shared memory, and any medium an extension adds, such
 as <code class="docutils literal notranslate"><span class="pre">g</span></code> for a GPU surface. <code class="docutils literal notranslate"><span class="pre">format</span></code> lists the values of the <code class="docutils literal notranslate"><span class="pre">f</span></code> key:
-<code class="docutils literal notranslate"><span class="pre">24</span></code> RGB, <code class="docutils literal notranslate"><span class="pre">32</span></code> RGBA, <code class="docutils literal notranslate"><span class="pre">100</span></code> PNG, and any format an extension adds, such
-as <code class="docutils literal notranslate"><span class="pre">64</span></code> for HDR images and <code class="docutils literal notranslate"><span class="pre">200</span></code> for vector images. Both describe what the
+<code class="docutils literal notranslate"><span class="pre">1</span></code>, <code class="docutils literal notranslate"><span class="pre">2</span></code>, <code class="docutils literal notranslate"><span class="pre">4</span></code> and <code class="docutils literal notranslate"><span class="pre">8</span></code> grayscale, <code class="docutils literal notranslate"><span class="pre">16</span></code> RGB565 (see
+<a class="reference internal" href="packed-image-protocol.html"><span class="doc">Packed image formats</span></a>), <code class="docutils literal notranslate"><span class="pre">24</span></code> RGB, <code class="docutils literal notranslate"><span class="pre">32</span></code> RGBA, <code class="docutils literal notranslate"><span class="pre">100</span></code> PNG, and any
+format an extension adds, such as <code class="docutils literal notranslate"><span class="pre">64</span></code> for HDR images and <code class="docutils literal notranslate"><span class="pre">200</span></code> for vector
+images. Both describe what the
 terminal accepts, not what is wise over a given connection, and the graphics
 protocol’s own query action (<code class="docutils literal notranslate"><span class="pre">a=q</span></code>) remains the check for one particular
 image. A relay answers with what it can carry to the terminal behind it:
 files, shared memory and GPU surfaces do not cross machines, so over a
 network relay only <code class="docutils literal notranslate"><span class="pre">d</span></code> is available.</p>
+<p>The accepted source formats are independent of the display’s reported color
+model and precision. A one-bit display can accept RGB images, and an RGB
+display can accept packed one-bit pixels; <a class="reference internal" href="display-protocol.html"><span class="doc">Display protocol</span></a> describes
+output capabilities rather than restricting input.</p>
 </section>
 <section id="reading-a-mode">
 <h2>Reading a mode<a class="headerlink" href="#reading-a-mode" title="Link to this heading">¶</a></h2>

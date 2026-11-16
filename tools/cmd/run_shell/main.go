@@ -145,12 +145,12 @@ func EntryPoint(root *cli.Command) *cli.Command {
 	})
 	sc.Add(cli.OptionSpec{
 		Name: "--shell-integration",
-		Help: "Specify a value for the :opt:`shell_integration` option, overriding the one from :file:`kitty.conf`.",
+		Help: "Specify a value for the :opt:`shell_integration` option, overriding the one from :file:`silkie.conf`.",
 	})
 	sc.Add(cli.OptionSpec{
 		Name:    "--shell",
 		Default: ".",
-		Help:    "Specify the shell command to run. The default value of :code:`.` will use the parent shell if recognized, falling back to the value of the :opt:`shell` option from :file:`kitty.conf`.",
+		Help:    "Specify the shell command to run. The default value of :code:`.` will use the parent shell if recognized, falling back to the value of the :opt:`shell` option from :file:`silkie.conf`.",
 	})
 	sc.Add(cli.OptionSpec{
 		Name: "--env",

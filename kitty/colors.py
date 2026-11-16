@@ -9,7 +9,16 @@ from typing import Any, Literal, Optional, TypedDict, cast
 
 from .config import parse_config
 from .constants import config_dir
-from .fast_data_types import Color, get_boss, get_options, glfw_get_system_color_theme, patch_color_profiles, patch_global_colors, set_os_window_chrome
+from .fast_data_types import (
+    Color,
+    ColorProfile,
+    get_boss,
+    get_options,
+    glfw_get_system_color_theme,
+    patch_color_profiles,
+    patch_global_colors,
+    set_os_window_chrome,
+)
 from .options.types import Options, all_colors, nullable_colors, special_colors
 from .rgb import color_from_int
 from .types import run_once
@@ -19,6 +28,15 @@ ColorsSpec = dict[str, Optional[int]]
 TransparentBackgroundColors = tuple[tuple[Color, float], ...]
 ColorSchemes = Literal['light', 'dark', 'no_preference']
 Colors = tuple[ColorsSpec, TransparentBackgroundColors]
+
+
+def color_profile_signature(profile: ColorProfile) -> dict[str, Any]:
+    # Compare effective colors, rather than whether the application has an override.
+    colors = {k: v for k, v in profile.as_dict().items() if k.startswith('color') or k == 'transparent_background_colors'}
+    colors.update(profile.basic_colors())
+    for attr in ('cursor_color', 'cursor_text_color', 'highlight_fg', 'highlight_bg', 'visual_bell_color'):
+        colors[attr] = getattr(profile, attr)
+    return colors
 
 
 def color_scheme_spec(opts: Options) -> ColorsSpec | None:
@@ -331,6 +349,7 @@ def patch_colors(
     if windows is None:
         windows = tuple(boss.all_windows)
     bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in windows}
+    colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in windows if w}
     profiles = tuple(w.screen.color_profile for w in windows if w)
     patch_color_profiles(spec, transparent_background_colors, profiles, configured)
     if configured:
@@ -365,4 +384,7 @@ def patch_colors(
         if w:
             if notify_bg and w.screen.color_profile.default_bg != bg_colors_before.get(w.id):
                 boss.default_bg_changed_for(w.id)
+            # Configuration reloads defer notifications until all profile/theme layers are applied.
+            if notify_on_bg_change and color_profile_signature(w.screen.color_profile) != colors_before[w.id]:
+                w.notify_child_of_color_change()
             w.refresh()

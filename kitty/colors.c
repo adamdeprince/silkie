@@ -566,7 +566,7 @@ colortable_colors_into_dict(ColorProfile *self, unsigned start, unsigned limit, 
 
 static PyObject *
 basic_colors(ColorProfile *self, PyObject *args UNUSED) {
-#define basic_colors_doc "Return the basic colors as a dictionary of color_name to integer or None (names are the same as used in kitty.conf)"
+#define basic_colors_doc "Return the basic colors as a dictionary of color_name to integer or None (names are the same as used in silkie.conf)"
     RAII_PyObject(ans, PyDict_New());
     if (ans == NULL) return NULL;
     if (!colortable_colors_into_dict(self, 0, 16, ans)) return NULL;
@@ -589,7 +589,7 @@ basic_colors(ColorProfile *self, PyObject *args UNUSED) {
 
 static PyObject *
 as_dict(ColorProfile *self, PyObject *args UNUSED) {
-#define as_dict_doc "Return all colors as a dictionary of color_name to integer or None (names are the same as used in kitty.conf)"
+#define as_dict_doc "Return all colors as a dictionary of color_name to integer or None (names are the same as used in silkie.conf)"
     RAII_PyObject(ans, PyDict_New());
     if (ans == NULL) return NULL;
     if (!colortable_colors_into_dict(self, 0, arraysz(self->color_table), ans)) return NULL;

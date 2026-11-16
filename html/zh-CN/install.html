@@ -1,0 +1,492 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="Silkie 与 kitty 游戏" href="games.html"><link rel="prev" title="让终端拥有更丰富的交互。" href="index.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/install.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>安装 Silkie - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../install.html">
+<link rel="alternate" hreflang="zh-CN" href="install.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="项目资源">
+  <a href="index.html">项目概览</a>
+  <a href="#">安装 Silkie</a>
+  <a href="games.html">游戏与实机视频</a>
+  <a href="browser-demo.html">试用浏览器演示</a>
+  <a href="browser-ssh.html">浏览器 SSH 设置</a>
+  <a href="developer-guide.html">开发者指南</a>
+  <a href="reference.html">扩展参考手册</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档 ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档 ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支 ↗</a>
+  <a href="../install.html" lang="en">English</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="搜索" name="q" aria-label="搜索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">安装 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Silkie 与 kitty 游戏</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">在浏览器中试用 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">浏览器演示中的 SSH</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">为 Silkie 开发软件</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="reference.html">Silkie 扩展参考手册</a><input aria-label="Toggle navigation of Silkie 扩展参考手册" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
+<li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="install-silkie">
+<h1>安装 Silkie<a class="headerlink" href="#install-silkie" title="链接到此标题。">¶</a></h1>
+<p>Silkie 从本仓库的 <a class="reference external" href="https://github.com/adamdeprince/silkie/tree/silkie">silkie 分支</a> 构建。安装后的可执行文件为 <code class="docutils literal notranslate"><span class="pre">silkie</span></code>，配套工具使用 <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code>。上游 kitty 软件包提供上游 kitty，不包含 Silkie 的扩展。</p>
+<section id="binary-packages">
+<h2>二进制软件包<a class="headerlink" href="#binary-packages" title="链接到此标题。">¶</a></h2>
+<p>在支持的 macOS、Ubuntu、Debian 或麒麟系统上安装 Silkie 和 Iosevka：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="o">-</span><span class="n">fsSL</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">silkie</span><span class="o">.</span><span class="n">goblinreactor</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">install</span><span class="o">.</span><span class="n">sh</span> <span class="o">|</span> <span class="n">bash</span>
+</pre></div>
+</div>
+<p>安装脚本会说明所需的 Goblin Reactor 软件源，并在添加或修改之前征求许可。它会复用匹配的现有软件源，验证 APT 签名密钥，并通过 Homebrew 或 APT 安装 <code class="docutils literal notranslate"><span class="pre">silkie</span></code>。此外还会安装未经修改的 Iosevka 字体：macOS 使用官方 Homebrew <code class="docutils literal notranslate"><span class="pre">font-iosevka</span></code> cask，Linux 则下载并校验上游发布文件的校验和。软件源许可从终端读取，因此脚本通过管道传给 Bash 时也能使用。macOS 需要 Apple Silicon 和 macOS 26 或更高版本；如果缺少 Homebrew，脚本会征得许可后安装。</p>
+<p>手动安装命令如下。</p>
+<p>在运行 macOS 26 Tahoe 的 Apple Silicon 机器上，安装 Homebrew cask：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brew</span> <span class="n">tap</span> <span class="n">goblinreactor</span><span class="o">/</span><span class="n">tap</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">brew</span><span class="o">.</span><span class="n">goblinreactor</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">homebrew</span><span class="o">-</span><span class="n">tap</span><span class="o">.</span><span class="n">git</span>
+<span class="n">brew</span> <span class="n">install</span> <span class="o">--</span><span class="n">cask</span> <span class="n">goblinreactor</span><span class="o">/</span><span class="n">tap</span><span class="o">/</span><span class="n">silkie</span>
+<span class="n">brew</span> <span class="n">install</span> <span class="o">--</span><span class="n">cask</span> <span class="n">font</span><span class="o">-</span><span class="n">iosevka</span>
+</pre></div>
+</div>
+<p>首次启动应用前，需要在 macOS 中批准运行。<a class="reference external" href="https://brew.goblinreactor.com/#silkie">Homebrew 仓库的 Silkie 安装说明</a> 介绍了批准步骤和可用版本。</p>
+<p>Linux 的 <a class="reference external" href="https://apt.goblinreactor.com/#silkie">已签名 APT 仓库</a> 提供安装说明、签名密钥和各发行版的软件源配置。当前目标包括 Ubuntu 26.04 的 amd64 和 arm64，以及旧世界 LoongArch64（<code class="docutils literal notranslate"><span class="pre">loongarch64</span></code>）的麒麟 V10 SP1。仓库还列出了 Ubuntu 24.04 和 Debian 13 的 amd64 软件包。请选择与系统匹配的发行套件；旧世界 <code class="docutils literal notranslate"><span class="pre">loongarch64</span></code> 和新世界 <code class="docutils literal notranslate"><span class="pre">loong64</span></code> 是不同的二进制目标。</p>
+<p>按上述说明配置软件源后：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">update</span>
+<span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">silkie</span>
+</pre></div>
+</div>
+<p>运行 <code class="docutils literal notranslate"><span class="pre">silkie</span></code> 启动终端，使用 <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code> 运行配套工具。</p>
+<p>检查已安装的命令：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">silkie</span> <span class="o">--</span><span class="n">version</span>
+<span class="n">silkie</span><span class="o">-</span><span class="n">kitten</span> <span class="o">--</span><span class="n">version</span>
+<span class="n">silkie</span><span class="o">-</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span> <span class="o">--</span><span class="n">help</span>
+</pre></div>
+</div>
+<p>2026 年 10 月 28 日，已检查上述五个目标的 Linux 仓库签名、软件包校验和以及可执行文件链接。还在 Ubuntu 26.04 amd64（<code class="docutils literal notranslate"><span class="pre">naamah</span></code>）和麒麟 V10 SP1 LoongArch64（<code class="docutils literal notranslate"><span class="pre">loongson</span></code>）上测试了 APT 安装与原生模块加载。</p>
+<p><a class="reference internal" href="games.html"><span class="doc">Silkie Sprint 和 Silkie Scramble 游戏</span></a> 以独立的 Homebrew 和 APT 软件包分发。游戏页面包含安装命令、支持的平台、操作方法和实机视频。</p>
+</section>
+<section id="fonts">
+<h2>字体<a class="headerlink" href="#fonts" title="链接到此标题。">¶</a></h2>
+<p>安装脚本包含 Silkie 默认文本使用的 Iosevka 字体；常规、粗体和斜体均使用较宽的 Extended 字形。手动安装时，macOS 可使用 <code class="docutils literal notranslate"><span class="pre">brew</span> <span class="pre">install</span> <span class="pre">--cask</span> <span class="pre">font-iosevka</span></code>；Linux 可从 <a class="reference external" href="https://github.com/be5invis/Iosevka/releases">Iosevka 发布页</a> 下载未经修改的字体。Linux 安装脚本目前固定使用 Iosevka 34.9.1。</p>
+<p>Iosevka 的版权属于 Renzhi Li，按 <a class="reference external" href="https://github.com/be5invis/Iosevka/blob/main/LICENSE.md">SIL 开源字体许可证 1.1</a> 分发。该许可证允许使用、安装和随软件一起分发字体，前提是保留许可证与版权声明；字体不得单独出售。安装脚本下载原始字体，不修改或重命名字体，并将对应的 <code class="docutils literal notranslate"><span class="pre">Iosevka-LICENSE.md</span></code> 保存到字体文件旁。字体与 Silkie 采用各自独立的许可证。</p>
+<p>如需使用 Iosevka 原来较窄的字宽，可配置：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">font_family</span> <span class="n">Iosevka</span>
+<span class="n">font_role</span> <span class="n">sans</span> <span class="n">Iosevka</span>
+</pre></div>
+</div>
+<p>衬线字体角色需要另行安装 Iosevka Slab。中日韩文本可安装相应地区的 Sarasa Term 或 Noto Sans CJK 字体。字体文件与应用分开提供；首选字体缺失时，操作系统会替换为可用字体。<a class="reference internal" href="font-protocol.html"><span class="doc">字体选择协议</span></a> 列出了字体来源，并说明了地区字形的选择方式。</p>
+</section>
+<section id="source-builds">
+<h2>从源码构建<a class="headerlink" href="#source-builds" title="链接到此标题。">¶</a></h2>
+</section>
+<section id="prerequisites">
+<h2>前置依赖<a class="headerlink" href="#prerequisites" title="链接到此标题。">¶</a></h2>
+<p>安装 Git、C 编译器和 <a class="reference external" href="https://go.dev/doc/install">Go</a>。Go 的最低版本在 <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/go.mod">silkie 分支的 go.mod</a> 中声明。</p>
+<p>在 macOS 上，若尚未安装 Apple 命令行开发工具，请运行 <code class="docutils literal notranslate"><span class="pre">xcode-select</span> <span class="pre">--install</span></code>。在 Linux 上，安装 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/#x11-dev-libs">kitty 构建前置条件</a> 列出的 X11 和 D-Bus 开发库。</p>
+<p><code class="docutils literal notranslate"><span class="pre">dev.sh</span></code> 使用支持平台的预构建依赖，包括 Python 环境。首次构建需要联网下载这些依赖。<a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/bypy/devenv.go">构建实现</a> 位于本仓库中。若要使用系统库构建，请参阅 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/#dependencies">上游依赖列表</a>；macOS 还可参阅 Silkie 的 <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/Brewfile">Brewfile</a>。</p>
+</section>
+<section id="build-and-launch">
+<h2>构建与启动<a class="headerlink" href="#build-and-launch" title="链接到此标题。">¶</a></h2>
+<p>macOS 的依赖配置使用相对于加载器的库引用，避免检出路径超出已下载库的 Mach-O 加载命令空间。如果上次下载或重定位不完整，会自动重试配置。2026 年 10 月 28 日，包含此修复的全新检出版本已通过构建和原生模块加载检查。</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--branch<span class="w"> </span>silkie<span class="w"> </span>https://github.com/adamdeprince/silkie.git
+<span class="nb">cd</span><span class="w"> </span>silkie
+./dev.sh<span class="w"> </span>build
+./kitty/launcher/kitty
+</pre></div>
+</div>
+<p>运行开发构建时，请保留检出目录。修改源码后重新运行 <code class="docutils literal notranslate"><span class="pre">./dev.sh</span> <span class="pre">build</span></code>。开发构建使用内部路径 <code class="docutils literal notranslate"><span class="pre">kitty/launcher/kitty</span></code> 和 <code class="docutils literal notranslate"><span class="pre">kitty/launcher/kitten</span></code>，而不是安装后的 <code class="docutils literal notranslate"><span class="pre">silkie</span></code> 与 <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code> 命令。在 macOS 上，构建还提供 <code class="docutils literal notranslate"><span class="pre">kitty/launcher/kitty.app</span></code>；未签名应用和移动检出目录的说明见 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/">上游构建文档</a>。</p>
+</section>
+<section id="try-the-input-inspector">
+<h2>试用输入检查工具<a class="headerlink" href="#try-the-input-inspector" title="链接到此标题。">¶</a></h2>
+<p>在已安装的 Silkie 终端中运行：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">silkie</span><span class="o">-</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span>
+</pre></div>
+</div>
+<p>源码构建请在仓库目录中运行工具。macOS：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">kitty</span><span class="o">/</span><span class="n">launcher</span><span class="o">/</span><span class="n">kitty</span><span class="o">.</span><span class="n">app</span><span class="o">/</span><span class="n">Contents</span><span class="o">/</span><span class="n">MacOS</span><span class="o">/</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span>
+</pre></div>
+</div>
+<p>Linux：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">kitty</span><span class="o">/</span><span class="n">launcher</span><span class="o">/</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="show-pointer.html"><span class="doc">show_pointer 工具</span></a> 会查询输入协议，并显示终端和已连接设备支持的事件。</p>
+<p>接下来，阅读 <a class="reference internal" href="configuration.html"><span class="doc">Silkie 配置</span></a> 了解 Silkie 专有选项，参阅 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty 配置手册</a> 了解继承的设置。应用应在启用扩展之前查询 <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a>。</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="games.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Silkie 与 kitty 游戏</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Home</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">安装 Silkie</a><ul>
+<li><a class="reference internal" href="#binary-packages">二进制软件包</a></li>
+<li><a class="reference internal" href="#fonts">字体</a></li>
+<li><a class="reference internal" href="#source-builds">从源码构建</a></li>
+<li><a class="reference internal" href="#prerequisites">前置依赖</a></li>
+<li><a class="reference internal" href="#build-and-launch">构建与启动</a></li>
+<li><a class="reference internal" href="#try-the-input-inspector">试用输入检查工具</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

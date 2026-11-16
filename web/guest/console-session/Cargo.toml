@@ -1,0 +1,14 @@
+[package]
+name = "silkie-console-session"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+license = "GPL-3.0-only"
+description = "An acknowledged terminal input handoff before returning to the browser shell"
+
+[dependencies]
+libc = "0.2.191"
+unicode-segmentation = "1.13.3"
+unicode-width = "0.2.2"
+

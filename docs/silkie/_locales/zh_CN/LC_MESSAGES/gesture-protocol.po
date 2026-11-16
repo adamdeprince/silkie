@@ -1,0 +1,385 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:47+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/gesture-protocol.rst:2
+msgid "Trackpad gesture protocol"
+msgstr "触控板手势协议"
+
+#: docs/gesture-protocol.rst:6
+msgid ""
+"A trackpad delivers more than scrolling: the system recognizes a pinch, a rotation, a swipe with "
+"several fingers, a double tap with two fingers and fingers held still, and hands them to the "
+"application as gestures. The trackpad gesture protocol is an open terminal extension that reports"
+" them to the program running in the terminal. Like the other extensions here it is small, "
+"unobtrusive, easy to implement and changes nothing about what the TTY is."
+msgstr ""
+"触控板不仅能滚动：系统还会识别捏合、旋转、多指轻扫、双指双击和手指静止按住，并将它们作为手势交给应用。触控板手势协议是将这些信息交给终端内程序的开放扩展。与其他扩展一样，它小巧、低干扰、易于实现，不改变"
+" TTY 的本质。"
+
+#: docs/gesture-protocol.rst:13
+msgid ""
+"It is independent of the :doc:`tablet-protocol`, which reports the fingers themselves and leaves "
+"recognizing a gesture to the program. Both can be on at the same time, a program takes whichever "
+"suits it."
+msgstr "本协议独立于 :doc:`tablet-protocol`，后者直接报告手指接触，由程序自行识别手势。两者可同时启用，程序可按需选择。"
+
+#: docs/gesture-protocol.rst:18
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/gesture-protocol.rst:20
+msgid "Frames are ``OSC 777`` with the ``gesture`` selector::"
+msgstr "帧使用带有 ``gesture`` 选择器的 ``OSC 777``：::"
+
+#: docs/gesture-protocol.rst:24
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected, the units and the clock. ``v``, the protocol "
+"version, is currently ``1``, and ``op`` is one of ``query``, ``cap``, ``mode`` and ``event``."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧、单位和时钟。协议版本 ``v`` 当前为 ``1``，``op`` 为 "
+"``query``、``cap``、``mode`` 或 ``event``。"
+
+#: docs/gesture-protocol.rst:30
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/gesture-protocol.rst:32
+msgid "A program asks the terminal whether it supports the protocol::"
+msgstr "程序询问终端是否支持本协议：::"
+
+#: docs/gesture-protocol.rst:36
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#: docs/gesture-protocol.rst:42
+msgid ""
+"``caps`` is a bit set of the gestures the terminal can report: pinch ``1``, rotate ``2``, swipe "
+"``4``, smart zoom ``8``, hold ``16``. It describes what the terminal can pass on from the window "
+"system it is connected to, not whether a trackpad is attached. ``mode`` is the current state of "
+"the mode described below. A terminal that does not support the protocol ignores the query, so a "
+"program must time out. A query does not change the mode."
+msgstr ""
+"``caps`` 是可报告手势的位集合：捏合 ``1``、旋转 ``2``、轻扫 ``4``、智能缩放 ``8``、按住 "
+"``16``。它描述终端能从当前窗口系统转发什么，而非是否已连接触控板。``mode`` 为下述模式的当前状态。不支持本协议的终端会忽略查询，因此程序必须设置超时。查询不改变模式。"
+
+#: docs/gesture-protocol.rst:51
+msgid "Mode"
+msgstr "模式"
+
+#: docs/gesture-protocol.rst:53
+msgid "Reports are off by default and turned on per terminal window with::"
+msgstr "报告默认关闭，按终端窗口开启：::"
+
+#: docs/gesture-protocol.rst:57
+msgid ""
+"``mode`` is a bit set of the kinds of gesture the program wants: ``1`` the gestures made by "
+"moving fingers, which are the pinch, the rotation, the swipe and the smart zoom, ``2`` holds; "
+"``0`` turns reporting off. While a bit is on, the gestures it names are reported with this "
+"protocol when they happen over the window. A terminal drops the bits it does not know, so a "
+"program that depends on a bit reads the mode back. The scroll and touch events the same fingers "
+"produce are unaffected, a two finger pinch still scrolls if the system scrolls during it, so a "
+"program that zooms on pinch should expect scroll reports too and ignore them while a pinch is in "
+"progress."
+msgstr ""
+"``mode`` 是程序请求的手势种类位集合：``1`` 表示移动手指形成的捏合、旋转、轻扫和智能缩放，``2`` 表示按住；``0`` "
+"关闭报告。相应位开启后，窗口上发生的对应手势由本协议报告。终端会舍弃不认识的位，因此依赖某个位的程序应读回状态。同一手指产生的滚动和触摸事件不受影响；系统在双指捏合期间产生滚动时仍会滚动，因此通过捏合缩放的程序也应预期滚动报告，并在捏合期间忽略它们。"
+
+#: docs/gesture-protocol.rst:67
+msgid ""
+"The mode is local to the window, is reset by ``RIS``, and changing it cancels every gesture in "
+"progress. Programs must turn it off when they exit, suspend or fail, and turn it back on when "
+"resumed. Multiplexers keep it with the rest of the terminal state, restore it on reconnect, and "
+"turn it off when detaching. A terminal may let its user refuse the mode, or some of its bits, for"
+" every program or for some. A refused bit reads back as off and the gestures it names are not "
+"reported, so a program reads the mode back rather than assume it was granted."
+msgstr ""
+"模式仅作用于当前窗口，由 ``RIS`` "
+"重置，修改模式会取消全部进行中的手势。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他终端状态一起保存它，重连时恢复，脱离连接时关闭。终端可允许用户针对全部或部分程序拒绝模式或部分位；被拒绝的位读回为关闭，不报告相应手势，因此程序应读回状态，不要假定已获准。"
+
+#: docs/gesture-protocol.rst:76
+msgid ""
+"A ``mode`` request without a ``mode`` field reads the state instead of changing it, and is "
+"answered with::"
+msgstr "不带 ``mode`` 字段的 ``mode`` 请求读取状态而不修改，回复为：::"
+
+#: docs/gesture-protocol.rst:81
+msgid ""
+"A program resuming after a reconnection reads the mode to learn whether it survived, rather than "
+"assuming it did."
+msgstr "程序重连后恢复时，应读回模式，确认是否仍然有效，而非假定状态保留。"
+
+#: docs/gesture-protocol.rst:85
+msgid "Reports"
+msgstr "报告"
+
+#: docs/gesture-protocol.rst:87
+msgid "A report is a single frame per event::"
+msgstr "每个事件对应一帧报告：::"
+
+#: docs/gesture-protocol.rst:91
+msgid "``kind``, ``phase``, ``t``, ``x``, ``y`` and ``mods`` are always present:"
+msgstr "始终包含 ``kind``、``phase``、``t``、``x``、``y`` 和 ``mods``："
+
+#: docs/gesture-protocol.rst:94
+msgid "``kind``"
+msgstr "``kind``"
+
+#: docs/gesture-protocol.rst:94
+msgid "``1`` pinch, ``2`` rotate, ``3`` swipe, ``4`` smart zoom, ``5`` hold"
+msgstr "``1`` 捏合，``2`` 旋转，``3`` 轻扫，``4`` 智能缩放，``5`` 按住"
+
+#: docs/gesture-protocol.rst:96
+msgid "``phase``"
+msgstr "``phase``"
+
+#: docs/gesture-protocol.rst:96
+msgid "``1`` begin, ``2`` update, ``3`` end, ``4`` cancel"
+msgstr "``1`` 开始，``2`` 更新，``3`` 结束，``4`` 取消"
+
+#: docs/gesture-protocol.rst:97
+msgid "``t``"
+msgstr "``t``"
+
+#: docs/gesture-protocol.rst:97
+msgid ""
+"When the system says the event happened, in milliseconds on the clock the terminal uses for every"
+" extension, see :doc:`extension-framing`. A cancel the terminal makes itself has the time it made"
+" it"
+msgstr "系统认定事件发生的时刻，以终端全部扩展共用时钟的毫秒表示，见 :doc:`extension-framing`。终端自行生成的取消事件使用其生成时刻"
+
+#: docs/gesture-protocol.rst:101
+msgid "``tu``"
+msgstr "``tu``"
+
+#: docs/gesture-protocol.rst:101
+msgid ""
+"Microseconds past ``t``, ``0`` to ``999``, present only when the system stamps events more finely"
+" than a millisecond"
+msgstr "``t`` 之后的微秒数，范围 ``0`` 至 ``999``；仅在系统时间戳精度高于毫秒时出现"
+
+#: docs/gesture-protocol.rst:103
+msgid "``x``, ``y``"
+msgstr "``x``、``y``"
+
+#: docs/gesture-protocol.rst:103
+msgid ""
+"Position of the pointer in 1/256 of a physical pixel, signed, zero based, relative to the top "
+"left of the cell area, within ±1073741823. A physical pixel is one of the framebuffer the "
+"terminal draws into, not a scaled unit of the window system"
+msgstr "指针位置，以物理像素的 1/256 为单位，有符号、从零开始，相对于字符单元区域左上角，范围为 ±1073741823。物理像素指终端帧缓冲区的像素，而非窗口系统缩放后的逻辑单位"
+
+#: docs/gesture-protocol.rst:107
+msgid "``mods``"
+msgstr "``mods``"
+
+#: docs/gesture-protocol.rst:107
+msgid "Shift ``1``, Alt ``2``, Control ``4``, Super ``8``"
+msgstr "Shift ``1``，Alt ``2``，Control ``4``，Super ``8``"
+
+#: docs/gesture-protocol.rst:110
+msgid "The fields a kind adds:"
+msgstr "各手势新增的字段："
+
+#: docs/gesture-protocol.rst:113
+msgid "pinch ``scale``"
+msgstr "捏合 ``scale``"
+
+#: docs/gesture-protocol.rst:113
+msgid ""
+"The change in magnification since the previous report of the gesture, in thousandths: ``100`` is "
+"ten percent larger, ``-100`` ten percent smaller"
+msgstr "自上次报告以来的缩放变化，单位千分之一：``100`` 表示放大百分之十，``-100`` 表示缩小百分之十"
+
+#: docs/gesture-protocol.rst:116
+msgid "pinch ``total``"
+msgstr "捏合 ``total``"
+
+#: docs/gesture-protocol.rst:116
+msgid "The magnification since the gesture began, in thousandths, ``1000`` when unchanged"
+msgstr "自手势开始以来的总缩放比例，单位千分之一，不变时为 ``1000``"
+
+#: docs/gesture-protocol.rst:118
+msgid "rotate ``angle``"
+msgstr "旋转 ``angle``"
+
+#: docs/gesture-protocol.rst:118
+msgid "The rotation since the previous report, in hundredths of a degree, clockwise positive"
+msgstr "自上次报告以来的旋转量，单位百分之一度，顺时针为正"
+
+#: docs/gesture-protocol.rst:120
+msgid "rotate ``total``"
+msgstr "旋转 ``total``"
+
+#: docs/gesture-protocol.rst:120
+msgid "The rotation since the gesture began, in hundredths of a degree"
+msgstr "自手势开始以来的总旋转量，单位百分之一度"
+
+#: docs/gesture-protocol.rst:122
+msgid "swipe ``dx``, ``dy``"
+msgstr "轻扫 ``dx``、``dy``"
+
+#: docs/gesture-protocol.rst:122
+msgid ""
+"The direction the fingers moved, ``-1``, ``0`` or ``1`` on each axis, positive to the right and "
+"down. Exactly one of the two is non-zero"
+msgstr "手指移动方向，各轴为 ``-1``、``0`` 或 ``1``，向右和向下为正。两个轴中恰有一个非零"
+
+#: docs/gesture-protocol.rst:127
+msgid "A smart zoom and a hold carry no extra fields."
+msgstr "智能缩放和按住不携带额外字段。"
+
+#: docs/gesture-protocol.rst:129
+msgid ""
+"Any kind may also carry ``fingers``, the number of fingers making the gesture. The system tells "
+"it when the gesture begins, and it is then present in every report of that gesture. It is absent "
+"when the system does not say."
+msgstr "任意手势还可携带 ``fingers``，表示参与的手指数。系统在手势开始时提供该值，此后该手势的每条报告均包含它；系统未提供时省略。"
+
+#: docs/gesture-protocol.rst:134
+msgid "Lifecycle"
+msgstr "生命周期"
+
+#: docs/gesture-protocol.rst:136
+msgid ""
+"A gesture begins with ``begin``, is followed by any number of ``update`` reports and ends with "
+"``end`` or ``cancel``. A ``begin`` carries a ``scale`` of ``0``, an ``angle`` of ``0``, and a "
+"``total`` of ``1000`` or ``0``. A swipe and a smart zoom are instantaneous: they are reported as "
+"a ``begin`` immediately followed by an ``end``, both with the same fields. A pinch and a rotation"
+" are independent gestures that usually run at the same time, since two fingers that pinch also "
+"turn a little, so a program interested in one must tolerate reports of the other."
+msgstr ""
+"手势以 ``begin`` 开始，接任意数量 ``update``，以 ``end`` 或 ``cancel`` 结束。``begin`` 中的 ``scale`` 为 "
+"``0``，``angle`` 为 ``0``，``total`` 为 ``1000`` 或 ``0``。轻扫和智能缩放为瞬时手势：先报告 ``begin``，紧接字段相同的 "
+"``end``。捏合与旋转相互独立，通常同时发生，因为捏合的双指也会略微旋转，因此关注其中一种的程序必须能处理另一种报告。"
+
+#: docs/gesture-protocol.rst:145
+msgid ""
+"A hold begins when fingers come to rest on the trackpad and ends when they lift, with no "
+"``update`` in between. It is cancelled when the fingers start to move instead, which usually "
+"begins a scroll or another gesture. Programs use it to stop something in motion, a coasting "
+"scroll, say, the moment the user touches the trackpad."
+msgstr "手指在触控板上静止时开始按住，抬起时结束，中间没有 ``update``。手指开始移动时取消按住，通常继而开始滚动或其他手势。程序可用它在用户接触触控板的一刻停止运动，例如停止惯性滚动。"
+
+#: docs/gesture-protocol.rst:151
+msgid ""
+"A gesture is captured by the window it began in, and its later reports go to that window even "
+"when the pointer moves out of it, so coordinates can be negative or exceed the cell area. The "
+"terminal cancels gestures in progress when the mode changes or the terminal is reset. After a "
+"cancel the rest of that gesture is not reported, not even its ``end``. Programs must tolerate a "
+"repeated cancel and a fresh ``begin`` for a kind they still have open, which replaces the earlier"
+" gesture."
+msgstr ""
+"手势由其开始时所在的窗口捕获，即使指针移出，该手势后续报告仍发给原窗口，因此坐标可为负数或超过字符单元区域。模式变化或终端重置时，终端取消进行中的手势。取消后不再报告该手势的任何后续事件，包括 "
+"``end``。程序必须容忍重复取消，以及对仍处于活动状态的同种手势收到新 ``begin``，后者替代旧手势。"
+
+#: docs/gesture-protocol.rst:159
+msgid ""
+"A terminal or a relay that cannot keep up with the program may merge consecutive ``update`` "
+"reports of one gesture into one, and nothing else: a merged pinch has the product of the changes "
+"in magnification as its ``scale``, a merged rotation the sum of the angles as its ``angle``, and "
+"both have the ``total``, ``t`` and ``tu`` of the last report merged. A ``begin``, an ``end`` and "
+"a ``cancel`` are never merged or dropped, see :doc:`extension-framing`."
+msgstr ""
+"无法跟上程序处理速度的终端或中继，只能将同一手势的连续 ``update`` 合并：捏合报告的 ``scale`` 为缩放变化的乘积，旋转报告的 ``angle`` 为角度之和，两者的 "
+"``total``、``t`` 和 ``tu`` 都取最后一条报告。``begin``、``end`` 和 ``cancel`` 绝不合并或丢弃，见 :doc:`extension-"
+"framing`。"
+
+#: docs/gesture-protocol.rst:167
+msgid ""
+"A multiplexer translates ``x,y`` by the pane's origin (borders included), forwards every other "
+"field unchanged, delivers each gesture only to the pane it began in, and cancels gestures when "
+"panes move or resize."
+msgstr "多路复用器按窗格原点（含边框）转换 ``x,y``，其他字段原样转发；每个手势仅交给其开始时所在窗格。窗格移动或调整大小时取消手势。"
+
+#: docs/gesture-protocol.rst:172
+msgid "Versions and extension"
+msgstr "版本与扩展"
+
+#: docs/gesture-protocol.rst:174
+msgid ""
+"A program ignores a frame whose ``op`` it does not know, a report whose ``kind`` it does not know"
+" and fields it does not know, so all three are added without a version change. A new kind is also"
+" only sent to a program that asked for it with a mode bit of its own, as the hold is, so a "
+"program that sends ``mode=1`` sees the four kinds that bit names and nothing else, however much "
+"the protocol grows. A new ``phase`` value, or a change in the meaning of an existing field, needs"
+" a new version."
+msgstr ""
+"程序忽略不认识 ``op`` 的帧、不认识 ``kind`` "
+"的报告和不认识的字段，因此三者新增内容均不必升级版本。新手势种类也只发送给通过其独立模式位请求它的程序，按住即如此；所以无论协议如何增长，发送 ``mode=1`` "
+"的程序只看到该位定义的四种手势。新增 ``phase`` 值或改变既有字段含义时，需要新版本。"
+
+#: docs/gesture-protocol.rst:183
+msgid "Implementations"
+msgstr "实现情况"
+
+#: docs/gesture-protocol.rst:185
+msgid ""
+"silkie, this fork of kitty: pinch, rotate, swipe and smart zoom on macOS; pinch, rotate, swipe "
+"and hold, with the number of fingers, on Wayland; pinch, rotate and swipe, with the number of "
+"fingers, on X11. ``kitty --debug-input`` logs the gestures it sees."
+msgstr ""
+"silkie（此 kitty 分支）：macOS 支持捏合、旋转、轻扫和智能缩放；Wayland 支持捏合、旋转、轻扫和按住，并报告手指数；X11 "
+"支持捏合、旋转和轻扫，并报告手指数。``kitty --debug-input`` 记录所见手势。"
+
+#: docs/gesture-protocol.rst:191
+msgid "Implementation notes for silkie"
+msgstr "silkie 实现说明"
+
+#: docs/gesture-protocol.rst:193
+msgid "silkie passes on what the window system recognizes:"
+msgstr "silkie 转发窗口系统识别的手势："
+
+#: docs/gesture-protocol.rst:195
+msgid ""
+"On macOS, the magnify, rotate, swipe and smart magnify events of AppKit. A swipe with three "
+"fingers only reaches applications when System Settings has it set to swipe between pages, and a "
+"smart zoom when the trackpad's smart zoom is enabled. AppKit does not say how many fingers made a"
+" gesture, so ``fingers`` is absent. Its events are stamped to the microsecond, so ``tu`` is sent "
+"on macOS only: Wayland and X11 stamp gestures in whole milliseconds."
+msgstr ""
+"macOS：使用 AppKit 的 magnify、rotate、swipe 和 smart magnify "
+"事件。系统设置中将三指轻扫配置为页面间轻扫时，应用才能收到它；启用触控板智能缩放时才能收到智能缩放。AppKit 不提供手指数，因此省略 ``fingers``。事件时间戳精确到微秒，所以仅 "
+"macOS 发送 ``tu``；Wayland 和 X11 手势时间戳为整毫秒。"
+
+#: docs/gesture-protocol.rst:202
+msgid ""
+"On Wayland, through version 3 of ``pointer-gestures-unstable-v1``, and ``caps`` is zero on a "
+"compositor without it. A pinch there carries both scale and rotation, so one compositor pinch is "
+"reported as a pinch and a rotation. A swipe is reported once it ends, as its dominant direction, "
+"and compositors keep most three finger swipes for themselves. A hold also stops kitty's own "
+"coasting scroll."
+msgstr ""
+"Wayland：通过 ``pointer-gestures-unstable-v1`` 第 3 版提供；不支持的合成器上 ``caps`` "
+"为零。一个捏合事件同时包含缩放与旋转，因此报告为一个捏合手势和一个旋转手势。轻扫结束后按主方向报告，合成器通常保留大多数三指轻扫供自己使用。按住也会停止 kitty 自身的惯性滚动。"
+
+#: docs/gesture-protocol.rst:208
+msgid ""
+"On X11, through the touchpad gestures of XInput 2.4, which needs version 21.1 or later of the X "
+"server and a driver that sends them, as the libinput driver does. ``caps`` is zero when the "
+"server does not have them. A pinch and a swipe are reported as on Wayland. X11 has no hold and no"
+" smart zoom."
+msgstr ""
+"X11：通过 XInput 2.4 的触控板手势提供，需要 X 服务器 21.1 或更新版本，以及会发送这些事件的驱动（如 libinput 驱动）。服务器不支持时 ``caps`` "
+"为零。捏合和轻扫的报告方式与 Wayland 相同。X11 不提供按住或智能缩放。"
+

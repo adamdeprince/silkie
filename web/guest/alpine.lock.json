@@ -1,0 +1,55 @@
+{
+  "distribution": "Alpine Linux",
+  "version": "3.23.7",
+  "architecture": "x86",
+  "rootfs": {
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86/alpine-minirootfs-3.23.7-x86.tar.gz",
+    "sha256": "41978b24040bf632b4d60e865a39ad1f57372ca202c011cde41ef36a7eed8dd3"
+  },
+  "packages": [
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/bash-5.3.3-r1.apk",
+      "sha256": "141016d37d6186e8a233099b3c98e814781561b3bcefe54730d4b65b6bcfa506"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/readline-8.3.1-r0.apk",
+      "sha256": "a8f8066105021774a372730aa6092642467dcf4bfa317533fd5c44399dc4f3dd"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/libncursesw-6.5_p20251123-r0.apk",
+      "sha256": "5362c3583de0a4fef106daf08e9e5cebe14a50b27bdb2ac393a0b0b8ba966f7f"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/ncurses-terminfo-base-6.5_p20251123-r0.apk",
+      "sha256": "55f46b1a5d286eff2579bb77ecd84cabbc61abfa766518490604f867a4ede500"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/ncurses-terminfo-6.5_p20251123-r0.apk",
+      "sha256": "cb921ade06fda8aff9481c5554c64bbace7778702afdf162d09c40616129bac2"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/openssh-client-default-10.2_p1-r0.apk",
+      "sha256": "c11607e8abbf8760984d541845f1f1aac33da6cd30812d13b8e02b581597c9a0"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/openssh-client-common-10.2_p1-r0.apk",
+      "sha256": "46dae667d33fae93fd47b356a6f1e420ed9671d8111d5a088d5bb0514be47564"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/openssh-keygen-10.2_p1-r0.apk",
+      "sha256": "b07ef7863071a26c04eeddfd9668d7040eaaa389c3e276bfa6d4df6a8957e0dd"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/libcrypto3-3.5.9-r0.apk",
+      "sha256": "2dd6a2737bd3b42a6c17827d742bebbc77747e02c1b8629f0c561511adcd3127"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/libedit-20251016.3.1-r0.apk",
+      "sha256": "95af6b127728a31e174f5181edbcc9de1b23196e3936c777babfca359acb8066"
+    },
+    {
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86/zlib-1.3.2-r1.apk",
+      "sha256": "f6a0303e5203a43635d2c8a360a8ef0a6c462d72a123ba96ca82407d5536e2be"
+    }
+  ]
+}

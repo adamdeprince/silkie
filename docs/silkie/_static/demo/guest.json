@@ -1,0 +1,28 @@
+{
+  "image": "guest.ext2",
+  "sha256": "a9ac7ac3df6d61b68eff3add5120ff51b073734b97f73ff6df92a3a3e48eb5fb",
+  "bytes": 989216768,
+  "architecture": "i386",
+  "distribution": "Alpine Linux 3.23.7",
+  "entry": "/usr/local/bin/silkie-demo-shell",
+  "cwd": "/home/demo",
+  "uid": 1000,
+  "gid": 1000,
+  "games": {
+    "silkie-sprint": {
+      "sha256": "d4d9d3ee980f5e75318a3985cb6d18dc6634fcf14eaa4803c7fcb8425a66b812"
+    },
+    "silkie-scramble": {
+      "sha256": "60685da385f5e97ebef4434b038f4ed95b7657b87af98e0e5a2e82406e220ed9"
+    },
+    "presidential": {
+      "sha256": "9c078e6b18de2a9a1fde522ccb034a1354af1ec46ce02f0b798c735ca59dc233"
+    },
+    "silkie-loophole": {
+      "sha256": "bebe99cdaa713b5a82b3bd9ae82f3a0ef2455a701ea76f172e70f2c40a56a394"
+    }
+  },
+  "console_session": {
+    "sha256": "1fe3becf5e0367cb519aa3af48b592fc920aedc19f48d4326ba8485aa9028785"
+  }
+}

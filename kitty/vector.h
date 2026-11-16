@@ -7,10 +7,11 @@
 
 #pragma once
 
+// Python's feature-test macros must precede system headers.
+#include <Python.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <Python.h>
 
 // 0 means no limit. Defined next to the other options so vector.c does not include state.h.
 unsigned long kitty_vector_depth_limit(void);
@@ -19,6 +20,10 @@ unsigned long kitty_vector_curve_limit(void);
 
 // A vector image: the element table of a graphics protocol f=200 image, see docs/vector-protocol.rst
 typedef struct VectorDoc VectorDoc;
+typedef struct {
+    double eye_pixels, positive, negative, fov, phase_pixels, phase_limit, multiplier;
+} VectorStereo;
+bool vector_doc_has_depth(const VectorDoc *doc);
 
 // A raster image drawn by an `i` record: its size, and when asked for its
 // pixels too, RGBA or RGB rows that the renderer frees
@@ -48,6 +53,7 @@ uint8_t *vector_doc_render(VectorDoc *doc, unsigned width, unsigned height, vect
 uint8_t *vector_doc_render_rect(VectorDoc *doc, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx);
 // Linear extended-sRGB, straight alpha floats; preserves negative/HDR channels.
 float *vector_doc_render_linear(VectorDoc *doc, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx);
+float *vector_doc_render_stereo(VectorDoc *doc, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx, VectorStereo stereo);
 // A document remembers what the records applied to it changed. This gives the pixels that differ, for the
 // document rasterized at width x height, from what it was when the damage was last cleared: false when
 // there are none, otherwise the rectangle around them, which is the whole image when the change could not

@@ -4,6 +4,17 @@
 A terminal for richer interaction.
 ==================================
 
+.. raw:: html
+
+   <figure class="hero-game">
+     <a href="games.html">
+       <img src="_static/games/sprint-tug.png" width="1100" height="393"
+            alt="Loki and Skaði playing tug with a Silkie hen in Silkie Sprint"
+            fetchpriority="high">
+     </a>
+     <figcaption><a href="games.html">Meet the games for Silkie and kitty.</a></figcaption>
+   </figure>
+
 .. container:: hero-lead
 
    Silkie is a terminal emulator for macOS and Linux, built on
@@ -16,12 +27,15 @@ A terminal for richer interaction.
    .. container:: home-actions
 
       `Install Silkie <#install>`_
+      :doc:`Try the browser demo <browser-demo>`
       :doc:`Read the specifications <developer-guide>`
 
    .. container:: source-note
 
       Open source · Main branch: `silkie
       <https://github.com/adamdeprince/silkie/tree/silkie>`_
+
+.. include:: _includes/browser-terminal.rst
 
 .. container:: lineage
 
@@ -86,6 +100,10 @@ each sample to make a round trip to the application.
 :doc:`Vector images <vector-protocol>` · :doc:`Terminal-side ink <ink-protocol>` ·
 :doc:`GPU surfaces <gpu-surface-protocol>`
 
+Send one-, two-, four-, or eight-bit grayscale pixels and RGB565 without
+requiring compression; :doc:`packed-image-protocol` describes the compact
+wire encodings, independent of the display's color model.
+
 Color beyond ordinary SDR
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -104,12 +122,30 @@ frame is presented. Use those reports to coordinate drawing with the terminal.
 :doc:`Display information <display-protocol>` · :doc:`Latency <latency-protocol>` ·
 :doc:`Frame presentation <frame-protocol>`
 
+Games
+-------
+
+Play **Presidential**, a political satire and economic simulation, or
+**Silkie Loophole**, a raccoon's trick-or-treating adventure in Montpelier.
+**Silkie Sprint** crosses roads and rivers; **Silkie Scramble** gathers
+chicks while outwitting garden predators. All four run in the browser's
+Linux terminal and support native Silkie and kitty terminals.
+
+:doc:`Play the games, watch gameplay, and find installation instructions <games>`.
+
 Install
 ---------
 
 Binary packages are available from `Homebrew <https://brew.goblinreactor.com/#silkie>`_
 for Apple Silicon macOS, and the `APT repository <https://apt.goblinreactor.com/#silkie>`_
 for Linux. See :doc:`install` for the supported targets and installation instructions.
+To set up package sources and install both Silkie and its Iosevka font::
+
+   curl -fsSL https://silkie.goblinreactor.com/install.sh | bash
+
+The installer asks before adding or changing Goblin Reactor package sources.
+It installs unmodified Iosevka with its SIL Open Font License notice.
+Silkie uses Iosevka's wider Extended faces by default.
 
 To build from source, use the ``silkie`` branch. You will need Git, a C compiler, and
 Go; Linux also needs the system libraries listed in the
@@ -118,8 +154,9 @@ build dependencies.
 
 .. include:: _includes/source-build.rst
 
-The executable retains the name ``kitty``. Running this checkout's executable
-launches Silkie with its extensions. Upstream kitty packages install upstream
+Launch the installed application with ``silkie`` and use ``silkie-kitten`` for
+its companion tools. The source build above runs directly from the checkout.
+Upstream kitty packages install upstream
 kitty; use the Silkie packages or source above to get these additions.
 
 .. container:: home-actions
@@ -165,5 +202,8 @@ that use and extend kitty, such as image display, SSH integration, and remote co
    :maxdepth: 2
 
    install
+   games
+   browser-demo
+   browser-ssh
    developer-guide
    reference

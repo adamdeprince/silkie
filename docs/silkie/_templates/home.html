@@ -1,18 +1,22 @@
 {% extends "base.html" %}
-{% block htmltitle %}<title>Silkie — a terminal emulator with richer input and graphics</title>{% endblock %}
+{% set home = pagename == 'index' %}
+{% block htmltitle %}<title>{{ 'Silkie — 支持丰富输入与图形的终端模拟器' if zh else 'Silkie — a terminal emulator with richer input and graphics' }}</title>{% endblock %}
 {% block body %}
 {{ super() }}
 {% include "partials/icons.html" %}
-<a class="skip-to-content" href="#main-content">Skip to content</a>
+<a class="skip-to-content" href="#main-content">{{ '跳转到正文' if zh else 'Skip to content' }}</a>
 <header class="site-header">
-  <a class="site-brand" href="{{ pathto('index') }}" aria-label="Silkie home"><span class="brand-mark" aria-hidden="true">s<span>_</span></span>silkie</a>
-  <nav aria-label="Main navigation">
-    <a href="#features">Features</a>
-    <a href="#install">Install</a>
-    <a href="#documentation">Documentation</a>
-    <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source <span aria-hidden="true">↗</span></a>
+  <a class="site-brand" href="{{ pathto('index') }}" aria-label="{{ 'Silkie 首页' if zh else 'Silkie home' }}"><span class="brand-mark" aria-hidden="true">s<span>_</span></span>silkie</a>
+  <nav aria-label="{{ '主导航' if zh else 'Main navigation' }}">
+    <a href="{{ '' if home else pathto('index') }}#features">{{ '功能' if zh else 'Features' }}</a>
+    <a href="{{ pathto('games') }}">{{ '游戏' if zh else 'Games' }}</a>
+    <a href="{{ pathto('browser-demo') }}">{{ '试用' if zh else 'Try Silkie' }}</a>
+    <a href="{{ '' if home else pathto('index') }}#install">{{ '安装' if zh else 'Install' }}</a>
+    <a href="{{ '' if home else pathto('index') }}#documentation">{{ '文档' if zh else 'Documentation' }}</a>
+    <a href="https://github.com/adamdeprince/silkie/tree/silkie">{{ '源代码' if zh else 'Source' }} <span aria-hidden="true">↗</span></a>
+    <a href="{{ english_url if zh else chinese_url }}" lang="{{ 'en' if zh else 'zh-CN' }}" hreflang="{{ 'en' if zh else 'zh-CN' }}">{{ 'English' if zh else '简体中文' }}</a>
   </nav>
-  <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+  <button class="theme-toggle" aria-label="{{ '切换浅色、深色或自动主题' if zh else 'Toggle Light / Dark / Auto color theme' }}">
     <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
     <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
     <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
@@ -20,16 +24,16 @@
   </button>
 </header>
 <main class="home-content" id="main-content">
-  <p class="site-eyebrow">Silkie / Terminal emulator / macOS + Linux</p>
+  <p class="site-eyebrow">Silkie / {{ '终端模拟器' if zh else 'Terminal emulator' }} / macOS + Linux</p>
   {{ body }}
 </main>
 <footer class="site-footer">
-  <p><strong>Silkie</strong> · Copyright © {{ copyright }}.</p>
-  <nav aria-label="Footer navigation">
-    <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch</a>
-    <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation</a>
-    <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation</a>
-    <a href="{{ pathto('developer-guide') }}">Developer guide</a>
+  <p><strong>Silkie</strong> · {{ '版权所有' if zh else 'Copyright' }} © {{ copyright }}.</p>
+  <nav aria-label="{{ '页脚导航' if zh else 'Footer navigation' }}">
+    <a href="https://github.com/adamdeprince/silkie/tree/silkie">{{ '源代码 · silkie 分支' if zh else 'Source · silkie branch' }}</a>
+    <a href="https://sw.kovidgoyal.net/kitty/">{{ 'kitty 文档' if zh else 'kitty documentation' }}</a>
+    <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">{{ 'Kitten 工具文档' if zh else 'Kitten documentation' }}</a>
+    <a href="{{ pathto('developer-guide') }}">{{ '开发者指南' if zh else 'Developer guide' }}</a>
   </nav>
 </footer>
 {% endblock %}

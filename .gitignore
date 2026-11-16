@@ -18,10 +18,12 @@
 /kitty.app/
 /glad/out/
 /kitty/launcher/kitt*
+/kitty/launcher/silkie*
 /*.dSYM/
 __pycache__/
 /glfw/wayland-*-client-protocol.[ch]
 /docs/_build/
+/docs/silkie/_locales/*/LC_MESSAGES/*.mo
 /docs/generated/
 /tools/simdstring/simdstring.test
 /.ruff_cache
@@ -31,3 +33,8 @@ __pycache__/
 bypy/b
 bypy/virtual-machines.conf
 _codeql_detected_source_root
+/web/wasm/target/
+/web/guest/console-session/target/
+/web/guest/math/target/
+/docs/silkie/_static/demo/guest.ext2
+/html/_static/demo/guest.ext2

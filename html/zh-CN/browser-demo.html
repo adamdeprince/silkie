@@ -1,0 +1,293 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="浏览器演示中的 SSH" href="browser-ssh.html"><link rel="prev" title="Silkie 与 kitty 游戏" href="games.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/browser-demo.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 --><title>Silkie — 支持丰富输入与图形的终端模拟器</title><link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../browser-demo.html">
+<link rel="alternate" hreflang="zh-CN" href="browser-demo.html">
+</head>
+  <body>
+    
+
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+<a class="skip-to-content" href="#main-content">跳转到正文</a>
+<header class="site-header">
+  <a class="site-brand" href="index.html" aria-label="Silkie 首页"><span class="brand-mark" aria-hidden="true">s<span>_</span></span>silkie</a>
+  <nav aria-label="主导航">
+    <a href="index.html#features">功能</a>
+    <a href="games.html">游戏</a>
+    <a href="#">试用</a>
+    <a href="index.html#install">安装</a>
+    <a href="index.html#documentation">文档</a>
+    <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 <span aria-hidden="true">↗</span></a>
+    <a href="../browser-demo.html" lang="en" hreflang="en">English</a>
+  </nav>
+  <button class="theme-toggle" aria-label="切换浅色、深色或自动主题">
+    <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+    <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+    <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+    <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+  </button>
+</header>
+<main class="home-content" id="main-content">
+  <p class="site-eyebrow">Silkie / 终端模拟器 / macOS + Linux</p>
+  <section id="try-silkie-in-your-browser">
+<h1>在浏览器中试用 Silkie<a class="headerlink" href="#try-silkie-in-your-browser" title="链接到此标题。">¶</a></h1>
+<div class="hero-lead docutils container">
+<p>真正的 Linux shell，就在当前标签页中本地运行。试试基本命令，玩 Presidential、Silkie Loophole、Sprint 和 Scramble，或者通过 SSH 连接自己的机器。终端会自动启动。</p>
+<p>点击终端即可输入，拖动选择文本后可照常复制。使用 <strong>全屏</strong> 获得更多空间和稍大的字体。终端下方的游戏链接会在独立窗口中打开游戏，窗口内即可开始游玩。在游戏窗口中使用 <strong>全屏</strong> 还可隐藏浏览器控件。</p>
+<p><a class="reference internal" href="install.html"><span class="doc">安装 Silkie</span></a> 以使用原生终端，或浏览 <a class="reference internal" href="reference.html"><span class="doc">扩展参考手册</span></a>。</p>
+</div>
+<link rel="stylesheet" href="../_static/demo/demo.css">
+<div class="browser-demo-window">
+  <section class="demo-panel" id="demo-panel" aria-label="交互式 Silkie 终端">
+    <div class="demo-toolbar" role="group" aria-label="终端控件">
+      <span class="demo-window-title">silkie<span aria-hidden="true">_</span></span>
+      <button type="button" id="demo-start" hidden>重新启动 shell</button>
+      <button type="button" id="demo-fullscreen" aria-pressed="false">全屏</button>
+    </div>
+    <p class="demo-status" id="demo-status" role="status" aria-live="polite">正在启动 shell…</p>
+    <div id="silkie-terminal" aria-label="Silkie Linux 终端"></div>
+  </section>
+  <p class="demo-caption">在独立终端窗口中游玩：
+  <a href="browser-demo.html?game=presidential" data-demo-game="presidential" target="silkie-presidential">Presidential</a> ·
+  <a href="browser-demo.html?game=silkie-loophole" data-demo-game="silkie-loophole" target="silkie-silkie-loophole">Silkie Loophole</a> ·
+  <a href="browser-demo.html?game=silkie-sprint" data-demo-game="silkie-sprint" target="silkie-silkie-sprint">Silkie Sprint</a> ·
+  <a href="browser-demo.html?game=silkie-scramble" data-demo-game="silkie-scramble" target="silkie-silkie-scramble">Silkie Scramble</a>.
+  使用<strong>全屏</strong>占满显示器。
+  <a href="browser-ssh.html">SSH 设置</a> ·
+  <a href="https://cheerpx.io/">由 CheerpX 提供支持</a></p>
+</div>
+<noscript><p>请启用 JavaScript 以运行 WebAssembly 终端。</p></noscript>
+<script type="module" src="../_static/demo/app.mjs"></script><section id="try-these-commands">
+<h2>试试这些命令<a class="headerlink" href="#try-these-commands" title="链接到此标题。">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>ls
+<span class="nb">printf</span><span class="w"> </span><span class="s1">'Hello from Silkie!\n'</span>
+silkie-features
+silkie-sprint
+silkie-scramble
+presidential
+silkie-loophole
+</pre></div>
+</div>
+<p>点击终端即可输入。Sprint 和 Scramble 使用方向键或 WASD 操作；按 P 暂停，再按 Q 退出。Loophole 使用方向键或 WASD 行走，空格键交互，? 查看帮助。Presidential 启动后显示竞选菜单；使用 F1–F9 浏览各面板，? 查看帮助。首页的 shell 与各游戏窗口可同时运行，文件和存档分别保存在浏览器的本地存储中。再次点击同一游戏链接会返回已有窗口。每款游戏只保留一个窗口，以保护其文件系统。浏览器的存储配额仍然适用。<code class="docutils literal notranslate"><span class="pre">silkie-features</span></code> 会按当前终端宽度排版报告，调整大小或切换全屏后也会适配。</p>
+</section>
+<section id="connect-to-your-machines">
+<h2>连接自己的机器<a class="headerlink" href="#connect-to-your-machines" title="链接到此标题。">¶</a></h2>
+<p>在终端中选择 <strong>连接 Tailscale</strong>，点击登录链接，加入自己的网络。然后在 shell 中运行 <code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">your-user&#64;your-tailscale-address</span></code>。页面会显示虚拟机的连接状态和地址。目标机器需要运行 SSH 服务，并允许你访问。</p>
+<p>Silkie 不提供公共中继。可以在自己的 Tailscale 机器上使用 Ncat，将连接转发到局域网内的 SSH 服务器。设置方法、命令和主机密钥验证见 <a class="reference internal" href="browser-ssh.html"><span class="doc">浏览器演示中的 SSH</span></a>。</p>
+<p class="demo-attribution">Linux 执行环境由 <a href="https://cheerpx.io/">Leaning Technologies 的 CheerpX</a> 提供，按<a href="https://cheerpx.io/docs/licensing">社区许可</a>从其托管运行时加载。Silkie 基于 <a href="https://sw.kovidgoyal.net/kitty/">kitty</a> 开发。请参阅 <a href="reference.html">Silkie 扩展参考手册</a>和<a href="https://sw.kovidgoyal.net/kitty/protocol-extensions/">上游协议手册</a>。kitty 的配套工具和插件称为 <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">kittens</a>。<a href="https://github.com/adamdeprince/silkie/tree/silkie">浏览源代码</a>。</p></section>
+</section>
+
+</main>
+<footer class="site-footer">
+  <p><strong>Silkie</strong> · 版权所有 © 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者.</p>
+  <nav aria-label="页脚导航">
+    <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支</a>
+    <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档</a>
+    <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档</a>
+    <a href="developer-guide.html">开发者指南</a>
+  </nav>
+</footer>
+<script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

@@ -417,9 +417,10 @@ class Freeze(object):
         freeze_python(self.python_stdlib, pdir, self.obj_dir, ext_map, develop_mode_env_var='KITTY_DEVELOP_FROM', remove_pyc_files=True)
         shutil.rmtree(self.python_stdlib)
         iv['build_frozen_launcher']([path_to_freeze_dir(), self.obj_dir])
-        os.rename(join(dirname(self.contents_dir), 'bin', 'kitty'), join(self.contents_dir, 'MacOS', 'kitty'))
+        os.rename(join(dirname(self.contents_dir), 'bin', 'silkie'), join(self.contents_dir, 'MacOS', 'silkie'))
+        os.symlink('silkie', join(self.contents_dir, 'MacOS', 'kitty'))
         shutil.rmtree(join(dirname(self.contents_dir), 'bin'))
-        self.fix_dependencies_in_lib(join(self.contents_dir, 'MacOS', 'kitty'))
+        self.fix_dependencies_in_lib(join(self.contents_dir, 'MacOS', 'silkie'))
         for f in glob.glob(join(self.contents_dir, '*.app', 'Contents', 'MacOS', '*')):
             if not os.path.islink(f):
                 self.fix_dependencies_in_lib(f)

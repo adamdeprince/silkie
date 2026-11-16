@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from kitty.fast_data_types import Screen, current_fonts, test_render_line
 from kitty.fonts import FontSpec, render
+from kitty.fonts.common import all_fonts_map
 from kitty.fonts import styles as fs
 from kitty.fonts.render import setup_for_testing
 from kitty.options.types import defaults
@@ -17,6 +18,21 @@ def select(screen, fields='', text=''):
 
 
 class FontStyles(BaseTest):
+    def test_iosevka_extended_roles_and_weights(self):
+        if 'iosevka' not in all_fonts_map(True)['family_map']:
+            self.skipTest('Iosevka is not installed')
+        fs.configure(defaults)
+        for role in ('default', 'sans'):
+            for weight in (0, 100, 400, 700, 900):
+                for bold, italic in ((False, False), (True, False), (False, True), (True, True)):
+                    with self.subTest(role=role, weight=weight, bold=bold, italic=italic):
+                        idx = fs.descriptor_index(fs.intern(fs.TextStyle(role=role, weight=weight)), bold, italic, 0)
+                        descriptor = render.current_faces[idx][0]
+                        self.assertIn('Extended', descriptor['style'])
+                        if not weight and bold:
+                            self.assertTrue('bold' in descriptor['style'].lower())
+                        self.ae('Italic' in descriptor['style'], italic)
+
     def tearDown(self):
         fs.configure(defaults)
         super().tearDown()

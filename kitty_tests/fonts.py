@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from functools import lru_cache, partial
 from itertools import repeat
 from math import ceil
+from unittest.mock import Mock, patch
 
 from kitty.constants import is_macos, read_kitty_resource
 from kitty.fast_data_types import (
@@ -44,6 +45,46 @@ def testing_font_data(name):
 
 
 class Selection(BaseTest):
+    def test_automatic_static_faces_preserve_width(self):
+        from kitty.fonts.common import get_font_from_spec
+
+        for backend in ('core_text', 'fontconfig'):
+            for extended in (False, True):
+                for bold, italic in ((True, False), (False, True), (True, True)):
+                    with self.subTest(backend=backend, extended=extended, bold=bold, italic=italic):
+                        def face(wide):
+                            return dict(descriptor_type=backend, family='Width Test',
+                                        expanded=wide, condensed=False, width=125 if wide else 100)
+
+                        medium = face(extended)
+                        wrong, matching = face(not extended), face(extended)
+                        scorer = Mock()
+                        scorer.sorted_candidates.side_effect = lambda candidates: list(candidates)
+                        with (
+                            patch('kitty.fonts.common.all_fonts_map', return_value={'family_map': {'width test': [wrong, matching]}}),
+                            patch('kitty.fonts.common.is_variable', return_value=False),
+                            patch('kitty.fonts.common.is_actually_variable_despite_fontconfigs_lies', return_value=False),
+                            patch('kitty.fonts.common.is_monospace', return_value=True),
+                            patch('kitty.fonts.common.create_scorer', return_value=scorer),
+                        ):
+                            actual = get_font_from_spec(parse_font_spec('auto'), bold, italic, resolved_medium_font=medium)
+                        self.assertIs(actual, matching)
+
+    def test_iosevka_extended_faces(self):
+        if 'iosevka' not in all_fonts_map(True)['family_map']:
+            self.skipTest('Iosevka is not installed')
+        opts = Options()
+        opts.font_family = parse_font_spec('family=Iosevka style=Extended')
+        for slot, face in get_font_files(opts).items():
+            with self.subTest(slot=slot):
+                self.ae(face['family'], 'Iosevka')
+                self.assertIn('Extended', face['style'])
+        # A user selecting another width must also get matching automatic faces.
+        opts.font_family = parse_font_spec('Iosevka')
+        for slot, face in get_font_files(opts).items():
+            with self.subTest(slot=slot):
+                self.assertNotIn('Extended', face['style'])
+
     def test_font_selection(self):
         self.set_options({'font_features': {'LiberationMono': (ParsedFontFeature('-dlig'),)}})
         opts = Options()

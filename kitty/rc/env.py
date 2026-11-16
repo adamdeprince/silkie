@@ -14,7 +14,7 @@ class Env(RemoteCommand):
     short_desc = 'Change environment variables seen by future children'
     desc = (
         'Change the environment variables that will be seen in newly launched windows.'
-        ' Similar to the :opt:`env` option in :file:`kitty.conf`, but affects running kitty instances.'
+        ' Similar to the :opt:`env` option in :file:`silkie.conf`, but affects running kitty instances.'
         ' If no = is present, the variable is removed from the environment.'
     )
     args = RemoteCommand.Args(spec='env_var1=val env_var2=val ...', minimum_count=1, json_field='env')

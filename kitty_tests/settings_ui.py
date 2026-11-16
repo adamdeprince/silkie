@@ -21,7 +21,7 @@ class TestSettingsUI(BaseTest):
         super().setUp()
         self.tdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tdir.cleanup)
-        self.conf = os.path.join(self.tdir.name, 'kitty.conf')
+        self.conf = os.path.join(self.tdir.name, 'silkie.conf')
         self.settings = os.path.join(self.tdir.name, 'settings.conf')
         for patcher in (
             mock.patch.object(settings_model, 'defconf', self.conf),
@@ -95,7 +95,7 @@ class TestSettingsUI(BaseTest):
         opts = load_config(self.conf, self.settings)
         self.ae(opts.scrollback_lines, 9000)
         self.assertFalse(opts.enable_audio_bell)
-        # kitty.conf is never touched
+        # silkie.conf is never touched
         with open(self.conf) as f:
             self.assertIn('# my own comment', f.read())
         settings_model.reset_global_value('scrollback_lines')
@@ -105,6 +105,50 @@ class TestSettingsUI(BaseTest):
         self.assertTrue(settings_model.set_global_value('background', 'not a color'))
         self.assertTrue(settings_model.set_global_value('no_such_option', '1'))
         self.assertFalse(os.path.exists(self.settings) and 'not a color' in open(self.settings).read())
+
+    def test_numeric_domains_and_stepping(self):
+        fields = self.fields()
+        for name, field in fields.items():
+            if field['kind'] in ('int', 'float'):
+                self.ae(settings_model.validate(name, field['default']), '', name)
+                self.assertGreater(field['step'], 0, name)
+                for invalid in ('nan', 'inf', '-inf'):
+                    self.assertTrue(settings_model.validate(name, invalid), name)
+        for name in ('cursor_brightness', 'hdr_max_headroom'):
+            self.ae(fields[name]['minimum'], 1)
+            self.assertIsNone(fields[name]['maximum'])
+            self.ae(fields[name]['step'], .1)
+            for invalid in ('0', '-1', '-2', '.99'):
+                self.assertTrue(settings_model.validate(name, invalid), name)
+            self.ae(settings_model.stepped_value(name, '1', -1), '1')
+            value = '1'
+            for unused in range(1000):
+                value = settings_model.stepped_value(name, value, 1)
+            self.ae(value, '101')
+            self.ae(settings_model.stepped_value(name, '1000000000', 1), '1000000000.1')
+        for name in ('background_opacity', 'scrollbar_handle_opacity'):
+            self.assertTrue(settings_model.validate(name, '-.1'), name)
+            self.assertTrue(settings_model.validate(name, '1.1'), name)
+        for name in ('wheel_scroll_multiplier', 'touch_scroll_multiplier', 'click_interval', 'inactive_text_alpha'):
+            self.ae(settings_model.validate(name, '-1'), '', name)
+        self.ae(settings_model.stepped_value('scrollback_lines', '-1', -1), '-1')
+        self.ae(settings_model.stepped_value('scrollback_lines', '9007199254740993', 1), '9007199254740994')
+        self.ae(fields['mouse_hide_wait']['kind'], 'text')
+        self.ae(fields['visual_bell_duration']['kind'], 'text')
+        self.ae(settings_model.validate('mouse_hide_wait', '3.0 5.0 40 yes'), '')
+        self.ae(settings_model.validate('spatial_vertical_phase_limit', '-1') != '', True)
+        self.ae(fields['spatial_vertical_phase_limit']['default'], '0')
+        self.ae(fields['spatial_negative_divergence']['default'], '0')
+        self.ae(fields['spatial_output']['choices'], ['sbs', 'red-blue'])
+        self.ae(fields['experimental_xreal_1s']['default'], 'no')
+        experimental = next(p for p in settings_model.settings_pages() if p['id'] == 'experimental')
+        self.ae(experimental['title'], 'Experimental and untested')
+        self.assertIn('experimental_xreal_1s', {f['name'] for s in experimental['sections'] for f in s['fields']})
+        self.ae((fields['spatial_divergence_exponent']['minimum'], fields['spatial_divergence_exponent']['maximum']), (-6, 6))
+        self.ae(settings_model.stepped_value('spatial_divergence_exponent', '0', 1), '0.1')
+        for value in ('-6.1', '6.1'):
+            self.assertTrue(settings_model.validate('spatial_divergence_exponent', value))
+        self.ae(settings_model.stepped_value('spatial_vertical_phase_limit', '0', 1), '0.1')
 
     def test_shortcuts(self):
         self.ae(settings_model.set_global_value('map:new_tab', 'ctrl+alt+n, ctrl+alt+m'), '')

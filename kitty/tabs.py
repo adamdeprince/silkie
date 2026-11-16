@@ -719,6 +719,15 @@ class Tab:  # {{{
         else:
             self.goto_layout(layout_name)
 
+    @ac('win', 'Split the active pane vertically, placing a new pane to its right')
+    def split_pane_vertically(self) -> None:
+        if self.current_layout.name != 'splits':
+            layout = next((x for x in self.enabled_layouts if x.partition(':')[0] == 'splits'), 'splits')
+            if layout not in self.enabled_layouts:
+                self.enabled_layouts.append(layout)
+            self.goto_layout(layout)
+        self.new_window(location='vsplit')
+
     def resize_window_by(self, window_id: int, increment: float, is_horizontal: bool) -> str | None:
         increment_as_percent = self.current_layout.bias_increment_for_cell(self.windows, is_horizontal) * increment
         if self.current_layout.modify_size_of_window(self.windows, window_id, increment_as_percent, is_horizontal):

@@ -1,0 +1,537 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:38+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/developer-guide.rst:2
+msgid "Writing software for Silkie"
+msgstr "为 Silkie 开发软件"
+
+#: docs/silkie/developer-guide.rst:4
+msgid ""
+"Silkie is a fork of the **kitty terminal emulator**. kitty extends the traditional VT/xterm-style"
+" terminal protocol with its own graphics, keyboard, and other protocols. **Kittens** are kitty's "
+"companion tools and plugins; they use terminal capabilities and can add functionality to kitty. "
+"Silkie adds further terminal protocols and the :doc:`show_pointer tool <show-pointer>`."
+msgstr ""
+"Silkie 是 **kitty 终端模拟器** 的一个分支。kitty 在传统的 VT/xterm 风格终端协议上扩展了图形、键盘及其他协议。**Kittens** 是 kitty "
+"的配套工具和插件，使用终端能力并可为 kitty 增添功能。Silkie 增加了更多终端协议和 :doc:`show_pointer 工具 <show-pointer>`。"
+
+#: docs/silkie/developer-guide.rst:10
+msgid ""
+"Silkie's behavior is documented in several places: terminal standards, kitty's manuals, and "
+"Silkie's extension specifications. This guide links to each source and the relevant "
+"implementation files."
+msgstr "Silkie 的行为分散记录在终端标准、kitty 手册和 Silkie 扩展规范中。本指南提供这些资料及相关实现文件的链接。"
+
+#: docs/silkie/developer-guide.rst:15
+msgid "Source and version"
+msgstr "源代码与版本"
+
+#: docs/silkie/developer-guide.rst:17
+msgid "Silkie's source is on the `silkie branch <https://github.com/adamdeprince/silkie/tree/silkie>`_."
+msgstr "Silkie 源代码位于 `silkie 分支 <https://github.com/adamdeprince/silkie/tree/silkie>`_。"
+
+#: docs/silkie/developer-guide.rst:20
+msgid ""
+"Upstream kitty manuals may describe behavior that differs from your Silkie build. The source for "
+"your version shows how a feature is implemented. Runtime capability queries tell your application"
+" which extensions, versions, and optional features are available."
+msgstr "上游 kitty 手册描述的行为可能与所用 Silkie 构建不同。对应版本的源代码展示了功能的实现方式。运行时能力查询则告诉应用哪些扩展、版本和可选功能可用。"
+
+#: docs/silkie/developer-guide.rst:26
+msgid "Getting started"
+msgstr "入门"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/silkie/developer-guide.rst:28
+msgid ""
+"If you are new to kitty, the `kitty overview <https://sw.kovidgoyal.net/kitty/>`_ introduces the "
+"terminal, and the `kitten overview <https://sw.kovidgoyal.net/kitty/kittens_intro/>`_ introduces "
+"its tools and plugins. The `terminal foundations`_ and `inherited kitty protocols`_ below cover "
+"the standards and protocols that Silkie builds on."
+msgstr ""
+"如果尚不熟悉 kitty，`kitty 概览 <https://sw.kovidgoyal.net/kitty/>`_ 介绍终端本身，`kitten 概览 "
+"<https://sw.kovidgoyal.net/kitty/kittens_intro/>`_ 介绍配套工具与插件。下文的 `终端基础 <terminal foundations_>`_ "
+"和 `继承的 kitty 协议 <inherited kitty protocols_>`_ 介绍 Silkie 所依赖的标准与协议。 #noqa"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/silkie/developer-guide.rst:34
+msgid ""
+"To add a Silkie feature to your application, start with :doc:`capabilities-protocol` and :doc"
+":`extension-framing`, then choose the protocols you need from the `Silkie extension map`_. Each "
+"specification explains how to discover support, use the feature, and clean up afterward, "
+"including any platform limits. Test your application in the target terminal and provide a "
+"fallback when a feature is unavailable."
+msgstr ""
+"要为应用添加 Silkie 功能，请先阅读 :doc:`capabilities-protocol` 和 :doc:`extension-framing`，再从 `Silkie 扩展导览 "
+"<Silkie extension map_>`_ 选择所需协议。每项规范都说明如何探测支持、使用功能及完成清理，并列出平台限制。请在目标终端中测试应用，并为不可用功能提供回退方案。 #noqa"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/silkie/developer-guide.rst:41
+msgid ""
+"For kittens, terminal user interfaces, remote-control clients, and shell integration, see `kitten"
+" and application APIs`_. The `implementation map`_ points to the relevant code if you want to "
+"investigate behavior or contribute a change to Silkie."
+msgstr ""
+"开发 kitten、终端用户界面、远程控制客户端和 shell 集成时，参阅 `Kitten 与应用 API <kitten and application APIs_>`_。若要调查行为或为 "
+"Silkie 贡献修改，`实现导览 <implementation map_>`_ 可引导你找到相关代码。 #noqa"
+
+#: docs/silkie/developer-guide.rst:49
+msgid "Terminal foundations"
+msgstr "终端基础"
+
+#: docs/silkie/developer-guide.rst:51
+msgid ""
+"The compatibility model is a terminal receiving text and control sequences over a byte stream. "
+"The following references explain the inherited vocabulary; they are not a claim that Silkie "
+"implements every historical terminal feature."
+msgstr "兼容模型是终端通过字节流接收文本和控制序列。以下参考资料解释了继承的术语；这不表示 Silkie 实现了所有历史终端功能。"
+
+#: docs/silkie/developer-guide.rst:55
+msgid ""
+"`ECMA-48: control functions <https://ecma-international.org/publications-and-"
+"standards/standards/ecma-48/>`_ defines control-function syntax, including CSI, SGR, OSC, and "
+"string terminators."
+msgstr ""
+"`ECMA-48：控制功能 <https://ecma-international.org/publications-and-standards/standards/ecma-48/>`_ "
+"定义控制功能语法，包括 CSI、SGR、OSC 和字符串终止符。"
+
+#: docs/silkie/developer-guide.rst:58
+msgid ""
+"`XTerm control sequences <https://invisible-island.net/xterm/ctlseqs/ctlseqs.html>`_ covers the "
+"VT/xterm conventions used for cursor movement, screen modes, mouse reporting, and other common "
+"terminal interactions."
+msgstr ""
+"`XTerm 控制序列 <https://invisible-island.net/xterm/ctlseqs/ctlseqs.html>`_ "
+"介绍光标移动、屏幕模式、鼠标报告及其他常见终端交互所用的 VT/xterm 约定。"
+
+#: docs/silkie/developer-guide.rst:62
+msgid ""
+"`Silkie's terminfo source "
+"<https://github.com/adamdeprince/silkie/blob/silkie/terminfo/kitty.terminfo>`_ describes the "
+"capabilities advertised to terminfo-based applications."
+msgstr ""
+"`Silkie 的 terminfo 源码 "
+"<https://github.com/adamdeprince/silkie/blob/silkie/terminfo/kitty.terminfo>`_ 描述向使用 terminfo "
+"的应用公布的能力。"
+
+#: docs/silkie/developer-guide.rst:67
+msgid "Inherited kitty protocols"
+msgstr "继承的 kitty 协议"
+
+#: docs/silkie/developer-guide.rst:69
+msgid ""
+"The `upstream terminal protocol index <https://sw.kovidgoyal.net/kitty/protocol-extensions/>`_ is"
+" the entry point for kitty's extensions to the traditional terminal protocol. These are inherited"
+" references, not Silkie-specific additions."
+msgstr ""
+"`上游终端协议索引 <https://sw.kovidgoyal.net/kitty/protocol-extensions/>`_ 是了解 kitty "
+"对传统终端协议所做扩展的入口。这些是继承的参考规范，而非 Silkie 专有扩展。"
+
+#: docs/silkie/developer-guide.rst:74
+msgid "Upstream specifications"
+msgstr "上游规范"
+
+#: docs/silkie/developer-guide.rst:78 docs/silkie/developer-guide.rst:111
+msgid "Area"
+msgstr "领域"
+
+#: docs/silkie/developer-guide.rst:79
+msgid "Read upstream"
+msgstr "阅读上游文档"
+
+#: docs/silkie/developer-guide.rst:80
+msgid "Images and keyboard input"
+msgstr "图像与键盘输入"
+
+#: docs/silkie/developer-guide.rst:81
+msgid ""
+"`Graphics <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_; `keyboard "
+"<https://sw.kovidgoyal.net/kitty/keyboard-protocol/>`_"
+msgstr ""
+"`图形 <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_；`键盘 <https://sw.kovidgoyal.net/kitty"
+"/keyboard-protocol/>`_"
+
+#: docs/silkie/developer-guide.rst:83
+msgid "Text and screen presentation"
+msgstr "文本与屏幕呈现"
+
+#: docs/silkie/developer-guide.rst:84
+msgid ""
+"`Underlines <https://sw.kovidgoyal.net/kitty/underlines/>`_; `text sizing "
+"<https://sw.kovidgoyal.net/kitty/text-sizing-protocol/>`_; `multiple cursors "
+"<https://sw.kovidgoyal.net/kitty/multiple-cursors-protocol/>`_; `unscrolling "
+"<https://sw.kovidgoyal.net/kitty/unscroll/>`_"
+msgstr ""
+"`下划线 <https://sw.kovidgoyal.net/kitty/underlines/>`_；`文本尺寸 <https://sw.kovidgoyal.net/kitty/text-"
+"sizing-protocol/>`_；`多个光标 <https://sw.kovidgoyal.net/kitty/multiple-cursors-protocol/>`_；`取消滚动 "
+"<https://sw.kovidgoyal.net/kitty/unscroll/>`_"
+
+#: docs/silkie/developer-guide.rst:88
+msgid "Colors and attributes"
+msgstr "色彩与属性"
+
+#: docs/silkie/developer-guide.rst:89
+msgid ""
+"`Color control <https://sw.kovidgoyal.net/kitty/color-stack/>`_; `attributes in rectangular areas"
+" <https://sw.kovidgoyal.net/kitty/deccara/>`_"
+msgstr ""
+"`色彩控制 <https://sw.kovidgoyal.net/kitty/color-stack/>`_；`矩形区域属性 "
+"<https://sw.kovidgoyal.net/kitty/deccara/>`_"
+
+#: docs/silkie/developer-guide.rst:91
+msgid "Interaction and desktop integration"
+msgstr "交互与桌面集成"
+
+#: docs/silkie/developer-guide.rst:92
+msgid ""
+"`Pointer shapes <https://sw.kovidgoyal.net/kitty/pointer-shapes/>`_; `drag and drop "
+"<https://sw.kovidgoyal.net/kitty/dnd-protocol/>`_; `desktop notifications "
+"<https://sw.kovidgoyal.net/kitty/desktop-notifications/>`_"
+msgstr ""
+"`指针形状 <https://sw.kovidgoyal.net/kitty/pointer-shapes/>`_；`拖放 <https://sw.kovidgoyal.net/kitty"
+"/dnd-protocol/>`_；`桌面通知 <https://sw.kovidgoyal.net/kitty/desktop-notifications/>`_"
+
+#: docs/silkie/developer-guide.rst:95
+msgid "Data exchange"
+msgstr "数据交换"
+
+#: docs/silkie/developer-guide.rst:96
+msgid ""
+"`Clipboard <https://sw.kovidgoyal.net/kitty/clipboard/>`_; `file transfer "
+"<https://sw.kovidgoyal.net/kitty/file-transfer-protocol/>`_"
+msgstr ""
+"`剪贴板 <https://sw.kovidgoyal.net/kitty/clipboard/>`_；`文件传输 <https://sw.kovidgoyal.net/kitty/file-"
+"transfer-protocol/>`_"
+
+#: docs/silkie/developer-guide.rst:98
+msgid "Additional controls"
+msgstr "其他控制"
+
+#: docs/silkie/developer-guide.rst:99
+msgid "`Miscellaneous protocols <https://sw.kovidgoyal.net/kitty/misc-protocol/>`_"
+msgstr "`其他协议 <https://sw.kovidgoyal.net/kitty/misc-protocol/>`_"
+
+#: docs/silkie/developer-guide.rst:102
+msgid "Silkie extension map"
+msgstr "Silkie 扩展导览"
+
+#: docs/silkie/developer-guide.rst:104
+msgid ""
+"Each link below opens a Silkie specification with wire formats, replies, and implementation "
+"details. The :doc:`reference` also lists them by category."
+msgstr "以下链接打开 Silkie 规范，其中包含传输格式、回复和实现细节。:doc:`reference` 也按类别列出这些规范。"
+
+#: docs/silkie/developer-guide.rst:107
+msgid "Silkie specifications and their prerequisites"
+msgstr "Silkie 规范及其前置知识"
+
+#: docs/silkie/developer-guide.rst:112
+msgid "Silkie specifications"
+msgstr "Silkie 规范"
+
+#: docs/silkie/developer-guide.rst:113
+msgid "Read alongside"
+msgstr "配套阅读"
+
+#: docs/silkie/developer-guide.rst:114
+msgid "Discovery and common rules"
+msgstr "能力探测与通用规则"
+
+#: docs/silkie/developer-guide.rst:115
+msgid ":doc:`capabilities-protocol`; :doc:`extension-framing`"
+msgstr ":doc:`capabilities-protocol`; :doc:`extension-framing`"
+
+#: docs/silkie/developer-guide.rst:116
+msgid "OSC and ST control-string framing"
+msgstr "OSC 与 ST 控制字符串封装"
+
+#: docs/silkie/developer-guide.rst:117
+msgid "Input"
+msgstr "输入"
+
+#: docs/silkie/developer-guide.rst:118
+msgid ":doc:`tablet-protocol`; :doc:`scroll-protocol`; :doc:`gesture-protocol`; :doc:`haptic-protocol`"
+msgstr ":doc:`tablet-protocol`; :doc:`scroll-protocol`; :doc:`gesture-protocol`; :doc:`haptic-protocol`"
+
+#: docs/silkie/developer-guide.rst:120
+msgid "Shared framing and each protocol's discovery rules"
+msgstr "通用封装与各协议的探测规则"
+
+#: docs/silkie/developer-guide.rst:121
+msgid "Vector rendering and ink"
+msgstr "矢量渲染与墨迹"
+
+#: docs/silkie/developer-guide.rst:122
+msgid ":doc:`vector-protocol`; :doc:`ink-protocol`; :doc:`gpu-surface-protocol`"
+msgstr ":doc:`vector-protocol`; :doc:`ink-protocol`; :doc:`gpu-surface-protocol`"
+
+#: docs/silkie/developer-guide.rst:123
+msgid "kitty graphics; tablet input for ink"
+msgstr "kitty 图形；墨迹功能所需的数位板输入"
+
+#: docs/silkie/developer-guide.rst:124
+msgid "Color and transparency"
+msgstr "色彩与透明度"
+
+#: docs/silkie/developer-guide.rst:125
+msgid ":doc:`hdr-protocol`; :doc:`wide-gamut-protocol`; :doc:`cell-alpha-protocol`"
+msgstr ":doc:`hdr-protocol`; :doc:`wide-gamut-protocol`; :doc:`cell-alpha-protocol`"
+
+#: docs/silkie/developer-guide.rst:126
+msgid "SGR, kitty graphics, display information"
+msgstr "SGR、kitty 图形、显示信息"
+
+#: docs/silkie/developer-guide.rst:127
+msgid "Font families and typography"
+msgstr "字体族与排版"
+
+#: docs/silkie/developer-guide.rst:128
+msgid ":doc:`font-protocol`"
+msgstr ":doc:`font-protocol`"
+
+#: docs/silkie/developer-guide.rst:129
+msgid "SGR, kitty font configuration and text sizing"
+msgstr "SGR、kitty 字体配置与文本尺寸"
+
+#: docs/silkie/developer-guide.rst:130
+msgid "Image cursors"
+msgstr "图像光标"
+
+#: docs/silkie/developer-guide.rst:131
+msgid ":doc:`pointer-image-protocol`"
+msgstr ":doc:`pointer-image-protocol`"
+
+#: docs/silkie/developer-guide.rst:132
+msgid "kitty pointer shapes and graphics"
+msgstr "kitty 指针形状与图形"
+
+#: docs/silkie/developer-guide.rst:133
+msgid "Display and timing"
+msgstr "显示与时序"
+
+#: docs/silkie/developer-guide.rst:134
+msgid ":doc:`display-protocol`; :doc:`latency-protocol`; :doc:`frame-protocol`"
+msgstr ":doc:`display-protocol`; :doc:`latency-protocol`; :doc:`frame-protocol`"
+
+#: docs/silkie/developer-guide.rst:135
+msgid "Shared framing and the clock/units defined by each protocol"
+msgstr "通用封装与各协议定义的时钟和单位"
+
+#: docs/silkie/developer-guide.rst:136
+msgid "Settings and tools"
+msgstr "设置与工具"
+
+#: docs/silkie/developer-guide.rst:137
+msgid ":doc:`configuration`; :doc:`show-pointer`; :doc:`window-actions`"
+msgstr ":doc:`configuration`; :doc:`show-pointer`; :doc:`window-actions`"
+
+#: docs/silkie/developer-guide.rst:138
+msgid "kitty configuration, key mappings, and kitten tools"
+msgstr "kitty 配置、按键映射和 kitten 工具"
+
+#: docs/silkie/developer-guide.rst:140
+msgid ""
+"For example, a vector drawing application needs kitty's graphics protocol for transmission and "
+"placement, Silkie's vector format for its scene, and tablet and ink protocols for pen input and "
+"local stroke rendering. The vector specification alone does not define the whole graphics "
+"transport."
+msgstr "例如，矢量绘图应用需要 kitty 图形协议传输和放置图像，使用 Silkie 矢量格式描述场景，再用数位板和墨迹协议处理笔输入与本地笔迹渲染。矢量规范本身不定义完整的图形传输机制。"
+
+#: docs/silkie/developer-guide.rst:146
+msgid "Kitten and application APIs"
+msgstr "Kitten 与应用 API"
+
+#: docs/silkie/developer-guide.rst:148
+msgid ""
+"`Kitten documentation <https://sw.kovidgoyal.net/kitty/kittens_intro/>`_: the tool catalog, with "
+"links to individual command manuals."
+msgstr "`Kitten 文档 <https://sw.kovidgoyal.net/kitty/kittens_intro/>`_：工具目录，附各命令手册的链接。"
+
+#: docs/silkie/developer-guide.rst:150
+msgid ""
+"`Create kittens <https://sw.kovidgoyal.net/kitty/kittens/custom/>`_: the plugin model and APIs "
+"for extending kitty through a kitten."
+msgstr "`创建 kitten <https://sw.kovidgoyal.net/kitty/kittens/custom/>`_：通过 kitten 扩展 kitty 的插件模型与 API。"
+
+#: docs/silkie/developer-guide.rst:152
+msgid ""
+"`Remote control guide <https://sw.kovidgoyal.net/kitty/remote-control/>`_ and `wire protocol "
+"<https://sw.kovidgoyal.net/kitty/rc_protocol/>`_: controlling terminal windows and state from "
+"software."
+msgstr ""
+"`远程控制指南 <https://sw.kovidgoyal.net/kitty/remote-control/>`_ 与 `传输协议 "
+"<https://sw.kovidgoyal.net/kitty/rc_protocol/>`_：从软件控制终端窗口与状态。"
+
+#: docs/silkie/developer-guide.rst:155
+msgid ""
+"`Shell integration <https://sw.kovidgoyal.net/kitty/shell-integration/>`_: shell-specific "
+"integration and the protocols it uses."
+msgstr "`Shell 集成 <https://sw.kovidgoyal.net/kitty/shell-integration/>`_：针对各 shell 的集成及所用协议。"
+
+#: docs/silkie/developer-guide.rst:157
+msgid ""
+"`Configuration <https://sw.kovidgoyal.net/kitty/conf/>`_ and `key mappings "
+"<https://sw.kovidgoyal.net/kitty/mapping/>`_: inherited settings and actions. Apply "
+":doc:`configuration` for Silkie's additions."
+msgstr ""
+"`配置 <https://sw.kovidgoyal.net/kitty/conf/>`_ 与 `按键映射 "
+"<https://sw.kovidgoyal.net/kitty/mapping/>`_：继承的设置和操作。Silkie 的新增内容见 :doc:`configuration`。"
+
+#: docs/silkie/developer-guide.rst:160
+msgid ""
+":doc:`show-pointer`: Silkie's input inspector, useful when implementing the tablet, gesture, and "
+"scroll protocols."
+msgstr ":doc:`show-pointer`：Silkie 的输入检查工具，适合实现数位板、手势与滚动协议时使用。"
+
+#: docs/silkie/developer-guide.rst:164
+msgid "Implementation map"
+msgstr "实现导览"
+
+#: docs/silkie/developer-guide.rst:166
+msgid "The source files below are on the **silkie** branch."
+msgstr "以下源码文件位于 **silkie** 分支。"
+
+#: docs/silkie/developer-guide.rst:168
+msgid "Source locations"
+msgstr "源码位置"
+
+#: docs/silkie/developer-guide.rst:172
+msgid "Responsibility"
+msgstr "职责"
+
+#: docs/silkie/developer-guide.rst:173
+msgid "Source"
+msgstr "源代码"
+
+#: docs/silkie/developer-guide.rst:174
+msgid "Repository and specification sources"
+msgstr "仓库与规范源码"
+
+#: docs/silkie/developer-guide.rst:175
+msgid ""
+"`Repository <https://github.com/adamdeprince/silkie/tree/silkie>`_; `docs "
+"<https://github.com/adamdeprince/silkie/tree/silkie/docs>`_"
+msgstr ""
+"`代码仓库 <https://github.com/adamdeprince/silkie/tree/silkie>`_；`文档 "
+"<https://github.com/adamdeprince/silkie/tree/silkie/docs>`_"
+
+#: docs/silkie/developer-guide.rst:177
+msgid "Terminal sequence parsing and screen behavior"
+msgstr "终端序列解析与屏幕行为"
+
+#: docs/silkie/developer-guide.rst:178
+msgid ""
+"`kitty/vt-parser.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/vt-parser.c>`_; "
+"`kitty/screen.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/screen.c>`_"
+msgstr ""
+"`kitty/vt-parser.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/vt-parser.c>`_; "
+"`kitty/screen.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/screen.c>`_"
+
+#: docs/silkie/developer-guide.rst:180
+msgid "Graphics, vectors, and ink"
+msgstr "图形、矢量与墨迹"
+
+#: docs/silkie/developer-guide.rst:181
+msgid ""
+"`kitty/graphics.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/graphics.c>`_; "
+"`kitty/vector.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/vector.c>`_; "
+"`kitty/fonts/vector.py "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kitty/fonts/vector.py>`_; "
+"`kittens/tui/vector.py "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kittens/tui/vector.py>`_; `kitty/ink.c "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kitty/ink.c>`_"
+msgstr ""
+"`kitty/graphics.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/graphics.c>`_; "
+"`kitty/vector.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/vector.c>`_; "
+"`kitty/fonts/vector.py "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kitty/fonts/vector.py>`_; "
+"`kittens/tui/vector.py "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kittens/tui/vector.py>`_; `kitty/ink.c "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kitty/ink.c>`_"
+
+#: docs/silkie/developer-guide.rst:186
+msgid "Input and platform integration"
+msgstr "输入与平台集成"
+
+#: docs/silkie/developer-guide.rst:187
+msgid ""
+"`kitty/mouse.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/mouse.c>`_; `glfw "
+"<https://github.com/adamdeprince/silkie/tree/silkie/glfw>`_"
+msgstr ""
+"`kitty/mouse.c <https://github.com/adamdeprince/silkie/blob/silkie/kitty/mouse.c>`_; `glfw "
+"<https://github.com/adamdeprince/silkie/tree/silkie/glfw>`_"
+
+#: docs/silkie/developer-guide.rst:189
+msgid "Kitten tools and input inspector"
+msgstr "Kitten 工具与输入检查器"
+
+#: docs/silkie/developer-guide.rst:190
+msgid ""
+"`kittens <https://github.com/adamdeprince/silkie/tree/silkie/kittens>`_; `kittens/show_pointer "
+"<https://github.com/adamdeprince/silkie/tree/silkie/kittens/show_pointer>`_"
+msgstr ""
+"`kittens <https://github.com/adamdeprince/silkie/tree/silkie/kittens>`_; `kittens/show_pointer "
+"<https://github.com/adamdeprince/silkie/tree/silkie/kittens/show_pointer>`_"
+
+#: docs/silkie/developer-guide.rst:192
+msgid "Terminal application helpers"
+msgstr "终端应用辅助库"
+
+#: docs/silkie/developer-guide.rst:193
+msgid "`tools/tui <https://github.com/adamdeprince/silkie/tree/silkie/tools/tui>`_"
+msgstr "`tools/tui <https://github.com/adamdeprince/silkie/tree/silkie/tools/tui>`_"
+
+#: docs/silkie/developer-guide.rst:194
+msgid "Configuration declarations"
+msgstr "配置声明"
+
+#: docs/silkie/developer-guide.rst:195
+msgid ""
+"`kitty/options/definition.py "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kitty/options/definition.py>`_"
+msgstr ""
+"`kitty/options/definition.py "
+"<https://github.com/adamdeprince/silkie/blob/silkie/kitty/options/definition.py>`_"
+
+#: docs/silkie/developer-guide.rst:196
+msgid "Terminal tests"
+msgstr "终端测试"
+
+#: docs/silkie/developer-guide.rst:197
+msgid "`kitty_tests <https://github.com/adamdeprince/silkie/tree/silkie/kitty_tests>`_"
+msgstr "`kitty_tests <https://github.com/adamdeprince/silkie/tree/silkie/kitty_tests>`_"
+
+#: docs/silkie/developer-guide.rst:200
+msgid "Capability discovery and cleanup"
+msgstr "能力探测与清理"
+
+#: docs/silkie/developer-guide.rst:202
+msgid ""
+"Query support before enabling an optional mode, apply a timeout when no reply arrives, and keep a"
+" fallback for unsupported features. The OSC 777 capability registry covers its selector family; "
+"graphics formats, SGR additions, and other protocols have their own discovery rules in their "
+"specifications. Disable modes you enabled when exiting or suspending, as the protocol requires. "
+"Account for remote connections and multiplexers: the application's effective capabilities depend "
+"on the whole path to the terminal."
+msgstr ""
+"启用可选模式前先查询支持情况；未收到回复时应设置超时，并为不支持的功能保留回退方案。OSC 777 能力注册表覆盖其选择器族；图形格式、SGR "
+"扩展和其他协议分别在自身规范中规定探测方法。退出或挂起时，按协议要求关闭自己启用的模式。还需考虑远程连接和多路复用器：应用实际可用的能力取决于通向终端的完整路径。"
+

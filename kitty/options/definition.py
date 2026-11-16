@@ -32,6 +32,22 @@ opt = definition.add_option
 map = definition.add_map
 mma = definition.add_mouse_map
 
+agr('experimental', 'Experimental and untested')
+opt('experimental_xreal_1s', 'no', option_type='to_bool', long_text='Enable experimental, untested XREAL 1S support on macOS: side-by-side stereo output and the XREAL head-tracking connection. Disabled by default. Physical-glasses compatibility has not been verified. Red/blue stereo without head tracking does not require this option. Disabling it returns active XREAL presentations to ordinary rendering.')
+egr()
+
+agr('spatial', 'Spatial display')
+opt('spatial_mode', 'off', choices=('off', 'follow', 'anchored'), long_text='macOS stereo presentation. See the Silkie spatial display reference. Off by default.')
+opt('spatial_output', 'sbs', choices=('sbs', 'red-blue'), long_text='Stereo output: side-by-side for XREAL glasses (requires experimental_xreal_1s), or red-blue anaglyph for inexpensive glasses with red over the left eye and blue over the right eye.')
+opt('spatial_divergence_exponent', '0', option_type='spatial_exponent', long_text='Divergence multiplier as a base-2 exponent X: the multiplier is 2^X. Range -6 to 6, adjusted in 0.1 steps in Settings. Zero gives 1x. Pixel depth is automatically scaled by the physical per-eye framebuffer width relative to 1920 pixels, including Retina scaling. The positive and negative divergence limits apply after multiplication.')
+opt('spatial_field_of_view', '52', option_type='spatial_angle', long_text='Horizontal field of view of one eye, in degrees. XREAL 1S defaults to 52 degrees.')
+opt('spatial_positive_divergence', '0.5', option_type='spatial_divergence', long_text='Maximum positive binocular divergence, in degrees, relative to the terminal plane. Zero disables positive depth.')
+opt('spatial_negative_divergence', '0', option_type='spatial_divergence', long_text='Maximum magnitude of negative binocular divergence, in degrees. Zero by default: applications cannot introduce negative depth until the user explicitly raises this limit.')
+opt('spatial_vertical_phase_limit', '0', option_type='spatial_phase_limit', long_text='Maximum magnitude of vertical separation between eye views, in physical pixels. Zero by default: applications cannot introduce vertical phase until the user raises this limit.')
+opt('spatial_wall_scale', '2', option_type='spatial_scale', long_text='Width and height of the anchored terminal wall relative to one eye view. Must be at least one; available GPU texture dimensions bound the rendered canvas.')
+opt('spatial_tracking_address', '169.254.2.1:52998', long_text='XREAL One series IMU TCP endpoint on its USB network interface. Only contacted while Anchored Wall is selected.')
+egr()
+
 # fonts {{{
 agr(
     'fonts',
@@ -44,7 +60,7 @@ and even specify special fonts for particular characters.
 
 opt(
     'font_family',
-    'Iosevka',
+    'family=Iosevka style=Extended',
     option_type='parse_font_spec',
     long_text="""
 You can specify different fonts for the bold/italic/bold-italic variants.
@@ -63,7 +79,7 @@ opt('bold_italic_font', 'auto', option_type='parse_font_spec')
 
 opt(
     '+font_role',
-    'sans Iosevka',
+    'sans family=Iosevka style=Extended',
     option_type='font_role',
     add_to_default=True,
     long_text="""
@@ -165,7 +181,7 @@ always render them. You can tell kitty to not render them when the cursor is
 over them by using :code:`cursor` to make editing easier, or have kitty never
 render them at all by using :code:`always`, if you don't like them. The ligature
 strategy can be set per-window either using the kitty remote control facility
-or by defining shortcuts for it in :file:`kitty.conf`, for example::
+or by defining shortcuts for it in :file:`silkie.conf`, for example::
 
     map alt+1 disable_ligatures_in active always
     map alt+2 disable_ligatures_in all never
@@ -415,13 +431,14 @@ place your value after the lines where the theme file is included.
 opt(
     'cursor_brightness',
     '1.0',
-    option_type='positive_float',
+    option_type='hdr_multiplier',
     ctype='float',
     long_text="""
 The brightness of the block cursor as a multiple of SDR white, so :code:`2.0`
 makes it twice as bright as normal white text. Values above one only take
 effect on an HDR display with :opt:`hdr` enabled, otherwise the cursor is
 rendered as usual. See :doc:`/hdr-protocol`.
+The minimum is 1.0. Settings increases or decreases this multiplier in steps of 0.1.
 """,
 )
 
@@ -1136,7 +1153,7 @@ The supported paste actions are:
     large amounts of text into shells can be very slow.
 :code:`filter`:
     Run the filter_paste() function from the file :file:`paste-actions.py` in
-    the kitty config directory on the pasted text. The text returned by the
+    the Silkie config directory on the pasted text. The text returned by the
     function will be actually pasted.
 :code:`no-op`:
     Has no effect.
@@ -1381,7 +1398,7 @@ mma(
     'start_simple_selection left press ungrabbed mouse_selection normal',
     long_text="""
 By default, pressing the left mouse button starts a new selection. To enable
-dragging selected text, hyperlinks or detected URLs, add this to :file:`kitty.conf`::
+dragging selected text, hyperlinks or detected URLs, add this to :file:`silkie.conf`::
 
     mouse_map left press ungrabbed mouse_selection drag_or_normal_select
 
@@ -1682,7 +1699,7 @@ Path to a sound file to play as the bell sound. If set to :code:`none`, the
 system default bell sound is used. Must be in a format supported by the
 operating systems sound API, such as WAV or OGA on Linux (libcanberra) or AIFF,
 MP3 or WAV on macOS (NSSound). Relative paths are resolved
-with respect to the kitty config directory.
+with respect to the Silkie config directory.
 """,
 )
 
@@ -2008,7 +2025,7 @@ opt(
     ctype='!window_logo_path',
     long_text="""
 Path to a logo image. Must be in PNG/JPEG/WEBP/GIF/TIFF/BMP format. Relative paths are interpreted
-relative to the kitty config directory. The logo is displayed in a corner of
+relative to the Silkie config directory. The logo is displayed in a corner of
 every kitty window. The position is controlled by :opt:`window_logo_position`.
 Individual windows can be configured to have different logos either using the
 :ac:`launch` action or the :doc:`remote control <remote-control>` facility.
@@ -2169,7 +2186,7 @@ A template to render the window title bar text. Uses the same template syntax as
 :code:`{bell_symbol}`, :code:`{activity_symbol}`, :code:`{progress_percent}`,
 :code:`{custom}`, :code:`{fmt}`, :code:`{is_active}`.
 You can also provide a custom :code:`draw_window_title(data)` function in
-:file:`window_title_bar.py` in the kitty config directory, exposed as :code:`{custom}`.
+:file:`window_title_bar.py` in the Silkie config directory, exposed as :code:`{custom}`.
 """,
 )
 
@@ -2313,7 +2330,7 @@ The tab bar style, can be one of:
     (See also :opt:`tab_powerline_style`)
 :code:`custom`
     A user-supplied Python function called draw_tab is loaded from the file
-    :file:`tab_bar.py` in the kitty config directory. For examples of how to
+    :file:`tab_bar.py` in the Silkie config directory. For examples of how to
     write such a function, see the functions named :code:`draw_tab_with_*` in
     kitty's source code: :file:`kitty/tab_bar.py`. See also
     :disc:`this discussion <4447>`
@@ -2530,7 +2547,7 @@ use :code:`{sup.index}`. All data available is:
     The current memory usage of all child process of the tab and their descendants
 :code:`custom`
     This will call a function named :code:`draw_title(data)` from the file :file:`tab_bar.py` placed in
-    the kitty config directory. The function will be passed a dictionary of data, the same data that
+    the Silkie config directory. The function will be passed a dictionary of data, the same data that
     can be used in this template. It can then perform arbitrarily complex processing and return a string.
     For example: :code:`tab_title_template "{custom}"` will use the output of the function as the tab title.
     Any print statements in the :code:`draw_title()` will print to the STDOUT of the kitty process, useful
@@ -2839,7 +2856,7 @@ see :doc:`/hdr-protocol`.
 opt(
     'hdr_max_headroom',
     '4.0',
-    option_type='positive_float',
+    option_type='hdr_multiplier',
     ctype='float',
     long_text="""
 The maximum brightness, as a multiple of SDR white, that Silkie will use for HDR
@@ -3078,9 +3095,27 @@ For example::
 
     remote_control_password "my passphrase" my_rc_command_checker.py
 
-Relative paths are resolved from the kitty configuration directory.
+Relative paths are resolved from the Silkie configuration directory.
 See :ref:`rc_custom_auth` for details.
 """,
+)
+
+opt(
+    'ssh_agent_forwarding',
+    'no',
+    option_type='to_bool',
+    long_text='''
+Allow applications to enumerate and use the local SSH agent through Silkie's
+OSC 777 ssh-agent protocol. Multiplexers and Skiff can expose a stable
+SSH_AUTH_SOCK whose provider follows the attached terminal. Enabling this grants
+programs that can write terminal output access to public keys and signing,
+as with SSH agent forwarding. Agent key additions, removals and locking are
+not exposed. OpenSSH session bindings remain attached to each connection.
+
+Silkie uses SSH_AUTH_SOCK when available. Otherwise it starts an ssh-agent
+and gives its socket to new local shells, where ssh-add can load keys.
+The agent is stopped when Silkie exits. See the SSH agent protocol reference.
+''',
 )
 
 opt(
@@ -3202,7 +3237,7 @@ The field :code:`app` is the name of the application sending the notification an
 is the type of the notification. Not all applications will send these fields, so you can also
 match on the title and body of the notification text. More sophisticated programmatic filtering
 and custom actions on notifications can be done by creating a notifications.py file in the
-kitty config directory (:file:`~/.config/kitty`). An annotated sample is
+Silkie config directory (:file:`~/.config/silkie`). An annotated sample is
 :link:`available <https://github.com/kovidgoyal/kitty/blob/master/docs/notifications.py>`.
 """,
 )
@@ -3270,7 +3305,7 @@ Automatically reload configuration files when they are changed. The setting
 is the number of seconds to wait before reloading the config files. This allows
 multiple changes to be debounced. Use a negative value to disable automatic reload.
 You can manually reload with :sc:`reload_config_file`. Note that automatic
-reload works only if the :file:`kitty.conf` already exists when kitty is started.
+reload works only if the :file:`silkie.conf` already exists when kitty is started.
 Changes to this setting by reloading configuration are ignored.
 """,
 )
@@ -3283,7 +3318,7 @@ opt(
 Path to a session file to use for all kitty instances. Can be overridden by
 using the :option:`kitty --session` :code:`=none` command line option for individual
 instances. See :ref:`sessions` in the kitty documentation for details. Note that
-relative paths are interpreted with respect to the kitty config directory.
+relative paths are interpreted with respect to the Silkie config directory.
 Environment variables in the path are expanded. Changing this option by
 reloading the config is not supported. Note that if kitty is invoked with command line
 arguments specifying a command to run, this option is ignored.
@@ -3575,10 +3610,21 @@ detects, for example on an e-ink display::
 
 The keys are :code:`kind` (:code:`lcd`, :code:`oled`, :code:`eink` or
 :code:`unknown`), :code:`color` (:code:`rgb`, :code:`gray` or :code:`mono`),
-:code:`bits` (bits per color channel), :code:`gamut` (:code:`srgb`,
+:code:`bits` (a common width for all active color channels), :code:`red_bits`,
+:code:`green_bits`, :code:`blue_bits`, :code:`gray_bits`, :code:`gamut` (:code:`srgb`,
 :code:`p3`, :code:`rec2020` or :code:`unknown`), :code:`headroom`,
 :code:`scale`, :code:`period` (refresh period in microseconds) and
 :code:`ppi`.
+
+Individual channel widths override :code:`bits` regardless of order. For RGB565,
+use :code:`color=rgb red_bits=5 green_bits=6 blue_bits=5`; the report's legacy
+:code:`bits` is then zero because the channels differ. A grayscale display uses
+:code:`color=gray gray_bits=4` for sixteen levels. :code:`color=mono` always
+means one bit; use :code:`gray` for more than two levels.
+
+The report identifies declared precision as :code:`configured`. Detected
+framebuffer widths are labeled :code:`framebuffer`, since they do not establish
+physical panel precision or color calibration. Unknown channel widths are zero.
 """,
 )
 
@@ -4018,7 +4064,7 @@ a given source wins.
 The remapping happens before anything else looks at the event, so it is
 application wide: kitty's own keyboard shortcuts, :opt:`kitty_mod`,
 :code:`mouse_map` and the keys sent to the program running in the terminal all
-see the remapped modifier. Every mapping in :file:`kitty.conf` is therefore
+see the remapped modifier. Every mapping in :file:`silkie.conf` is therefore
 written in terms of the modifier a key *becomes*, not the one printed on the
 keycap — including the built-in shortcuts, so :code:`remap_modifiers ctrl super`
 moves every default :code:`ctrl+shift+…` binding onto the physical Super key
@@ -4992,7 +5038,7 @@ the screen, instead of just clearing the screen. For ZSH, in :file:`~/.zshrc`, a
     zle -N ctrl_l
     bindkey '^l' ctrl_l
 
-Alternatively, you can just add :code:`map ctrl+l clear_terminal to_cursor_scroll active` to :file:`kitty.conf` which
+Alternatively, you can just add :code:`map ctrl+l clear_terminal to_cursor_scroll active` to :file:`silkie.conf` which
 works with no changes to the shell rc files, but only clears up to the prompt, it does not clear any text at the prompt itself.
 """,
 )
@@ -5029,23 +5075,23 @@ map(
 
 
 map(
-    'Reload kitty.conf',
+    'Reload silkie.conf',
     'reload_config_file kitty_mod+f5 load_config_file',
     long_text="""
-Reload :file:`kitty.conf`, applying any changes since the last time it was
+Reload :file:`silkie.conf`, applying any changes since the last time it was
 loaded. Note that a handful of options cannot be dynamically changed and
 require a full restart of kitty. Particularly, when changing shortcuts for
 actions located on the macOS global menu bar, a full restart is needed. You can
 also map a keybinding to load a different config file, for example::
 
-    map f5 load_config /path/to/alternative/kitty.conf
+    map f5 load_config /path/to/alternative/silkie.conf
 
-Note that all options from the original :file:`kitty.conf` are discarded, in
+Note that all options from the original :file:`silkie.conf` are discarded, in
 other words the new configuration *replace* the old ones.
 """,
 )
 
-map('Reload kitty.conf', 'reload_config_file ctrl+cmd+, load_config_file', only='macos')
+map('Reload silkie.conf', 'reload_config_file ctrl+cmd+, load_config_file', only='macos')
 
 map(
     'Debug kitty configuration',
@@ -5118,9 +5164,14 @@ map(
 )
 
 map(
-    'Quit kitty',
+    'Quit Silkie',
     'quit cmd+q quit',
     only='macos',
+    add_to_default=False,
+    long_text="""
+Silkie does not bind :kbd:`Cmd+Q` to quit by default. To enable this shortcut,
+add ``map cmd+q quit`` to :file:`silkie.conf`.
+""",
 )
 egr()  # }}}
 egr()  # }}}

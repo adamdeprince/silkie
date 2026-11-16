@@ -6,8 +6,10 @@ text. These attributes are retained with the cells through scrolling, resizing,
 screen copies and ANSI export. Text remains selectable and searchable. The
 terminal grid, character widths and cursor advances are unchanged.
 
-Silkie uses Iosevka by default, with Iosevka Slab for the ``serif`` role.
-Install the desired families from `Iosevka's releases
+Silkie uses Iosevka's wider Extended faces by default, including automatic
+bold and italic variants, with Iosevka Slab for the ``serif`` role. The
+:doc:`installer <install>` includes Iosevka and its SIL Open Font License notice.
+Install additional families from `Iosevka's releases
 <https://github.com/be5invis/Iosevka/releases>`_. Fonts are selected from the
 local system; the protocol does not transmit font files. If a family is absent,
 normal platform font substitution applies.
@@ -119,8 +121,8 @@ terminal's geometric box drawing keep their inherited behavior.
 
 Example configuration::
 
-    font_family Iosevka
-    font_role sans Iosevka
+    font_family family=Iosevka style=Extended
+    font_role sans family=Iosevka style=Extended
     font_role serif Iosevka Slab
     cjk_font auto
     cjk_font_locale jp

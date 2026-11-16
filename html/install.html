@@ -3,14 +3,15 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Writing software for Silkie" href="developer-guide.html"><link rel="prev" title="A terminal for richer interaction." href="index.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Games for Silkie and kitty" href="games.html"><link rel="prev" title="A terminal for richer interaction." href="index.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/install.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Install Silkie - Silkie</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -92,7 +93,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="install.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/install.html">
+</head>
   <body>
     
     <script>
@@ -244,11 +250,15 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="#">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
   <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
   <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/install.html" lang="zh-CN">简体中文</a>
 </nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -257,6 +267,9 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
@@ -318,14 +331,28 @@
           <section id="install-silkie">
 <h1>Install Silkie<a class="headerlink" href="#install-silkie" title="Link to this heading">¶</a></h1>
 <p>Silkie is built from the <a class="reference external" href="https://github.com/adamdeprince/silkie/tree/silkie">silkie branch</a> of this repository.
-Source builds retain the executable names <code class="docutils literal notranslate"><span class="pre">kitty</span></code> and <code class="docutils literal notranslate"><span class="pre">kitten</span></code>; binary
-packages provide <code class="docutils literal notranslate"><span class="pre">silkie</span></code> and <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code>. Upstream kitty packages
+The installed executable is <code class="docutils literal notranslate"><span class="pre">silkie</span></code>; its companion tools use
+<code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code>. Upstream kitty packages
 provide upstream kitty rather than Silkie’s extensions.</p>
 <section id="binary-packages">
 <h2>Binary packages<a class="headerlink" href="#binary-packages" title="Link to this heading">¶</a></h2>
+<p>Install Silkie and Iosevka on a supported macOS, Ubuntu, Debian, or Kylin system:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="o">-</span><span class="n">fsSL</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">silkie</span><span class="o">.</span><span class="n">goblinreactor</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">install</span><span class="o">.</span><span class="n">sh</span> <span class="o">|</span> <span class="n">bash</span>
+</pre></div>
+</div>
+<p>The installer explains which Goblin Reactor package source it needs and asks
+for permission before adding or changing it. It reuses an existing matching
+source, verifies the APT signing key, and installs <code class="docutils literal notranslate"><span class="pre">silkie</span></code> with Homebrew or
+APT. It also installs the unmodified Iosevka font: the official Homebrew
+<code class="docutils literal notranslate"><span class="pre">font-iosevka</span></code> cask on macOS, or a checksum-verified upstream release on Linux.
+Source approval is read from your terminal, so it also works when the
+script is piped to Bash. macOS needs Apple Silicon and macOS 26 or newer;
+Homebrew is installed with your permission if it is missing.</p>
+<p>The manual commands are below.</p>
 <p>On Apple Silicon with macOS 26 Tahoe, install the Homebrew cask:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brew</span> <span class="n">tap</span> <span class="n">goblinreactor</span><span class="o">/</span><span class="n">tap</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">brew</span><span class="o">.</span><span class="n">goblinreactor</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">homebrew</span><span class="o">-</span><span class="n">tap</span><span class="o">.</span><span class="n">git</span>
 <span class="n">brew</span> <span class="n">install</span> <span class="o">--</span><span class="n">cask</span> <span class="n">goblinreactor</span><span class="o">/</span><span class="n">tap</span><span class="o">/</span><span class="n">silkie</span>
+<span class="n">brew</span> <span class="n">install</span> <span class="o">--</span><span class="n">cask</span> <span class="n">font</span><span class="o">-</span><span class="n">iosevka</span>
 </pre></div>
 </div>
 <p>The application requires macOS approval before first launch. The
@@ -344,10 +371,39 @@ binary targets.</p>
 </pre></div>
 </div>
 <p>Launch <code class="docutils literal notranslate"><span class="pre">silkie</span></code> and use <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code> for its companion tools.</p>
+<p>To check the installed commands:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">silkie</span> <span class="o">--</span><span class="n">version</span>
+<span class="n">silkie</span><span class="o">-</span><span class="n">kitten</span> <span class="o">--</span><span class="n">version</span>
+<span class="n">silkie</span><span class="o">-</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span> <span class="o">--</span><span class="n">help</span>
+</pre></div>
+</div>
+<p>The Linux repository signatures, package checksums, and executable links were
+checked for all five targets listed above on October 28, 2026. APT installation and native-module loading were also tested on Ubuntu 26.04
+amd64 (<code class="docutils literal notranslate"><span class="pre">naamah</span></code>) and Kylin V10 SP1 LoongArch64 (<code class="docutils literal notranslate"><span class="pre">loongson</span></code>).</p>
+<p>The <a class="reference internal" href="games.html"><span class="doc">Silkie Sprint and Silkie Scramble games</span></a> are distributed
+as separate Homebrew and APT packages. Their game page includes installation
+commands, supported platforms, controls, and gameplay videos.</p>
 </section>
 <section id="fonts">
 <h2>Fonts<a class="headerlink" href="#fonts" title="Link to this heading">¶</a></h2>
-<p>Install Iosevka for Silkie’s default text and Iosevka Slab for the serif role.
+<p>The installer includes Iosevka for Silkie’s default text, using the wider
+Extended faces for regular, bold and italic text. For a manual font installation,
+use <code class="docutils literal notranslate"><span class="pre">brew</span> <span class="pre">install</span> <span class="pre">--cask</span> <span class="pre">font-iosevka</span></code> on macOS or download the unmodified
+fonts from <a class="reference external" href="https://github.com/be5invis/Iosevka/releases">Iosevka’s releases</a>
+on Linux. The scripted Linux installation currently pins Iosevka 34.9.1.</p>
+<p>Iosevka is copyright Renzhi Li and is distributed under the
+<a class="reference external" href="https://github.com/be5invis/Iosevka/blob/main/LICENSE.md">SIL Open Font License 1.1</a>. This license permits
+use, installation and bundling with software, provided the font retains its
+license and copyright notices; the font cannot be sold on its own. The
+installer downloads the original fonts without modifying or renaming them,
+and saves the matching <code class="docutils literal notranslate"><span class="pre">Iosevka-LICENSE.md</span></code> alongside the font files.
+The fonts remain licensed separately from Silkie.</p>
+<p>To use Iosevka’s narrower original width instead, configure:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">font_family</span> <span class="n">Iosevka</span>
+<span class="n">font_role</span> <span class="n">sans</span> <span class="n">Iosevka</span>
+</pre></div>
+</div>
+<p>Install Iosevka Slab separately for the serif role.
 For CJK text, install a regional Sarasa Term or Noto Sans CJK family. Font
 files are separate from the application; when a preferred font is absent,
 the operating system substitutes an available face. The <a class="reference internal" href="font-protocol.html"><span class="doc">Font selection protocol</span></a>
@@ -372,6 +428,11 @@ and Silkie’s <a class="reference external" href="https://github.com/adamdeprin
 </section>
 <section id="build-and-launch">
 <h2>Build and launch<a class="headerlink" href="#build-and-launch" title="Link to this heading">¶</a></h2>
+<p>The macOS dependency setup uses loader-relative library references so checkout
+paths do not overflow the downloaded libraries’ Mach-O load commands. Setup
+is retried automatically if an earlier download or relocation was incomplete.
+A fresh checkout with this fix completed the build and native-module loading
+checks on October 28, 2026.</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--branch<span class="w"> </span>silkie<span class="w"> </span>https://github.com/adamdeprince/silkie.git
 <span class="nb">cd</span><span class="w"> </span>silkie
 ./dev.sh<span class="w"> </span>build
@@ -379,17 +440,27 @@ and Silkie’s <a class="reference external" href="https://github.com/adamdeprin
 </pre></div>
 </div>
 <p>Keep the checkout in place when running this development build. Re-run
-<code class="docutils literal notranslate"><span class="pre">./dev.sh</span> <span class="pre">build</span></code> after changing the source. On macOS, the build also supplies
+<code class="docutils literal notranslate"><span class="pre">./dev.sh</span> <span class="pre">build</span></code> after changing the source. Development builds use the internal
+<code class="docutils literal notranslate"><span class="pre">kitty/launcher/kitty</span></code> and <code class="docutils literal notranslate"><span class="pre">kitty/launcher/kitten</span></code> paths rather than the
+installed <code class="docutils literal notranslate"><span class="pre">silkie</span></code> and <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code> commands. On macOS, the build also supplies
 <code class="docutils literal notranslate"><span class="pre">kitty/launcher/kitty.app</span></code>; see the <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/">upstream build notes</a> for details about unsigned applications
 and relocating a checkout.</p>
 </section>
 <section id="try-the-input-inspector">
 <h2>Try the input inspector<a class="headerlink" href="#try-the-input-inspector" title="Link to this heading">¶</a></h2>
-<p>Inside the running Silkie terminal, use the executable from the same checkout:</p>
+<p>Inside the installed Silkie terminal, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">silkie</span><span class="o">-</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span>
+</pre></div>
+</div>
+<p>For a source build, run the tool from the repository directory. On macOS:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">kitty</span><span class="o">/</span><span class="n">launcher</span><span class="o">/</span><span class="n">kitty</span><span class="o">.</span><span class="n">app</span><span class="o">/</span><span class="n">Contents</span><span class="o">/</span><span class="n">MacOS</span><span class="o">/</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span>
+</pre></div>
+</div>
+<p>On Linux:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">kitty</span><span class="o">/</span><span class="n">launcher</span><span class="o">/</span><span class="n">kitten</span> <span class="n">show</span><span class="o">-</span><span class="n">pointer</span>
 </pre></div>
 </div>
-<p>Run that command from the repository directory. The <a class="reference internal" href="show-pointer.html"><span class="doc">show_pointer kitten</span></a> queries the input protocols and displays the events supported
+<p>The <a class="reference internal" href="show-pointer.html"><span class="doc">show_pointer kitten</span></a> queries the input protocols and displays the events supported
 by the terminal and connected devices.</p>
 <p>Next, read <a class="reference internal" href="configuration.html"><span class="doc">Silkie configuration</span></a> for Silkie-specific options and the
 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty configuration manual</a> for the
@@ -403,12 +474,12 @@ before enabling extensions.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="developer-guide.html">
+          <a class="next-page" href="games.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Writing software for Silkie</div>
+                <div class="title">Games for Silkie and kitty</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

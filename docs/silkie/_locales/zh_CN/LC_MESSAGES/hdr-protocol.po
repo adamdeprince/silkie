@@ -1,0 +1,300 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:46+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/hdr-protocol.rst:2
+msgid "HDR brightness protocol"
+msgstr "HDR 亮度协议"
+
+#: docs/hdr-protocol.rst:6
+msgid ""
+"Many modern displays can show colors brighter than the white used for normal content, which Apple"
+" calls *extended dynamic range* (EDR). This protocol lets programs request that extra brightness "
+"for text, for images and for the cursor, without changing how anything else is displayed."
+msgstr "许多现代显示器能显示高于普通内容白色的亮度，Apple 称之为 *扩展动态范围* （EDR）。本协议允许程序为文本、图像和光标请求额外亮度，同时不改变其他内容的显示。"
+
+#: docs/hdr-protocol.rst:11
+msgid ""
+"Everything is expressed relative to *SDR white*, the white of normal text, which is rendered "
+"exactly as bright as it always has been. A brightness of ``100`` percent is SDR white, ``200`` "
+"percent is twice as bright in linear light, and so on. How much extra brightness the display can "
+"show is called the *headroom*, also a multiple of SDR white: a headroom of ``1`` means the "
+"display has no extra range, a headroom of ``4`` means it can show up to four times SDR white. The"
+" headroom changes with the brightness setting of the display and when a window moves between "
+"screens."
+msgstr ""
+"所有值相对于 *SDR 白色*，即普通文本使用的白色，它仍按原有亮度绘制。亮度 ``100`` 百分比表示 SDR 白色，``200`` "
+"表示线性光强下两倍亮度，依此类推。显示器能提供的额外亮度称为 *亮度余量*，也以 SDR 白色的倍数表示：``1`` 表示没有额外范围，``4`` 表示最高四倍 SDR "
+"白色。亮度余量会随显示器亮度设置及窗口所在屏幕变化。"
+
+#: docs/hdr-protocol.rst:20
+msgid ""
+"The terminal clamps every request to the headroom it currently has. On a display without HDR, or "
+"when the user has HDR turned off, every request is clamped to ``1`` and the output is identical "
+"to what it was before this protocol existed. Requests are never used to make anything dimmer, so "
+"programs written without HDR in mind look the same in a terminal that implements this protocol as"
+" in one that does not."
+msgstr ""
+"终端将每个请求钳制到当前可用亮度余量。在非 HDR 显示器上，或用户关闭 HDR 时，所有请求都钳制为 ``1``，输出与本协议出现前完全相同。请求绝不用于降低亮度，因此未考虑 HDR "
+"的程序，在支持与不支持本协议的终端上外观相同。"
+
+#: docs/hdr-protocol.rst:28
+msgid "Text"
+msgstr "文本"
+
+#: docs/hdr-protocol.rst:30
+msgid ""
+"Two new SGR attributes set the brightness of the foreground and the background of subsequently "
+"written cells, as a percent of SDR white, using the colon sub-parameter form::"
+msgstr "两个新的 SGR 属性使用冒号子参数，以 SDR 白色的百分比设置后续字符单元前景和背景亮度：::"
+
+#: docs/hdr-protocol.rst:37
+msgid "For example, to show text in orange at two and a half times SDR white::"
+msgstr "例如，以 SDR 白色两倍半的亮度显示橙色文本：::"
+
+#: docs/hdr-protocol.rst:41
+msgid ""
+"The brightness is independent of how the color was chosen. It applies to colors set with "
+"``38``/``48``, to the sixteen basic colors, to colors from the 256 color palette and to the "
+"default foreground and background, so a program can ask for the default text color, brighter, "
+"without knowing what that color is. The text decorations of a cell (underline, strikethrough) use"
+" the foreground brightness. Under reverse video the brightness follows the color it was set with,"
+" so a reversed cell with a foreground brightness of 200 percent shows a background at 200 "
+"percent."
+msgstr ""
+"亮度独立于颜色的选择方式，适用于 ``38``/``48`` 设置的颜色、十六种基本色、256 "
+"色调色板，以及默认前景和背景。因此程序无需知道默认文本是什么颜色，也能请求更亮的默认文本。字符单元的下划线和删除线使用前景亮度。反显时亮度跟随其所属颜色，因此前景亮度为 200 "
+"百分比的反显单元会显示 200 百分比亮度的背景。"
+
+#: docs/hdr-protocol.rst:50
+msgid ""
+"The attributes are reset by ``<ESC>[0m``, by ``56`` and ``57`` without a sub-parameter, and by a "
+"value of ``100`` or less. Values are rounded to quarter steps (``125``, ``150``, ``175``...) and "
+"clamped to ``1675``. A request larger than the headroom is shown at the headroom. The *dim* "
+"attribute (``2``) and brightness are independent, dim text at 200 percent is dim relative to a "
+"white twice as bright as usual."
+msgstr ""
+"``<ESC>[0m``、不带子参数的 ``56`` 和 ``57``，以及 ``100`` 或更低的值会重置属性。数值按四分之一步长取整（``125``、``150``、``175`` "
+"等），并钳制到 ``1675``。超出亮度余量的请求按余量上限显示。*暗淡* 属性（``2``）与亮度独立；200 百分比的暗淡文本，是相对于两倍普通白色亮度而言的暗淡。"
+
+#: docs/hdr-protocol.rst:57
+msgid ""
+"Terminals that do not know these attributes ignore them, since that is what most terminals do "
+"with unknown SGR parameters and their sub-parameters, so a program can emit them unconditionally."
+" A terminal that drops a whole SGR sequence containing an unknown parameter would also lose any "
+"color set in the same sequence, so send the brightness in its own ``<ESC>[...m`` after the color,"
+" as in the example above. The percent is only recognized as a colon sub-parameter, "
+"``<ESC>[56;250m`` is ``56`` with no value followed by an unrelated parameter."
+msgstr ""
+"不认识这些属性的终端会忽略它们，因为多数终端都会忽略未知 SGR 参数及子参数，所以程序可无条件发送。如果终端会丢弃包含未知参数的整个 SGR "
+"序列，同一序列中的颜色设置也会丢失；因此应像上例那样，在设置颜色之后，用独立 ``<ESC>[...m`` 发送亮度。百分比只在冒号子参数中识别；``<ESC>[56;250m`` 表示无值的 "
+"``56`` 后接一个无关参数。"
+
+#: docs/hdr-protocol.rst:67
+msgid "Images"
+msgstr "图像"
+
+#: docs/hdr-protocol.rst:69
+msgid ""
+"The :doc:`graphics-protocol` gains a pixel format for HDR images, ``f=64``. The data is RGBA with"
+" four 16-bit floating point numbers (IEEE 754 half precision, little endian) per pixel, in "
+"*linear* extended sRGB where ``1.0`` is SDR white and values above it are brighter. Alpha is "
+"straight (not pre-multiplied), as for ``f=32``. The other keys work as for ``f=32``: the width "
+"and height must be given with ``s`` and ``v``, the data may be compressed with ``o=z``, and it "
+"may be sent by any transmission medium. Animation frames of such an image must also be ``f=64`` "
+"(and ``f=64`` frames cannot be added to other images), the terminal responds with ``EINVAL`` "
+"otherwise. Frames are blended in linear light, and the background color of a frame (the ``Y`` "
+"key) is taken as linear values, ``255`` being SDR white. The gamut key of the :doc:`wide-gamut-"
+"protocol`, ``G``, is ignored for an HDR image: its colors are extended sRGB by definition, which "
+"reaches the colors outside sRGB with values below zero and above one."
+msgstr ""
+":doc:`graphics-protocol` 增加 HDR 像素格式 ``f=64``。数据为 RGBA，每个像素含四个 16 位浮点数（IEEE 754 半精度，小端序），使用 *线性* "
+"扩展 sRGB，``1.0`` 为 SDR 白色，更大的值更亮。Alpha 与 ``f=32`` 一样，采用直通值（非预乘）。其他键的行为与 ``f=32`` 相同：必须通过 ``s`` 和 "
+"``v`` 指定宽高，可用 ``o=z`` 压缩，也可使用任意传输介质。此类图像的动画帧也必须为 ``f=64``，且不能向其他格式图像添加 ``f=64`` 帧，否则回复 "
+"``EINVAL``。帧在线性光空间混合；帧背景色（``Y`` 键）视为线性值，``255`` 为 SDR 白色。HDR 图像忽略 :doc:`wide-gamut-protocol` 的色域键"
+" ``G``：按定义，其颜色是扩展 sRGB，可通过小于零或大于一的值表示 sRGB 以外的颜色。"
+
+#: docs/hdr-protocol.rst:84
+msgid ""
+"Pixel values larger than the headroom are shown at the headroom, which clips the bright parts of "
+"an image on a display with little headroom. An image can ask instead for its bright parts to be "
+"compressed into the headroom with ``T=1`` on the command that transmits it. Then, with *H* the "
+"headroom, *P* the largest color component in the image (at least ``1.0``, and including the "
+"animation frames loaded so far) and *k* = 0.75 *H* the knee, a pixel whose largest component *m* "
+"is above the knee is scaled by *f(m)/m* where::"
+msgstr ""
+"超过亮度余量的像素按余量上限显示；余量较少时，图像高光会被裁剪。也可在传输命令中用 ``T=1`` 请求将高光压缩到可用余量内。令 *H* 为亮度余量，*P* 为图像的最大颜色分量（至少为 "
+"``1.0``，且包括已加载的动画帧），转折点 *k* = 0.75 *H*。若像素最大分量 *m* 高于转折点，则按 *f(m)/m* 缩放，其中：::"
+
+#: docs/hdr-protocol.rst:94
+msgid ""
+"so that everything up to the knee is unchanged, *P* lands exactly at *H*, the curve is continuous"
+" at the knee and the hue of a pixel is preserved. When *P* is within the headroom nothing is "
+"changed. ``T=0``, the default, clips."
+msgstr "因此转折点以下保持不变，*P* 恰好映射到 *H*，曲线在转折点连续，并保留像素色相。如果 *P* 未超出亮度余量，则不改变内容。默认 ``T=0`` 使用裁剪。"
+
+#: docs/hdr-protocol.rst:98
+msgid ""
+"To check whether a terminal supports ``f=64``, use the query action described in the graphics "
+"protocol with ``f=64`` and a single pixel of data, a terminal that does not know the format "
+"responds with ``EINVAL``."
+msgstr "检查终端是否支持 ``f=64`` 时，使用图形协议规定的查询操作，附带 ``f=64`` 和单个像素数据；不认识此格式的终端回复 ``EINVAL``。"
+
+#: docs/hdr-protocol.rst:102
+msgid ""
+"The :doc:`vector-protocol` uses the same HDR presentation path. Brightness suffixes and linear "
+"extended-sRGB paints work in every vector primitive, including styled text, strokes, gradients "
+"and symbols. Nested clips and group opacity preserve HDR values; embedded ``f=64`` images retain "
+"their linear colors. Vector images also accept ``T=1`` for tone mapping."
+msgstr ""
+":doc:`vector-protocol` 使用相同的 HDR 呈现路径。亮度后缀和线性扩展 sRGB 绘制色适用于全部矢量图元，包括带样式文本、描边、渐变和符号。嵌套裁剪和分组不透明度保留 "
+"HDR 值；嵌入的 ``f=64`` 图像保留线性颜色。矢量图像也接受 ``T=1`` 进行色调映射。"
+
+#: docs/hdr-protocol.rst:109
+msgid "Cursor"
+msgstr "光标"
+
+#: docs/hdr-protocol.rst:111
+msgid ""
+"In Silkie the brightness of the block cursor is a configuration option, :opt:`cursor_brightness`."
+" A cursor brighter than any text makes it easy to find on a crowded screen."
+msgstr "在 Silkie 中，块状光标亮度由配置选项 :opt:`cursor_brightness` 控制。让光标比所有文本都亮，可在拥挤屏幕上更容易找到它。"
+
+#: docs/hdr-protocol.rst:116
+msgid "Querying the headroom"
+msgstr "查询亮度余量"
+
+#: docs/hdr-protocol.rst:118
+msgid ""
+"A program that wants to know how much extra brightness is available, for example to pick between "
+"several renderings of an image, can ask for the headroom of the window it is running in with the "
+"``XTGETTCAP`` query mechanism, see :doc:`kittens/query_terminal`. The query name is ``kitty-"
+"query-hdr_headroom`` and the answer is the headroom as a decimal number, ``1`` when there is "
+"none. For example, encoding the query name as hex::"
+msgstr ""
+"程序若想知道可用额外亮度（例如选择图像的不同渲染版本），可通过 ``XTGETTCAP`` 查询机制询问当前窗口的亮度余量，参阅 "
+":doc:`kittens/query_terminal`。查询名称为 ``kitty-query-hdr_headroom``，答案为十进制数表示的亮度余量，无余量时为 "
+"``1``。例如，将查询名称编码为十六进制：::"
+
+#: docs/hdr-protocol.rst:128
+msgid ""
+"The headroom changes over time, so re-query it before relying on a value obtained a while ago. "
+"This query sends no notification of changes; a program that wants to be told turns on the events "
+"of the :doc:`display-protocol`, whose ``headroom`` field is the same value. On macOS the display "
+"fades its extended range in over the first second or so after an HDR window appears, so a value "
+"obtained at startup is often smaller than one obtained a moment later."
+msgstr ""
+"亮度余量随时间变化，因此依赖较早获得的值前应重新查询。该查询不发送变化通知；需要通知的程序可开启 :doc:`display-protocol` 事件，其中 ``headroom`` "
+"字段是相同值。在 macOS 上，HDR 窗口出现后的约一秒内，显示器会逐渐提升扩展范围，因此启动时查得的值常比稍后的值小。"
+
+#: docs/hdr-protocol.rst:136
+msgid "Configuration"
+msgstr "配置"
+
+#: docs/hdr-protocol.rst:138
+msgid ""
+"In Silkie, :opt:`hdr` defaults to ``detect``. HDR stays enabled when the window's display offers "
+"it without a display mode switch. On macOS this uses the display's EDR capability, including "
+"built-in MacBook displays, even when the current headroom is temporarily ``1``. On Wayland it "
+"uses the HDR headroom already offered by the compositor. Detection is updated as the window moves"
+" between displays; unsupported displays use SDR."
+msgstr ""
+"Silkie 的 :opt:`hdr` 默认值为 ``detect``。只要窗口所在显示器无需切换模式即可提供 HDR，就保持启用。在 macOS 上依据显示器的 EDR 能力，包括 "
+"MacBook 内置显示器，即使当前亮度余量暂时为 ``1``。Wayland 则使用合成器已经提供的 HDR 余量。窗口在显示器间移动时重新检测；不支持的显示器使用 SDR。"
+
+#: docs/hdr-protocol.rst:145
+msgid ""
+"Silkie does not change a display's HDR mode. If an external monitor requires an HDR mode switch, "
+"enable HDR in the system's display settings first. ``hdr no`` disables HDR, ``hdr auto`` requests"
+" it only while HDR content is visible, and ``hdr always`` requests it regardless of display "
+"detection. Restart Silkie after changing ``hdr``, since the framebuffer format is chosen when a "
+"window is created."
+msgstr ""
+"Silkie 不改变显示器的 HDR 模式。如果外接显示器需要切换 HDR 模式，请先在系统显示设置中启用。``hdr no`` 禁用 HDR，``hdr auto`` 仅在 HDR "
+"内容可见时请求，``hdr always`` 则不论检测结果都请求。修改 ``hdr`` 后请重启 Silkie，因为帧缓冲区格式在创建窗口时选定。"
+
+#: docs/hdr-protocol.rst:152
+msgid ""
+"The user can cap how bright anything gets with :opt:`hdr_max_headroom`, which the terminal "
+"applies before clamping to the headroom of the display, and that cap is what the query above "
+"reports."
+msgstr "用户可通过 :opt:`hdr_max_headroom` 限制亮度。终端先应用此上限，再钳制到显示器的可用余量；上面的查询报告的是经过该上限限制的余量。"
+
+#: docs/hdr-protocol.rst:156
+msgid "HDR content is displayed on macOS, and on Wayland when two things hold:"
+msgstr "macOS 支持 HDR 内容；Wayland 需要同时满足以下条件："
+
+#: docs/hdr-protocol.rst:158
+msgid ""
+"The compositor implements the ``color-management-v1`` protocol with parametric image "
+"descriptions, the extended linear transfer function and settable luminances. Mutter 50 does. A "
+"window then draws linear values and tells the compositor that they reach from black to as many "
+"times the reference white of the display as the content gets bright."
+msgstr ""
+"合成器实现 ``color-management-v1`` 协议，支持参数化图像描述、扩展线性传递函数和可设置亮度。Mutter 50 "
+"具备这些能力。此时窗口绘制线性值，并告知合成器其范围从黑色延伸到内容实际达到的、显示器参考白色的若干倍亮度。"
+
+#: docs/hdr-protocol.rst:163
+msgid ""
+"The graphics driver has EGL window surfaces with floating point color "
+"(``EGL_EXT_pixel_format_float``), since eight bits per channel cannot hold values above white. "
+"Mesa's drivers for graphics hardware are expected to have them, which is untested. The NVIDIA "
+"driver (version 595) does not, and neither does Mesa when it renders in software, so there the "
+"window stays as it is without :opt:`hdr`."
+msgstr ""
+"图形驱动提供浮点色彩 EGL 窗口表面（``EGL_EXT_pixel_format_float``），因为每通道八位无法表示高于白色的值。预期 Mesa "
+"的硬件驱动具有此能力，但尚未测试。NVIDIA 驱动（版本 595）不支持，Mesa 软件渲染也不支持，因此这些情况下窗口行为与未启用 :opt:`hdr` 相同。"
+
+#: docs/hdr-protocol.rst:170
+msgid ""
+"The headroom on Wayland is the brightest luminance the compositor says the display of the window "
+"can show, divided by the luminance of its reference white. It is ``1`` on a display that is not "
+"in HDR mode and changes when the display is switched into or out of it. A compositor that does "
+"not know the peak of a display, a virtual one for instance, reports the limit of the signal "
+"instead, which makes the headroom about ``49``; :opt:`hdr_max_headroom` is what keeps Silkie from"
+" using that."
+msgstr ""
+"Wayland 的亮度余量等于合成器报告的窗口所在显示器最大亮度，除以参考白色亮度。非 HDR 模式显示器上为 ``1``，切入或切出 HDR "
+"模式时会变化。若合成器不知道显示器峰值（例如虚拟显示器），则报告信号上限，使余量约为 ``49``；:opt:`hdr_max_headroom` 会阻止 Silkie 使用这么大的值。"
+
+#: docs/hdr-protocol.rst:178
+msgid ""
+"The values of an HDR window on Wayland are in the sRGB primaries unless :opt:`wayland_colorspace`"
+" asks for a wider gamut, see :doc:`wide-gamut-protocol`. The compositor is then told of the wide "
+"primaries in the same description that says the values are linear and how bright they get, since "
+"a window has only one, and what is drawn is converted to those primaries. A compositor that takes"
+" linear values only in the sRGB primaries leaves the window an HDR window in sRGB. This "
+"combination has been checked against Mutter 50 in the same way and to the same extent as HDR "
+"itself."
+msgstr ""
+"Wayland 的 HDR 窗口默认使用 sRGB 基色，除非 :opt:`wayland_colorspace` 请求更宽色域，见 :doc:`wide-gamut-"
+"protocol`。因为窗口只有一份描述，广色域基色会与线性值和亮度范围在同一描述中告知合成器，绘制内容也转换到这些基色。如果合成器只接受 sRGB 基色下的线性值，则窗口保持 HDR，但使用 "
+"sRGB。该组合已按与 HDR 相同的方式、相同的范围在 Mutter 50 上检查。"
+
+#: docs/hdr-protocol.rst:187
+msgid ""
+"``kitty --debug-rendering`` says whether a window got a floating point surface and what the "
+"compositor was told. The Wayland support has been run against Mutter 50 with every step checked "
+"except the floating point surface itself, for want of a driver that has one, and it has not been "
+"seen on an HDR monitor. On X11 and on Wayland without the above the headroom is always ``1``."
+msgstr ""
+"``kitty --debug-rendering`` 显示窗口是否获得浮点表面，以及向合成器声明了什么。Wayland 支持已在 Mutter 50 "
+"上逐步检查，但由于缺少支持驱动，尚未检查浮点表面本身，也未在 HDR 显示器上实际观察。在 X11 或不满足上述条件的 Wayland 上，亮度余量始终为 ``1``。"
+

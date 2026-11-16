@@ -48,7 +48,7 @@ just as for :opt:`remote_control_password`. For example::
 
 This password will be in effect for this window only.
 Note that any passwords you have defined for :opt:`remote_control_password`
-in :file:`kitty.conf` are also in effect. You can override them by using the same password here.
+in :file:`silkie.conf` are also in effect. You can override them by using the same password here.
 You can also disable all :opt:`remote_control_password` global passwords for this window, by using::
 
     --remote-control-password '!'
@@ -307,7 +307,7 @@ The bias option was introduced in kitty version 0.36.0.
 --allow-remote-control
 type=bool-set
 Programs running in this window can control kitty (even if remote control is not
-enabled in :file:`kitty.conf`). Note that any program with the right level of
+enabled in :file:`silkie.conf`). Note that any program with the right level of
 permissions can still write to the pipes of any other program on the same
 computer and therefore can control kitty. It can, however, be useful to block
 programs running on other computers (for example, over SSH) or as other users.
@@ -406,7 +406,7 @@ desktop environment/window manager. It never works on Wayland.
 --logo
 completion=type:file ext:png group:"PNG images" relative:conf
 Path to a PNG image to use as the logo for the newly created window. See
-:opt:`window_logo_path`. Relative paths are resolved from the kitty configuration directory.
+:opt:`window_logo_path`. Relative paths are resolved from the Silkie configuration directory.
 
 
 --logo-position
@@ -424,7 +424,7 @@ effect if :option:`--logo` is specified. See :opt:`window_logo_alpha`.
 --color
 type=list
 Change colors in the newly launched window. You can either specify a path to a
-:file:`.conf` file with the same syntax as :file:`kitty.conf` to read the colors
+:file:`.conf` file with the same syntax as :file:`silkie.conf` to read the colors
 from, or specify them individually, for example::
 
     --color background=white --color foreground=red
@@ -445,9 +445,9 @@ completion=type:file ext:py relative:conf group:"Python scripts"
 Path to a Python file. Appropriately named functions in this file will be called
 for various events, such as when the window is resized, focused or closed. See
 the section on watchers in the launch command documentation: :ref:`watchers`.
-Relative paths are resolved relative to the :ref:`kitty config directory
+Relative paths are resolved relative to the :ref:`Silkie config directory
 <confloc>`. Global watchers for all windows can be specified with
-:opt:`watcher` in :file:`kitty.conf`.
+:opt:`watcher` in :file:`silkie.conf`.
 
 
 --os-panel

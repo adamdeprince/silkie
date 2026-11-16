@@ -86,7 +86,7 @@ By default, this kitten will signal only the parent kitty instance it is
 running in to reload its config, after making changes. Use this option
 to instead either not reload the config at all or in all running
 kitty instances. Note that if you have config autoreload enabled
-in kitty.conf (it is enabled by default) then :code:`parent`
+in silkie.conf (it is enabled by default) then :code:`parent`
 is the same as :code:`all`, since all kitty instances will detect the config
 file change and reload automatically.
 
@@ -95,16 +95,16 @@ file change and reload automatically.
 type=bool-set
 default=false
 When running non-interactively, dump the specified theme to STDOUT
-instead of changing kitty.conf.
+instead of changing silkie.conf.
 
 
 --config-file-name
-default=kitty.conf
+default=silkie.conf
 The name or path to the config file to edit. Relative paths are interpreted
-with respect to the kitty config directory. By default the kitty config file,
-kitty.conf is edited. This is most useful if you add :code:`include themes.conf`
-to your kitty.conf and then have the kitten operate only on :file:`themes.conf`,
-allowing :code:`kitty.conf` to remain unchanged.
+with respect to the Silkie config directory. By default the kitty config file,
+silkie.conf is edited. This is most useful if you add :code:`include themes.conf`
+to your silkie.conf and then have the kitten operate only on :file:`themes.conf`,
+allowing :code:`silkie.conf` to remain unchanged.
 """.format
 
 

@@ -592,7 +592,7 @@ main(int argc_, char *argv_[], char *envp[]) {
     lc_ctype = getenv("LC_CTYPE");
     if (lc_ctype) lc_ctype = strdup(lc_ctype);
     char abuf[PATH_MAX + 1];
-    is_quick_access_terminal = endswith(exe, "/kitty-quick-access");
+    is_quick_access_terminal = endswith(exe, "/silkie-quick-access") || endswith(exe, "/kitty-quick-access");
     if (getenv("KITTY_LAUNCHED_BY_LAUNCH_SERVICES")) {
         launched_by_launch_services = true;
         unsetenv("KITTY_LAUNCHED_BY_LAUNCH_SERVICES");

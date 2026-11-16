@@ -133,7 +133,7 @@ func (self *Context) Prettify(text string) string {
 		val := group.Payload
 		switch group.Role {
 		case "file":
-			if val == "kitty.conf" && self.fmt_ctx.AllowEscapeCodes {
+			if val == "silkie.conf" && self.fmt_ctx.AllowEscapeCodes {
 				path := filepath.Join(utils.ConfigDir(), val)
 				val = self.hyperlink_for_path(path, val)
 			}

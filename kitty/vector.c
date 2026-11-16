@@ -11,6 +11,7 @@
 // docs/vector-protocol.rst for the format.
 
 #include "vector.h"
+#include "spatial.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -341,13 +342,19 @@ polygon_misses(const double *pts, size_t n, Mat m, Rect clip) {
 
 typedef struct {
     double x;
-    int dir;
+    Edge *edge;
 } Crossing;
 
 static int
 cmp_edge_y(const void *a, const void *b) {
     const Edge *x = a, *y = b;
     return x->y0 < y->y0 ? -1 : x->y0 > y->y0;
+}
+
+static int
+cmp_crossing_x(const void *a, const void *b) {
+    const Crossing *x = a, *y = b;
+    return x->x < y->x ? -1 : x->x > y->x;
 }
 
 #define COVERAGE_ONE 4096  // a whole pixel on one subsample line
@@ -376,12 +383,19 @@ static bool
 rasterize(EdgeList *el, bool evenodd, Rect clip, span_fn fn, void *ctx) {
     if (!el->count || clip.x1 <= clip.x0 || clip.y1 <= clip.y0) return true;
     double minx = INFINITY, maxx = -INFINITY, miny = INFINITY, maxy = -INFINITY;
+    bool reusable_order = true;
     for (size_t i = 0; i < el->count; i++) {
         const Edge *e = el->item + i;
         minx = fmin(minx, fmin(e->x0, e->x1));
         maxx = fmax(maxx, fmax(e->x0, e->x1));
         miny = fmin(miny, e->y0);
         maxy = fmax(maxy, e->y1);
+        // Finite input coordinates can still overflow slope/intersection
+        // arithmetic. Preserve the original active order for that entire
+        // shape: an earlier finite sample cannot predict later NaN barriers.
+        const double sy0 = fmax(e->y0, clip.y0), sy1 = fmin(e->y1, clip.y1);
+        if (!isfinite(e->slope) || (sy0 < sy1 &&
+            (!isfinite(e->x0 + (sy0 - e->y0) * e->slope) || !isfinite(e->x0 + (sy1 - e->y0) * e->slope)))) reusable_order = false;
     }
     // compared before they are converted, the edges can be anywhere
     const double fx0 = fmax(clip.x0, floor(minx)), fx1 = fmin(clip.x1 - 1, ceil(maxx)), fy0 = fmax(clip.y0, floor(miny)), fy1 = fmin(clip.y1 - 1, ceil(maxy));
@@ -402,6 +416,7 @@ rasterize(EdgeList *el, bool evenodd, Rect clip, span_fn fn, void *ctx) {
                 double sy = y + (k + 0.5) / SUBSAMPLES;
                 while (next < el->count && el->item[next].y0 <= sy) active[nactive++] = el->item + next++;
                 size_t nx = 0;
+                bool finite_crossings = reusable_order;
                 for (size_t i = 0; i < nactive;) {
                     Edge *e = active[i];
                     if (e->y1 <= sy) {
@@ -409,24 +424,37 @@ rasterize(EdgeList *el, bool evenodd, Rect clip, span_fn fn, void *ctx) {
                         continue;
                     }
                     // taking a whole number of pixels off a crossing at or right of bx0 loses nothing of where in its pixel it is
-                    xs[nx++] = (Crossing){e->x0 + (sy - e->y0) * e->slope - bx0, e->dir};
+                    xs[nx++] = (Crossing){e->x0 + (sy - e->y0) * e->slope - bx0, e};
+                    finite_crossings &= isfinite(xs[nx - 1].x);
                     i++;
                 }
                 if (nx < 2) continue;
-                for (size_t i = 1; i < nx; i++) {  // insertion sort, crossings are few and nearly sorted
+                // Keep active edges in crossing order between subsamples.
+                // Insertion handles their usual small changes in linear work;
+                // fall back to O(n log n) if new edges or intersections make
+                // this sample disorderly. This budget changes the algorithm,
+                // never the number of crossings processed.
+                size_t moves = 0;
+                for (size_t i = 1; i < nx; i++) {
                     Crossing c = xs[i];
                     size_t j = i;
                     while (j > 0 && xs[j - 1].x > c.x) {
                         xs[j] = xs[j - 1];
                         j--;
+                        if (finite_crossings && ++moves == nx) break;
                     }
                     xs[j] = c;
+                    if (finite_crossings && moves == nx) {
+                        qsort(xs, nx, sizeof(Crossing), cmp_crossing_x);
+                        break;
+                    }
                 }
+                if (finite_crossings) for (size_t i = 0; i < nx; i++) active[i] = xs[i].edge;
                 int wind = 0;
                 double start = 0;
                 for (size_t i = 0; i < nx; i++) {
                     bool was = evenodd ? (wind & 1) : wind != 0;
-                    wind += xs[i].dir;
+                    wind += xs[i].edge->dir;
                     bool now = evenodd ? (wind & 1) : wind != 0;
                     if (!was && now) start = xs[i].x;
                     else if (was && !now) {
@@ -442,7 +470,9 @@ rasterize(EdgeList *el, bool evenodd, Rect clip, span_fn fn, void *ctx) {
                 run += acc[i];
                 float c = (float)run * (1.f / (SUBSAMPLES * COVERAGE_ONE));
                 c = c < 0 ? 0 : (c > 1 ? 1 : c);
-                if (c > 0.0005f) {
+                // Every positive quantized coverage must be painted, including
+                // when a damage crop excludes stronger spans elsewhere in the row.
+                if (c > 0) {
                     if (first < 0) first = i;
                     last = i;
                 }
@@ -678,6 +708,11 @@ typedef struct Elem {
     uint32_t id, parent, ref;  // ref: clip path of a group, symbol of a use, image of an image
     char type;
     bool has_t, visible, has_focus, in_progress;
+    bool has_depth;
+    double depth;
+    bool depth_in_pixels;
+    bool has_phase;
+    double phase;
     Mat t;
     Path path;   // p and s
     double *pts; // k: x, y, width triples
@@ -690,7 +725,7 @@ typedef struct Elem {
     double g[5];  // l: x1 y1 x2 y2, r: cx cy r fx fy
     Stop *stops;
     unsigned nstops;
-    size_t slot, bytes;
+    size_t slot, sorted_slot, bytes;
     // The box of the geometry in the element's own coordinate system, worked
     // out when first asked for and kept up as geometry is appended
     Box box;
@@ -726,6 +761,13 @@ struct VectorDoc {
     PyObject *font_session;
 };
 
+bool
+vector_doc_has_depth(const VectorDoc *d) {
+    if (d->root.has_depth || d->root.has_phase) return true;
+    for (size_t i = 0; i < d->count; i++) if (d->order[i] && (d->order[i]->has_depth || d->order[i]->has_phase)) return true;
+    return false;
+}
+
 static void
 elem_free(Elem *e) {
     if (!e) return;
@@ -750,6 +792,7 @@ elem_new(void) {
     e->opacity = 100;
     e->fill.type = PAINT_NONE;
     e->stroke.type = PAINT_NONE;
+    e->sorted_slot = SIZE_MAX;
     return e;
 }
 
@@ -829,30 +872,41 @@ compact(VectorDoc *d) {
     d->count = out;
 }
 
+static bool
+has_render_order(const Elem *e) {
+    return e->type != 's' && e->type != 'l' && e->type != 'r';
+}
+
 // Puts e into the document, replacing any element with the same id in place
 static bool
 insert_elem(VectorDoc *d, Elem *e) {
-    Elem *old = lookup(d, e->id);
-    d->is_sorted = false;
+    elem_map_itr existing = vt_get(&d->by_id, e->id);
+    Elem *old = vt_is_end(existing) ? NULL : existing.data->val;
+    const bool keep_sorted = d->is_sorted && old && old->parent == e->parent && has_render_order(old) == has_render_order(e);
+    if (!keep_sorted) d->is_sorted = false;
     if (old) {
         e->slot = old->slot;
+        if (keep_sorted && has_render_order(e)) {
+            e->sorted_slot = old->sorted_slot;
+            d->sorted[e->sorted_slot] = e;
+        }
         d->order[e->slot] = e;
-        vt_erase(&d->by_id, old->id);
+        existing.data->val = e;
         d->used_bytes -= old->bytes;
         if (is_clip_group(old)) d->clip_groups--;
         elem_free(old);
         d->live--;
     } else {
+        if (d->count == SIZE_MAX) return false;
         if (d->count + 1 > d->capacity) {
-            if (d->count == SIZE_MAX) return false;
             void *np = reserve_array(d->order, &d->capacity, d->count + 1, sizeof(Elem *), 64);
             if (!np) return false;
             d->order = np;
         }
+        if (vt_is_end(vt_insert(&d->by_id, e->id, e))) return false;
         e->slot = d->count;
         d->order[d->count++] = e;
     }
-    if (vt_is_end(vt_insert(&d->by_id, e->id, e))) return false;
     d->used_bytes += e->bytes;
     d->live++;
     if (is_clip_group(e)) d->clip_groups++;
@@ -1393,6 +1447,17 @@ parse_field(Record *r, const char *key, size_t klen, const char *v, const char *
         if (!parse_nums(&q, end, m, 6) || q != end) FAIL("Bad transform");
         e->t = (Mat){m[0], m[1], m[2], m[3], m[4], m[5]};
         e->has_t = true;
+    } else if (IS("depth")) {
+        NUM(e->depth);
+        e->has_depth = true;
+        e->depth_in_pixels = false;
+    } else if (IS("depth_px")) {
+        NUM(e->depth);
+        e->has_depth = true;
+        e->depth_in_pixels = true;
+    } else if (IS("phase")) {
+        NUM(e->phase);
+        e->has_phase = true;
     } else if (IS("box")) {
         double b[4];
         const char *q = v;
@@ -1774,16 +1839,20 @@ typedef struct {
     const Elem *grad;
     Mat inv;  // device to paint space
     const VectorImageData *img;
+    const float *srgb_bytes;
 } Fill;
 
 typedef struct {
     VectorDoc *doc;
+    VectorStereo stereo;
     Elem **sorted;  // live elements sorted by parent then slot
     size_t nsorted;
     Rect area;  // the pixels being drawn
     vector_image_lookup lookup;
     void *lookup_ctx;
     bool failed;
+    bool has_srgb_bytes;
+    float srgb_bytes[256];  // all possible values of one channel in an 8-bit raster
 } Render;
 
 static inline float
@@ -1801,8 +1870,13 @@ eval_stops(const Elem *g, double t, float *r, float *gg, float *b, float *a) {
     } else if (t >= st[n - 1].offset) {
         c[0] = st[n - 1].r, c[1] = st[n - 1].g, c[2] = st[n - 1].b, c[3] = st[n - 1].a;
     } else {
-        unsigned i = 1;
-        while (i < n - 1 && st[i].offset < t) i++;
+        unsigned i = 1, hi = n - 1;
+        // Find the first stop at or after t, preserving the behavior at repeated offsets.
+        while (i < hi) {
+            unsigned mid = i + (hi - i) / 2;
+            if (st[mid].offset < t) i = mid + 1;
+            else hi = mid;
+        }
         double span = st[i].offset - st[i - 1].offset, f = span > 0 ? (t - st[i - 1].offset) / span : 0;
         c[0] = st[i - 1].r + (st[i].r - st[i - 1].r) * f;
         c[1] = st[i - 1].g + (st[i].g - st[i - 1].g) * f;
@@ -1813,7 +1887,7 @@ eval_stops(const Elem *g, double t, float *r, float *gg, float *b, float *a) {
 }
 
 static inline void
-sample_image(const VectorImageData *img, double u, double v, float *r, float *g, float *b, float *a) {
+sample_image(const VectorImageData *img, const float *srgb_bytes, double u, double v, float *r, float *g, float *b, float *a) {
     const unsigned bpp = img->is_float ? 8 : img->is_opaque ? 3 : 4;
     double fx = u - 0.5, fy = v - 0.5;
     int x0 = (int)floor(fx), y0 = (int)floor(fy);
@@ -1833,7 +1907,7 @@ sample_image(const VectorImageData *img, double u, double v, float *r, float *g,
                 memcpy(h, p, sizeof(h));
                 for (unsigned k = 0; k < 4; k++) c[k] = vector_half_to_float(h[k]);
             } else {
-                for (unsigned k = 0; k < 3; k++) c[k] = vector_decode_srgb(p[k] / 255.f);
+                for (unsigned k = 0; k < 3; k++) c[k] = srgb_bytes[p[k]];
                 c[3] = img->is_opaque ? 1 : p[3] / 255.f;
                 vector_to_srgb(c, img->gamut);
             }
@@ -1853,7 +1927,7 @@ paint_at(const Fill *f, int x, int y, float *r, float *g, float *b, float *a) {
     double u, v;
     apply(f->inv, x + 0.5, y + 0.5, &u, &v);
     if (f->type == FILL_IMAGE) {
-        sample_image(f->img, u, v, r, g, b, a);
+        sample_image(f->img, f->srgb_bytes, u, v, r, g, b, a);
     } else {
         const Elem *gr = f->grad;
         double t;
@@ -1987,8 +2061,20 @@ stroke_polys(PolyList *polys, const Elem *style, double hw, Mat m, Rect clip, do
     size_t budget_store = kitty_vector_dash_limit();
     size_t *budget = budget_store ? &budget_store : NULL;
     for (size_t i = 0; i < polys->count; i++) {
+        const Poly *p = polys->item + i;
+        if (!style->ndash) {
+            // A retained network can have thousands of subpaths while only a
+            // small gate or ink rectangle is damaged. Cull before stroking,
+            // which would otherwise build caps and joins for every subpath.
+            Box box = empty_box;
+            for (size_t k = 0; k < p->count; k += 2) box_add(&box, p->pts[k], p->pts[k + 1]);
+            box = box_transform(box_grow(box, stroke_reach(style)), m);
+            if (box.x1 < clip.x0 - 1 || box.x0 > clip.x1 + 1 || box.y1 < clip.y0 - 1 || box.y0 > clip.y1 + 1) continue;
+            if (!stroke_polyline(&out, p->pts, p->count / 2, p->closed, hw, style->cap, style->join, style->miter_limit, tol)) return false;
+            continue;
+        }
         PolyList pieces = {0};
-        bool ok = dash_polyline(polys->item + i, style->dash, style->ndash, style->dash_phase, &pieces, budget);
+        bool ok = dash_polyline(p, style->dash, style->ndash, style->dash_phase, &pieces, budget);
         for (size_t k = 0; ok && k < pieces.count; k++)
             ok = stroke_polyline(&out, pieces.item[k].pts, pieces.item[k].count / 2, pieces.item[k].closed, hw, style->cap, style->join, style->miter_limit, tol);
         polylist_free(&pieces);
@@ -2061,6 +2147,13 @@ draw_image(Render *r, const Elem *e, Mat m, const Target *t) {
         return;
     }
     Fill f = {.canvas = t->canvas, .clip = t->clip, .blend = t->blend, .type = FILL_IMAGE, .opacity = e->opacity / 100.f, .img = &img};
+    if (!img.is_float) {
+        if (!r->has_srgb_bytes) {
+            for (unsigned i = 0; i < 256; i++) r->srgb_bytes[i] = vector_decode_srgb(i / 255.f);
+            r->has_srgb_bytes = true;
+        }
+        f.srgb_bytes = r->srgb_bytes;
+    }
     EdgeList el = {0};
     double q[8] = {0, 0, img.width, 0, img.width, img.height, 0, img.height};
     if (mat_invert(m, &f.inv) && add_polygon(&el, q, 4, m, false)) fill_edges(r, &el, false, &f);
@@ -2115,6 +2208,9 @@ first_child(const Render *r, uint32_t gid) {
 // group as a whole through a layer.
 typedef struct {
     Elem *group;
+    double depth;
+    double phase;
+    bool depth_in_pixels;
     Mat m;
     Target parent, target;
     Canvas *layer;
@@ -2142,6 +2238,8 @@ render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
                 continue;
             }
             f->entered = true;
+            if (g->has_depth) { f->depth = g->depth; f->depth_in_pixels = g->depth_in_pixels; }
+            if (g->has_phase) f->phase = g->phase;
             g->in_progress = true;
             f->m = g->has_t ? mat_mul(f->m, g->t) : f->m;
             f->target = f->parent;
@@ -2194,10 +2292,21 @@ render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
         }
         Elem *e = r->sorted[f->child++];
         if (e == g) continue;
-        const Mat m = f->m, em = e->has_t ? mat_mul(m, e->t) : m;
+        const Mat m = f->m;
+        Mat em = e->has_t ? mat_mul(m, e->t) : m;
+        const double depth = e->has_depth ? e->depth : f->depth;
+        const bool depth_in_pixels = e->has_depth ? e->depth_in_pixels : f->depth_in_pixels;
+        const double phase = e->has_phase ? e->phase : f->phase;
+        if (e->type != 'g' && r->stereo.eye_pixels != 0.)
+            em.e += r->stereo.eye_pixels * spatial_requested_disparity(depth_in_pixels ? 0. : depth, depth_in_pixels ? depth : 0.,
+                r->stereo.multiplier, r->stereo.positive, r->stereo.negative, r->stereo.fov);
+        if (e->type != 'g') em.f += r->stereo.phase_pixels * fmin(r->stereo.phase_limit, fmax(-r->stereo.phase_limit, phase));
         const Target t = f->target;
         switch (e->type) {
             case 'g': {
+                const double inherited_depth = f->depth;
+                const double inherited_phase = f->phase;
+                const bool inherited_depth_in_pixels = f->depth_in_pixels;
                 if (count == capacity) {
                     if (count == SIZE_MAX) {
                         r->failed = true;
@@ -2210,7 +2319,8 @@ render_group(Render *r, Elem *group, Mat parent_m, Target parent) {
                     }
                     stack = np;
                 }
-                stack[count++] = (GroupFrame){.group = e, .m = m, .parent = t};
+                stack[count++] = (GroupFrame){.group = e, .m = m, .parent = t, .depth = inherited_depth,
+                    .depth_in_pixels = inherited_depth_in_pixels, .phase = inherited_phase};
             } break;
             case 'p':
                 if (!outside(r, box_grow(elem_box(e), stroke_reach(e)), em)) draw_path(r, e, &e->path, em, &t);
@@ -2259,21 +2369,22 @@ sort_elements(VectorDoc *d) {
     d->nsorted = 0;
     for (size_t i = 0; i < d->count; i++) {
         Elem *e = d->order[i];
-        if (e && e->type != 's' && e->type != 'l' && e->type != 'r') d->sorted[d->nsorted++] = e;
+        if (e && has_render_order(e)) d->sorted[d->nsorted++] = e;
     }
     qsort(d->sorted, d->nsorted, sizeof(Elem *), cmp_parent_slot);
+    for (size_t i = 0; i < d->nsorted; i++) d->sorted[i]->sorted_slot = i;
     d->is_sorted = true;
     return true;
 }
 
 float *
-vector_doc_render_linear(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
+vector_doc_render_stereo(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx, VectorStereo stereo) {
     if (!width || !height || !d->width || !d->height || !rect.width || !rect.height) return NULL;
     if (width > INT32_MAX || height > INT32_MAX) return NULL;
     if (rect.x >= width || rect.y >= height || rect.width > width - rect.x || rect.height > height - rect.y) return NULL;
     if (!sort_elements(d)) return NULL;
     const Rect area = {(int)rect.x, (int)rect.y, (int)(rect.x + rect.width), (int)(rect.y + rect.height)};
-    Render r = {.doc = d, .sorted = d->sorted, .nsorted = d->nsorted, .area = area, .lookup = lookup, .lookup_ctx = ctx};
+    Render r = {.doc = d, .sorted = d->sorted, .nsorted = d->nsorted, .area = area, .lookup = lookup, .lookup_ctx = ctx, .stereo = stereo};
     if (rect_size(area) > SIZE_MAX / (4 * sizeof(float))) return NULL;
     Canvas canvas = {.px = calloc(rect_size(area), 4 * sizeof(float)), .r = area};
     if (!canvas.px) return NULL;
@@ -2292,6 +2403,11 @@ vector_doc_render_linear(VectorDoc *d, unsigned width, unsigned height, VectorRe
         if (p[3] > 0) for (unsigned k = 0; k < 3; k++) p[k] /= p[3];
     }
     return canvas.px;
+}
+
+float *
+vector_doc_render_linear(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
+    return vector_doc_render_stereo(d, width, height, rect, lookup, ctx, (VectorStereo){0});
 }
 
 uint8_t *

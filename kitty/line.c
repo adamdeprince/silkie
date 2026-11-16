@@ -668,6 +668,22 @@ line_as_ansi(Line *self, ANSILineState *s, index_type start_at, index_type stop_
             const char *sgr = cell_as_sgr(cell, s->prev_gpu_cell);
             if (*sgr) write_sgr_to_ansi_buf(s, sgr);
         }
+        if (CMP(depth) || CMP(depth_pixels) || CMP(phase)) {
+            close_multicell(s);
+            RAII_PyObject(d, cell->depth_pixels != 0.f ? PyFloat_FromDouble(cell->depth_pixels) : PyLong_FromLong(cell->depth));
+            RAII_PyObject(y, PyFloat_FromDouble(cell->phase));
+            RAII_PyObject(escape, d && y ? PyUnicode_FromFormat("\033]777;depth;v=1:op=set:%s=%S:y=%S\033\\", cell->depth_pixels != 0.f ? "p" : "d", d, y) : NULL);
+            if (escape) {
+                Py_ssize_t size;
+                const char *data = PyUnicode_AsUTF8AndSize(escape, &size);
+                if (data) {
+                    ensure_space_in_ansi_output_buf(s, (size_t)size);
+                    for (Py_ssize_t j = 0; j < size; j++) s->output_buf->buf[s->output_buf->len++] = (unsigned char)data[j];
+                    s->escape_code_written = true;
+                }
+            }
+            if (PyErr_Occurred()) PyErr_Print();
+        }
 
         index_type num_cells_to_skip_for_tab = text_in_cell_ansi(s, self->cpu_cells + s->pos, self->text_cache, skip_multiline_non_zero_lines);
         s->prev_gpu_cell = cell;
@@ -794,6 +810,9 @@ set_text(Line *self, PyObject *args) {
         self->cpu_cells[i].ch_or_idx = PyUnicode_READ(kind, buf, offset);
         self->gpu_cells[i].attrs = attrs;
         self->gpu_cells[i].text_style = cursor->sgr.text_style;
+        self->gpu_cells[i].depth = cursor->sgr.depth;
+        self->gpu_cells[i].depth_pixels = cursor->sgr.depth_pixels;
+        self->gpu_cells[i].phase = cursor->sgr.phase;
         self->gpu_cells[i].fg = fg;
         self->gpu_cells[i].bg = bg;
         self->gpu_cells[i].decoration_fg = dfg;
@@ -823,6 +842,9 @@ cursor_from(Line *self, PyObject *args) {
     ans->y = y;
     attrs_to_cursor(self->gpu_cells[x].attrs, ans);
     ans->sgr.text_style = self->gpu_cells[x].text_style;
+    ans->sgr.depth = self->gpu_cells[x].depth;
+    ans->sgr.depth_pixels = self->gpu_cells[x].depth_pixels;
+    ans->sgr.phase = self->gpu_cells[x].phase;
     ans->sgr.fg = self->gpu_cells[x].fg;
     ans->sgr.bg = self->gpu_cells[x].bg;
     ans->sgr.decoration_fg = self->gpu_cells[x].decoration_fg & COL_MASK;
@@ -919,6 +941,9 @@ line_set_char(Line *self, unsigned int at, uint32_t ch, Cursor *cursor, hyperlin
     if (cursor != NULL) {
         g->attrs = cursor_to_attrs(cursor);
         g->text_style = cursor->sgr.text_style;
+        g->depth = cursor->sgr.depth;
+        g->depth_pixels = cursor->sgr.depth_pixels;
+        g->phase = cursor->sgr.phase;
         g->fg = cursor->sgr.fg & COL_MASK;
         g->bg = cursor->sgr.bg & COL_MASK;
         g->decoration_fg = cursor->sgr.decoration_fg & COL_MASK;

@@ -4,13 +4,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Low latency protocol" href="latency-protocol.html"><link rel="prev" title="Cell background alpha" href="cell-alpha-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/display-protocol.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Display protocol - Silkie</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -92,7 +93,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="display-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/display-protocol.html">
+</head>
   <body>
     
     <script>
@@ -244,11 +250,15 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
   <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
   <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/display-protocol.html" lang="zh-CN">简体中文</a>
 </nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -257,6 +267,9 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
@@ -352,7 +365,7 @@ words, or decimal numbers that may have a fraction, such as
 <p><code class="docutils literal notranslate"><span class="pre">id</span></code> is a non-negative 31 bit integer of the program’s choosing, echoed in
 the reply so replies can be matched to queries. A supporting terminal
 answers:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">p3</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">8333</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">254</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">p3</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">8333</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">254</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
 </pre></div>
 </div>
 <p>A terminal that does not support the protocol ignores the query, so a program
@@ -365,13 +378,37 @@ must time out and fall back to assuming an ordinary color display.</p>
 slow and leave ghosts, so a program avoids animation and smooth scrolling
 and redraws in large, infrequent steps.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">color</span></code></dt><dd><p>One of <code class="docutils literal notranslate"><span class="pre">rgb</span></code>, <code class="docutils literal notranslate"><span class="pre">gray</span></code> and <code class="docutils literal notranslate"><span class="pre">mono</span></code>.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">color</span></code></dt><dd><p>One of <code class="docutils literal notranslate"><span class="pre">rgb</span></code> (independent red, green and blue channels), <code class="docutils literal notranslate"><span class="pre">gray</span></code>
+(one grayscale channel) and <code class="docutils literal notranslate"><span class="pre">mono</span></code> (only black and white).</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">bits</span></code></dt><dd><p>Bits per color channel, <code class="docutils literal notranslate"><span class="pre">0</span></code> when unknown. Sixteen levels of gray are
+<dt><code class="docutils literal notranslate"><span class="pre">bits</span></code></dt><dd><p>Bits per color channel, <code class="docutils literal notranslate"><span class="pre">0</span></code> when unknown or RGB channels have different
+widths. This field remains for older clients; use the individual widths
+below when available. Sixteen levels of gray are
 <code class="docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">:</span> <span class="pre">bits=4</span></code>. Together with <code class="docutils literal notranslate"><span class="pre">color</span></code> this is what a program
 needs to choose a palette and whether and how to dither; antialiasing
 works fine with a few levels and is not what this field decides.</p>
 </dd>
+<dt><code class="docutils literal notranslate"><span class="pre">red_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">green_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">blue_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">gray_bits</span></code></dt><dd><p>Individual channel precision in bits, <code class="docutils literal notranslate"><span class="pre">0</span></code> when unknown or not applicable.
+RGB reports use the first three fields and set <code class="docutils literal notranslate"><span class="pre">gray_bits=0</span></code>; grayscale
+and monochrome reports use <code class="docutils literal notranslate"><span class="pre">gray_bits</span></code> and set all three RGB widths to
+<code class="docutils literal notranslate"><span class="pre">0</span></code>. For example RGB565 is <code class="docutils literal notranslate"><span class="pre">color=rgb</span> <span class="pre">:</span> <span class="pre">bits=0</span> <span class="pre">:</span> <span class="pre">red_bits=5</span> <span class="pre">:</span>
+<span class="pre">green_bits=6</span> <span class="pre">:</span> <span class="pre">blue_bits=5</span> <span class="pre">:</span> <span class="pre">gray_bits=0</span></code>. A sixteen-level grayscale
+display is <code class="docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">:</span> <span class="pre">bits=4</span> <span class="pre">:</span> <span class="pre">gray_bits=4</span></code>. A monochrome display has
+<code class="docutils literal notranslate"><span class="pre">color=mono</span> <span class="pre">:</span> <span class="pre">bits=1</span> <span class="pre">:</span> <span class="pre">gray_bits=1</span></code>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">precision</span></code></dt><dd><p>Where the channel widths came from: <code class="docutils literal notranslate"><span class="pre">framebuffer</span></code> for the system’s
+display mode or window visual, <code class="docutils literal notranslate"><span class="pre">configured</span></code> for a user’s declaration,
+or <code class="docutils literal notranslate"><span class="pre">unknown</span></code>. A framebuffer width does not establish the physical
+panel’s precision: the compositor, display link, panel, or dithering may
+change what is finally shown. These fields describe available color
+representation, not a measurement of calibration or color error.</p>
+</dd>
+</dl>
+<p>The individual widths and <code class="docutils literal notranslate"><span class="pre">precision</span></code> are additive version-1 fields. Clients
+must ignore unknown fields and treat missing individual widths as unknown;
+an older terminal’s nonzero <code class="docutils literal notranslate"><span class="pre">bits</span></code> still applies equally to its active
+channels.</p>
+<dl class="simple">
 <dt><code class="docutils literal notranslate"><span class="pre">gamut</span></code></dt><dd><p>One of <code class="docutils literal notranslate"><span class="pre">srgb</span></code>, <code class="docutils literal notranslate"><span class="pre">p3</span></code>, <code class="docutils literal notranslate"><span class="pre">rec2020</span></code> and <code class="docutils literal notranslate"><span class="pre">unknown</span></code>: the widest color
 space the display covers.</p>
 </dd>
@@ -444,7 +481,7 @@ needs no separate query. After that, while the mode is on, the terminal sends
 one event whenever any field changes: the window was moved to a display with
 a different scale or refresh rate, the display’s brightness setting changed
 the headroom, its color profile was switched:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">srgb</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">16666</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">96</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">srgb</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">16666</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">96</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
 </pre></div>
 </div>
 <p>The fields are those of the <code class="docutils literal notranslate"><span class="pre">cap</span></code> reply, without <code class="docutils literal notranslate"><span class="pre">id</span></code> and <code class="docutils literal notranslate"><span class="pre">mode</span></code>, and
@@ -487,6 +524,34 @@ of, <code class="docutils literal notranslate"><span class="pre">srgb</span></co
 headroom of the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>, after the cap of <a class="reference internal" href="configuration.html#opt-hdr_max_headroom"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr_max_headroom</span></code></a>,
 so it is <code class="docutils literal notranslate"><span class="pre">1</span></code> unless <a class="reference internal" href="configuration.html#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> is enabled and the window is actually showing
 HDR, which that page says when to expect on macOS and on Wayland.</p>
+<p>For a known ten-bit RGB panel or a sixteen-level grayscale panel, configure:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">10</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">10</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">10</span>
+</pre></div>
+</div>
+<p>or:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">4</span>
+</pre></div>
+</div>
+<p>For a black-and-white panel, use <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=mono</span></code>. Monochrome means
+exactly one bit, so wider <code class="docutils literal notranslate"><span class="pre">bits</span></code> or <code class="docutils literal notranslate"><span class="pre">gray_bits</span></code> declarations are ignored;
+use <code class="docutils literal notranslate"><span class="pre">color=gray</span></code> for more than two levels. The legacy <code class="docutils literal notranslate"><span class="pre">bits=8</span></code> declaration
+sets all active channel widths; individual declarations take precedence
+regardless of their order. Changing from RGB to grayscale clears detected RGB
+precision rather than guessing the gray panel’s depth.</p>
+<p>macOS reports the screen’s color-space model and bits per sample. X11 reports
+the actual window visual’s RGB masks or grayscale depth, including unequal
+RGB channel widths. These are labeled <code class="docutils literal notranslate"><span class="pre">precision=framebuffer</span></code> and do not
+detect a panel that accepts RGB input but displays only gray. Wayland does
+not provide channel precision through the output and color-management
+protocols currently used by Silkie, so it reports zero widths rather than
+assuming eight bits. Declare physical panel properties explicitly when the
+system cannot supply them. Applications may query the fields with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">printf</span> <span class="s1">'</span><span class="se">\033</span><span class="s1">]777;display;v=1:op=query:id=42</span><span class="se">\033\\</span><span class="s1">'</span>
+</pre></div>
+</div>
+<p>Responses and subscribed events both carry the channel widths; moving to a
+display with a different width triggers an event even if its other properties
+are unchanged.</p>
 <p><code class="docutils literal notranslate"><span class="pre">scale</span></code> is the scale the window system gives the window: the backing scale
 factor on macOS, the preferred scale of the surface on Wayland, fractional
 where the compositor says so, and the scale of the desktop taken from

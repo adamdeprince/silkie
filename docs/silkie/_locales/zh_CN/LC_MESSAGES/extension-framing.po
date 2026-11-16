@@ -1,0 +1,234 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:43+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/extension-framing.rst:2
+msgid "OSC 777 extension framing"
+msgstr "OSC 777 扩展封装"
+
+#: docs/extension-framing.rst:6
+msgid ""
+"The terminal extensions of this fork, such as the :doc:`tablet-protocol`, share one framing. This"
+" page is what they have in common: how a frame is written and read, the units and the clock of "
+"what they report, which reports may be merged when a link cannot keep up, and how a mode is "
+"turned on and refused. The page of each extension names its selector and its fields and says only"
+" what is particular to it."
+msgstr ""
+"本分支的终端扩展（例如 :doc:`tablet-"
+"protocol`）使用共同的消息封装。本页说明它们共有的规则：帧的读写方式、报告使用的单位和时钟、链路来不及处理时可合并哪些报告，以及如何开启和拒绝模式。各扩展页面列出自己的选择器和字段，仅说明其特有行为。"
+
+#: docs/extension-framing.rst:14
+msgid "Syntax"
+msgstr "语法"
+
+#: docs/extension-framing.rst:16
+msgid "A frame is an ``OSC 777`` escape code whose first field is the selector that names the extension::"
+msgstr "帧是 ``OSC 777`` 转义序列，第一个字段为指明扩展的选择器：::"
+
+#: docs/extension-framing.rst:21
+msgid ""
+"``<OSC>`` is ``<ESC> ]`` and ``<ST>`` is ``<ESC> \\``; ``BEL`` is also accepted as a terminator. "
+"The fields are ASCII ``key=value`` pairs separated by colons, in any order. Keys are case "
+"sensitive. A number is a decimal integer with no leading ``+``, and with a leading ``-`` only "
+"where the field is signed. Spaces in the examples on these pages are for clarity only. Every "
+"frame has ``v``, the version of the extension's protocol, and ``op``, which says what the frame "
+"is."
+msgstr ""
+"``<OSC>`` 为 ``<ESC> ]``，``<ST>`` 为 ``<ESC> \\``；也接受 ``BEL`` 作为终止符。字段为 ASCII ``key=value`` "
+"键值对，以冒号分隔，顺序任意，键名区分大小写。数值为十进制整数，不带前导 ``+``；仅有符号字段允许前导 ``-``。这些页面示例中的空格仅用于清晰展示。每帧都有扩展协议版本 "
+"``v``，以及说明帧类型的 ``op``。"
+
+#: docs/extension-framing.rst:30
+msgid "Frames from a program"
+msgstr "程序发出的帧"
+
+#: docs/extension-framing.rst:32
+msgid "A frame from a program is rejected as a whole, and changes nothing, when it has"
+msgstr "程序帧出现以下任一情况时，将整帧拒绝且不改变任何状态："
+
+#: docs/extension-framing.rst:35
+msgid "a version the terminal does not know,"
+msgstr "终端不认识该版本；"
+
+#: docs/extension-framing.rst:36
+msgid "a key that appears more than once,"
+msgstr "同一个键出现多次；"
+
+#: docs/extension-framing.rst:37
+msgid "a value out of the range its page gives, or a number that is not written as above,"
+msgstr "值超出规范规定的范围，或数值未按上述格式书写；"
+
+#: docs/extension-framing.rst:39
+msgid "no value for a field its page requires."
+msgstr "缺少规范要求的字段值。"
+
+#: docs/extension-framing.rst:41
+msgid ""
+"The fields have no length limit of their own. A frame is an escape code, and a configured "
+"``escape_limit`` can bound an entire OSC sequence."
+msgstr "字段本身没有独立长度限制。帧属于转义序列，因此配置的 ``escape_limit`` 可以限制整个 OSC 序列。"
+
+#: docs/extension-framing.rst:44
+msgid ""
+"No frame from a program, whether it is rejected, incomplete or accepted, ever reaches the program"
+" or anything else as keystrokes."
+msgstr "程序发送的帧，无论被拒绝、不完整还是被接受，都绝不会作为按键输入传给该程序或其他程序。"
+
+#: docs/extension-framing.rst:48
+msgid "Growth"
+msgstr "协议扩展"
+
+#: docs/extension-framing.rst:50
+msgid ""
+"A key the receiver does not know is ignored, whichever way the frame goes, so fields can be added"
+" to an extension without a new version. A program ignores a frame whose ``op`` it does not know, "
+"and a frame from the terminal with a version it does not know. Only a change in the meaning of "
+"something that exists needs a new version."
+msgstr "无论帧的方向如何，接收方都忽略不认识的键，因此扩展可以新增字段而无需升级版本。程序忽略不认识 ``op`` 的帧，也忽略终端发来的不认识版本的帧。只有修改既有内容的含义时才需要新版本。"
+
+#: docs/extension-framing.rst:57
+msgid "Units"
+msgstr "单位"
+
+#: docs/extension-framing.rst:59
+msgid ""
+"A position is in 1/256 of a physical pixel, relative to the top left of the cell area, signed "
+"where it can fall outside it. A physical pixel is a pixel of the framebuffer the terminal draws "
+"into, never a logical unit of the system, which stands for several of them on a high density "
+"display. The ``Pixels`` section of the display protocol says more, where a terminal has that "
+"protocol."
+msgstr ""
+"位置以物理像素的 1/256 "
+"为单位，相对于字符单元区域的左上角；允许落在区域外的位置使用有符号值。物理像素指终端所绘制帧缓冲区中的像素，而非系统的逻辑单位，后者在高密度显示器上可能对应多个物理像素。支持显示协议的终端可参阅其中的"
+" ``Pixels`` 小节。"
+
+#: docs/extension-framing.rst:65
+msgid "A length on a device, such as the size of a tablet or a touchpad, is in 1/256 millimeter."
+msgstr "设备上的长度（如数位板或触控板尺寸）以 1/256 毫米为单位。"
+
+#: docs/extension-framing.rst:67
+msgid "An angle is in hundredths of a degree."
+msgstr "角度以百分之一度为单位。"
+
+#: docs/extension-framing.rst:68
+msgid "A time is as described next."
+msgstr "时间的定义如下。"
+
+#: docs/extension-framing.rst:71
+msgid "Time"
+msgstr "时间"
+
+#: docs/extension-framing.rst:73
+msgid ""
+"Every report from the terminal about something that happened carries ``t``: milliseconds on one "
+"monotonic clock that the terminal uses for every extension and for every window. The ``t`` of a "
+"pen report and the ``t`` of a frame report can therefore be subtracted, to learn how long a "
+"stroke took to reach the screen. The origin of the clock is the terminal's choice and stays fixed"
+" for as long as it runs, so ``t`` means nothing by itself. ``t`` is when the system says the "
+"thing happened, or, where the system does not say, when the terminal learnt of it. ``tu``, where "
+"it is present, is microseconds past ``t``, ``0`` to ``999``. It is sent only where the system "
+"stamps what happened more finely than a millisecond, and a report without it is on a grid of "
+"whole milliseconds."
+msgstr ""
+"终端对已发生事件的每条报告都携带 ``t``：同一单调时钟上的毫秒值，全部扩展和全部窗口共用此时钟。因此，笔报告的 ``t`` 可与画面报告的 ``t`` "
+"相减，计算笔迹到达屏幕所需时间。时钟原点由终端选择，在整个运行期间保持固定，单独的 ``t`` 没有绝对意义。``t`` "
+"是系统认定事件发生的时刻；系统未给出时刻时，使用终端获知事件的时刻。若存在 ``tu``，则表示 ``t`` 之后的微秒数，范围 ``0`` 至 "
+"``999``。只有系统提供比毫秒更精细的时间戳时才发送此字段；没有它的报告仅具有整毫秒精度。"
+
+#: docs/extension-framing.rst:85
+msgid "In kitty the clock is the one kitty measures all its time on, which starts when kitty starts."
+msgstr "kitty 使用自身计时所用的时钟，从 kitty 启动时开始计时。"
+
+#: docs/extension-framing.rst:89
+msgid "Delivery"
+msgstr "传递规则"
+
+#: docs/extension-framing.rst:91
+msgid ""
+"A terminal sends reports in the order the things they report happened, and never drops one. A "
+"terminal, or a relay between it and the program, that cannot keep up, because the program is not "
+"reading or a link is slow, may merge reports, and only these:"
+msgstr "终端按事件发生顺序发送报告，不丢弃报告。如果程序未读取输入或链路较慢，导致终端或中继无法跟上，则只能合并以下报告："
+
+#: docs/extension-framing.rst:96
+msgid ""
+"consecutive ``move`` or ``hover`` reports of one contact of the tablet pointer protocol, with no "
+"other report of that contact between them and the same ``buttons``. The merged report has the "
+"absolute values of the last of them and the sum of the relative ones, ``wheel`` and ``wclicks``. "
+"The frame reports (phase ``6``) of groups that were merged are merged with them."
+msgstr ""
+"数位板指针协议中，同一接触点连续的 ``move`` 或 ``hover`` 报告，期间没有该接触点的其他报告，且 ``buttons`` 相同。合并后使用最后一条报告的绝对值，并对相对值 "
+"``wheel`` 和 ``wclicks`` 求和。被合并分组的帧报告（阶段 ``6``）也随之合并。"
+
+#: docs/extension-framing.rst:102
+msgid ""
+"consecutive ``update`` reports of one gesture, with ``scale`` multiplied and rotation and "
+"translation summed."
+msgstr "同一手势连续的 ``update`` 报告，其中 ``scale`` 相乘，旋转和平移量分别求和。"
+
+#: docs/extension-framing.rst:104
+msgid "consecutive scroll reports of one device in one phase, with the distances summed."
+msgstr "同一设备、同一阶段的连续滚动报告，将距离求和。"
+
+#: docs/extension-framing.rst:107
+msgid ""
+"A merged report carries the ``t`` of the last report merged into it. Nothing else is ever merged "
+"or dropped: not a ``down``, an ``up``, a ``cancel`` or an ``out``, not a change of buttons, not "
+"the description of a device, not a reply or a report of a mode, not the beginning or the end of a"
+" gesture, not a change of scroll phase, and no report of the frame presentation protocol. The "
+"page of each extension says which of its reports may be merged."
+msgstr ""
+"合并报告携带最后一条被合并报告的 "
+"``t``。其他内容绝不合并或丢弃：``down``、``up``、``cancel``、``out``、按钮变化、设备描述、回复、模式报告、手势开始或结束、滚动阶段变化，以及画面呈现协议的全部报告。各扩展页面说明了其哪些报告可合并。"
+
+#: docs/extension-framing.rst:115
+msgid ""
+"Silkie itself merges nothing. What it writes to a program waits in memory until the program reads"
+" it, up to 100 MiB for each window. A write that would take that past 100 MiB is dropped whole, "
+"and Silkie logs an error saying so; a program that has left that much unread has stopped reading."
+msgstr ""
+"Silkie 本身不合并报告。写给程序的内容保留在内存中，等待程序读取，每个窗口最多 100 MiB。如果一次写入会超出 100 "
+"MiB，则整次写入被丢弃，并记录错误；积累这么多未读内容的程序已停止读取。"
+
+#: docs/extension-framing.rst:121
+msgid "Modes and consent"
+msgstr "模式与授权"
+
+#: docs/extension-framing.rst:123
+msgid ""
+"An extension that reports anything does so only after a program turns it on with a mode, for one "
+"terminal window. The mode is reset by ``RIS``. A program turns it off when it exits, suspends or "
+"fails, and on again when it is resumed. A ``mode`` request without a value reads the mode back."
+msgstr "会发送报告的扩展，只有在程序为某个终端窗口开启相应模式后才开始报告。``RIS`` 会重置模式。程序在退出、挂起或失败时关闭模式，恢复时重新开启。不带值的 ``mode`` 请求用于读回模式。"
+
+#: docs/extension-framing.rst:128
+msgid ""
+"A terminal may let its user refuse a mode, or some of its bits, for every program or for some. A "
+"refused bit reads back as off, and nothing it would have turned on is reported, so a program "
+"reads the mode back rather than assume that what it asked for was granted. A terminal also keeps "
+"only the bits it knows, which a program learns in the same way."
+msgstr "终端可允许用户针对全部或部分程序拒绝某个模式或其部分位。被拒绝的位读回为关闭，也不会产生其本应开启的报告，因此程序应读回模式，而不是假定所有请求都已获准。终端也只保留自己认识的位，程序可用同样方式获知。"
+
+#: docs/extension-framing.rst:134
+msgid ""
+"In Silkie the user can refuse the hardware identifiers of the tablet pointer protocol, and does "
+"so by default, see :opt:`tablet_hardware_ids`."
+msgstr "Silkie 允许用户拒绝数位板指针协议中的硬件标识，并默认拒绝，参阅 :opt:`tablet_hardware_ids`。"
+

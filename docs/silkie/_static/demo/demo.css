@@ -1,0 +1,44 @@
+.browser-demo-window { grid-column: 2; grid-row: 1 / 4; align-self: start; min-width: 0; }
+.home-content:has(.browser-demo-window) .site-eyebrow { margin-top: 2rem; margin-bottom: 1rem; }
+.home-content:has(.browser-demo-window) > section > h1 { grid-row: 1; }
+.home-content:has(.browser-demo-window) > section > .hero-game { grid-column: 1; grid-row: 2; margin: 0 0 1.25rem; }
+.home-content:has(.browser-demo-window) > section > .hero-lead { grid-row: 3; }
+.demo-panel { box-sizing: border-box; width: 100%; max-width: 44rem; aspect-ratio: 4 / 3; display: flex; flex-direction: column; margin: 0; border: 1px solid #45483f; background: #11130f; color: #f7f6f1; overflow: hidden; }
+.home-content .demo-panel { padding: 0; margin: 0; }
+.demo-toolbar { display: flex; align-items: center; flex: none; gap: .5rem; padding: .35rem .6rem; border-bottom: 1px solid #45483f; }
+.demo-window-title { margin-right: auto; font: 600 .8rem ui-monospace, monospace; }
+.demo-window-title span { color: #a6e22e; }
+.demo-toolbar button { font: inherit; font-size: .75rem; padding: .3rem .55rem; border: 1px solid #79817a; color: #f7f6f1; background: #1b1e17; cursor: pointer; }
+.demo-toolbar button:disabled { opacity: .5; cursor: default; }
+.demo-toolbar button:focus-visible { outline: 2px solid #a6e22e; outline-offset: 2px; }
+.demo-toolbar [hidden] { display: none; }
+.demo-status { flex: none; font-size: .75rem; line-height: 1.4; margin: 0; padding: .3rem .6rem; color: #c5c8be; overflow-wrap: anywhere; }
+#silkie-terminal { width: 100%; flex: 1; min-height: 0; overflow: hidden; position: relative; }
+.demo-panel:fullscreen { width: 100vw; height: 100dvh; max-width: none; aspect-ratio: auto; }
+.demo-caption { margin: .6rem 0 0; font-size: .8rem; line-height: 1.6; color: var(--color-foreground-secondary); }
+.demo-caption a[data-demo-game] { white-space: nowrap; }
+.home-content:has(.browser-demo-window) .lineage { grid-column: 1 / -1; grid-row: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem; margin-top: 2rem; }
+.home-content:has(.browser-demo-window) .lineage .rubric { grid-column: 1 / -1; margin-bottom: 0; }
+.home-content:has(.browser-demo-window) .lineage > div + div { margin-top: 0; }
+@media (max-width: 700px) {
+    .home-content:has(.browser-demo-window) > section { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .home-content:has(.browser-demo-window) .site-eyebrow { margin-top: 1.25rem; margin-bottom: .75rem; }
+    .home-content:has(.browser-demo-window) > section > h1 { max-width: none; font-size: clamp(2.2rem, 8.3vw, 2.7rem); }
+    .home-content:has(.browser-demo-window) > section > .hero-game { margin-bottom: 1rem; }
+    .browser-demo-window { grid-column: 1; grid-row: 3; margin: 0 0 1.5rem; }
+    .home-content:has(.browser-demo-window) > section > .hero-lead { grid-row: 4; }
+    .home-content:has(.browser-demo-window) > section > .lineage { grid-row: 5; }
+    .home-content:has(.browser-demo-window) .lineage { display: block; }
+    .home-content:has(.browser-demo-window) .lineage > div { margin-top: 1.2rem; }
+}
+
+/* Game links keep the same terminal and palette in a dedicated window. */
+html[data-demo-game] .site-header,
+html[data-demo-game] .site-footer,
+html[data-demo-game] .site-eyebrow,
+html[data-demo-game] .home-content > section > :not(.browser-demo-window) { display: none; }
+html[data-demo-game] .home-content { width: 100%; margin: 0; }
+html[data-demo-game] .home-content > section { display: block; }
+html[data-demo-game] .browser-demo-window { margin: 0; }
+html[data-demo-game] .demo-panel { width: 100%; height: 100dvh; max-width: none; aspect-ratio: auto; border: 0; }
+html[data-demo-game] .demo-caption { display: none; }

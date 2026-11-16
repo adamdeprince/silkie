@@ -88,7 +88,7 @@ def completion(self: TestCompletion, tdir: str):
         env = os.environ.copy()
         env['PATH'] = os.path.join(tdir, 'bin')
         env['HOME'] = os.path.join(tdir, 'sub')
-        env['KITTY_CONFIG_DIRECTORY'] = os.path.join(tdir, 'sub')
+        env['SILKIE_CONFIG_DIRECTORY'] = os.path.join(tdir, 'sub')
         cp = subprocess.run([kitten(), '__complete__', 'json'], check=True, stdout=subprocess.PIPE, cwd=tdir, input=json.dumps(all_argv).encode(), env=env)
         self.assertEqual(cp.returncode, 0, f'kitten __complete__ failed with exit code: {cp.returncode}')
         return json.loads(cp.stdout)

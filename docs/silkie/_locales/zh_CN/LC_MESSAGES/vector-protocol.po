@@ -1,0 +1,785 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:50+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/vector-protocol.rst:2
+msgid "Vector images"
+msgstr "矢量图像"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/vector-protocol.rst:6
+msgid ""
+"The :doc:`graphics-protocol` moves pixels. A program that draws, a document viewer, a plotting "
+"library or a pen application, has to rasterize everything itself and send the pixels again "
+"whenever the window is resized, the view is zoomed or a stroke is added, and over a slow link "
+"that is what makes such programs feel remote. Vector images are a pixel format of the graphics "
+"protocol, ``f=200``, whose data is not pixels but a small scene: paths, shaped text, glyph "
+"outlines, pen strokes, raster images and gradients. The terminal keeps the scene and rasterizes "
+"it itself, at the exact size the image is shown at, so it is crisp at any zoom, and a program "
+"changes it with patches a few bytes long. The format is rich enough to render a PDF page, see "
+"`Rendering a PDF`_."
+msgstr ""
+":doc:`graphics-protocol` "
+"传输像素。绘图程序、文档查看器、绘图库和笔应用原本必须自行栅格化全部内容，窗口调整大小、视图缩放或新增笔划时重新发送像素；在慢速连接上，这使它们明显带有远程操作的迟滞感。矢量图像是图形协议的像素格式"
+" "
+"``f=200``，传输数据不是像素，而是由路径、整形文本、字形轮廓、笔划、光栅图像和渐变组成的小型场景。终端保留场景，自行按实际显示尺寸栅格化，因此任意缩放级别都清晰，程序只需用几字节的补丁更新。该格式足以渲染"
+" PDF 页面，见 `渲染 PDF <Rendering a PDF_>`_。 #noqa"
+
+#: docs/vector-protocol.rst:17
+msgid ""
+"Because a vector image is an ordinary image to the rest of the protocol, everything else works "
+"unchanged: placement with ``a=p``, anchoring to cells so the image scrolls with the text and into"
+" the scrollback, the alternate screen, ``z`` ordering with the text, Unicode placeholders, "
+"relative placements, chunked transmission with ``m=1``, compression with ``o=z``, every "
+"transmission medium, deletion with ``a=d`` and the query action ``a=q``. A relay or multiplexer "
+"that stores images stores vector images the same way."
+msgstr ""
+"对协议其余部分而言，矢量图像仍是普通图像，其他机制均不变：``a=p`` 放置、锚定字符单元以随文本滚入回滚缓冲区、备用屏幕、与文本的 ``z`` 层级、Unicode "
+"占位符、相对放置、``m=1`` 分块、``o=z`` 压缩、全部传输介质、``a=d`` 删除及 ``a=q`` 查询。存储图像的中继或多路复用器以相同方式存储矢量图像。"
+
+#: docs/vector-protocol.rst:26
+msgid "Transmitting a vector image"
+msgstr "传输矢量图像"
+
+#: docs/vector-protocol.rst:28
+msgid ""
+"The data is UTF-8 text, one *record* per line, transmitted with ``a=t`` or ``a=T`` and ``f=200``."
+" The ``s`` and ``v`` keys are required and give the *intrinsic size* of the image in *user "
+"units*, the coordinate system of the records. The image is shown like a raster image of that many"
+" pixels, so with no ``c`` or ``r`` key it occupies ``s`` by ``v`` pixels, and with them the scene"
+" is scaled to fit the cells. For example, a red square on a white page::"
+msgstr ""
+"数据为 UTF-8 文本，每行一条 *记录*，使用 ``a=t`` 或 ``a=T`` 及 ``f=200`` 传输。``s`` 和 ``v`` 必需，以记录所用坐标系的 *用户单位* "
+"指定图像的 *固有尺寸*。显示方式与具有相应像素数的光栅图像一致：省略 ``c`` 和 ``r`` 时，占据 ``s`` 乘 ``v`` "
+"像素；指定时，场景缩放到对应字符单元。例如，白页上的红色方块：::"
+
+#: docs/vector-protocol.rst:40
+msgid ""
+"Transmitting again with the same image id replaces the whole scene, as it does for any image. "
+"With ``o=z`` the uncompressed size need not be given. The terminal answers ``OK`` or, for a scene"
+" it cannot parse, ``EINVAL`` with the line number and the problem, and nothing of such a "
+"transmission is kept."
+msgstr ""
+"与其他图像一样，以相同图像 ID 重新传输会替换整个场景。使用 ``o=z`` 时无须提供未压缩尺寸。成功回复 ``OK``；场景解析失败则回复 "
+"``EINVAL``，附行号和问题描述，且不保留此次传输的任何内容。"
+
+#: docs/vector-protocol.rst:46
+msgid "Editing a vector image"
+msgstr "编辑矢量图像"
+
+#: docs/vector-protocol.rst:48
+msgid ""
+"The action ``a=e`` applies the records in its payload to the existing vector image given by ``i``"
+" or ``I`` as a patch: an element with the id of an existing element replaces it, a new id adds an"
+" element, ``x`` records delete and ``a`` records append geometry. The patch is applied as a whole"
+" or, when a record is malformed, not at all, with ``EINVAL`` as the response. A patch to an image"
+" that does not exist answers ``ENOENT`` and to a raster image ``EINVAL``. Chunking and "
+"compression work as for ``a=t``::"
+msgstr ""
+"``a=e`` 将载荷中的记录作为补丁，应用于 ``i`` 或 ``I`` 指定的已有矢量图像：相同 ID 替换已有元素，新 ID 添加元素，``x`` 删除，``a`` "
+"追加几何数据。补丁要么完整应用，要么在任一记录错误时完全不应用，并回复 ``EINVAL``。图像不存在时回复 ``ENOENT``，目标为光栅图像时回复 ``EINVAL``。分块和压缩与 "
+"``a=t`` 相同：::"
+
+#: docs/vector-protocol.rst:58
+msgid ""
+"That one record zooms the whole scene to twice its size around the point ``100,50``, which is how"
+" a viewer pans and zooms a page: the terminal re-rasterizes, nothing is sent again. Because the "
+"terminal rasterizes at the size of the placement, a program that wants a sharper image after the "
+"user zoomed need not do anything either."
+msgstr "这一条记录将整个场景以 ``100,50`` 为中心放大两倍，查看器即可如此平移和缩放页面：终端重新栅格化，无需重传。由于终端按放置尺寸栅格化，用户放大后，程序也不必额外操作来提高图像清晰度。"
+
+#: docs/vector-protocol.rst:65
+msgid "Records"
+msgstr "记录"
+
+#: docs/vector-protocol.rst:67
+msgid ""
+"A record is a type, one character, followed by fields of the form ``key=value`` separated by "
+"single spaces, with no quoting and no spaces inside a value. Unknown keys and unknown record "
+"types are ignored, so the format can grow. Blank lines are ignored. Numbers are decimal and may "
+"have a fraction and an exponent. Lists of numbers are separated by commas."
+msgstr ""
+"每条记录以一个字符表示类型，后接单个空格分隔的 ``key=value`` "
+"字段，不使用引号，值内不含空格。未知键和记录类型会被忽略，以便格式扩展。空行会被忽略。数值为十进制，可含小数和指数，数值列表以逗号分隔。"
+
+#: docs/vector-protocol.rst:73
+msgid ""
+"Every element has an ``id``, a 32 bit unsigned integer chosen by the program, unique across all "
+"record types of the image, and every drawable element has ``g``, the id of the group it belongs "
+"to, defaulting to the root group, which has id ``0`` and always exists. Elements are drawn in the"
+" order they were created, within their group, and groups among their siblings likewise. Replacing"
+" an element keeps its place in that order."
+msgstr ""
+"每个元素都具有由程序选择的 32 位无符号整数 ``id``，在图像的全部记录类型间唯一。每个可绘制元素还具有所属分组 ID ``g``，默认为始终存在的根分组 "
+"``0``。同一分组内的元素按创建顺序绘制，同级分组亦然。替换元素不改变其顺序。"
+
+#: docs/vector-protocol.rst:80
+msgid "``g`` *group*"
+msgstr "``g`` *分组*"
+
+#: docs/vector-protocol.rst:81
+msgid ""
+"``g id= [p=<parent group>] [t=<transform>] [clip=<path id>] [box=x,y,width,height] [o=<opacity>] "
+"[blend=normal|multiply|screen] [v=0|1]``"
+msgstr ""
+"``g id= [p=<parent group>] [t=<transform>] [clip=<path id>] [box=x,y,width,height] [o=<opacity>] "
+"[blend=normal|multiply|screen] [v=0|1]``"
+
+#: docs/vector-protocol.rst:83
+msgid ""
+"Groups nest through ``p`` and carry the state a PDF or SVG renderer pushes and pops: a transform,"
+" a clip, an opacity and a blend mode. ``clip`` names a ``p`` or ``s`` element whose geometry, in "
+"the group's coordinate system and with its fill rule, clips everything in the group, intersected "
+"with the clips of the enclosing groups. ``o`` is a percent, ``100`` by default; a group with less"
+" is composited as a whole, so overlapping children do not show through each other. ``blend`` "
+"applies to every drawing operation inside the group, ``multiply`` makes a highlighter. ``v=0`` "
+"hides the group and its subtree without deleting it. The root group accepts all of these except "
+"``p``, so ``g id=0 t=...`` pans and zooms the whole scene."
+msgstr ""
+"分组通过 ``p`` 嵌套，携带 PDF 或 SVG 渲染器压入／弹出的状态：变换、裁剪、不透明度和混合模式。``clip`` 指定 ``p`` 或 ``s`` "
+"元素，以其几何形状和填充规则在分组坐标系中裁剪全部内容，并与外层分组的裁剪求交。``o`` 为百分比，默认 ``100``；较低值使分组作为整体合成，重叠子元素不会相互透出。``blend`` "
+"应用于组内每项绘制操作，``multiply`` 可产生荧光笔效果。``v=0`` 隐藏分组及其子树，而不删除。根分组接受除 ``p`` 外的全部属性，因此 ``g id=0 t=...`` "
+"可平移和缩放整幅场景。"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/vector-protocol.rst:95
+msgid ""
+"``box`` is a rectangular clip in this group's coordinate system. Width and height must be "
+"nonnegative; a zero dimension clips everything away. It intersects ``clip`` and every enclosing "
+"group's clip. See `Nested window clips`_. Replacing a group without ``box`` removes its box."
+msgstr ""
+"``box`` 是该分组坐标系中的矩形裁剪。宽高必须非负，任一为零会裁掉全部内容。它与 ``clip`` 及全部祖先分组裁剪求交，见 `嵌套窗口裁剪 <Nested window "
+"clips_>`_。替换分组时省略 ``box`` 会移除原矩形。 #noqa"
+
+#: docs/vector-protocol.rst:100
+msgid "``t`` *text*"
+msgstr "``t`` *文本*"
+
+#: docs/vector-protocol.rst:101
+msgid "``t id= [g=] text=<base64 UTF-8 JSON> [t=<transform>]``"
+msgstr "``t id= [g=] text=<base64 UTF-8 JSON> [t=<transform>]``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/vector-protocol.rst:103
+msgid ""
+"Shapes and retains a string or styled runs as vector outlines. The JSON layout object is "
+"described under `Text layout and measurement`_. Text participates in group transforms, clipping, "
+"opacity, blending and normal element replacement and deletion. Its outlines are generated once "
+"when the record is accepted, then rasterized at the placement's resolution."
+msgstr ""
+"将字符串或带样式文本段整形并保留为矢量轮廓。JSON 布局对象见 `文本布局与测量 <Text layout and "
+"measurement_>`_。文本参与分组变换、裁剪、不透明度、混合及普通元素替换／删除。记录被接受时只生成一次轮廓，此后按放置分辨率栅格化。 #noqa"
+
+#: docs/vector-protocol.rst:109
+msgid "``p`` *path*"
+msgstr "``p`` *路径*"
+
+#: docs/vector-protocol.rst:110
+msgid ""
+"``p id= [g=] d=<path> [fill=<color>|none] [rule=nz|eo] [stroke=<color>] [w=<width>] "
+"[cap=butt|round|square] [join=miter|round|bevel] [ml=<miter limit>] [dash=<lengths>] [dp=<dash "
+"phase>] [t=<transform>]``"
+msgstr ""
+"``p id= [g=] d=<path> [fill=<color>|none] [rule=nz|eo] [stroke=<color>] [w=<width>] "
+"[cap=butt|round|square] [join=miter|round|bevel] [ml=<miter limit>] [dash=<lengths>] [dp=<dash "
+"phase>] [t=<transform>]``"
+
+#: docs/vector-protocol.rst:112
+msgid ""
+"The path data in ``d`` is the SVG path syntax with commas, never spaces, between numbers: ``M``, "
+"``L``, ``H``, ``V``, ``C``, ``S``, ``Q``, ``T`` and ``Z``, in absolute and (lowercase) relative "
+"forms, with a command repeated when it is followed by more numbers than it takes. Arcs are not "
+"supported, send them as curves. A path with neither ``fill`` nor ``stroke`` is filled black; a "
+"path with only ``stroke`` is not filled. ``rule`` is the fill rule, nonzero by default. ``w``, "
+"``cap``, ``join``, ``ml`` (``4`` by default) and ``dash`` have their SVG meanings, with the "
+"stroke geometry computed in the element's own coordinate system, so a stroke transformed non-"
+"uniformly is stretched like the path. When ``vector_dash_limit`` is set, the stroke of one path "
+"is cut into that many dashes at most: a subpath whose dashes would take the count past the limit "
+"is stroked solid, as are the subpaths after it that would too. ``0``, the default, strokes every "
+"dash. A pattern that fine against a path that long costs far more than it can show."
+msgstr ""
+"``d`` 使用 SVG 路径语法，数值之间用逗号，不用空格：``M``、``L``、``H``、``V``、``C``、``S``、``Q``、``T`` 和 "
+"``Z``，支持绝对形式及小写相对形式。后续数值超出一条命令所需数量时，重复该命令。不支持圆弧，应将其转换为曲线。既无 ``fill`` 也无 ``stroke`` 的路径默认黑色填充；只有 "
+"``stroke`` 的路径不填充。``rule`` 是填充规则，默认非零环绕。``w``、``cap``、``join``、``ml``（默认 ``4``）和 ``dash`` 与 SVG "
+"含义相同；描边几何在元素自身坐标系中计算，因此非均匀变换会像拉伸路径一样拉伸描边。设置 ``vector_dash_limit`` "
+"时，一条路径最多切分为相应数量的虚线：若某子路径使计数超过上限，则该子路径以及之后同样会超限的子路径均绘制为实线。默认 ``0`` "
+"表示绘制全部虚线。长路径上的细密虚线可能消耗远超可见效果所需的计算。"
+
+#: docs/vector-protocol.rst:128
+msgid "``s`` *symbol*"
+msgstr "``s`` *符号*"
+
+#: docs/vector-protocol.rst:129
+msgid "``s id= d=<path>``"
+msgstr "``s id= d=<path>``"
+
+#: docs/vector-protocol.rst:131
+msgid ""
+"Geometry that is not drawn by itself but placed by ``u`` records, as many times as needed. A page"
+" of text sends each glyph outline once as a symbol and then one ``u`` per glyph."
+msgstr "不自行绘制的几何对象，通过 ``u`` 记录按需多次放置。一页文本可以只发送一次各字形轮廓作为符号，再为每个字形发送一个 ``u``。"
+
+#: docs/vector-protocol.rst:135
+msgid "``u`` *use*"
+msgstr "``u`` *使用符号*"
+
+#: docs/vector-protocol.rst:136
+msgid "``u id= [g=] s=<symbol id> [t=<transform>] [fill=] [stroke=] [w=]``"
+msgstr "``u id= [g=] s=<symbol id> [t=<transform>] [fill=] [stroke=] [w=]``"
+
+#: docs/vector-protocol.rst:138
+msgid "Draws a symbol with the given style, filled black by default."
+msgstr "以给定样式绘制符号，默认黑色填充。"
+
+#: docs/vector-protocol.rst:140
+msgid "``i`` *image*"
+msgstr "``i`` *图像*"
+
+#: docs/vector-protocol.rst:141
+msgid "``i id= [g=] img=<image id> [t=<transform>] [o=<opacity>]``"
+msgstr "``i id= [g=] img=<image id> [t=<transform>] [o=<opacity>]``"
+
+#: docs/vector-protocol.rst:143
+msgid ""
+"Draws a raster image transmitted earlier through the graphics protocol, by its image id, at its "
+"pixel size, so a pixel is one user unit before the transform. It is sampled bilinearly. An image "
+"that does not exist or is itself a vector image is not drawn."
+msgstr "通过图像 ID 绘制先前由图形协议传输的光栅图像，按其像素尺寸放置，因此变换前一像素等于一个用户单位。采用双线性采样。图像不存在或自身为矢量图像时不绘制。"
+
+#: docs/vector-protocol.rst:148
+msgid "``k`` *pen stroke*"
+msgstr "``k`` *笔划*"
+
+#: docs/vector-protocol.rst:149
+msgid "``k id= [g=] pts=<x,y,width,...> [fill=<color>] [cap=round|butt]``"
+msgstr "``k id= [g=] pts=<x,y,width,...> [fill=<color>] [cap=round|butt]``"
+
+#: docs/vector-protocol.rst:151
+msgid ""
+"Ink: a ribbon through the points with the width given at each point, joined and, by default, "
+"capped round. This is the record for live drawing, one ``a`` record per pen event appends to it. "
+"A terminal can apply these records itself as the pen moves, see :doc:`ink-protocol`."
+msgstr ""
+"墨迹：沿各点形成的带状几何，每点具有对应宽度，连接处及默认端点采用圆形。用于实时绘图，每个笔事件通过一条 ``a`` 记录追加。终端也可随笔移动自行应用这些记录，见 :doc:`ink-"
+"protocol`。"
+
+#: docs/vector-protocol.rst:156
+msgid "``a`` *append*"
+msgstr "``a`` *追加*"
+
+#: docs/vector-protocol.rst:157
+msgid "``a id= d=<path>`` or ``a id= pts=<x,y,width,...>``"
+msgstr "``a id= d=<path>`` 或 ``a id= pts=<x,y,width,...>``"
+
+#: docs/vector-protocol.rst:159
+msgid ""
+"Appends geometry to a path or symbol (``d``) or to a pen stroke (``pts``). Appended path data is "
+"parsed on its own, so start it with an absolute command."
+msgstr "向路径或符号追加几何（``d``），或向笔划追加点（``pts``）。追加路径数据独立解析，因此应以绝对坐标命令开始。"
+
+#: docs/vector-protocol.rst:163
+msgid "``l`` and ``r`` *gradients*"
+msgstr "``l`` 和 ``r`` *渐变*"
+
+#: docs/vector-protocol.rst:164
+msgid "``l id= x1= y1= x2= y2= stops=<offset,color,offset,color,...>``"
+msgstr "``l id= x1= y1= x2= y2= stops=<offset,color,offset,color,...>``"
+
+#: docs/vector-protocol.rst:166
+msgid "``r id= cx= cy= r= [fx= fy=] stops=<...>``"
+msgstr "``r id= cx= cy= r= [fx= fy=] stops=<...>``"
+
+#: docs/vector-protocol.rst:168
+msgid ""
+"A linear gradient along a line, or a radial gradient around a center with an optional focus, in "
+"the coordinate system of the element that uses it. Offsets run from ``0`` to ``1``. A gradient is"
+" used as a color with ``fill=@<id>`` or ``stroke=@<id>``."
+msgstr ""
+"沿直线的线性渐变，或带可选焦点的径向渐变，使用该渐变的元素坐标系。色标偏移从 ``0`` 到 ``1``。通过 ``fill=@<id>`` 或 ``stroke=@<id>`` "
+"将渐变作为颜色使用。"
+
+#: docs/vector-protocol.rst:173
+msgid "``x`` *delete*"
+msgstr "``x`` *删除*"
+
+#: docs/vector-protocol.rst:174
+msgid "``x id=<element>``, ``x g=<group>`` or ``x all``"
+msgstr "``x id=<element>``、``x g=<group>`` 或 ``x all``"
+
+#: docs/vector-protocol.rst:176
+msgid ""
+"Deletes one element, a group with everything inside it, or the whole scene. Deleting an element "
+"that other elements refer to, a symbol, a gradient or a clip, leaves those elements in place but "
+"without it."
+msgstr "删除一个元素、分组及其全部内容，或整个场景。删除被其他元素引用的符号、渐变或裁剪时，引用元素仍存在，但失去对应资源。"
+
+#: docs/vector-protocol.rst:180
+msgid ""
+"Colors are ``#rrggbb`` or ``#rrggbbaa`` in sRGB, or ``none``. The floating-point forms "
+"``srgb:r/g/b[/a]``, ``p3:r/g/b[/a]`` and ``rec2020:r/g/b[/a]`` use components from 0 to 1, the "
+"named primaries and the sRGB transfer curve, matching :doc:`wide-gamut-protocol`. "
+"``linear:r/g/b[/a]`` uses linear extended sRGB: RGB may be negative or exceed 1; alpha is 0 to 1 "
+"and defaults to 1. All numbers must be finite. Slashes keep these colors unambiguous in comma-"
+"separated gradient stops."
+msgstr ""
+"颜色可用 sRGB ``#rrggbb``、``#rrggbbaa``，或 ``none``。浮点形式 ``srgb:r/g/b[/a]``、``p3:r/g/b[/a]`` 和 "
+"``rec2020:r/g/b[/a]`` 使用 0 至 1 的分量、指定基色和 sRGB 传递曲线，与 :doc:`wide-gamut-protocol` "
+"一致。``linear:r/g/b[/a]`` 为线性扩展 sRGB：RGB 可为负或超过 1，Alpha 范围 0 至 1，默认 1。所有数值必须有限。斜杠分隔可避免与逗号分隔的渐变色标混淆。"
+
+#: docs/vector-protocol.rst:188
+msgid ""
+"Every color form accepts ``*<percent>`` to multiply linear RGB by that percentage, without "
+"changing alpha: ``#ff8800*250`` or ``p3:1/0.2/0*300``. This works in fills, strokes, pen strokes,"
+" symbols, text and decorations, and gradient stops. Gradient references ``@<id>`` work for text "
+"paints too. The compositor and gradient interpolation operate in linear extended sRGB, preserving"
+" HDR and out-of-sRGB channels through nested groups and clips. Embedded raster images retain "
+"their tagged gamut and ``f=64`` HDR values. The GPU texture is RGBA16F (finite channels saturate "
+"at its representable range, ±65504), with display gamut/headroom conversion at presentation. "
+"``T=1`` on the image selects the :doc:`hdr-protocol` tone mapper. SDR output uses the terminal's "
+"existing HDR-to-SDR presentation path."
+msgstr ""
+"各种颜色形式均接受 ``*<percent>``，按该百分比乘线性 RGB 而不改变 Alpha，例如 ``#ff8800*250`` 或 "
+"``p3:1/0.2/0*300``。适用于填充、描边、笔划、符号、文本及装饰和渐变色标。渐变引用 ``@<id>`` 也可用于文本绘制色。合成和渐变插值在线性扩展 sRGB "
+"中进行，嵌套分组及裁剪保留 HDR 和超出 sRGB 的通道。嵌入光栅图像保留标注色域及 ``f=64`` HDR 值。GPU 纹理使用 RGBA16F（有限通道值饱和到其可表示范围 "
+"±65504），呈现时转换到显示色域及亮度余量。图像上的 ``T=1`` 选择 :doc:`hdr-protocol` 色调映射。SDR 输出使用终端已有的 HDR 转 SDR 呈现路径。"
+
+#: docs/vector-protocol.rst:200
+msgid ""
+"Transforms are the six numbers of an affine matrix, ``t=a,b,c,d,e,f``, mapping ``x, y`` to ``a*x "
+"+ c*y + e, b*x + d*y + f``, the SVG and PDF convention."
+msgstr "变换为六值仿射矩阵 ``t=a,b,c,d,e,f``，将 ``x, y`` 映射为 ``a*x + c*y + e, b*x + d*y + f``，遵循 SVG 和 PDF 约定。"
+
+#: docs/vector-protocol.rst:205
+msgid "Nested window clips"
+msgstr "嵌套窗口裁剪"
+
+#: docs/vector-protocol.rst:207
+msgid ""
+"Clips are retained device-space masks after the owning group's transform. A descendant's "
+"translation, rotation, scale or inverse transform cannot escape an enclosing clip. There is no "
+"fixed nesting limit; the optional ``vector_depth_limit`` configuration applies as to other nested"
+" groups. For a window manager such as odin-seat, put each window's content under a group with its"
+" outer clip, then nest content and widget clips::"
+msgstr ""
+"裁剪在所属分组变换之后，以设备空间蒙版保留。后代的平移、旋转、缩放或逆变换不能越出外层裁剪。嵌套没有固定上限；可选 ``vector_depth_limit`` 与其他嵌套分组相同。对于 "
+"odin-seat 等窗口管理器，把各窗口内容放在带外层裁剪的分组下，再嵌套内容和控件裁剪：::"
+
+#: docs/vector-protocol.rst:219
+msgid ""
+"The blue drawing remains inside all three boxes. Moving the outer group moves its clip and "
+"contents together. A window manager assigns element IDs and attaches child scenes beneath its "
+"window group when merging scenes; ``box`` constrains that subtree, rather than other root-level "
+"elements."
+msgstr "蓝色图形始终位于全部三个矩形内。移动外层分组时，其裁剪和内容一起移动。窗口管理器合并场景时分配元素 ID，将子场景挂在窗口分组下；``box`` 约束该子树，不影响其他根级元素。"
+
+#: docs/vector-protocol.rst:225
+msgid "Font resources in the vector protocol"
+msgstr "矢量协议中的字体资源"
+
+#: docs/vector-protocol.rst:227
+msgid ""
+"``a=v,f=200,i=<request id>`` is the vector service. Its payload is UTF-8 JSON, carried by the "
+"graphics protocol's normal base64 encoding, chunking, compression and direct/file/temporary-file"
+"/shared-memory transports. It does not need ``s`` or ``v`` and creates no image or placement. "
+"``i`` correlates the reply and occupies no image ID. Continuation chunks may omit the action and "
+"retain the first chunk's parameters. Use ordinary kitty graphics chunks of at most 4096 base64 "
+"bytes. For example::"
+msgstr ""
+"``a=v,f=200,i=<request id>`` 是矢量服务。载荷为 UTF-8 JSON，使用普通图形协议的 base64 编码、分块、压缩及直接／文件／临时文件／共享内存传输。不需要"
+" ``s`` 或 ``v``，也不创建图像或放置。``i`` 用于关联回复，不占用图像 ID。后续块可省略操作，沿用首块参数。使用普通 kitty 图形块，每块最多 4096 字节 "
+"base64。例如：::"
+
+#: docs/vector-protocol.rst:238
+#, python-brace-format
+msgid ""
+"Errors are ``EINVAL:<base64 of {\"error\":\"description\"}>``; transport errors use the ordinary "
+"graphics error responses. ``q`` has the ordinary quiet semantics; use ``q=0`` when a result is "
+"needed. Successful result bodies grow with the data and are not truncated to the ordinary short "
+"graphics message."
+msgstr ""
+"错误为 ``EINVAL:<base64 of {\"error\":\"description\"}>``；传输错误使用普通图形错误回复。``q`` 沿用静默语义；需要结果时使用 "
+"``q=0``。成功结果正文随数据增长，不截断为普通的简短图形消息。"
+
+#: docs/vector-protocol.rst:243
+#, python-brace-format
+msgid "``{\"op\":\"fonts\"}``"
+msgstr "``{\"op\":\"fonts\"}``"
+
+#: docs/vector-protocol.rst:244
+msgid ""
+"Lists installed faces (family, style, PostScript name, weight, native slant in degrees, and "
+"monospace status), configured roles, and uploaded session font IDs. ``version:1`` identifies this"
+" text/resource protocol. Family and PostScript names can be used as ``font`` selectors."
+msgstr ""
+"列出已安装字体（字体族、样式、PostScript 名称、字重、原生倾斜角度和是否等宽）、配置角色及已上传的会话字体 ID。``version:1`` 标识本套文本／资源协议。字体族和 "
+"PostScript 名称可作为 ``font`` 选择器。"
+
+#: docs/vector-protocol.rst:249
+#, python-brace-format
+msgid "``{\"op\":\"inspect\",\"font\":\"Iosevka\"}``"
+msgstr "``{\"op\":\"inspect\",\"font\":\"Iosevka\"}``"
+
+#: docs/vector-protocol.rst:250
+msgid ""
+"Reports the selected face's units per em, glyph count, weight, native slant, and variable axes, "
+"each with tag, minimum, default and maximum. Role, weight and italic selection are also accepted."
+msgstr "报告所选字体每 em 单位数、字形数、字重、原生倾斜，以及可变轴的标签、最小值、默认值和最大值。也接受角色、字重和意大利体选择。"
+
+#: docs/vector-protocol.rst:254
+#, python-brace-format
+msgid "``{\"op\":\"upload\",\"id\":\"body\",\"data\":\"<base64 font bytes>\",\"index\":0}``"
+msgstr "``{\"op\":\"upload\",\"id\":\"body\",\"data\":\"<base64 font bytes>\",\"index\":0}``"
+
+#: docs/vector-protocol.rst:255
+msgid ""
+"Loads a TrueType/OpenType outline font into memory. ``index`` selects a collection member and "
+"defaults to zero. The nonempty string ID has a separate namespace from image and element IDs. "
+"Reusing it atomically replaces the font after validation. The reply has its ID and inspection "
+"metadata. Select it as ``\"font\":\"@body\"``. Font bytes are never written to the image disk "
+"cache or registered with the operating system."
+msgstr ""
+"将 TrueType/OpenType 轮廓字体加载到内存。``index`` 选择字体集合成员，默认零。非空字符串 ID 使用独立于图像和元素 ID 的命名空间。复用 ID "
+"会在验证成功后原子替换字体。回复包含 ID 和检查元数据。使用 ``\"font\":\"@body\"`` 选择它。字体字节不会写入图像磁盘缓存，也不会注册到操作系统。"
+
+#: docs/vector-protocol.rst:262
+#, python-brace-format
+msgid "``{\"op\":\"release\",\"id\":\"body\"}``"
+msgstr "``{\"op\":\"release\",\"id\":\"body\"}``"
+
+#: docs/vector-protocol.rst:263
+msgid ""
+"Releases the session handle. Already-retained text keeps its outlines; subsequent layouts using "
+"that handle fail until it is uploaded again. Uploads are local to the PTY, shared across its main"
+" and alternate buffers, and freed when that session closes. Image deletion does not release "
+"fonts. There is no fixed font-count limit; applications should release resources when finished. "
+"Transport allocation errors are reported."
+msgstr ""
+"释放会话句柄。已保留文本仍持有其轮廓；之后使用该句柄的布局会失败，直到重新上传。上传资源局限于当前 "
+"PTY，在主缓冲区和备用缓冲区间共享，会话关闭时释放。删除图像不释放字体。字体数量没有固定限制，应用应在用完后释放资源。传输分配错误会被报告。"
+
+#: docs/vector-protocol.rst:271
+msgid "Text layout and measurement"
+msgstr "文本布局与测量"
+
+#: docs/vector-protocol.rst:273
+msgid "The text record's decoded JSON is a layout object, for example::"
+msgstr "文本记录解码后的 JSON 是布局对象，例如：::"
+
+#: docs/vector-protocol.rst:282
+msgid ""
+"Use ``text`` for a single string or ``runs`` for an array of objects, each with a ``text`` string"
+" and style overrides. Top-level style fields are the defaults for each run; runs advance "
+"consecutively on the same baseline. Split runs at intended shaping boundaries: a style change "
+"also ends a ligature or script shaping run. JSON escaping preserves spaces, newlines, Unicode and"
+" control characters without introducing extra scene records."
+msgstr ""
+"单字符串使用 ``text``，多段使用 ``runs`` 数组，其中每个对象包含 ``text`` "
+"字符串及样式覆盖。顶层样式作为各段默认值，各段沿同一基线连续排布。应按预期的文本整形边界拆分：样式变化也会终止连字或文字整形段。JSON 转义可保留空格、换行、Unicode "
+"和控制字符，而不引入额外场景记录。"
+
+#: docs/vector-protocol.rst:289
+msgid "``font`` / ``role``"
+msgstr "``font`` / ``role``"
+
+#: docs/vector-protocol.rst:290
+msgid ""
+"Select an installed family/PostScript name or an ``@`` session handle, or use a configured :doc"
+":`font-protocol` role such as ``sans`` or ``serif``. Default: the terminal's configured regular "
+"font (Iosevka). Vector text also accepts proportional outline fonts."
+msgstr ""
+"选择已安装字体族／PostScript 名称或 ``@`` 会话句柄，或使用 :doc:`font-protocol` 中配置的 ``sans``、``serif`` "
+"等角色。默认使用终端配置的常规字体（Iosevka）。矢量文本也接受比例轮廓字体。"
+
+#: docs/vector-protocol.rst:295
+msgid "``size`` / ``weight`` / ``italic`` / ``slant``"
+msgstr "``size`` / ``weight`` / ``italic`` / ``slant``"
+
+#: docs/vector-protocol.rst:296
+msgid ""
+"Positive em size in scene units (default 16), weight 100–900 (default 400), italic letterforms "
+"(boolean, default false), and optional absolute slant in degrees from -15 to 15. Negative slant "
+"leans right; zero can make italic letterforms upright; positive synthesizes inverse slant. "
+"Installed static families select the nearest face; variable fonts use their weight axis. Uploaded"
+" static faces retain their native weight and letterforms; upload each desired face or a variable "
+"font."
+msgstr ""
+"以场景单位表示的正 em 尺寸（默认 16）、字重 100–900（默认 400）、意大利体字形（布尔值，默认 false），以及可选的绝对倾斜角度 -15 至 15 "
+"度。负值向右倾；零可使意大利体字形直立；正值合成反向倾斜。已安装静态字体族选择最接近的字体；可变字体使用字重轴。上传的静态字体保留原生字重和字形，应分别上传所需字体，或上传可变字体。"
+
+#: docs/vector-protocol.rst:304
+msgid "``axes`` / ``features``"
+msgstr "``axes`` / ``features``"
+
+#: docs/vector-protocol.rst:305
+msgid ""
+"A dictionary of supported four-character OpenType axis tags and design values, and an array of "
+"HarfBuzz feature strings such as ``[\"liga=0\", \"ss01=1\"]``. Explicit axis values must lie "
+"within the font's range."
+msgstr ""
+"分别为受支持的四字符 OpenType 轴标签到设计值的字典，以及 HarfBuzz 特性字符串数组，例如 ``[\"liga=0\", "
+"\"ss01=1\"]``。明确指定的轴值必须位于字体范围内。"
+
+#: docs/vector-protocol.rst:309
+msgid "``direction`` / ``language`` / ``script`` / ``fallback``"
+msgstr "``direction`` / ``language`` / ``script`` / ``fallback``"
+
+#: docs/vector-protocol.rst:310
+msgid ""
+"Optional shaping direction (``ltr``, ``rtl``, ``ttb`` or ``btt``), BCP47 language and ISO15924 "
+"script. HarfBuzz guesses unspecified properties. An optional array of font selectors supplies "
+"fallback faces; the configured regional CJK face is also tried for missing clusters. Combining "
+"marks and joined sequences stay together when choosing a fallback. This is a run layout API: "
+"applications supply visual run order for mixed bidirectional paragraphs, and line breaks rather "
+"than automatic paragraph wrapping. Bitmap-only and embedded color glyph painting are not part of "
+"the outline text format."
+msgstr ""
+"可选的整形方向（``ltr``、``rtl``、``ttb`` 或 ``btt``）、BCP47 语言和 ISO15924 文字。未指定属性由 HarfBuzz "
+"推断。可用字体选择器数组提供回退字体；缺失字形簇时也会尝试所配置的地区中日韩字体。选择回退时，组合附加符和连接序列保持完整。这是文本段布局 "
+"API：混合双向段落的视觉段序由应用提供，换行由应用指定，不自动折行。纯位图字形和内嵌彩色字形绘制不属于轮廓文本格式。"
+
+#: docs/vector-protocol.rst:320
+msgid "``fill`` / ``stroke`` / ``stroke_width`` / ``background``"
+msgstr "``fill`` / ``stroke`` / ``stroke_width`` / ``background``"
+
+#: docs/vector-protocol.rst:321
+msgid ""
+"Vector paints, including gradients and HDR/wide-gamut colors. Fill defaults to black, stroke to "
+"``none`` and stroke width to 1; text strokes have round joins. Background is optional and fills "
+"each run's logical box."
+msgstr "矢量绘制色，支持渐变、HDR 和广色域。填充默认黑色，描边默认 ``none``，描边宽度默认 1，文本描边使用圆角连接。背景可选，填充各文本段的逻辑矩形。"
+
+#: docs/vector-protocol.rst:325
+msgid "``underline`` / ``underline_color`` / ``strike`` / ``overline``"
+msgstr "``underline`` / ``underline_color`` / ``strike`` / ``overline``"
+
+#: docs/vector-protocol.rst:326
+msgid ""
+"Underline style ``none`` (default), ``single``, ``double``, ``curly``, ``dotted`` or ``dashed``; "
+"its optional paint defaults to the fill. Strike and overline are booleans. Decorations are vector"
+" geometry and accept the same HDR/wide-gamut paints and transforms as the glyphs."
+msgstr ""
+"下划线样式为 ``none``（默认）、``single``、``double``、``curly``、``dotted`` 或 "
+"``dashed``；可选绘制色默认与填充相同。删除线和上划线为布尔值。装饰由矢量几何构成，接受与字形相同的 HDR／广色域绘制色和变换。"
+
+#: docs/vector-protocol.rst:331
+msgid "``x`` / ``y`` / ``angle``"
+msgstr "``x`` / ``y`` / ``angle``"
+
+#: docs/vector-protocol.rst:332
+msgid ""
+"Top-level baseline origin (default 0,0) and rotation in degrees (default 0). Positive rotation is"
+" clockwise in the scene's downward y axis. ``\\n`` starts another line. The record's affine "
+"transform and all parent transforms apply afterward. Use group boxes to clip text to a viewport."
+msgstr "顶层基线原点（默认 0,0）及旋转角度（默认 0 度）。场景 y 轴向下，因此正角度为顺时针。``\\n`` 开始新行。随后应用记录的仿射变换及全部父级变换。可用分组矩形将文本裁剪到视口。"
+
+#: docs/vector-protocol.rst:337
+msgid ""
+"Send the same layout object with ``\"op\":\"measure\"`` through ``a=v`` to measure without "
+"creating an image or rasterizing pixels. The result gives ``width`` and ``height`` of the "
+"unrotated logical layout in user units, ``advance:[x,y]`` before the origin/rotation, ``ascent`` "
+"and ``descent``, and ``ink:[left,top,right,bottom]`` after the layout origin/rotation, or "
+"``null`` for no painted geometry. Ink includes decorations, backgrounds and stroke reach; curve "
+"extrema are measured from the shaped outlines. ``missing`` lists Unicode scalar indices for "
+"unresolved glyphs, across the concatenated runs. Rendering uses the same layout code. Measurement"
+" precedes scene transforms, gradient lookup, opacity and clipping; it reports the full string "
+"even when a window shows only a clipped part."
+msgstr ""
+"通过 ``a=v`` 发送同样的布局对象，并设置 ``\"op\":\"measure\"``，即可测量而不创建图像或栅格化像素。结果包含未旋转逻辑布局的 "
+"``width``、``height``（用户单位），应用原点／旋转前的 ``advance:[x,y]``，``ascent``、``descent``，以及应用布局原点／旋转后的 "
+"``ink:[left,top,right,bottom]``；没有绘制几何时为 ``null``。墨迹范围包括装饰、背景和描边延伸，曲线极值从整形轮廓测得。``missing`` "
+"列出未解析字形的 Unicode 标量索引，按所有文本段连接后的顺序计数。渲染使用相同布局代码。测量先于场景变换、渐变查询、不透明度和裁剪；即使窗口只显示被裁剪的一部分，也报告完整字符串。"
+
+#: docs/vector-protocol.rst:350
+msgid "Python client helpers"
+msgstr "Python 客户端辅助函数"
+
+#: docs/vector-protocol.rst:352
+msgid ""
+"``kittens.tui.vector`` provides ``service_request``, ``font_upload``, ``measure_text``, "
+"``parse_service_response``, ``text_record``, ``clip_group`` and ``scene``. Transmission helpers "
+"yield correctly chunked graphics sequences for the application's output queue. The response "
+"parser accepts either a framed APC or the ``G``-prefixed body from an input parser and returns "
+"the request ID and decoded result. It raises ``ValueError`` for an error response. For example, "
+"after uploading ``body`` and receiving its successful reply::"
+msgstr ""
+"``kittens.tui.vector`` 提供 "
+"``service_request``、``font_upload``、``measure_text``、``parse_service_response``、``text_record``、``clip_group``"
+" 和 ``scene``。传输辅助函数为应用输出队列生成正确分块的图形序列。回复解析器接受完整 APC 帧，或输入解析器给出的 ``G`` 前缀正文，返回请求 ID 和解码结果。错误回复会抛出 "
+"``ValueError``。例如，上传 ``body`` 并收到成功回复后：::"
+
+#: docs/vector-protocol.rst:375
+msgid "Rendering"
+msgstr "渲染"
+
+#: docs/vector-protocol.rst:377
+msgid ""
+"The terminal rasterizes the scene with antialiasing, with the same appearance on a gray or color "
+"display, whenever it is first shown, the scene changes, or the size it is shown at changes, with "
+"user units scaled so the intrinsic size fills the placement. Scenes count toward the image "
+"storage quota by the size of their elements, not by pixels."
+msgstr "场景首次显示、场景变化或显示尺寸改变时，终端使用抗锯齿进行栅格化，并按固有尺寸填满放置区域的方式缩放用户单位；灰度和彩色显示器上的形状外观一致。场景按元素大小计入图像存储配额，而非按像素计数。"
+
+#: docs/vector-protocol.rst:383
+msgid ""
+"Silkie rasterizes on the CPU. Drawing all of a scene that covers a large window at a high pixel "
+"density takes tens to hundreds of milliseconds, which is what the first showing, a change of size"
+" and some patches cost. Most patches cost far less, because kitty works out the rectangle a patch"
+" can have changed and draws only that again, with a result that is the same, pixel for pixel, as "
+"drawing everything:"
+msgstr ""
+"Silkie 在 CPU 上栅格化。在高像素密度的大窗口中绘制整个场景可能需要几十到几百毫秒，这是首次显示、调整尺寸及部分补丁的成本。多数补丁更便宜，因为 kitty "
+"会计算可能受影响的矩形，仅重绘该区域，结果与全量绘制逐像素一致："
+
+#: docs/vector-protocol.rst:390
+msgid ""
+"Appending to a pen stroke, or to a path that is stroked and has ``fill=none``, draws the "
+"rectangle around the appended geometry and not the one around the stroke. This is what live ink "
+"costs."
+msgstr "向笔划，或带描边且 ``fill=none`` 的路径追加内容时，只绘制新增几何周围的矩形，而非整条笔划的矩形。这就是实时墨迹的绘制成本。"
+
+#: docs/vector-protocol.rst:393
+msgid ""
+"Adding, replacing or deleting a path, text, a use or a pen stroke draws the rectangle around "
+"where the element was and where it now is. So does appending to a filled path, since a fill is "
+"closed across the gap between the ends of a subpath and more of it changes than was appended."
+msgstr "新增、替换或删除路径、文本、符号使用实例或笔划时，重绘元素旧位置和新位置周围的矩形。向填充路径追加内容同样如此，因为填充会跨越子路径两端间的缺口闭合，受影响范围不止新增部分。"
+
+#: docs/vector-protocol.rst:397
+msgid ""
+"A ``g`` record, the root group's included, a symbol, a gradient or an image record, a deletion of"
+" any of those, ``x g=``, ``x all`` and any change to a path that a group is clipped by draw "
+"everything, as other elements depend on them. Panning or zooming through the transform of the "
+"root group is in this class."
+msgstr ""
+"``g`` 记录（包括根分组）、符号、渐变或图像记录，以及删除它们、``x g=``、``x "
+"all``，或改变作为分组裁剪的路径，都会全量重绘，因为其他元素依赖这些资源。通过根分组变换进行平移或缩放也属于此类。"
+
+#: docs/vector-protocol.rst:403
+msgid ""
+"A program that animates should therefore keep what changes small and in elements of its own. "
+"Kitty keeps no rasterized copy of a scene other than the texture it is drawn from, so nothing but"
+" the elements counts toward the quota."
+msgstr "因此动画程序应把变化限制在独立的小元素中。除用于显示的纹理外，kitty 不保留其他栅格化场景副本，所以只有元素本身计入配额。"
+
+#: docs/vector-protocol.rst:408
+msgid "Rendering a PDF"
+msgstr "渲染 PDF"
+
+#: docs/vector-protocol.rst:410
+msgid ""
+"The records map onto the PDF content stream operators closely enough that a viewer can render "
+"pages without rasterizing anything itself:"
+msgstr "记录与 PDF 内容流操作符足够接近，查看器可以不自行栅格化而渲染页面："
+
+#: docs/vector-protocol.rst:413
+msgid "``q`` and ``Q`` are a ``g`` record and the end of it; ``cm`` is its ``t``."
+msgstr "``q`` 和 ``Q`` 分别对应 ``g`` 记录及其结束，``cm`` 对应 ``t``。"
+
+#: docs/vector-protocol.rst:414
+msgid "``W n`` is a ``p`` record with the clip path and ``clip=`` on a group that encloses what follows."
+msgstr "``W n`` 对应包含裁剪路径的 ``p`` 记录，以及包围后续内容分组上的 ``clip=``。"
+
+#: docs/vector-protocol.rst:416
+msgid ""
+"The path construction and painting operators become ``p`` records, with ``rule=eo`` for the even-"
+"odd variants, and the graphics state parameters for line width, cap, join, miter limit and dash "
+"become ``w``, ``cap``, ``join``, ``ml`` and ``dash``."
+msgstr ""
+"路径构建和绘制操作符转换为 ``p`` 记录，奇偶填充使用 ``rule=eo``；线宽、端点、连接、斜接限制和虚线等图形状态参数转换为 "
+"``w``、``cap``、``join``、``ml`` 和 ``dash``。"
+
+#: docs/vector-protocol.rst:420
+msgid ""
+"Text: each glyph used is sent once as an ``s`` record holding its outline from the embedded font,"
+" and every ``Tj`` becomes ``u`` records with the text matrix as ``t``; text render modes that "
+"stroke use ``stroke``."
+msgstr "文本：每个使用的字形从内嵌字体提取轮廓，作为 ``s`` 记录只发送一次；各 ``Tj`` 转换为 ``u`` 记录，以文本矩阵作为 ``t``。需要描边的文本渲染模式使用 ``stroke``。"
+
+#: docs/vector-protocol.rst:423
+msgid ""
+"``Do`` with an image XObject transmits the image through the graphics protocol once and draws it "
+"with an ``i`` record; the image space of PDF, the unit square, is the transform "
+"``t=w,0,0,-h,0,h`` for an image of ``w`` by ``h`` pixels followed by the current matrix."
+msgstr ""
+"图像 XObject 的 ``Do`` 先通过图形协议传输图像一次，再用 ``i`` 绘制。PDF 的单位正方形图像空间，对宽 ``w``、高 ``h`` 像素的图像，对应变换 "
+"``t=w,0,0,-h,0,h``，随后再应用当前矩阵。"
+
+#: docs/vector-protocol.rst:427
+msgid ""
+"``ca`` and ``CA`` are ``o`` on a group, ``BM`` is ``blend`` for the normal, multiply and screen "
+"modes, and axial and radial shadings are ``l`` and ``r`` gradients."
+msgstr ""
+"``ca`` 和 ``CA`` 对应分组的 ``o``；``BM`` 的 normal、multiply、screen 模式对应 ``blend``；轴向和径向着色分别对应 "
+"``l``、``r`` 渐变。"
+
+#: docs/vector-protocol.rst:431
+msgid ""
+"Soft masks, tiling and shading patterns as fills, knockout and isolated groups, and the other "
+"blend modes are not supported in this version of the format; a viewer rasterizes those parts "
+"itself and sends them as raster images."
+msgstr "本版本不支持软蒙版、作为填充的平铺和着色图案、挖空与隔离分组，以及其他混合模式；查看器应自行栅格化这些部分，再作为光栅图像发送。"
+
+#: docs/vector-protocol.rst:437
+msgid "Relays and multiplexers"
+msgstr "中继与多路复用器"
+
+#: docs/vector-protocol.rst:439
+msgid ""
+"A relay that resynthesizes the screen for a client, in the manner of mosh, keeps a vector image "
+"as a table of records keyed by id. Records with a new id are added, records with an existing id "
+"replace it, ``x`` records remove ids (a group's ``x g=`` removing everything whose parent chain "
+"leads to it), ``a`` records are concatenated to the geometry of their target, and a transmission "
+"with ``a=t`` or ``a=T`` empties the table before adding. The table, written out as records, is "
+"the whole state of the image and can be sent to a fresh terminal after a reconnection, as one "
+"``a=t`` transmission. The patches themselves need not be kept. Session font uploads must also be "
+"replayed before text records that reference them. A relay that does not understand the records "
+"can still forward them as opaque image data, keeping the transmissions and the patches in order."
+msgstr ""
+"像 mosh 那样为客户端重建屏幕的中继，以 ID 为键将矢量图像保存为记录表。新 ID 添加，相同 ID 替换，``x`` 删除（分组 ``x g=`` "
+"同时删除父级链通向它的全部元素），``a`` 拼接到目标几何，``a=t`` 或 ``a=T`` 则先清空记录表再添加。将表写成记录即得到完整图像状态，可在重连后以一次 ``a=t`` "
+"传给新终端，无需保存补丁历史。会话字体也必须在引用它们的文本记录之前重放上传。不理解记录的中继仍可把它们作为不透明图像数据按顺序转发，保留传输与补丁的先后关系。"
+
+#: docs/vector-protocol.rst:453
+msgid "Querying support"
+msgstr "查询支持情况"
+
+#: docs/vector-protocol.rst:455
+msgid ""
+"To find out whether a terminal supports vector images, send a query with ``f=200`` and a small "
+"scene::"
+msgstr "查询终端是否支持矢量图像，可发送 ``f=200`` 和一个小型场景：::"
+
+#: docs/vector-protocol.rst:460
+msgid ""
+"A terminal that does answers ``OK``, one that does not answers ``EINVAL`` or nothing at all, in "
+"which case the usual timeout applies."
+msgstr "支持的终端回复 ``OK``，不支持的回复 ``EINVAL`` 或不回答；后者使用通常的超时处理。"
+
+#: docs/vector-protocol.rst:463
+#, python-brace-format
+msgid ""
+"That query establishes base scene support. For shaped text, font resources, measurement, box "
+"clips and HDR paints, query ``a=v,f=200`` with ``{\"op\":\"fonts\"}`` and inspect ``version`` and"
+" ``features``. An older vector implementation can accept base scenes while lacking these "
+"additions."
+msgstr ""
+"该查询仅确认基础场景支持。若要使用整形文本、字体资源、测量、矩形裁剪和 HDR 绘制色，请以 ``a=v,f=200`` 查询 ``{\"op\":\"fonts\"}``，检查 "
+"``version`` 和 ``features``。较早的矢量实现可能接受基础场景，却不具备这些扩展。"
+

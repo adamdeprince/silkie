@@ -1291,7 +1291,11 @@ mouse_selection(Window *w, int code, int button) {
         case MOUSE_SELECTION_WORD_AND_LINE_FROM_POINT:
             if (screen_selection_range_for_line(screen, w->mouse_pos.cell_y, &start, &end) && end > w->mouse_pos.cell_x) S(EXTEND_WORD_AND_LINE_FROM_POINT);
             break;
-        case MOUSE_SELECTION_EXTEND: extend_selection(w, false, true); break;
+        case MOUSE_SELECTION_EXTEND:
+            if (screen_has_selection(screen)) extend_selection(w, false, true);
+            else if (button == GLFW_MOUSE_BUTTON_LEFT)
+                screen_start_selection(screen, w->mouse_pos.cell_x, w->mouse_pos.cell_y, w->mouse_pos.in_left_half_of_cell, false, EXTEND_CELL);
+            break;
         case MOUSE_SELECTION_MOVE_END: extend_selection(w, false, false); break;
         case MOUSE_SELECTION_UPTO_SURROUNDING_WHITESPACE:
             // TODO: Implement me for people migrating from urxvt
@@ -1702,6 +1706,7 @@ scroll_event(const GLFWScrollEvent *ev) {
         glfwGetCursorPos((GLFWwindow *)osw->handle, &mouse_x, &mouse_y);
         osw->mouse_x = mouse_x * osw->viewport_x_ratio;
         osw->mouse_y = mouse_y * osw->viewport_y_ratio;
+        spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
     }
     MouseRegion r = mouse_region(false, true);
     Window *w = r.window;
@@ -2661,6 +2666,7 @@ touch_pointer_event(const GLFWTouchEvent *ev) {
             const double mouse_x = osw->mouse_x, mouse_y = osw->mouse_y;
             osw->mouse_x = first->x * osw->viewport_x_ratio;
             osw->mouse_y = first->y * osw->viewport_y_ratio;
+            spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
             w = pointer_window(POINTER_TOUCH);
             osw->mouse_x = mouse_x;
             osw->mouse_y = mouse_y;

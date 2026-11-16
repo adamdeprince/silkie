@@ -88,7 +88,7 @@ opt(
     '+kitty_conf',
     '',
     long_text='Path to config file to use for kitty when drawing the window. Can be specified multiple times. By default, the'
-    ' normal kitty.conf is used. Relative paths are resolved with respect to the kitty config directory.',
+    ' normal silkie.conf is used. Relative paths are resolved with respect to the Silkie config directory.',
 )
 
 opt(
@@ -167,7 +167,7 @@ terminal exits, instead of closing the tab or window.
 completion=type:special group:complete_kitty_listen_on
 Listen on the specified socket address for remote control messages. For example,
 :code:`unix:@quick-access` or :code:`unix:/tmp/quick-access`. Unlike the
-:opt:`listen_on` option in :file:`kitty.conf`, the process id of kitty
+:opt:`listen_on` option in :file:`silkie.conf`, the process id of kitty
 is not appended to the address. Note that this will be ignored unless
 :opt:`allow_remote_control` is enabled, which you can do via
 :opt:`kitty_override <kitten-quick_access_terminal.kitty_override>`.

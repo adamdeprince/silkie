@@ -1,5 +1,6 @@
 sphinx
 furo
+jieba
 sphinx-copybutton
 sphinxext-opengraph
 sphinx-design

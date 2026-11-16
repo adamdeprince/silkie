@@ -26,6 +26,7 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
    :caption: Text and typography
 
    font-protocol
+   spatial-protocol
 
 .. toctree::
    :maxdepth: 1
@@ -37,12 +38,15 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
    haptic-protocol
    pointer-image-protocol
    ink-protocol
+   notification-routing
+   ssh-agent-protocol
 
 .. toctree::
    :maxdepth: 1
    :caption: Graphics and color
 
    vector-protocol
+   packed-image-protocol
    gpu-surface-protocol
    hdr-protocol
    wide-gamut-protocol

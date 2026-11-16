@@ -1,9 +1,81 @@
 Silkie configuration
 =====================
 
-These options configure Silkie's extensions in ``kitty.conf``. For the file
-location, syntax, and inherited settings, see `kitty's configuration reference
-<https://sw.kovidgoyal.net/kitty/conf/>`_.
+Silkie reads ``silkie.conf`` from its own configuration directory, normally
+``~/.config/silkie/``. It does not automatically read kitty's configuration or
+use ``KITTY_CONFIG_DIRECTORY``.
+
+Configuration paths
+-------------------
+
+Set ``SILKIE_CONFIG_DIRECTORY`` to use a different directory. Otherwise,
+Silkie searches for ``silkie.conf`` in the following order and uses the first
+file whose directory is writable:
+
+* ``$XDG_CONFIG_HOME/silkie/``, when ``XDG_CONFIG_HOME`` is set;
+* ``~/.config/silkie/``;
+* ``~/Library/Preferences/silkie/`` on macOS;
+* ``silkie/`` under each directory in ``XDG_CONFIG_DIRS``, in order.
+
+If no configuration exists, Silkie creates ``$XDG_CONFIG_HOME/silkie/`` or
+``~/.config/silkie/``. System defaults come from
+``/etc/xdg/silkie/silkie.conf`` and are read before the user configuration.
+Relative includes, themes, kitten configuration files, and profiles use the
+Silkie configuration directory. The Settings window writes ``settings.conf``
+there, which is read after ``silkie.conf``.
+
+Use ``--config /path/to/file.conf`` to load a file explicitly, or
+``--config NONE`` to skip configuration files. To reuse existing kitty settings,
+copy them to ``silkie.conf`` or add an explicit include, for example::
+
+    include ../kitty/kitty.conf
+
+The configuration syntax and inherited settings are described in
+`kitty's configuration reference <https://sw.kovidgoyal.net/kitty/conf/>`_.
+The paths above are specific to Silkie.
+
+Quitting on macOS
+-----------------
+
+Silkie does not bind ``Cmd-Q`` to quit by default. To explicitly enable it,
+add this to ``silkie.conf``::
+
+    map cmd+q quit
+
+The application menu's Quit command remains available without a keyboard
+shortcut unless you configure one.
+
+Spatial display
+----------------
+
+On macOS, **View → Spatial Display** switches between ordinary rendering,
+stereo content that follows the head, and an anchored terminal wall. Settings
+place XREAL 1S support under **Experimental and untested**, disabled by default.
+Enable ``experimental_xreal_1s yes`` to use side-by-side output or XREAL tracking.
+Red/blue output without tracking does not require that opt-in. Spatial settings
+include side-by-side and red/blue output, independent positive and negative
+divergence limits, and a 2^X divergence multiplier with X from -6 to 6 in
+0.1 steps. Fractional pixel depth scales with the physical eye resolution,
+including Retina backing scale. Negative divergence and vertical phase are
+disabled by default and require explicit user configuration. Applications
+can assign depth to text and graphics while leaving unmarked content flat.
+See :doc:`spatial-protocol` for XREAL setup, configuration, the optional text
+attribute, and current tracking support.
+
+Numeric controls enforce the setting's domain: opacity stays within its
+documented range, dimensions and durations are nonnegative, and documented
+negative sentinels and signed scroll multipliers remain available. Cursor HDR
+brightness and HDR headroom start at 1× and step by 0.1, with no invented upper
+bound. Composite values retain their complete text rather than losing optional
+parameters to a numeric widget.
+
+SSH agent forwarding
+--------------------
+
+Set ``ssh_agent_forwarding yes`` to offer the local SSH agent over the terminal
+channel. Odin Seat and Skiff can keep a stable ``SSH_AUTH_SOCK`` while the
+provider follows the attached terminal. See :doc:`ssh-agent-protocol` for
+permissions, connection lifetime, fallback behavior, and protocol details.
 
 The option defaults and descriptions below come from Silkie's configuration
 definitions.
@@ -12,7 +84,7 @@ E-paper and color switching
 ---------------------------
 
 For an external e-paper monitor, including a BOOX monitor that the operating
-system treats as an ordinary display, add this to ``kitty.conf``::
+system treats as an ordinary display, add this to ``silkie.conf``::
 
     eink_mode yes
 
@@ -46,6 +118,34 @@ capabilities. ``display_info kind=eink`` remains available as a reporting-only
 override that leaves the color scheme unchanged. These declarations apply to
 all windows in the Silkie process, so toggle the mode when moving between an
 ordinary monitor and an e-paper monitor.
+
+Display channel precision
+-------------------------
+
+The :doc:`display-protocol` reports whether output is RGB, grayscale, or
+black-and-white, and the precision of each active channel. System-reported
+framebuffer precision does not prove physical panel precision or calibration.
+For a panel whose capabilities the system cannot report, declare them::
+
+    display_info color=rgb red_bits=5 green_bits=6 blue_bits=5
+
+Use ``display_info color=gray gray_bits=4`` for sixteen gray levels, or
+``display_info color=mono`` for black and white. The report identifies these
+values as configured and uses zero for unknown widths. The display protocol
+documents the query, replies, subscriptions, and platform detection limits.
+
+When the user changes the terminal's color scheme, profile colors, or output
+color capabilities, Silkie asks applications to redraw as it does after a
+window resize: it sends ``SIGWINCH`` to each affected terminal's foreground
+process group. Applications subscribed to in-band resize notifications also
+receive the usual resize report, with the current dimensions even if they have
+not changed. Existing color-scheme and display subscriptions keep working.
+
+Moving a window between outputs can change the color model, channel precision,
+gamut, or HDR headroom and trigger the same redraw. Refresh-rate changes alone
+do not. Application-issued palette changes through OSC escape sequences do
+not send resize notifications, so an application's own redraw cannot cause a
+palette-change redraw loop.
 
 Fonts and CJK text
 ------------------

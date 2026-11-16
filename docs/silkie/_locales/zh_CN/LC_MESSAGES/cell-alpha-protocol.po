@@ -1,0 +1,98 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:43+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/cell-alpha-protocol.rst:2
+msgid "Cell background alpha"
+msgstr "字符单元背景透明度"
+
+#: docs/cell-alpha-protocol.rst:6
+msgid ""
+"A program can draw images in the terminal, but it cannot draw text over them without hiding them,"
+" because a cell background is always opaque. This extension lets a program make the background of"
+" a cell translucent, so that whatever is beneath, the window background, a background image or an"
+" image placed below the text, shows through. The usual use is a heads up display over a canvas or"
+" a dimmed overlay behind a menu."
+msgstr "程序可以在终端绘制图像，但在其上绘制文本时会遮住图像，因为字符单元背景始终不透明。本扩展让程序将单元背景设为半透明，使下方的窗口背景、背景图或位于文本下层的图像透出。典型用途是在画布上显示抬头信息，或在菜单后添加暗色蒙层。"
+
+#: docs/cell-alpha-protocol.rst:14
+msgid "Setting the alpha"
+msgstr "设置不透明度"
+
+#: docs/cell-alpha-protocol.rst:16
+msgid ""
+"A new SGR attribute sets the opacity of the background of subsequently written cells, as a "
+"percent, using the colon sub-parameter form::"
+msgstr "新的 SGR 属性使用冒号子参数形式，以百分比设置后续写入字符单元的背景不透明度：::"
+
+#: docs/cell-alpha-protocol.rst:21
+msgid ""
+"``100`` is opaque, which is the default, and ``0`` is fully transparent. For example, to show "
+"text on a red background that is thirty percent opaque::"
+msgstr "默认值 ``100`` 表示不透明，``0`` 表示完全透明。例如，在不透明度为百分之三十的红色背景上显示文本：::"
+
+#: docs/cell-alpha-protocol.rst:26
+msgid ""
+"The alpha is independent of how the background color was chosen. It applies to colors set with "
+"``48``, to the sixteen basic colors, to colors from the 256 color palette and to the default "
+"background, and it stays in effect when the background color is changed. It is reset by "
+"``<ESC>[0m``, by ``70`` without a sub-parameter, and by a value of ``100`` or more. Values are "
+"rounded down to even percentages. The percent is only recognized as a colon sub-parameter, "
+"``<ESC>[70;30m`` is ``70`` with no value followed by an unrelated parameter."
+msgstr ""
+"此属性独立于背景色的选择方式，适用于 ``48`` 设置的颜色、十六种基本色、256 色调色板中的颜色，以及默认背景；背景色改变时仍然生效。``<ESC>[0m``、不带子参数的 "
+"``70``，或 ``100`` 及以上的值会重置此属性。百分比向下取整到偶数。百分比只在冒号子参数中识别；``<ESC>[70;30m`` 表示无值的 ``70``，后接一个无关参数。"
+
+#: docs/cell-alpha-protocol.rst:35
+msgid ""
+"The translucent background is blended over whatever the terminal draws beneath the cell: the "
+"window background including its own transparency, a background image, and images placed below the"
+" text with a negative z-index. Cells under the cursor, selected cells and cells with reverse "
+"video are drawn opaque, as they are today, and under reverse video the alpha is ignored since the"
+" background color is being used as the foreground. The foreground text, underlines and "
+"strikethrough are not affected."
+msgstr ""
+"半透明背景会与终端在单元下方绘制的内容混合：窗口背景（含自身透明度）、背景图，以及以负 z-index "
+"放置在文本下层的图像。光标下方、被选中或反显的字符单元仍按现有方式绘制为不透明；反显时因背景色用作前景，透明度被忽略。前景文本、下划线和删除线不受影响。"
+
+#: docs/cell-alpha-protocol.rst:44
+msgid "Compatibility"
+msgstr "兼容性"
+
+#: docs/cell-alpha-protocol.rst:46
+msgid ""
+"Terminals that do not know this attribute ignore it, since that is what most terminals do with "
+"unknown SGR parameters and their sub-parameters, so a program can emit it unconditionally and get"
+" an opaque background elsewhere. A terminal that drops a whole SGR sequence containing an unknown"
+" parameter would also lose any color set in the same sequence, so send the alpha in its own "
+"``<ESC>[...m`` after the color, as in the example above."
+msgstr ""
+"不认识此属性的终端会忽略它，因为多数终端都会忽略未知 SGR 参数及子参数，所以程序可无条件发送，在其他终端上得到不透明背景。如果终端会丢弃含未知参数的整个 SGR "
+"序列，同一序列中的颜色设置也会丢失。因此，如上例所示，应在设置颜色之后，用独立的 ``<ESC>[...m`` 发送透明度。"
+
+#: docs/cell-alpha-protocol.rst:53
+msgid ""
+"In kitty the attribute is stored with the background color of the cell and survives everything "
+"the color survives: scrollback, copying with formatting, and ``DECRQSS`` reports of the current "
+"SGR state, which include ``70:<percent>`` when the alpha is not 100."
+msgstr ""
+"kitty 将此属性与字符单元背景色一起保存，凡背景色能保留的地方都会保留它，包括回滚、带格式复制，以及当前 SGR 状态的 ``DECRQSS`` 报告；当不透明度不是 100 时，报告包含 "
+"``70:<percent>``。"
+

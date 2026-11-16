@@ -82,7 +82,29 @@ def profile_items(shortcuts: dict[str, 'SingleKey']) -> list[dict[str, Any]]:
 
 
 def view_items(s: dict[str, 'SingleKey']) -> list[dict[str, Any]]:
+    spatial: list[dict[str, Any]] = []
+    if is_macos:
+        from .spatial import Presentation, controller, requires_xreal
+        window = get_boss().active_window
+        current = controller.windows.get(window.os_window_id if window else 0, Presentation(output=get_options().spatial_output))
+        items = []
+        for mode, title in (('off', 'Off'), ('follow', 'Follow Head'), ('anchored', 'Anchored Wall')):
+            items.append({**menu_item(s, title, f'set_spatial_mode {mode}', when='window'), 'checked': current.mode == mode,
+                          'enabled': not requires_xreal(mode, current.output) or get_options().experimental_xreal_1s})
+        items.append(SEPARATOR)
+        for output, title in (('sbs', 'Side-by-Side (XREAL)'), ('red-blue', 'Red/Blue Glasses')):
+            items.append({**menu_item(s, title, f'set_spatial_output {output}', when='window'), 'checked': current.output == output,
+                          'enabled': output != 'sbs' or get_options().experimental_xreal_1s})
+        items.extend([SEPARATOR, menu_item(s, 'Recenter', 'recenter_spatial', when='window'),
+                      menu_item(s, 'Spatial Display Settings…', 'open_settings spatial')])
+        if not get_options().experimental_xreal_1s:
+            items.append(menu_item(s, 'XREAL 1S: Experimental and untested…', 'open_settings experimental'))
+        if current.mode == 'anchored':
+            status = 'Tracking: 3DoF' if current.tracking else 'Tracking unavailable — wall held at center'
+            items.extend([SEPARATOR, {'title': status, 'enabled': False}])
+        spatial = [{'title': 'Spatial Display', 'items': items}, SEPARATOR]
     return [
+        *spatial,
         menu_item(s, 'Make Text Bigger', 'change_font_size all +2.0', when='window'),
         menu_item(s, 'Make Text Smaller', 'change_font_size all -2.0', when='window'),
         menu_item(s, 'Actual Size', 'change_font_size all 0', when='window'),
@@ -105,6 +127,7 @@ def native_menu_model() -> list[dict[str, Any]]:
             menu_item(s, 'New Tab', 'new_tab'),
             menu_item(s, 'New Window', 'new_os_window'),
             menu_item(s, 'Split Pane', 'new_window'),
+            menu_item(s, 'Split Pane Vertically', 'split_pane_vertically', when='window'),
             SEPARATOR,
             menu_item(s, 'Close Pane', 'close_window', when='window'),
             menu_item(s, 'Close Tab', 'close_tab', when='window'),
@@ -216,6 +239,10 @@ class SettingsController:
             reset_profile_value(p, name)
         self.schedule_reload()
         self.refresh()
+
+    def on_adjust(self, name: str, value: str, direction: str) -> str:
+        from .settings_model import stepped_value
+        return stepped_value(name, value, int(direction))
 
     def on_profile_new(self, name: str = 'New Profile') -> None:
         create_profile(name or 'New Profile')

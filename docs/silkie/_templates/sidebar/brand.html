@@ -1,12 +1,16 @@
 <a class="sidebar-brand" href="{{ pathto('index') }}">
   <span class="sidebar-brand-text">Silkie</span>
 </a>
-<nav class="project-links" aria-label="Project resources">
-  <a href="{{ pathto('index') }}">Project overview</a>
-  <a href="{{ pathto('install') }}">Install Silkie</a>
-  <a href="{{ pathto('developer-guide') }}">Developer guide</a>
-  <a href="{{ pathto('reference') }}">Extension reference</a>
-  <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
-  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
-  <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+<nav class="project-links" aria-label="{{ '项目资源' if zh else 'Project resources' }}">
+  <a href="{{ pathto('index') }}">{{ '项目概览' if zh else 'Project overview' }}</a>
+  <a href="{{ pathto('install') }}">{{ '安装 Silkie' if zh else 'Install Silkie' }}</a>
+  <a href="{{ pathto('games') }}">{{ '游戏与实机视频' if zh else 'Games and gameplay videos' }}</a>
+  <a href="{{ pathto('browser-demo') }}">{{ '试用浏览器演示' if zh else 'Try the browser demo' }}</a>
+  <a href="{{ pathto('browser-ssh') }}">{{ '浏览器 SSH 设置' if zh else 'Browser SSH setup' }}</a>
+  <a href="{{ pathto('developer-guide') }}">{{ '开发者指南' if zh else 'Developer guide' }}</a>
+  <a href="{{ pathto('reference') }}">{{ '扩展参考手册' if zh else 'Extension reference' }}</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">{{ 'kitty 文档' if zh else 'kitty documentation' }} ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">{{ 'Kitten 工具文档' if zh else 'Kitten documentation' }} ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">{{ '源代码 · silkie 分支' if zh else 'Source · silkie branch' }} ↗</a>
+  <a href="{{ english_url if zh else chinese_url }}" lang="{{ 'en' if zh else 'zh-CN' }}">{{ 'English' if zh else '简体中文' }}</a>
 </nav>

@@ -84,7 +84,7 @@ class TerminalVersion(Query):
 @query
 class AllowHyperlinks(Query):
     name: str = 'allow_hyperlinks'
-    help_text: str = 'The config option :opt:`allow_hyperlinks` in :file:`kitty.conf` for allowing hyperlinks can be :code:`yes`, :code:`no` or :code:`ask`'
+    help_text: str = 'The config option :opt:`allow_hyperlinks` in :file:`silkie.conf` for allowing hyperlinks can be :code:`yes`, :code:`no` or :code:`ask`'
 
     @staticmethod
     def get_result(opts: Options, window_id: int, os_window_id: int) -> str:
@@ -247,7 +247,7 @@ class HDRHeadroom(Query):
 @query
 class ClipboardControl(Query):
     name: str = 'clipboard_control'
-    help_text: str = 'The config option :opt:`clipboard_control` in :file:`kitty.conf` for allowing reads/writes to/from the clipboard'
+    help_text: str = 'The config option :opt:`clipboard_control` in :file:`silkie.conf` for allowing reads/writes to/from the clipboard'
 
     @staticmethod
     def get_result(opts: Options, window_id: int, os_window_id: int) -> str:

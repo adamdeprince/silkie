@@ -3069,7 +3069,19 @@ _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
     GLFWvidmode mode, best = {0};
     _GLFWmonitor *best_monitor = NULL;
     info->color = GLFW_DISPLAY_COLOR_RGB;
-    info->bits = 8;
+    XWindowAttributes attributes;
+    if (XGetWindowAttributes(_glfw.x11.display, window->x11.handle, &attributes)) {
+        const Visual *visual = attributes.visual;
+        if (visual->class == TrueColor || visual->class == DirectColor) {
+            info->red_bits = __builtin_popcountl(visual->red_mask);
+            info->green_bits = __builtin_popcountl(visual->green_mask);
+            info->blue_bits = __builtin_popcountl(visual->blue_mask);
+            if (info->red_bits == info->green_bits && info->red_bits == info->blue_bits) info->bits = info->red_bits;
+        } else if (visual->class == StaticGray || visual->class == GrayScale) {
+            info->color = attributes.depth == 1 ? GLFW_DISPLAY_COLOR_MONO : GLFW_DISPLAY_COLOR_GRAY;
+            info->gray_bits = info->bits = attributes.depth;
+        }
+    }
     info->scale = _glfw.x11.contentScaleX;
     _glfwPlatformGetWindowPos(window, &wx, &wy);
     _glfwPlatformGetWindowSize(window, &ww, &wh);

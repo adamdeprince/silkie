@@ -16,8 +16,18 @@ struct VSOutput {
 
 [shader("vertex")]
 VSOutput
-vertex_main(uint vertex_id: SV_VertexID, uniform float4 src_rect, uniform float4 dest_rect, ) {
+vertex_main(uint vertex_id: SV_VertexID, uniform float4 src_rect, uniform float4 dest_rect,
+    uniform float4 spatial_wall, uniform float3x3 spatial_rotation, ) {
     BlitOutput ans = get_coords_for_blit(vertex_id, src_rect, dest_rect);
+    if (spatial_wall.x != 0.f) {
+        // Keep the existing top-left content in view when the wall grows.
+        float pan = spatial_wall.y - 1.f;
+        float3 ray = float3((ans.position.x * spatial_wall.y + pan) * spatial_wall.z,
+            (ans.position.y * spatial_wall.y - pan) * spatial_wall.z / spatial_wall.w, -1.f);
+        // Slang's row-major lowering emits a GLSL matrix times column vector.
+        ray = mul(ray, spatial_rotation);
+        return {ans.texcoord, float4(ray.x / spatial_wall.z, ray.y * spatial_wall.w / spatial_wall.z, 0.f, -ray.z)};
+    }
     return { ans.texcoord, float4(ans.position[0], ans.position[1], 0.0, 1.0) };
 }
 
@@ -25,13 +35,17 @@ uniform Sampler2D image;
 
 [shader("fragment")]
 float4
-fragment_main(float2 texcoord: TEXCOORD, uniform float encode_srgb, uniform uint output_gamut)
+fragment_main(float2 texcoord: TEXCOORD, uniform float encode_srgb, uniform uint output_gamut, uniform float spatial_anaglyph)
     : SV_Target {
     // The one place the layers of a window become what its surface holds. They are linear sRGB, which in a window
     // in a wide gamut reaches beyond zero and one, see gamut.slang. An HDR window has a linear float backbuffer: its
     // values are brought to the primaries of the window and left linear. Any other window is sRGB encoded, after
     // its values are brought to its primaries and clipped to them. For a window in sRGB neither step changes anything
     float4 color_premul = image.Sample(texcoord);
+    if (spatial_anaglyph != 0.f) {
+        float luminance = dot(color_premul.rgb, float3(0.2126f, 0.7152f, 0.0722f));
+        color_premul.rgb = spatial_anaglyph == 1.f ? float3(luminance, 0.f, 0.f) : float3(0.f, 0.f, luminance);
+    }
     if (encode_srgb == 0.0f) return float4(linear_output_from_extended(color_premul.rgb, output_gamut), color_premul.a);
     return vec4_premul(linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut)), color_premul.a);
 }

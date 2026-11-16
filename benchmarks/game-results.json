@@ -1,0 +1,333 @@
+{
+  "platform": "macOS arm64, local development build",
+  "baseline": "Workspace after the general vector optimization pass, before game-specific changes.",
+  "timing_scope": "CPU rendering/parse stages only; not complete frame or GPU presentation times.",
+  "fixture_sha256": "b12a12fb0de160851619a2d3f4ec08992adfeb1f21db5551d5f22c5a88612e61",
+  "output_validation": "Optimization-only results matched every baseline linear/RGBA hash. A separate correctness fix now preserves every positive quantized antialias coverage, including faint pixels previously inconsistently omitted by partial redraws; final hashes reflect that fix.",
+  "cases": [
+    {
+      "name": "scramble-ground",
+      "before": {
+        "name": "scramble-ground",
+        "size": [
+          3456,
+          1944
+        ],
+        "records": 3176,
+        "updates": 4,
+        "initial_parse_ms": 3.345583099871874,
+        "linear_full_ms": 866.7107501532882,
+        "edit_median_ms": 0.01702108420431614,
+        "damage_median_ms": 1.5153955901041627,
+        "damage_pixels_median": 8092.0,
+        "linear_sha256": "a205dc60b5f0babeaa01fd130688cab5afafee316291e549d965f0178a2c4977",
+        "updated_rgba_sha256": "e74741774af57a2f2ba7337d4aa4f08667dc80327ba32ffc976dffd0e4685bb3"
+      },
+      "optimized_before_coverage_fix": {
+        "name": "scramble-ground",
+        "size": [
+          3456,
+          1944
+        ],
+        "records": 3176,
+        "updates": 4,
+        "initial_parse_ms": 3.485750174149871,
+        "linear_full_ms": 534.6677091438323,
+        "edit_median_ms": 0.01852051354944706,
+        "damage_median_ms": 1.2919375440105796,
+        "damage_pixels_median": 8092.0,
+        "linear_sha256": "a205dc60b5f0babeaa01fd130688cab5afafee316291e549d965f0178a2c4977",
+        "updated_rgba_sha256": "e74741774af57a2f2ba7337d4aa4f08667dc80327ba32ffc976dffd0e4685bb3"
+      },
+      "after": {
+        "name": "scramble-ground",
+        "size": [
+          3456,
+          1944
+        ],
+        "records": 3176,
+        "updates": 4,
+        "initial_parse_ms": 3.5867500118911266,
+        "linear_full_ms": 532.5582080986351,
+        "edit_median_ms": 0.017020967788994312,
+        "damage_median_ms": 1.2892710510641336,
+        "damage_pixels_median": 8092.0,
+        "linear_sha256": "9504c90fa12581078f8ea3e6f3f099f24ab75372469ffe293cc1cffd022e94ec",
+        "updated_rgba_sha256": "6a16eda86fd9b76c8ed6db4923685493836f85f6d95a214f6ca88fbcba6ba498"
+      }
+    },
+    {
+      "name": "scramble-canopy",
+      "before": {
+        "name": "scramble-canopy",
+        "size": [
+          3456,
+          1944
+        ],
+        "records": 107,
+        "updates": 0,
+        "initial_parse_ms": 0.4524579271674156,
+        "linear_full_ms": 18.977042054757476,
+        "edit_median_ms": 0,
+        "damage_median_ms": 0,
+        "damage_pixels_median": 0,
+        "linear_sha256": "8f37ccb5c438a609e1c4b30223b5ba780d21efcbcb8fbd1634064a5e56b46054",
+        "updated_rgba_sha256": "d3a3fb380556eaacca98a5afaacf9b9554a0194e1213a533fc711fd1095748af"
+      },
+      "optimized_before_coverage_fix": {
+        "name": "scramble-canopy",
+        "size": [
+          3456,
+          1944
+        ],
+        "records": 107,
+        "updates": 0,
+        "initial_parse_ms": 0.43649994768202305,
+        "linear_full_ms": 15.341500053182244,
+        "edit_median_ms": 0,
+        "damage_median_ms": 0,
+        "damage_pixels_median": 0,
+        "linear_sha256": "8f37ccb5c438a609e1c4b30223b5ba780d21efcbcb8fbd1634064a5e56b46054",
+        "updated_rgba_sha256": "d3a3fb380556eaacca98a5afaacf9b9554a0194e1213a533fc711fd1095748af"
+      },
+      "after": {
+        "name": "scramble-canopy",
+        "size": [
+          3456,
+          1944
+        ],
+        "records": 107,
+        "updates": 0,
+        "initial_parse_ms": 0.5005837883800268,
+        "linear_full_ms": 15.973000088706613,
+        "edit_median_ms": 0,
+        "damage_median_ms": 0,
+        "damage_pixels_median": 0,
+        "linear_sha256": "6df8a0293a9498f008eb10391b51cd33c7954b37eec2e37c0b590e869f0f64f5",
+        "updated_rgba_sha256": "63d06e290401053094b1216d137aa7d63a1ec339c6f3f0e794e974598b68e4aa"
+      }
+    },
+    {
+      "name": "ground-stop-radar",
+      "before": {
+        "name": "ground-stop-radar",
+        "size": [
+          1060,
+          900
+        ],
+        "records": 131,
+        "updates": 51,
+        "initial_parse_ms": 0.2517078537493944,
+        "linear_full_ms": 3.119500121101737,
+        "edit_median_ms": 0.02487492747604847,
+        "damage_median_ms": 3.183749970048666,
+        "damage_pixels_median": 739851,
+        "linear_sha256": "b6e78b97e891f89263c10ce0b6e73959c97e662e836f70969f1f3f1c6340c961",
+        "updated_rgba_sha256": "e365e958595471c66d154b7ee14027a9bcf2d68010bd8d07aa854c96d5afefb2"
+      },
+      "optimized_before_coverage_fix": {
+        "name": "ground-stop-radar",
+        "size": [
+          1060,
+          900
+        ],
+        "records": 131,
+        "updates": 51,
+        "initial_parse_ms": 0.25800010189414024,
+        "linear_full_ms": 3.018083982169628,
+        "edit_median_ms": 0.025833025574684143,
+        "damage_median_ms": 3.249207977205515,
+        "damage_pixels_median": 739851,
+        "linear_sha256": "b6e78b97e891f89263c10ce0b6e73959c97e662e836f70969f1f3f1c6340c961",
+        "updated_rgba_sha256": "e365e958595471c66d154b7ee14027a9bcf2d68010bd8d07aa854c96d5afefb2"
+      },
+      "after": {
+        "name": "ground-stop-radar",
+        "size": [
+          1060,
+          900
+        ],
+        "records": 131,
+        "updates": 51,
+        "initial_parse_ms": 0.2787909470498562,
+        "linear_full_ms": 3.1224999111145735,
+        "edit_median_ms": 0.030499882996082306,
+        "damage_median_ms": 3.151749959215522,
+        "damage_pixels_median": 739851,
+        "linear_sha256": "91dfd053b9e86ae4aae3a7488eba4c6a46ac2e40c81ac78fee84ce13b20cff21",
+        "updated_rgba_sha256": "e0c7aec6b262f39529cf821218dd4761a78d5559442bd543ea42e0d0d133b58e"
+      }
+    },
+    {
+      "name": "ground-stop-map-pan",
+      "before": {
+        "name": "ground-stop-map-pan",
+        "size": [
+          1060,
+          900
+        ],
+        "records": 66,
+        "updates": 16,
+        "initial_parse_ms": 0.40870788507163525,
+        "linear_full_ms": 40.456000017002225,
+        "edit_median_ms": 0.01585355494171381,
+        "damage_median_ms": 46.350811957381666,
+        "damage_pixels_median": 954000.0,
+        "linear_sha256": "f3d141ab2771ddc08c0cd91f45227e23d6be192f874be0ef61b5e77490a67172",
+        "updated_rgba_sha256": "ecdfb795b6db1275edd43a4aa7c481ea57035ad8d6711e301b233d9daeef383e"
+      },
+      "optimized_before_coverage_fix": {
+        "name": "ground-stop-map-pan",
+        "size": [
+          1060,
+          900
+        ],
+        "records": 66,
+        "updates": 16,
+        "initial_parse_ms": 0.39762514643371105,
+        "linear_full_ms": 40.87224998511374,
+        "edit_median_ms": 0.015479512512683868,
+        "damage_median_ms": 45.63485458493233,
+        "damage_pixels_median": 954000.0,
+        "linear_sha256": "f3d141ab2771ddc08c0cd91f45227e23d6be192f874be0ef61b5e77490a67172",
+        "updated_rgba_sha256": "ecdfb795b6db1275edd43a4aa7c481ea57035ad8d6711e301b233d9daeef383e"
+      },
+      "after": {
+        "name": "ground-stop-map-pan",
+        "size": [
+          1060,
+          900
+        ],
+        "records": 66,
+        "updates": 16,
+        "initial_parse_ms": 0.36270893178880215,
+        "linear_full_ms": 42.06391586922109,
+        "edit_median_ms": 0.02662499900907278,
+        "damage_median_ms": 47.080666525289416,
+        "damage_pixels_median": 954000.0,
+        "linear_sha256": "3f43f60b03b5331db924bf70b33f23b8b3ec58960811161b0bc8f02997eb3c63",
+        "updated_rgba_sha256": "f2da710529a861e3b36f3a296c8a4bdaf2f427b684fce30c79a7e7cb262400e8"
+      }
+    },
+    {
+      "name": "sprint-ground",
+      "before": {
+        "name": "sprint-ground",
+        "size": [
+          3600,
+          1800
+        ],
+        "records": 258,
+        "updates": 8,
+        "initial_parse_ms": 1.0738749988377094,
+        "linear_full_ms": 211.22883399948478,
+        "edit_median_ms": 0.01562456600368023,
+        "damage_median_ms": 0.9148124372586608,
+        "damage_pixels_median": 4802.5,
+        "linear_sha256": "fede36767cae61bcc4fe02fe6b6105023231870825d6be0f009f17cf25a9cedf",
+        "updated_rgba_sha256": "d815ee77b8e69fe782e45329947fbf129101ae90e3026c2e48fb3bd2184228ae"
+      },
+      "optimized_before_coverage_fix": {
+        "name": "sprint-ground",
+        "size": [
+          3600,
+          1800
+        ],
+        "records": 258,
+        "updates": 8,
+        "initial_parse_ms": 0.7328749634325504,
+        "linear_full_ms": 111.00687505677342,
+        "edit_median_ms": 0.009083421900868416,
+        "damage_median_ms": 0.48964552115648985,
+        "damage_pixels_median": 4802.5,
+        "linear_sha256": "fede36767cae61bcc4fe02fe6b6105023231870825d6be0f009f17cf25a9cedf",
+        "updated_rgba_sha256": "d815ee77b8e69fe782e45329947fbf129101ae90e3026c2e48fb3bd2184228ae"
+      },
+      "after": {
+        "name": "sprint-ground",
+        "size": [
+          3600,
+          1800
+        ],
+        "records": 258,
+        "updates": 8,
+        "initial_parse_ms": 0.7692500948905945,
+        "linear_full_ms": 111.24929203651845,
+        "edit_median_ms": 0.009499955922365189,
+        "damage_median_ms": 0.4942293744534254,
+        "damage_pixels_median": 4802.5,
+        "linear_sha256": "0a917c946a8384fb07be92f992df57318d380a7326d721a6b14c74c732841ece",
+        "updated_rgba_sha256": "dd035c01499b57edc37809f3f93b66b68b31bea6bbe5d63220150a3d854fd585"
+      }
+    },
+    {
+      "name": "sprint-canopy",
+      "before": {
+        "name": "sprint-canopy",
+        "size": [
+          3600,
+          1800
+        ],
+        "records": 8,
+        "updates": 0,
+        "initial_parse_ms": 0.0815410166978836,
+        "linear_full_ms": 9.951333981007338,
+        "edit_median_ms": 0,
+        "damage_median_ms": 0,
+        "damage_pixels_median": 0,
+        "linear_sha256": "d3efb02307431ad7a9b837b0372a3ed302096ac075b40e88dff5af5bf8236dab",
+        "updated_rgba_sha256": "70b59838caa0f3626e47ea1bc89036750d9038839c502bd1eb88eda130fb8cba"
+      },
+      "optimized_before_coverage_fix": {
+        "name": "sprint-canopy",
+        "size": [
+          3600,
+          1800
+        ],
+        "records": 8,
+        "updates": 0,
+        "initial_parse_ms": 0.027540838345885277,
+        "linear_full_ms": 4.938584053888917,
+        "edit_median_ms": 0,
+        "damage_median_ms": 0,
+        "damage_pixels_median": 0,
+        "linear_sha256": "d3efb02307431ad7a9b837b0372a3ed302096ac075b40e88dff5af5bf8236dab",
+        "updated_rgba_sha256": "70b59838caa0f3626e47ea1bc89036750d9038839c502bd1eb88eda130fb8cba"
+      },
+      "after": {
+        "name": "sprint-canopy",
+        "size": [
+          3600,
+          1800
+        ],
+        "records": 8,
+        "updates": 0,
+        "initial_parse_ms": 0.041624996811151505,
+        "linear_full_ms": 5.112458020448685,
+        "edit_median_ms": 0,
+        "damage_median_ms": 0,
+        "damage_pixels_median": 0,
+        "linear_sha256": "d3efb02307431ad7a9b837b0372a3ed302096ac075b40e88dff5af5bf8236dab",
+        "updated_rgba_sha256": "70b59838caa0f3626e47ea1bc89036750d9038839c502bd1eb88eda130fb8cba"
+      }
+    }
+  ],
+  "placement_parse_ms": {
+    "before": {
+      "26": 0.008458038792014122,
+      "32": 0.01033395528793335,
+      "96": 0.04124990664422512,
+      "256": 0.17816666513681412,
+      "1024": 2.1274170139804482,
+      "4096": 31.060853856615722
+    },
+    "after": {
+      "26": 0.007666880264878273,
+      "32": 0.009249895811080933,
+      "96": 0.02570892684161663,
+      "256": 0.06816699169576168,
+      "1024": 0.279437517747283,
+      "4096": 1.0914374142885208
+    }
+  }
+}

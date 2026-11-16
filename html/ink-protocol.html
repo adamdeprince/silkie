@@ -4,13 +4,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Vector images" href="vector-protocol.html"><link rel="prev" title="Image pointer extension" href="pointer-image-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/ink-protocol.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Terminal-side ink - Silkie</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -92,7 +93,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="ink-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/ink-protocol.html">
+</head>
   <body>
     
     <script>
@@ -244,11 +250,15 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
   <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
   <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/ink-protocol.html" lang="zh-CN">简体中文</a>
 </nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -257,6 +267,9 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
@@ -345,7 +358,7 @@ change to what the TTY is.</p>
 </div>
 <p>They follow the rules every OSC 777 extension shares, which
 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 extension framing</span></a> gives: the syntax of the fields, which frames are
-rejected, among them every frame of more than 127 bytes, and the units.
+rejected, and the units.
 Values are decimal integers, except the widths and the exponent of a brush,
 which are numbers as the records of a vector image write them and may have a
 fraction, and its color. <code class="docutils literal notranslate"><span class="pre">v</span></code>, the protocol version, is <code class="docutils literal notranslate"><span class="pre">1</span></code>, and <code class="docutils literal notranslate"><span class="pre">op</span></code> is
@@ -405,20 +418,20 @@ the terminal, <code class="docutils literal notranslate"><span class="pre">1</sp
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fill</span></code></p></td>
 <td><p>The color of the strokes, as vector records write a color,
-<code class="docutils literal notranslate"><span class="pre">#rrggbb</span></code>, <code class="docutils literal notranslate"><span class="pre">#rrggbbaa</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> and the id of a gradient, at
-most 23 bytes. Black by default; <code class="docutils literal notranslate"><span class="pre">none</span></code> is refused</p></td>
+<code class="docutils literal notranslate"><span class="pre">#rrggbb</span></code>, <code class="docutils literal notranslate"><span class="pre">#rrggbbaa</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> and the id of a gradient.
+Black by default; <code class="docutils literal notranslate"><span class="pre">none</span></code> is refused</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">w1</span></code></p></td>
 <td><p>Required. The width of the stroke under full pressure, in the
-units of the group, from 0 to 1000000000</p></td>
+units of the group, a finite number from 0 up</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">w0</span></code></p></td>
 <td><p>The width under no pressure, the same as <code class="docutils literal notranslate"><span class="pre">w1</span></code> by default, which
 gives a stroke of constant width</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">e</span></code></p></td>
-<td><p>The exponent of the curve between the two, greater than 0 and at
-most 100, <code class="docutils literal notranslate"><span class="pre">1</span></code> by default</p></td>
+<td><p>The exponent of the curve between the two, a finite number
+greater than 0, <code class="docutils literal notranslate"><span class="pre">1</span></code> by default</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tools</span></code></p></td>
 <td><p>The tools that draw, a bit set with bit <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">&lt;&lt;</span> <span class="pre">tool</span></code> for each
@@ -433,10 +446,7 @@ lens <code class="docutils literal notranslate"><span class="pre">128</span></co
 <p>A brush replaces the one before it, ids included, and turns ink on. The
 eraser is left out by default because what erasing means is the program’s
 business; a program that wants the other end of the pen to paint, with the
-color of its page for instance, gives a brush that says so. The frame is
-limited to 127 bytes like every frame from a program; a brush with every id
-at its largest fits when the widths are written with a few digits, which is
-all they need.</p>
+color of its page for instance, gives a brush that says so.</p>
 </section>
 <section id="mode">
 <h2>Mode<a class="headerlink" href="#mode" title="Link to this heading">¶</a></h2>

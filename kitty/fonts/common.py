@@ -364,6 +364,14 @@ def get_font_from_spec(
                 v = find_bold_italic_variant(resolved_medium_font, bold, italic, family_axis_values=family_axis_values)
                 if v is not None:
                     return v
+            # Keep the selected static face's width when choosing automatic
+            # bold/italic faces, for example Iosevka Extended.
+            monospaced = is_monospace(resolved_medium_font)
+            candidates = all_fonts_map(monospaced)['family_map'].get(family_name_to_key(family), [])
+            width = font_width(resolved_medium_font)
+            candidates = [f for f in candidates if font_width(f) == width]
+            if candidates:
+                return create_scorer(bold, italic, monospaced).sorted_candidates(candidates)[0]
         else:
             family = 'monospace'
     return find_best_match(family, bold, italic, ignore_face=resolved_medium_font)
@@ -377,6 +385,12 @@ class FontFiles(TypedDict):
 
 
 actually_variable_cache: dict[str, bool] = {}
+
+
+def font_width(font: Descriptor) -> int:
+    if font.get('descriptor_type') == 'core_text':
+        return int(font['expanded']) - int(font['condensed'])
+    return font.get('width', 0)
 
 
 def is_actually_variable_despite_fontconfigs_lies(d: Descriptor) -> bool:

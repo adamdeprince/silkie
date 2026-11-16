@@ -18,6 +18,7 @@
 #include "window_logo.h"
 #include "srgb_gamma.h"
 #include "state.h"
+#include "spatial.h"
 
 enum {
     CELL_PROGRAM,
@@ -123,6 +124,16 @@ output_gamut(const OSWindow *os_window) {
 }
 // Of the OS window being drawn, for what is drawn without being handed the window
 static GLuint current_output_gamut = 0;
+static OSWindow *spatial_window = NULL;
+
+static float
+depth_shift(double depth, double pixels, unsigned width) {
+    OSWindow *w = spatial_window;
+    if (!w || !w->spatial.mode || !width) return 0.f;
+    const double scale = w->spatial.mode == 2 ? w->spatial.scale : 1.;
+    return (float)(w->spatial.eye * spatial_requested_disparity(depth, pixels, w->spatial.multiplier, w->spatial.positive, w->spatial.negative, w->spatial.fov) *
+        w->viewport_width / (scale * width));
+}
 
 // A window in a wide gamut is drawn into textures that hold values below
 // zero and above one before it is copied to the screen, which needs a GPU
@@ -883,6 +894,9 @@ create_cell_vao(void) {
     add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER);
     A1("sprite_idx", 2, GL_UNSIGNED_INT, sprite_idx);
     A1("colors", 3, GL_UNSIGNED_INT, fg);
+    A1("depth", 1, GL_INT, depth);
+    A1("depth_pixels", 1, GL_FLOAT, depth_pixels);
+    A1("phase", 1, GL_FLOAT, phase);
 
     add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER);
     A("is_selected", 1, GL_UNSIGNED_BYTE, NULL, 0);
@@ -1257,10 +1271,11 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
     // Images tagged with a gamut are converted to that of the window, the alpha mask program draws none
     const GLint image_gamut_loc = try_program_uniform_location(program, "image_gamut");
     const GLint output_gamut_loc = try_program_uniform_location(program, "output_gamut");
+    const unsigned viewport_width = get_gpu_viewport().width;
     if (output_gamut_loc >= 0) glUniform1ui(output_gamut_loc, current_output_gamut);
     for (GLuint i = 0; i < count;) {
         ImageRenderData *group = data + start + i;
-        glBindTexture(GL_TEXTURE_2D, group->texture_id);
+        glBindTexture(GL_TEXTURE_2D, spatial_window && spatial_window->spatial.eye > 0 && group->right_texture_id ? group->right_texture_id : group->texture_id);
         if (program != GRAPHICS_ALPHA_MASK_PROGRAM) {
             glUniform1f(program_uniform_location(program, "tone_peak"), group->tone_map ? group->peak : 0.f);
         }
@@ -1272,7 +1287,13 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
         for (GLuint k = 0; k < group->group_count; k++, i++) {
             ImageRenderData *rd = data + start + i;
             glUniform4f(src_rect_loc, rd->src_rect.left, rd->src_rect.top, rd->src_rect.right, rd->src_rect.bottom);
-            glUniform4f(dest_rect_loc, rd->dest_rect.left, rd->dest_rect.top, rd->dest_rect.right, rd->dest_rect.bottom);
+            const float shift = depth_shift(rd->depth, rd->depth_pixels, viewport_width);
+            float phase = 0.f;
+            if (spatial_window && spatial_window->spatial.mode) {
+                const float limit = spatial_window->spatial.phase_limit;
+                phase = -(float)spatial_window->spatial.eye * fmaxf(-limit, fminf(limit, (float)rd->phase)) / get_gpu_viewport().height;
+            }
+            glUniform4f(dest_rect_loc, rd->dest_rect.left + shift, rd->dest_rect.top + phase, rd->dest_rect.right + shift, rd->dest_rect.bottom + phase);
             draw_quad(true, 0);
         }
     }
@@ -1980,7 +2001,19 @@ call_cell_program(int program, const UIRenderData *ui, ssize_t vao_idx, bool for
     CELL_BUFFERS;
     bind_vao_uniform_buffer(vao_idx, uniform_buffer, CELL_RENDER_DATA_BINDING_POINT);
     bind_vao_uniform_buffer(vao_idx, color_table_buffer, COLOR_TABLE_BINDING_POINT);
-    glUniform1ui(program_uniform_location(program, "draw_bg_bitfield"), draw_bg_bitfield);
+    const GLint background_location = try_program_uniform_location(program, "draw_bg_bitfield");
+    if (background_location >= 0) glUniform1ui(background_location, draw_bg_bitfield);
+    const OSWindow *w = ui->os_window;
+    const float scale = w->spatial.mode == 2 ? w->spatial.scale : 1.f;
+    glUniform4f(program_uniform_location(program, "spatial_depth"),
+        w->spatial.mode ? (float)w->spatial.eye * w->viewport_width / (scale * ui->screen_width) : 0.f,
+        w->spatial.mode ? tanf(w->spatial.fov * (float)(M_PI / 360.)) : 1.f,
+        w->spatial.positive, w->spatial.negative);
+    glUniform2f(program_uniform_location(program, "spatial_phase"),
+        w->spatial.mode ? -(float)w->spatial.eye / ui->screen_height : 0.f, w->spatial.phase_limit);
+    glUniform1f(program_uniform_location(program, "spatial_multiplier"), w->spatial.mode ? w->spatial.multiplier : 1.f);
+    glUniform2f(program_uniform_location(program, "spatial_pixel_size"),
+        w->spatial.mode ? 2.f / ui->screen_width : 0.f, w->spatial.mode ? 2.f / ui->screen_height : 0.f);
     if (for_final_output) glEnable(GL_FRAMEBUFFER_SRGB);
     draw_quad(!for_final_output, render_lines_for_screen(ui->screen) * ui->screen->columns);
     if (for_final_output) glDisable(GL_FRAMEBUFFER_SRGB);
@@ -2000,6 +2033,12 @@ configure_cell_vao_attributes(ssize_t vao_idx, unsigned int base_cell, unsigned 
     CELL_BUFFERS;
     const GLsizei cell_stride = (GLsizei)(cell_step * sizeof(GPUCell));
     const uintptr_t cell_base = (uintptr_t)base_cell * sizeof(GPUCell);
+    set_vao_attribute(vao_idx, cell_data_buffer, program_attribute_location(CELL_PROGRAM, "depth"), 1, GL_INT,
+        cell_stride, (void *)(cell_base + offsetof(GPUCell, depth)), 1);
+    set_vao_attribute(vao_idx, cell_data_buffer, program_attribute_location(CELL_PROGRAM, "depth_pixels"), 1, GL_FLOAT,
+        cell_stride, (void *)(cell_base + offsetof(GPUCell, depth_pixels)), 1);
+    set_vao_attribute(vao_idx, cell_data_buffer, program_attribute_location(CELL_PROGRAM, "phase"), 1, GL_FLOAT,
+        cell_stride, (void *)(cell_base + offsetof(GPUCell, phase)), 1);
     set_vao_attribute(
         vao_idx,
         cell_data_buffer,
@@ -2224,7 +2263,7 @@ draw_tint(const UIRenderData *ui) {
 static void
 draw_cells_with_layers(const UIRenderData *ui, ssize_t vao_idx) {
     if (ui->has_background_image && OPT(background_tint) > 0) draw_tint(ui);
-    const bool has_content_between_background_and_foreground = ui->window_logo != NULL || ui->grd.num_of_below_refs > 0 || ui->grd.num_of_negative_refs > 0;
+    const bool has_content_between_background_and_foreground = ui->os_window->spatial.mode || ui->window_logo != NULL || ui->grd.num_of_below_refs > 0 || ui->grd.num_of_negative_refs > 0;
     const float hdr_headroom = effective_hdr_headroom(ui->os_window);
     if (has_content_between_background_and_foreground) {
         if (!ui->has_background_image) call_cell_program(CELL_BG_PROGRAM, ui, vao_idx, false, DRAW_DEFAULT_BG);
@@ -2638,9 +2677,10 @@ layers_are_float(const OSWindow *os_window) {
 
 static void
 start_os_window_rendering(OSWindow *os_window, Tab *tab) {
+    spatial_window = os_window;
     current_output_gamut = output_gamut(os_window);
     // note that during live resize rendering is done in layers
-    if (os_window->live_resize.in_progress) blank_os_window(os_window);
+    if (os_window->live_resize.in_progress && os_window->spatial.eye != 1) blank_os_window(os_window);
     if (os_window->needs_layers) {
         // Ensure the global shared texture is large enough for this window
         if (global_state.layers_render_texture.width < os_window->viewport_width || global_state.layers_render_texture.height < os_window->viewport_height ||
@@ -3147,7 +3187,7 @@ stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, m
     if (os_window->needs_layers) {
         float sx = global_state.layers_render_texture.width > 0 ? (float)os_window->viewport_width / (float)global_state.layers_render_texture.width : 1.f;
         float sy = global_state.layers_render_texture.height > 0 ? (float)os_window->viewport_height / (float)global_state.layers_render_texture.height : 1.f;
-        if (custom_shaders.end.active && os_window->shader_anim.has_active_shaders) {
+        if (!os_window->spatial.mode && custom_shaders.end.active && os_window->shader_anim.has_active_shaders) {
             // debug_rendering("Custom end shader running (groups=%zu)\n", custom_shaders.end.num_groups);
             restore_viewport();
             if (os_window->live_resize.in_progress)
@@ -3165,9 +3205,27 @@ stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, m
             glUniform4f(program_uniform_location(BLIT_PROGRAM, "dest_rect"), -1, 1, 1, -1);
             glUniform1f(program_uniform_location(BLIT_PROGRAM, "encode_srgb"), os_window->linear_output ? 0.f : 1.f);
             restore_viewport();
+            if (os_window->spatial.mode) {
+                const bool red_blue = os_window->spatial.red_blue;
+                const int width = red_blue ? os_window->spatial.output_width : os_window->spatial.output_width / 2;
+                glViewport(!red_blue && os_window->spatial.eye > 0 ? width : 0, 0, width, os_window->spatial.output_height);
+                glUniform1f(program_uniform_location(BLIT_PROGRAM, "spatial_anaglyph"), red_blue ? (os_window->spatial.eye < 0 ? 1.f : 2.f) : 0.f);
+                if (red_blue) glColorMask(os_window->spatial.eye < 0, GL_FALSE, os_window->spatial.eye > 0, GL_TRUE);
+                glUniform4f(program_uniform_location(BLIT_PROGRAM, "spatial_wall"), 1.f,
+                    os_window->spatial.mode == 2 ? os_window->spatial.scale : 1.f,
+                    tanf(os_window->spatial.fov * (float)(M_PI / 360.)), (float)width / os_window->spatial.output_height);
+                glUniformMatrix3fv(program_uniform_location(BLIT_PROGRAM, "spatial_rotation"), 1, GL_FALSE, os_window->spatial.rotation);
+            } else {
+                glUniform4f(program_uniform_location(BLIT_PROGRAM, "spatial_wall"), 0, 1, 1, 1);
+                glUniform1f(program_uniform_location(BLIT_PROGRAM, "spatial_anaglyph"), 0.f);
+            }
             if (os_window->live_resize.in_progress)
                 save_viewport_using_top_left_origin(0, 0, os_window->viewport_width, os_window->viewport_height, os_window->live_resize.height);
             draw_quad(false, 0);
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glUniform4f(program_uniform_location(BLIT_PROGRAM, "spatial_wall"), 0, 1, 1, 1);
+            glUniform1f(program_uniform_location(BLIT_PROGRAM, "spatial_anaglyph"), 0.f);
+            if (os_window->spatial.mode) set_gpu_viewport(os_window->viewport_width, os_window->viewport_height);
         }
         if (os_window->live_resize.in_progress) {
             restore_viewport();
@@ -3175,13 +3233,16 @@ stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, m
         }
     }
     os_window->last_rendered_at = now;
-    os_window->frame_counter++;
+    if (os_window->spatial.eye != -1) os_window->frame_counter++;
 }
 
 void
 setup_os_window_for_rendering(OSWindow *os_window, Tab *tab, Window *active_window, bool start, monotonic_t now) {
     if (start) start_os_window_rendering(os_window, tab);
-    else stop_os_window_rendering(os_window, tab, active_window, now);
+    else {
+        stop_os_window_rendering(os_window, tab, active_window, now);
+        spatial_window = NULL;
+    }
 }
 
 // Take a screenshot of the OS Window, must be called immediately after
@@ -3199,7 +3260,7 @@ setup_os_window_for_rendering(OSWindow *os_window, Tab *tab, Window *active_wind
 // the scaled path below which flips to top-down).
 void
 take_screenshot_of_rectangular_region(OSWindow *os_window, Region region, unsigned char *dst_buf, unsigned *thumb_w, unsigned *thumb_h, bool no_scaling) {
-    unsigned vh = os_window->viewport_height;
+    unsigned vh = os_window->spatial.mode ? os_window->spatial.output_height : os_window->viewport_height;
 
     // Calculate the source region dimensions
     unsigned src_height = region.bottom - region.top;
@@ -3244,7 +3305,7 @@ take_screenshot_of_rectangular_region(OSWindow *os_window, Region region, unsign
         return;
     }
 
-    unsigned vw = os_window->viewport_width;
+    unsigned vw = os_window->spatial.mode ? os_window->spatial.output_width : os_window->viewport_width;
     if (!*thumb_w) *thumb_w = src_width;
     if (!*thumb_h) *thumb_h = src_height;
     *thumb_w = MIN(src_width, *thumb_w);
@@ -3658,7 +3719,77 @@ pysimulate_custom_shader_render_ticks(PyObject *self UNUSED, PyObject *args) {
 
 #define M(name, arg_type) {#name, (PyCFunction)name, arg_type, NULL}
 #define MW(name, arg_type) {#name, (PyCFunction)py##name, arg_type, NULL}
+static PyObject *
+pyspatial_configure(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    unsigned mode;
+    int red_blue;
+    float scale, fov, positive, negative, phase_limit, multiplier;
+    if (!PyArg_ParseTuple(args, "KIpffffff", &id, &mode, &red_blue, &scale, &fov, &positive, &negative, &phase_limit, &multiplier)) return NULL;
+    OSWindow *w = os_window_for_id(id);
+    if (!w) Py_RETURN_FALSE;
+    if (mode > 2 || !isfinite(scale) || scale < 1 || !isfinite(fov) || fov <= 0 || fov >= 180 ||
+        !isfinite(positive) || positive < 0 || positive >= 180 || !isfinite(negative) || negative < 0 || negative >= 180 || !isfinite(phase_limit) || phase_limit < 0 ||
+        !isfinite(multiplier) || multiplier < 1.f / 64.f || multiplier > 64.f) {
+        PyErr_SetString(PyExc_ValueError, "Invalid spatial display parameters");
+        return NULL;
+    }
+    make_os_window_context_current(w);
+    GLint limit = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &limit);
+    const double factor = mode == 2 ? scale : 1.;
+    const int eye_width = red_blue ? w->spatial.output_width : w->spatial.output_width / 2;
+    if (mode && (eye_width * factor > limit || w->spatial.output_height * factor > limit)) {
+        PyErr_Format(PyExc_ValueError, "Spatial canvas exceeds this GPU's %d pixel texture dimension", limit);
+        return NULL;
+    }
+    w->spatial.mode = mode;
+    w->spatial.red_blue = red_blue;
+    w->spatial.scale = scale;
+    w->spatial.requested_scale = scale;
+    w->spatial.texture_limit = limit;
+    w->spatial.fov = fov;
+    w->spatial.positive = positive;
+    w->spatial.negative = negative;
+    w->spatial.phase_limit = phase_limit;
+    w->spatial.multiplier = multiplier;
+    for (unsigned i = 0; i < 9; i++) w->spatial.rotation[i] = i % 4 == 0 ? 1.f : 0.f;
+    w->spatial.tracking = false;
+    for (unsigned t = 0; t < w->num_tabs; t++) for (unsigned i = 0; i < w->tabs[t].num_windows; i++) {
+        Screen *s = w->tabs[t].windows[i].render_data.screen;
+        if (s) { s->is_dirty = true; grman_mark_layers_dirty(s->grman); }
+    }
+    update_os_window_viewport(w, true);
+    w->needs_render = true;
+    Py_RETURN_TRUE;
+}
+
+static PyObject *
+pyspatial_pose(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    PyObject *rotation;
+    int tracking;
+    if (!PyArg_ParseTuple(args, "KOp", &id, &rotation, &tracking)) return NULL;
+    OSWindow *w = os_window_for_id(id);
+    if (!w) Py_RETURN_FALSE;
+    RAII_PyObject(seq, PySequence_Fast(rotation, "Expected a 3 by 3 rotation matrix"));
+    if (!seq) return NULL;
+    if (PySequence_Fast_GET_SIZE(seq) != 9) { PyErr_SetString(PyExc_ValueError, "Expected nine rotation components"); return NULL; }
+    float values[9]; // mathematical size of a 3 by 3 matrix
+    for (unsigned i = 0; i < 9; i++) {
+        values[i] = (float)PyFloat_AsDouble(PySequence_Fast_GET_ITEM(seq, i));
+        if (PyErr_Occurred()) return NULL;
+        if (!isfinite(values[i])) { PyErr_SetString(PyExc_ValueError, "Rotation must be finite"); return NULL; }
+    }
+    if (memcmp(values, w->spatial.rotation, sizeof(values)) || tracking != w->spatial.tracking) w->needs_render = true;
+    memcpy(w->spatial.rotation, values, sizeof(values));
+    w->spatial.tracking = tracking;
+    Py_RETURN_TRUE;
+}
+
 static PyMethodDef module_methods[] = {
+    MW(spatial_configure, METH_VARARGS),
+    MW(spatial_pose, METH_VARARGS),
     M(compile_program, METH_VARARGS),
     M(sprite_map_set_limits, METH_VARARGS),
     MW(create_vao, METH_NOARGS),

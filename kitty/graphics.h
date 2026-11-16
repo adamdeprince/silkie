@@ -52,7 +52,10 @@ typedef struct {
 typedef struct {
     ImageRect src_rect, dest_rect;
     uint32_t texture_id, group_count;
+    uint32_t right_texture_id;
     int z_index;
+    int32_t depth;
+    float depth_pixels, phase;
     id_type image_id, ref_id;
     float peak; // of HDR images, see docs/hdr-protocol.rst
     bool tone_map;
@@ -73,6 +76,8 @@ typedef struct {
     float src_width, src_height, src_x, src_y;
     uint32_t cell_x_offset, cell_y_offset, num_cols, num_rows, effective_num_rows, effective_num_cols;
     int32_t z_index;
+    int32_t depth;
+    float depth_pixels, phase;
     int32_t start_row, start_column;
     uint32_t client_id;
     ImageRect src_rect;
@@ -113,6 +118,8 @@ typedef struct TextureRef {
 typedef struct {
     uint32_t client_id, client_number, width, height;
     TextureRef *texture;
+    TextureRef *vector_right_texture;
+    VectorStereo vector_stereo;
     id_type internal_id;
     // A GPU surface shared by a local client, see t=g in the graphics protocol
     void *surface;
@@ -132,6 +139,7 @@ typedef struct {
     uint32_t max_loops, current_loop;
     monotonic_t current_frame_shown_at;
     ref_map refs_by_internal_id;
+    ref_map refs_by_client_id;  // named placements only; client id 0 can have many refs
     float peak; // of HDR images, see docs/hdr-protocol.rst
     bool tone_map;
     VectorDoc *vector;  // f=200 images are rasterized on demand at the size they are shown at, the document tracks what changed

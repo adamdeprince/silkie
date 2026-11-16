@@ -1,0 +1,49 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:40+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/window-actions.rst:2
+msgid "Window actions"
+msgstr "窗口操作"
+
+#: docs/silkie/window-actions.rst:5
+msgid "Kill an unresponsive window"
+msgstr "终止无响应的窗口"
+
+#: docs/silkie/window-actions.rst:7
+msgid ""
+"Silkie adds the ``kill_window`` action. It sends ``SIGKILL`` to the foreground process group and "
+"to the shell, then closes the active terminal window. Use it when a program no longer responds; "
+"the killed programs cannot save their state."
+msgstr "Silkie 添加了 ``kill_window`` 操作。它向前台进程组和 shell 发送 ``SIGKILL``，然后关闭当前终端窗口。程序不再响应时可使用此操作；被终止的程序无法保存状态。"
+
+#: docs/silkie/window-actions.rst:11
+msgid "To bind the action in ``kitty.conf``::"
+msgstr "在 ``kitty.conf`` 中绑定该操作：::"
+
+#: docs/silkie/window-actions.rst:15
+msgid ""
+"On macOS, the Shell menu also provides **Kill Window**. For the mapping syntax and inherited "
+"actions, see `kitty's keyboard mapping documentation "
+"<https://sw.kovidgoyal.net/kitty/mapping/>`_."
+msgstr ""
+"macOS 的 Shell 菜单还提供 **Kill Window（终止窗口）**。映射语法和继承的操作见 `kitty 按键映射文档 "
+"<https://sw.kovidgoyal.net/kitty/mapping/>`_。"
+

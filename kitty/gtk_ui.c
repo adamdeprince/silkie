@@ -765,6 +765,8 @@ commit_field(gpointer widget, const char *value) {
     if (v) { PyDict_SetItemString(f, "value", v); Py_DECREF(v); } else PyErr_Clear();
     PyDict_SetItemString(f, "is_set", Py_True);
     GtkWidget *reset = g_object_get_data(G_OBJECT(widget), "reset");
+    for (GtkWidget *parent = gtk_widget_get_parent(GTK_WIDGET(widget)); !reset && parent; parent = gtk_widget_get_parent(parent))
+        reset = g_object_get_data(G_OBJECT(parent), "reset");
     if (reset) gtk_widget_show(reset);
     return true;
 }
@@ -817,15 +819,16 @@ static void on_entry_activate(GtkEntry *e, gpointer data) { (void)data; commit_e
 static gboolean on_entry_focus_out(GtkWidget *e, GdkEvent *ev, gpointer data) { (void)ev; (void)data; commit_entry(e); return FALSE; }
 
 static void
-on_spin_changed(GtkSpinButton *s, gpointer data) {
-    (void)data;
-    PyObject *f = field_of(s);
+on_number_adjust(GtkButton *button, gpointer data) {
+    GtkWidget *entry = data;
+    PyObject *f = field_of(entry);
     if (!f || settings.building) return;
-    char buf[64];
-    if (strcmp(str_item(f, "kind"), "int") == 0) g_snprintf(buf, sizeof(buf), "%ld", (long)gtk_spin_button_get_value_as_int(s));
-    else g_snprintf(buf, sizeof(buf), "%g", gtk_spin_button_get_value(s));
-    if (strtod(buf, NULL) == strtod(str_item(f, "value"), NULL)) return;
-    commit_field(s, buf);
+    const char *direction = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "direction")) < 0 ? "-1" : "1";
+    char *value = emit_event("adjust", str_item(f, "name"), gtk_entry_get_text(GTK_ENTRY(entry)), direction);
+    if (value) {
+        if (strcmp(value, str_item(f, "value")) && commit_field(entry, value)) gtk_entry_set_text(GTK_ENTRY(entry), value);
+        g_free(value);
+    }
 }
 
 static void
@@ -985,15 +988,23 @@ control_for_field(PyObject *f) {
         return c;
     }
     if (strcmp(kind, "int") == 0 || strcmp(kind, "float") == 0) {
-        const bool is_int = strcmp(kind, "int") == 0;
-        const double v = strtod(value, NULL);
-        GtkWidget *s = gtk_spin_button_new_with_range(-1e9, 1e9, (!is_int && v > 0 && v < 1) ? 0.05 : 1);
-        gtk_spin_button_set_digits(GTK_SPIN_BUTTON(s), is_int ? 0 : 3);
-        gtk_spin_button_set_value(GTK_SPIN_BUTTON(s), v);
-        gtk_widget_set_halign(s, GTK_ALIGN_START);
-        attach_field(s, f);
-        g_signal_connect(s, "value-changed", G_CALLBACK(on_spin_changed), NULL);
-        return s;
+        GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        GtkWidget *entry = gtk_entry_new();
+        gtk_entry_set_text(GTK_ENTRY(entry), value);
+        gtk_entry_set_width_chars(GTK_ENTRY(entry), 10);
+        attach_field(entry, f);
+        g_signal_connect(entry, "activate", G_CALLBACK(on_entry_activate), NULL);
+        g_signal_connect(entry, "focus-out-event", G_CALLBACK(on_entry_focus_out), NULL);
+        gtk_box_pack_start(GTK_BOX(box), entry, FALSE, FALSE, 0);
+        for (int direction = -1; direction <= 1; direction += 2) {
+            GtkWidget *button = gtk_button_new_with_label(direction < 0 ? "−" : "+");
+            g_object_set_data(G_OBJECT(button), "direction", GINT_TO_POINTER(direction));
+            g_signal_connect(button, "clicked", G_CALLBACK(on_number_adjust), entry);
+            gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
+        }
+        attach_field(box, f);
+        gtk_widget_set_halign(box, GTK_ALIGN_START);
+        return box;
     }
     if (strcmp(kind, "lines") == 0) {
         GtkWidget *tv = gtk_text_view_new();

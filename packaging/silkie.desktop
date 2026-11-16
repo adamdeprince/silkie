@@ -1,0 +1,17 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Silkie
+GenericName=Terminal emulator
+Comment=Silkie terminal emulator
+TryExec=silkie
+Exec=silkie --class silkie
+Icon=silkie
+StartupWMClass=silkie
+StartupNotify=true
+Categories=System;TerminalEmulator;
+X-TerminalArgExec=--
+X-TerminalArgTitle=--title
+X-TerminalArgAppId=--class
+X-TerminalArgDir=--working-directory
+X-TerminalArgHold=--hold

@@ -191,6 +191,7 @@ new_window_for_tab(id self UNUSED, SEL _cmd UNUSED, id sender UNUSED) {
 
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     NSDictionary *d = item.representedObject;
+    if (d[@"enabled"] && !bool_of(d, @"enabled")) return NO;
     NSString *when = str_of(d, @"when");
     if ([when isEqualToString:@"window"] || [when isEqualToString:@"selection"]) return [NSApp keyWindow] != nil;
     return YES;
@@ -217,6 +218,7 @@ fill_menu(NSMenu *menu, NSArray *items) {
             mi.action = @selector(kitty_action:);
             mi.target = [NativeMenuTarget shared];
             mi.representedObject = d;
+            if (bool_of(d, @"checked")) mi.state = NSControlStateValueOn;
             NSNumber *key = d[@"key"], *mods = d[@"mods"];
             if (key && mods) {
                 char kbuf[32] = {0};
@@ -767,10 +769,12 @@ matches(NSDictionary *field, NSString *query) {
         [t.widthAnchor constraintEqualToConstant:80].active = YES;
         objc_setAssociatedObject(t, FIELD_KEY, field, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         NSStepper *st = [[[NSStepper alloc] init] autorelease];
-        st.minValue = -1e9;
-        st.maxValue = 1e9;
-        st.increment = [value doubleValue] > 0 && [value doubleValue] < 1 ? 0.05 : 1;
-        st.doubleValue = value.doubleValue;
+        // A relative direction control, not a bounded copy of the setting.
+        // Python performs exact decimal stepping and domain validation.
+        st.minValue = -1;
+        st.maxValue = 1;
+        st.increment = 1;
+        st.doubleValue = 0;
         st.target = self;
         st.action = @selector(stepperChanged:);
         objc_setAssociatedObject(st, "text", t, OBJC_ASSOCIATION_ASSIGN);
@@ -898,11 +902,14 @@ hex_from_color(NSColor *c) {
 - (void)stepperChanged:(NSStepper *)st {
     NSMutableDictionary *f = objc_getAssociatedObject(st, FIELD_KEY);
     NSTextField *t = objc_getAssociatedObject(st, "text");
-    NSString *val = [str_of(f, @"kind") isEqualToString:@"int"] ? [NSString stringWithFormat:@"%ld", (long)lround(st.doubleValue)] : [NSString stringWithFormat:@"%g", st.doubleValue];
+    NSString *direction = st.doubleValue < 0 ? @"-1" : @"1";
+    st.doubleValue = 0;
+    NSString *val = [self emit:@"adjust" args:@[str_of(f, @"name"), t.stringValue, direction]];
+    if (!val.length || [val isEqualToString:str_of(f, @"value")]) return;
     if ([self commitField:f value:val]) {
         t.stringValue = val;
         [self markSet:f control:t];
-    } else st.doubleValue = str_of(f, @"value").doubleValue;
+    } else t.stringValue = str_of(f, @"value");
 }
 
 - (void)colorChanged:(NSColorWell *)well {

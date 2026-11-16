@@ -1919,7 +1919,8 @@ _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
     // The first output the window is on, the first output there is before the compositor has told us
     _GLFWmonitor *monitor = window->wl.monitorsCount ? window->wl.monitors[0] : _glfw.monitorCount ? _glfw.monitors[0] : NULL;
     info->color = GLFW_DISPLAY_COLOR_RGB;
-    info->bits = 8;
+    // Neither wl_output nor color management specifies per-channel precision.
+    // An 8-bit application surface says nothing about the display's depth.
     info->scale = (float)_glfwWaylandWindowScale(window);
     // Compositors with color management describe the display the window is on, the target being what it can actually show
     GLFWcolordescription description;

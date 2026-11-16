@@ -125,6 +125,15 @@ func get_local_dependencies(path string) (ans []dependency) {
 func change_dep(path string, dep dependency) {
 	cmd := []string{}
 	fid := filepath.Join(root_dir(), dep.basename)
+	// Loader-relative names keep Mach-O load commands independent of the
+	// checkout path length and allow the dependency tree to be moved.
+	rel, err := filepath.Rel(filepath.Dir(path), fid)
+	if err != nil {
+		exit(err)
+	}
+	if !dep.is_id {
+		fid = "@loader_path/" + filepath.ToSlash(rel)
+	}
 	if dep.is_id {
 		cmd = append(cmd, "-id", fid)
 	} else {
@@ -361,7 +370,10 @@ func dependencies(args []string) {
 		exit(err)
 	}
 
-	fmt.Println(`Dependencies downloaded. Now build kitty with: ./dev.sh build`)
+	if err := os.WriteFile(filepath.Join(root_dir(), ".ready"), nil, 0o644); err != nil {
+		exit(err)
+	}
+	fmt.Println(`Dependencies downloaded. Now build Silkie with: ./dev.sh build`)
 }
 
 // }}}
@@ -397,7 +409,7 @@ func setup_to_run_python() (python string) {
 
 func build(args []string) {
 	chdir_to_base()
-	if _, err := os.Stat(folder); err != nil {
+	if _, err := os.Stat(filepath.Join(root_dir(), ".ready")); err != nil {
 		dependencies(nil)
 	}
 	root := root_dir()

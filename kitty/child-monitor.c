@@ -8,6 +8,7 @@
 #include "loop-utils.h"
 #include "safe-wrappers.h"
 #include "state.h"
+#include "gl.h"
 #include "threading.h"
 #include "screen.h"
 #include "monotonic.h"
@@ -851,7 +852,7 @@ prepare_to_render_os_window(
     // A window in a wide gamut is converted to it as a whole, after everything is drawn
     os_window->needs_layers =
         (!global_state.supports_framebuffer_srgb || effective_os_window_alpha(os_window) < 1.f || os_window->live_resize.in_progress ||
-         (background_image_for_os_window(os_window) != NULL) || os_window->shader_anim.has_active_shaders || os_window->wide_gamut);
+         (background_image_for_os_window(os_window) != NULL) || os_window->shader_anim.has_active_shaders || os_window->wide_gamut || os_window->spatial.mode);
     if (TD.screen && os_window->num_tabs && !os_window->has_too_few_tabs) {
         if (!os_window->tab_bar_data_updated) {
             call_boss(update_tab_bar_data, "K", os_window->id);
@@ -999,8 +1000,9 @@ prepare_to_render_os_window(
 static void
 thumbnail_callback(OSWindow *os_window) {
 #define tc global_state.thumbnail_callback
-    Region region = {.right = os_window->viewport_width, .bottom = os_window->viewport_height};
-    if (tc.window) {
+    Region region = {.right = os_window->spatial.mode ? os_window->spatial.output_width : os_window->viewport_width,
+        .bottom = os_window->spatial.mode ? os_window->spatial.output_height : os_window->viewport_height};
+    if (tc.window && !os_window->spatial.mode) {
         Window *w = window_for_window_id(tc.window);
         if (!w) return;
         region.left = w->render_data.geometry.left;
@@ -1008,7 +1010,7 @@ thumbnail_callback(OSWindow *os_window) {
         region.right = w->render_data.geometry.right;
         region.bottom = w->render_data.geometry.bottom;
     } else {
-        if (!tc.include_tab_bar) {
+        if (!tc.include_tab_bar && !os_window->spatial.mode) {
             Region central = {0}, tab_bar = {0};
             os_window_regions(os_window, &central, &tab_bar);
             if (tab_bar.bottom > tab_bar.top) region = central;
@@ -1048,6 +1050,14 @@ render_prepared_os_window(
     bool all_windows_have_same_bg,
     monotonic_t now) {
     Tab *tab = os_window->tabs + os_window->active_tab;
+    const unsigned eyes = os_window->spatial.mode ? 2 : 1;
+    if (os_window->spatial.mode) {
+        bind_framebuffer_for_output(0);
+        blank_canvas(1.f, 0, false);
+    }
+    for (unsigned eye = 0; eye < eyes; eye++) {
+    os_window->spatial.eye = eyes == 1 ? 0 : eye == 0 ? -1 : 1;
+    set_gpu_viewport(os_window->viewport_width, os_window->viewport_height);
     setup_os_window_for_rendering(os_window, tab, NULL, true, now);
     BorderRects *br = &tab->border_rects;
     draw_borders(br->vao_idx, br->num_border_rects, br->rect_buf, br->is_dirty, active_window_bg, num_visible_windows, all_windows_have_same_bg, os_window);
@@ -1073,6 +1083,8 @@ render_prepared_os_window(
     }
     draw_rounded_borders(br, active_window_bg, num_visible_windows, all_windows_have_same_bg, os_window);
     setup_os_window_for_rendering(os_window, tab, active_window, false, now);
+    }
+    os_window->spatial.eye = 0;
     if (global_state.thumbnail_callback.os_window == os_window->id) {
         thumbnail_callback(os_window);
         global_state.thumbnail_callback.os_window = 0;
@@ -1171,12 +1183,13 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
 
 static void
 poll_display_info(OSWindow *os_window, monotonic_t now) {
-    // Windows that asked for display events are told when the display changes, see docs/display-protocol.rst
+    // Output color changes invalidate application rendering just as a resize
+    // does, including for applications that did not subscribe to OSC events.
     const monotonic_t interval = ms_to_monotonic_t(250ll);
     bool wanted = false;
     for (unsigned t = 0; t < os_window->num_tabs && !wanted; t++) {
         Tab *tab = os_window->tabs + t;
-        for (unsigned i = 0; i < tab->num_windows && !wanted; i++) wanted = tab->windows[i].render_data.screen && tab->windows[i].render_data.screen->display_events;
+        for (unsigned i = 0; i < tab->num_windows && !wanted; i++) wanted = tab->windows[i].render_data.screen != NULL;
     }
     if (!wanted) return;
     if (now - os_window->display_info_at < interval) {
@@ -1185,7 +1198,10 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
     }
     DisplayInfo d, *o = &os_window->display_info;
     os_window_display_info(os_window, &d);
-    const bool changed = os_window->display_info_at && (d.kind != o->kind || d.color != o->color || d.gamut != o->gamut || d.bits != o->bits || d.period_us != o->period_us || d.headroom != o->headroom || d.scale != o->scale || d.ppi != o->ppi);
+    const bool color_changed = os_window->display_info_at && (d.kind != o->kind || d.color != o->color || d.gamut != o->gamut || d.bits != o->bits ||
+        d.red_bits != o->red_bits || d.green_bits != o->green_bits || d.blue_bits != o->blue_bits || d.gray_bits != o->gray_bits ||
+        strcmp(d.precision, o->precision) || d.headroom != o->headroom);
+    const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi));
     *o = d;
     os_window->display_info_at = now;
     set_maximum_wait(interval);
@@ -1194,6 +1210,7 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
         Tab *tab = os_window->tabs + t;
         for (unsigned i = 0; i < tab->num_windows; i++) if (tab->windows[i].render_data.screen) screen_display_changed(tab->windows[i].render_data.screen, &d);
     }
+    if (color_changed) call_boss(on_display_color_change, "K", os_window->id);
 }
 
 static void

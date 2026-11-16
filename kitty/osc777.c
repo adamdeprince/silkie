@@ -14,8 +14,43 @@
 // protocol, see docs/capabilities-protocol.rst. A selector handled in
 // dispatch_osc() must also be listed here.
 static const struct { const char *selector; unsigned version; } extensions[] = {
+    {"depth", 1},
+    {"ssh-agent", 1},
     {"caps", 1}, {"display", 1}, {"font", 1}, {"frame", 1}, {"gesture", 1}, {"haptic", 1}, {"ink", 1}, {"latency", 1}, {"scroll", 1}, {"tablet-pointer", 1},
 };
+
+void
+screen_depth_protocol(Screen *self, const char *data, size_t sz) {
+    EXTENSION_FIELDS(f);
+    const char *op;
+    long long depth = 0;
+    float pixels = 0, phase = 0;
+    if (!extension_fields_parse(&f, data, sz) || !extension_frame_header(&f, 1, &op)) return;
+    if (!extension_field_int(&f, "d", INT32_MIN, INT32_MAX, &depth)) return;
+    if (extension_field(&f, "p") && extension_field(&f, "d")) return;
+    const char *keys[] = {"p", "y"};
+    float *values[] = {&pixels, &phase};
+    for (unsigned i = 0; i < arraysz(keys); i++) {
+        const char *value = extension_field(&f, keys[i]);
+        if (!value) continue;
+        if (!*value || strspn(value, "-0123456789.eE+") != strlen(value)) return;
+        char *end;
+        const double number = strtod(value, &end);
+        if (*end || !isfinite(number) || !isfinite((float)number) || (number != 0. && (float)number == 0.f)) return;
+        *values[i] = (float)number;
+    }
+    if (!strcmp(op, "reset")) {
+        self->cursor->sgr.depth = 0;
+        self->cursor->sgr.depth_pixels = self->cursor->sgr.phase = 0.f;
+    }
+    else if (!strcmp(op, "set")) {
+        if (extension_field(&f, "d") || extension_field(&f, "p")) {
+            self->cursor->sgr.depth = (int32_t)depth;
+            self->cursor->sgr.depth_pixels = pixels;
+        }
+        if (extension_field(&f, "y")) self->cursor->sgr.phase = phase;
+    }
+}
 
 void
 screen_font_protocol(Screen *self, const char *data, size_t sz) {
@@ -42,7 +77,7 @@ static const char *const media[] = {"d", "f", "t", "s",
     "g",
 #endif
 };
-static const char *const formats[] = {"24", "32", "64", "100", "200"};
+static const char *const formats[] = {"1", "2", "4", "8", "16", "24", "32", "64", "100", "200"};
 
 static bool
 append_list(PyObject **reply, const char *key, const char *const *items, size_t count) {
@@ -61,6 +96,9 @@ append_list(PyObject **reply, const char *key, const char *const *items, size_t 
 // An extension that has a mode adds its lines here.
 void
 screen_reset_extension_modes(Screen *self) {
+    self->cursor->sgr.depth = 0;
+    self->cursor->sgr.depth_pixels = 0;
+    self->cursor->sgr.phase = 0;
     // tablet-pointer
     screen_pointer_cancel(self, 0);
     self->pointer.mode = 0;

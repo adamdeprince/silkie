@@ -4,13 +4,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Show pointer" href="show-pointer.html"><link rel="prev" title="Frame presentation protocol" href="frame-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/configuration.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Silkie configuration - Silkie</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -92,7 +93,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="configuration.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/configuration.html">
+</head>
   <body>
     
     <script>
@@ -244,11 +250,15 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
   <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
   <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/configuration.html" lang="zh-CN">简体中文</a>
 </nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -257,18 +267,25 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">Haptic feedback protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">Image pointer extension</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU surfaces (zero-copy)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR brightness protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">Wide gamut colors</a></li>
@@ -317,14 +334,81 @@
         <article role="main" id="furo-main-content">
           <section id="silkie-configuration">
 <h1>Silkie configuration<a class="headerlink" href="#silkie-configuration" title="Link to this heading">¶</a></h1>
-<p>These options configure Silkie’s extensions in <code class="docutils literal notranslate"><span class="pre">kitty.conf</span></code>. For the file
-location, syntax, and inherited settings, see <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty’s configuration reference</a>.</p>
+<p>Silkie reads <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code> from its own configuration directory, normally
+<code class="docutils literal notranslate"><span class="pre">~/.config/silkie/</span></code>. It does not automatically read kitty’s configuration or
+use <code class="docutils literal notranslate"><span class="pre">KITTY_CONFIG_DIRECTORY</span></code>.</p>
+<section id="configuration-paths">
+<h2>Configuration paths<a class="headerlink" href="#configuration-paths" title="Link to this heading">¶</a></h2>
+<p>Set <code class="docutils literal notranslate"><span class="pre">SILKIE_CONFIG_DIRECTORY</span></code> to use a different directory. Otherwise,
+Silkie searches for <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code> in the following order and uses the first
+file whose directory is writable:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">$XDG_CONFIG_HOME/silkie/</span></code>, when <code class="docutils literal notranslate"><span class="pre">XDG_CONFIG_HOME</span></code> is set;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">~/.config/silkie/</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">~/Library/Preferences/silkie/</span></code> on macOS;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silkie/</span></code> under each directory in <code class="docutils literal notranslate"><span class="pre">XDG_CONFIG_DIRS</span></code>, in order.</p></li>
+</ul>
+<p>If no configuration exists, Silkie creates <code class="docutils literal notranslate"><span class="pre">$XDG_CONFIG_HOME/silkie/</span></code> or
+<code class="docutils literal notranslate"><span class="pre">~/.config/silkie/</span></code>. System defaults come from
+<code class="docutils literal notranslate"><span class="pre">/etc/xdg/silkie/silkie.conf</span></code> and are read before the user configuration.
+Relative includes, themes, kitten configuration files, and profiles use the
+Silkie configuration directory. The Settings window writes <code class="docutils literal notranslate"><span class="pre">settings.conf</span></code>
+there, which is read after <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--config</span> <span class="pre">/path/to/file.conf</span></code> to load a file explicitly, or
+<code class="docutils literal notranslate"><span class="pre">--config</span> <span class="pre">NONE</span></code> to skip configuration files. To reuse existing kitty settings,
+copy them to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code> or add an explicit include, for example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">include</span> <span class="o">../</span><span class="n">kitty</span><span class="o">/</span><span class="n">kitty</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+<p>The configuration syntax and inherited settings are described in
+<a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty’s configuration reference</a>.
+The paths above are specific to Silkie.</p>
+</section>
+<section id="quitting-on-macos">
+<h2>Quitting on macOS<a class="headerlink" href="#quitting-on-macos" title="Link to this heading">¶</a></h2>
+<p>Silkie does not bind <code class="docutils literal notranslate"><span class="pre">Cmd-Q</span></code> to quit by default. To explicitly enable it,
+add this to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">cmd</span><span class="o">+</span><span class="n">q</span> <span class="n">quit</span>
+</pre></div>
+</div>
+<p>The application menu’s Quit command remains available without a keyboard
+shortcut unless you configure one.</p>
+</section>
+<section id="spatial-display">
+<h2>Spatial display<a class="headerlink" href="#spatial-display" title="Link to this heading">¶</a></h2>
+<p>On macOS, <strong>View → Spatial Display</strong> switches between ordinary rendering,
+stereo content that follows the head, and an anchored terminal wall. Settings
+place XREAL 1S support under <strong>Experimental and untested</strong>, disabled by default.
+Enable <code class="docutils literal notranslate"><span class="pre">experimental_xreal_1s</span> <span class="pre">yes</span></code> to use side-by-side output or XREAL tracking.
+Red/blue output without tracking does not require that opt-in. Spatial settings
+include side-by-side and red/blue output, independent positive and negative
+divergence limits, and a 2^X divergence multiplier with X from -6 to 6 in
+0.1 steps. Fractional pixel depth scales with the physical eye resolution,
+including Retina backing scale. Negative divergence and vertical phase are
+disabled by default and require explicit user configuration. Applications
+can assign depth to text and graphics while leaving unmarked content flat.
+See <a class="reference internal" href="spatial-protocol.html"><span class="doc">Spatial display and depth</span></a> for XREAL setup, configuration, the optional text
+attribute, and current tracking support.</p>
+<p>Numeric controls enforce the setting’s domain: opacity stays within its
+documented range, dimensions and durations are nonnegative, and documented
+negative sentinels and signed scroll multipliers remain available. Cursor HDR
+brightness and HDR headroom start at 1× and step by 0.1, with no invented upper
+bound. Composite values retain their complete text rather than losing optional
+parameters to a numeric widget.</p>
+</section>
+<section id="ssh-agent-forwarding">
+<h2>SSH agent forwarding<a class="headerlink" href="#ssh-agent-forwarding" title="Link to this heading">¶</a></h2>
+<p>Set <code class="docutils literal notranslate"><span class="pre">ssh_agent_forwarding</span> <span class="pre">yes</span></code> to offer the local SSH agent over the terminal
+channel. Odin Seat and Skiff can keep a stable <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code> while the
+provider follows the attached terminal. See <a class="reference internal" href="ssh-agent-protocol.html"><span class="doc">SSH agent transport</span></a> for
+permissions, connection lifetime, fallback behavior, and protocol details.</p>
 <p>The option defaults and descriptions below come from Silkie’s configuration
 definitions.</p>
+</section>
 <section id="e-paper-and-color-switching">
 <h2>E-paper and color switching<a class="headerlink" href="#e-paper-and-color-switching" title="Link to this heading">¶</a></h2>
 <p>For an external e-paper monitor, including a BOOX monitor that the operating
-system treats as an ordinary display, add this to <code class="docutils literal notranslate"><span class="pre">kitty.conf</span></code>:</p>
+system treats as an ordinary display, add this to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">eink_mode</span> <span class="n">yes</span>
 </pre></div>
 </div>
@@ -356,6 +440,31 @@ capabilities. <code class="docutils literal notranslate"><span class="pre">displ
 override that leaves the color scheme unchanged. These declarations apply to
 all windows in the Silkie process, so toggle the mode when moving between an
 ordinary monitor and an e-paper monitor.</p>
+</section>
+<section id="display-channel-precision">
+<h2>Display channel precision<a class="headerlink" href="#display-channel-precision" title="Link to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="display-protocol.html"><span class="doc">Display protocol</span></a> reports whether output is RGB, grayscale, or
+black-and-white, and the precision of each active channel. System-reported
+framebuffer precision does not prove physical panel precision or calibration.
+For a panel whose capabilities the system cannot report, declare them:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">5</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">6</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">5</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=gray</span> <span class="pre">gray_bits=4</span></code> for sixteen gray levels, or
+<code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=mono</span></code> for black and white. The report identifies these
+values as configured and uses zero for unknown widths. The display protocol
+documents the query, replies, subscriptions, and platform detection limits.</p>
+<p>When the user changes the terminal’s color scheme, profile colors, or output
+color capabilities, Silkie asks applications to redraw as it does after a
+window resize: it sends <code class="docutils literal notranslate"><span class="pre">SIGWINCH</span></code> to each affected terminal’s foreground
+process group. Applications subscribed to in-band resize notifications also
+receive the usual resize report, with the current dimensions even if they have
+not changed. Existing color-scheme and display subscriptions keep working.</p>
+<p>Moving a window between outputs can change the color model, channel precision,
+gamut, or HDR headroom and trigger the same redraw. Refresh-rate changes alone
+do not. Application-issued palette changes through OSC escape sequences do
+not send resize notifications, so an application’s own redraw cannot cause a
+palette-change redraw loop.</p>
 </section>
 <section id="fonts-and-cjk-text">
 <h2>Fonts and CJK text<a class="headerlink" href="#fonts-and-cjk-text" title="Link to this heading">¶</a></h2>
@@ -450,7 +559,8 @@ more brightness are clamped to this value. The display’s own limit always appl
 <p>The brightness of the block cursor as a multiple of SDR white, so <code class="code docutils literal notranslate"><span class="pre">2.0</span></code>
 makes it twice as bright as normal white text. Values above one only take
 effect on an HDR display with <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> enabled, otherwise the cursor is
-rendered as usual. See <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>.</p>
+rendered as usual. See <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR brightness protocol</span></a>.
+The minimum is 1.0. Settings increases or decreases this multiplier in steps of 0.1.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -516,10 +626,19 @@ detects, for example on an e-ink display:</p>
 </div>
 <p>The keys are <code class="code docutils literal notranslate"><span class="pre">kind</span></code> (<code class="code docutils literal notranslate"><span class="pre">lcd</span></code>, <code class="code docutils literal notranslate"><span class="pre">oled</span></code>, <code class="code docutils literal notranslate"><span class="pre">eink</span></code> or
 <code class="code docutils literal notranslate"><span class="pre">unknown</span></code>), <code class="code docutils literal notranslate"><span class="pre">color</span></code> (<code class="code docutils literal notranslate"><span class="pre">rgb</span></code>, <code class="code docutils literal notranslate"><span class="pre">gray</span></code> or <code class="code docutils literal notranslate"><span class="pre">mono</span></code>),
-<code class="code docutils literal notranslate"><span class="pre">bits</span></code> (bits per color channel), <code class="code docutils literal notranslate"><span class="pre">gamut</span></code> (<code class="code docutils literal notranslate"><span class="pre">srgb</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">bits</span></code> (a common width for all active color channels), <code class="code docutils literal notranslate"><span class="pre">red_bits</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">green_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">blue_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">gray_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">gamut</span></code> (<code class="code docutils literal notranslate"><span class="pre">srgb</span></code>,
 <code class="code docutils literal notranslate"><span class="pre">p3</span></code>, <code class="code docutils literal notranslate"><span class="pre">rec2020</span></code> or <code class="code docutils literal notranslate"><span class="pre">unknown</span></code>), <code class="code docutils literal notranslate"><span class="pre">headroom</span></code>,
 <code class="code docutils literal notranslate"><span class="pre">scale</span></code>, <code class="code docutils literal notranslate"><span class="pre">period</span></code> (refresh period in microseconds) and
 <code class="code docutils literal notranslate"><span class="pre">ppi</span></code>.</p>
+<p>Individual channel widths override <code class="code docutils literal notranslate"><span class="pre">bits</span></code> regardless of order. For RGB565,
+use <code class="code docutils literal notranslate"><span class="pre">color=rgb</span> <span class="pre">red_bits=5</span> <span class="pre">green_bits=6</span> <span class="pre">blue_bits=5</span></code>; the report’s legacy
+<code class="code docutils literal notranslate"><span class="pre">bits</span></code> is then zero because the channels differ. A grayscale display uses
+<code class="code docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">gray_bits=4</span></code> for sixteen levels. <code class="code docutils literal notranslate"><span class="pre">color=mono</span></code> always
+means one bit; use <code class="code docutils literal notranslate"><span class="pre">gray</span></code> for more than two levels.</p>
+<p>The report identifies declared precision as <code class="code docutils literal notranslate"><span class="pre">configured</span></code>. Detected
+framebuffer widths are labeled <code class="code docutils literal notranslate"><span class="pre">framebuffer</span></code>, since they do not establish
+physical panel precision or color calibration. Unknown channel widths are zero.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -601,7 +720,12 @@ pen, a tablet or a pad is reported as before.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Silkie configuration</a><ul>
+<li><a class="reference internal" href="#configuration-paths">Configuration paths</a></li>
+<li><a class="reference internal" href="#quitting-on-macos">Quitting on macOS</a></li>
+<li><a class="reference internal" href="#spatial-display">Spatial display</a></li>
+<li><a class="reference internal" href="#ssh-agent-forwarding">SSH agent forwarding</a></li>
 <li><a class="reference internal" href="#e-paper-and-color-switching">E-paper and color switching</a></li>
+<li><a class="reference internal" href="#display-channel-precision">Display channel precision</a></li>
 <li><a class="reference internal" href="#fonts-and-cjk-text">Fonts and CJK text</a></li>
 <li><a class="reference internal" href="#input-limits">Input limits</a></li>
 </ul>

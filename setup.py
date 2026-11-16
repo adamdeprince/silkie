@@ -1685,7 +1685,7 @@ def build_launcher(args: Options, launcher_dir: str = '.', bundle_type: str = 's
         args.compilation_database.add_command(
             f'Compiling {emphasis(src)} ...', cmd, partial(newer, obj, src, *dependecies_for(src, obj, headers)), key=key, keyfile=src
         )
-    dest = kitty_exe = os.path.join(launcher_dir, 'kitty')
+    dest = kitty_exe = os.path.join(launcher_dir, macos_executable if is_macos else 'kitty')
     link_targets.append(os.path.abspath(dest))
     desc = f'Linking {emphasis("launcher")} ...'
     cmd = env.cc + ldflags + objects + libs + pylib + ['-o', dest]
@@ -1695,6 +1695,10 @@ def build_launcher(args: Options, launcher_dir: str = '.', bundle_type: str = 's
         dsym = f'{dest}.dSYM/Contents/Resources/DWARF/{os.path.basename(dest)}'
         args.compilation_database.add_command(desc, ['dsymutil', dest], partial(newer, dsym, dest), key=LinkKey(dsym), is_post_link=True)
     args.compilation_database.build_all()
+    if is_macos:
+        legacy_exe = Path(launcher_dir) / 'kitty'
+        legacy_exe.unlink(missing_ok=True)
+        legacy_exe.symlink_to(macos_executable)
     return kitty_exe
 
 
@@ -2005,7 +2009,7 @@ def macos_info_plist(for_quake: str = '') -> bytes:
         CFBundleSignature='????',
         LSApplicationCategoryType='public.app-category.utilities',
         # App Execution
-        CFBundleExecutable=quake_name if for_quake else appname,
+        CFBundleExecutable=quake_executable if for_quake else macos_executable,
         LSEnvironment={'KITTY_LAUNCHED_BY_LAUNCH_SERVICES': '1'},
         LSRequiresNativeExecution=True,
         NSSupportsSuddenTermination=False,
@@ -2040,7 +2044,7 @@ def macos_info_plist(for_quake: str = '') -> bytes:
         # Motion
         NSMotionUsageDescription=access('motion data.'),
         # Networking
-        NSLocalNetworkUsageDescription=access('local network.'),
+        NSLocalNetworkUsageDescription='Silkie uses local network access for XREAL head tracking over USB and for programs running in the terminal.',
         # Photos
         NSPhotoLibraryUsageDescription=access('your photo library.'),
         # Scripting
@@ -2067,6 +2071,10 @@ def create_macos_app_icon(where: str = 'Resources') -> None:
     shutil.copy('logo/kitty.icns', os.path.join(where, 'silkie.icns'))
 
 
+# The executable name appears in macOS crash reports. Keep kitty entry points
+# as compatibility symlinks, with Silkie as the actual process identity.
+macos_executable = 'silkie'
+quake_executable = f'{macos_executable}-quick-access'
 quake_name = f'{appname}-quick-access'
 
 
@@ -2081,9 +2089,10 @@ def create_quick_access_bundle(kapp: str, quake_desc: str = 'Quick access to kit
         f.write(macos_info_plist(quake_desc))
     for exe in os.listdir(base_exe_dir):
         os.symlink(f'../../../MacOS/{exe}', os.path.join(bin_dir, exe))
-    base_exe = os.path.join(base_exe_dir, 'kitty')
+    base_exe = os.path.join(base_exe_dir, macos_executable)
     if os.path.exists(base_exe):  # during freeze launcher is built after bundle is created
-        shutil.copy2(base_exe, os.path.join(bin_dir, quake_name))
+        shutil.copy2(base_exe, os.path.join(bin_dir, quake_executable))
+    os.symlink(quake_executable, os.path.join(bin_dir, quake_name))
     for x in ('Frameworks', 'Resources'):
         os.symlink(f'../../{x}', os.path.join(qapp, 'Contents', x))
 
@@ -2099,7 +2108,8 @@ def create_minimal_macos_bundle(args: Options, launcher_dir: str, relocate: bool
     with open(os.path.join(kapp, 'Contents/Info.plist'), 'wb') as f:
         f.write(macos_info_plist())
     if relocate:
-        shutil.copy2(os.path.join(launcher_dir, 'kitty'), bin_dir)
+        shutil.copy2(os.path.join(launcher_dir, macos_executable), bin_dir)
+        os.symlink(macos_executable, os.path.join(bin_dir, 'kitty'))
         shutil.copy2(os.path.join(launcher_dir, 'kitten'), bin_dir)
     else:
         build_launcher(args, bin_dir)
@@ -2107,7 +2117,7 @@ def create_minimal_macos_bundle(args: Options, launcher_dir: str, relocate: bool
         kitty_exe = os.path.join(launcher_dir, appname)
         with suppress(FileNotFoundError):
             os.remove(kitty_exe)
-        os.symlink(os.path.join(os.path.relpath(bin_dir, launcher_dir), appname), kitty_exe)
+        os.symlink(os.path.join(os.path.relpath(bin_dir, launcher_dir), macos_executable), kitty_exe)
     create_macos_app_icon(resources_dir)
     create_quick_access_bundle(kapp, 'Quick access to kitty built from source')
 
@@ -2123,7 +2133,7 @@ def create_macos_bundle_gunk(dest: str, for_freeze: bool, args: Options) -> str:
     os.rename(ddir / 'bin', ddir / 'Contents/MacOS')
     os.rename(ddir / 'lib', ddir / 'Contents/Frameworks')
     os.rename(ddir / 'Contents/Frameworks/kitty', ddir / 'Contents/Resources/kitty')
-    kitty_exe = ddir / 'Contents/MacOS/kitty'
+    kitty_exe = ddir / 'Contents/MacOS' / macos_executable
     in_src_launcher = ddir / 'Contents/Resources/kitty/kitty/launcher/kitty'
     if os.path.exists(in_src_launcher):
         os.remove(in_src_launcher)
@@ -2134,7 +2144,10 @@ def create_macos_bundle_gunk(dest: str, for_freeze: bool, args: Options) -> str:
         kitten_exe = build_static_kittens(args, launcher_dir=os.path.dirname(kitty_exe))
         if not kitten_exe:
             raise SystemExit('kitten not built cannot create macOS bundle')
-        os.symlink(os.path.relpath(kitten_exe, os.path.dirname(in_src_launcher)), os.path.join(os.path.dirname(in_src_launcher), os.path.basename(kitten_exe)))
+        kitten_link = os.path.join(os.path.dirname(in_src_launcher), os.path.basename(kitten_exe))
+        if os.path.lexists(kitten_link):
+            os.remove(kitten_link)
+        os.symlink(os.path.relpath(kitten_exe, os.path.dirname(in_src_launcher)), kitten_link)
     create_quick_access_bundle(dest)
     return str(kitty_exe)
 
@@ -2227,7 +2240,7 @@ def package(args: Options, bundle_type: str, do_build_all: bool = True) -> None:
 
 
 def clean_launcher_dir(launcher_dir: str) -> None:
-    for x in glob.glob(os.path.join(launcher_dir, 'kitt*')):
+    for x in glob.glob(os.path.join(launcher_dir, 'kitt*')) + glob.glob(os.path.join(launcher_dir, 'silkie*')):
         if os.path.isdir(x):
             shutil.rmtree(x)
         else:
@@ -2491,7 +2504,7 @@ def macos_freeze(args: Options, launcher_dir: str, only_frozen_launcher: bool = 
     lipo(link_target_map)
     if only_frozen_launcher:
         if is_macos:
-            shutil.copy2(kitty_exe_path, os.path.dirname(kitty_exe_path) + f'/../Contents/{quake_name}.app/Contents/MacOS/{quake_name}')
+            shutil.copy2(kitty_exe_path, os.path.dirname(kitty_exe_path) + f'/../Contents/{quake_name}.app/Contents/MacOS/{quake_executable}')
     else:
         package(args, bundle_type=bundle_type, do_build_all=False)
 

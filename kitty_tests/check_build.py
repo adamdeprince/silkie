@@ -4,6 +4,7 @@
 
 import json
 import os
+import plistlib
 import shutil
 import stat
 import subprocess
@@ -12,6 +13,7 @@ import tempfile
 import textwrap
 import unittest
 from functools import partial
+from pathlib import Path
 
 from .base import BaseTest
 
@@ -35,6 +37,43 @@ class TestBuild(BaseTest):
         from kittens.transfer import rsync
 
         del fdt, rsync
+
+    def test_macos_process_identity(self) -> None:
+        from kitty.constants import is_macos, kitty_exe
+
+        if not is_macos:
+            self.skipTest('Process identity check requires macOS')
+        exe = Path(kitty_exe()).resolve()
+        contents = exe.parent.parent
+        info = plistlib.loads((contents / 'Info.plist').read_bytes())
+        self.assertEqual(info['CFBundleExecutable'], 'silkie')
+        self.assertEqual(exe.name, 'silkie')
+        probe = textwrap.dedent("""\
+            import ctypes, errno, os
+            libproc = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+            size = 1
+            while True:
+                buffer = ctypes.create_string_buffer(size)
+                ctypes.set_errno(0)
+                if libproc.proc_name(os.getpid(), buffer, size) > 0:
+                    print(buffer.value.decode())
+                    break
+                error = ctypes.get_errno()
+                if error != errno.ENOMEM:
+                    raise OSError(error, os.strerror(error))
+                size *= 2
+        """)
+        for entry in (exe, exe.with_name('kitty')):
+            with self.subTest(entry=entry):
+                process = subprocess.check_output([str(entry), '+runpy', probe], text=True).strip()
+                self.assertEqual(process, 'silkie')
+        quick_contents = contents / 'kitty-quick-access.app/Contents'
+        quick_info = plistlib.loads((quick_contents / 'Info.plist').read_bytes())
+        self.assertEqual(quick_info['CFBundleExecutable'], 'silkie-quick-access')
+        for name in ('silkie-quick-access', 'kitty-quick-access'):
+            entry = str(quick_contents / 'MacOS' / name)
+            output = subprocess.check_output([entry, '+testing-launcher-code'], text=True)
+            self.assertIn('is_quick_access_terminal: 1', output)
 
     def test_slang_build(self) -> None:
         from kitty.shaders.slang import test_slang_build
@@ -149,6 +188,23 @@ class TestBuild(BaseTest):
             path = glfw_path(name)
             self.assertTrue(os.path.isfile(path), f'{path} is not a file')
             self.assertTrue(os.access(path, os.X_OK), f'{path} is not executable')
+
+    def test_macos_native_tab_resizing(self) -> None:
+        from kitty.constants import glfw_path, is_macos
+
+        if not is_macos or not shutil.which('clang'):
+            self.skipTest('Native tab resize test requires macOS and clang')
+        cocoa_module = glfw_path('cocoa')
+        src = os.path.join(os.path.dirname(__file__), 'native_tabs.m')
+        with tempfile.TemporaryDirectory() as tdir:
+            exe = os.path.join(tdir, 'native_tabs')
+            nm = subprocess.run(['nm', '-g', cocoa_module], capture_output=True, text=True)
+            asan_flags = ['-fsanitize=address,undefined', '-fno-omit-frame-pointer'] if '__asan_init' in nm.stdout else []
+            cp = subprocess.run(['clang', '-framework', 'AppKit'] + asan_flags + [src, '-o', exe], capture_output=True, text=True)
+            self.assertEqual(cp.returncode, 0, cp.stdout + cp.stderr)
+            cp = subprocess.run([exe, cocoa_module], capture_output=True, text=True)
+            self.assertEqual(cp.returncode, 0, cp.stdout + cp.stderr)
+            self.assertIn('native tab resizing passed', cp.stdout)
 
     def test_all_kitten_names(self) -> None:
         from kittens.runner import all_kitten_names

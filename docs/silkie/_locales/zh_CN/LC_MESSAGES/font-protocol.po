@@ -1,0 +1,240 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:46+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/font-protocol.rst:2
+msgid "Font selection protocol"
+msgstr "字体选择协议"
+
+#: docs/silkie/font-protocol.rst:4
+msgid ""
+"Silkie extends kitty with font-family, weight and slant selection for terminal text. These "
+"attributes are retained with the cells through scrolling, resizing, screen copies and ANSI "
+"export. Text remains selectable and searchable. The terminal grid, character widths and cursor "
+"advances are unchanged."
+msgstr ""
+"Silkie 扩展了 kitty，可为终端文本选择字体族、字重和倾斜角度。滚动、调整大小、屏幕复制和 ANSI "
+"导出时，这些属性会随字符单元保留。文本仍可选择和搜索，终端网格、字符宽度和光标前进距离保持不变。"
+
+#: docs/silkie/font-protocol.rst:9
+msgid ""
+"Silkie uses Iosevka by default, with Iosevka Slab for the ``serif`` role. Install the desired "
+"families from `Iosevka's releases <https://github.com/be5invis/Iosevka/releases>`_. Fonts are "
+"selected from the local system; the protocol does not transmit font files. If a family is absent,"
+" normal platform font substitution applies."
+msgstr ""
+"Silkie 默认使用 Iosevka，``serif`` 角色使用 Iosevka Slab。请从 `Iosevka 发布页 "
+"<https://github.com/be5invis/Iosevka/releases>`_ "
+"安装所需字体族。字体从本地系统中选择，协议不传输字体文件。字体族缺失时，使用平台的正常字体替代机制。"
+
+#: docs/silkie/font-protocol.rst:15
+msgid ""
+"For inherited configuration, font features and variable axes, see `kitty's font manual "
+"<https://sw.kovidgoyal.net/kitty/kittens/choose-fonts/>`_. Text size uses `kitty's text sizing "
+"protocol <https://sw.kovidgoyal.net/kitty/text-sizing-protocol/>`_, independently of this "
+"extension."
+msgstr ""
+"继承的配置、字体特性和可变轴见 `kitty 字体手册 <https://sw.kovidgoyal.net/kitty/kittens/choose-fonts/>`_。文本大小使用 "
+"`kitty 文本尺寸协议 <https://sw.kovidgoyal.net/kitty/text-sizing-protocol/>`_，独立于此扩展。"
+
+#: docs/silkie/font-protocol.rst:22
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/silkie/font-protocol.rst:24
+msgid ""
+"The :doc:`capabilities-protocol` lists ``font.1``. A program queries its capabilities using the "
+"shared :doc:`extension-framing`::"
+msgstr ":doc:`capabilities-protocol` 列出 ``font.1``。程序通过共用的 :doc:`extension-framing` 查询其能力：::"
+
+#: docs/silkie/font-protocol.rst:29
+msgid "The reply lists configured roles and accepted numeric ranges::"
+msgstr "回复列出已配置的角色和接受的数值范围：::"
+
+#: docs/silkie/font-protocol.rst:33
+msgid ""
+"``caps=1`` means selection is supported. Ranges describe requests the terminal accepts; installed"
+" fonts can have fewer weights, in which case the nearest available weight is used. "
+"``synthetic_slant=1`` identifies renderer synthesis. The list of roles can change when the user "
+"reloads configuration."
+msgstr ""
+"``caps=1`` 表示支持字体选择。范围描述终端接受的请求；已安装字体可能提供更少的字重，此时使用最接近的可用字重。``synthetic_slant=1`` "
+"表示倾斜由渲染器合成。用户重新加载配置时，角色列表可能变化。"
+
+#: docs/silkie/font-protocol.rst:39
+msgid "Selecting a font"
+msgstr "选择字体"
+
+#: docs/silkie/font-protocol.rst:41
+msgid "Selection applies to subsequent text::"
+msgstr "选择应用于后续文本：::"
+
+#: docs/silkie/font-protocol.rst:45
+msgid "Each omitted property retains its current value. The properties are:"
+msgstr "省略的属性保留当前值。各属性如下："
+
+#: docs/silkie/font-protocol.rst:47
+msgid "``role``"
+msgstr "``role``"
+
+#: docs/silkie/font-protocol.rst:48
+msgid ""
+"``default`` selects ``font_family``. Other names select user-configured ``font_role`` entries. "
+"Names begin with an ASCII letter and contain ASCII letters, digits, underscores, periods or "
+"hyphens. An unknown role selects ``default``. There is no fixed limit on role names or the number"
+" of roles."
+msgstr ""
+"``default`` 选择 ``font_family``。其他名称选择用户配置的 ``font_role`` 条目。名称以 ASCII 字母开头，可包含 ASCII "
+"字母、数字、下划线、句点或连字符。未知角色回退到 ``default``。角色名称长度和角色数量没有固定上限。"
+
+#: docs/silkie/font-protocol.rst:53
+msgid "``weight``"
+msgstr "``weight``"
+
+#: docs/silkie/font-protocol.rst:54
+msgid ""
+"An integer from ``100`` to ``900``: Thin, Extra Light, Light, Regular, Medium, Semibold, Bold, "
+"Extra Bold and Heavy at the multiples of 100. Intermediate requests use a variable font's weight "
+"axis when available, otherwise the nearest static weight. ``0`` restores selection through the "
+"configured face and the ordinary SGR bold attribute. An explicit nonzero weight takes precedence "
+"over SGR bold until it is reset."
+msgstr ""
+"取值 ``100`` 至 ``900`` 的整数；100 的倍数分别对应 Thin、Extra Light、Light、Regular、Medium、Semibold、Bold、Extra "
+"Bold 和 Heavy。中间值优先使用可变字体的字重轴，否则使用最接近的静态字重。``0`` 恢复通过配置字体和普通 SGR 粗体属性选择字重。明确指定的非零字重优先于 SGR "
+"粗体，直到重置。"
+
+#: docs/silkie/font-protocol.rst:61
+msgid "``slant``"
+msgstr "``slant``"
+
+#: docs/silkie/font-protocol.rst:62
+msgid ""
+"An integer from ``-1500`` to ``1500``, in hundredths of a degree, using OpenType's sign "
+"convention. Negative values lean right, positive values lean left, and ``0`` is upright. ``auto``"
+" restores the selected face's native slant. Synthesis preserves roman or italic letterforms; "
+"selecting ``italic=1:slant=0`` produces upright italic. Slant does not change cell advances. "
+"Overhang at a cell or window boundary can be clipped, as with ordinary italic text."
+msgstr ""
+"``-1500`` 至 ``1500`` 的整数，单位为百分之一度，使用 OpenType 的符号约定。负值向右倾，正值向左倾，``0`` 为直立。``auto`` "
+"恢复所选字体原生的倾斜角度。合成倾斜保留正体或意大利体字形；设置 ``italic=1:slant=0`` "
+"会得到直立的意大利体。倾斜不改变字符单元的前进距离。与普通斜体一样，超出字符单元或窗口边界的部分可能被裁剪。"
+
+#: docs/silkie/font-protocol.rst:70
+msgid "``italic``"
+msgstr "``italic``"
+
+#: docs/silkie/font-protocol.rst:71
+msgid ""
+"``1`` selects italic letterforms and ``0`` selects roman letterforms. This is the same attribute "
+"controlled by SGR 3 and SGR 23. It remains independent of an explicitly selected slant angle."
+msgstr "``1`` 选择意大利体字形，``0`` 选择正体字形。这与 SGR 3 和 SGR 23 控制的是同一属性，但独立于明确选择的倾斜角度。"
+
+#: docs/silkie/font-protocol.rst:75
+msgid "Restore the default role, weight and native slant with::"
+msgstr "恢复默认角色、字重和原生倾斜角度：::"
+
+#: docs/silkie/font-protocol.rst:79
+msgid ""
+"This leaves ordinary SGR attributes, including italic, unchanged. SGR 0 and RIS reset all font-"
+"selection attributes. Cursor save/restore and alternate screen cursor restoration include the "
+"selected style. These are text attributes rather than reporting modes, so ``caps;op=reset`` does "
+"not reset them."
+msgstr ""
+"普通 SGR 属性（包括意大利体）保持不变。SGR 0 和 RIS 会重置全部字体选择属性。光标保存／恢复及备用屏幕光标恢复均包含所选样式。这些是文本属性，而非报告模式，因此 "
+"``caps;op=reset`` 不会重置它们。"
+
+#: docs/silkie/font-protocol.rst:85
+msgid ""
+"``op=state:id=42`` reads back the requested role, weight and slant using ``op=state`` in the "
+"reply, along with ``italic``. Requests are validated atomically. Unknown fields are ignored; "
+"duplicate keys, malformed fields, unsupported versions and out-of-range values reject the entire "
+"request. Storage grows with the input; the configured ``escape_limit`` still applies to OSC "
+"sequences."
+msgstr ""
+"``op=state:id=42`` 通过回复中的 ``op=state`` 读回请求的角色、字重、倾斜角度和 "
+"``italic``。请求按原子方式验证。未知字段会被忽略；重复键、格式错误的字段、不支持的版本和越界数值会导致整条请求被拒绝。存储随输入增长；OSC 序列仍受配置的 "
+"``escape_limit`` 约束。"
+
+#: docs/silkie/font-protocol.rst:93
+msgid "Legacy font slots"
+msgstr "旧式字体槽位"
+
+#: docs/silkie/font-protocol.rst:95
+msgid ""
+"SGR 10 selects the default role. SGR 11 through 19 select the first nine configured roles in "
+"configuration order. An unassigned slot selects the default role. These aliases preserve weight "
+"and slant, and do not restrict the number of roles selectable through OSC 777."
+msgstr "SGR 10 选择默认角色。SGR 11 至 19 按配置顺序选择前九个配置角色。未分配的槽位选择默认角色。这些别名保留字重和倾斜角度，不限制通过 OSC 777 可选的角色数量。"
+
+#: docs/silkie/font-protocol.rst:101
+msgid "CJK text"
+msgstr "中日韩文本"
+
+#: docs/silkie/font-protocol.rst:103
+msgid ""
+"CJK glyphs use ``cjk_font`` and retain their normal cell widths. With ``auto``, Silkie prefers "
+"the regional `Sarasa Term <https://github.com/be5invis/Sarasa-Gothic>`_ family, which combines "
+"Iosevka with Source Han Sans, then Noto Sans CJK and Noto Sans Mono CJK, then available regional "
+"system faces and platform glyph fallback. Sarasa and Noto can have different weight coverage from"
+" Iosevka; requests use their available weights. The same signed slant transformation applies to "
+"preferred CJK faces."
+msgstr ""
+"中日韩字形使用 ``cjk_font``，保持其正常字符单元宽度。设置为 ``auto`` 时，Silkie 优先选择对应地区的 `Sarasa Term "
+"<https://github.com/be5invis/Sarasa-Gothic>`_ （将 Iosevka 与思源黑体组合），然后选择 Noto Sans CJK 和 Noto Sans "
+"Mono CJK，最后使用可用的地区系统字体和平台字形回退。Sarasa 和 Noto 的字重覆盖可能与 Iosevka "
+"不同；请求会使用它们可用的字重。同样的带符号倾斜变换也适用于首选中日韩字体。"
+
+#: docs/silkie/font-protocol.rst:111
+msgid ""
+"``cjk_font_locale`` selects Japanese (``jp``), Korean (``kr``), Simplified Chinese (``sc``), "
+"Traditional Chinese (``tc``) or Hong Kong (``hk``) glyph forms. ``auto`` uses the process locale,"
+" defaulting to ``sc`` when unspecified. Kana prefer Japanese faces and Hangul prefer Korean faces"
+" automatically. Font selection cannot infer the language of a shared Han character from its code "
+"point. Configure the region when the process locale is insufficient. User ``symbol_map`` entries "
+"take precedence; emoji presentation and the terminal's geometric box drawing keep their inherited"
+" behavior."
+msgstr ""
+"``cjk_font_locale`` 选择日文（``jp``）、韩文（``kr``）、简体中文（``sc``）、繁体中文（``tc``）或香港（``hk``）字形。``auto`` "
+"使用进程区域设置，未指定时默认 ``sc``。假名自动优先使用日文字体，谚文自动优先使用韩文字体。无法仅从统一汉字的码点推断语言；进程区域设置不够明确时，请手动配置地区。用户的 "
+"``symbol_map`` 条目优先；表情符号呈现及终端几何制表绘图保持继承的行为。"
+
+#: docs/silkie/font-protocol.rst:120
+msgid "Example configuration::"
+msgstr "配置示例：::"
+
+#: docs/silkie/font-protocol.rst:128
+msgid "To choose an installed CJK family explicitly::"
+msgstr "明确选择已安装的中日韩字体族：::"
+
+#: docs/silkie/font-protocol.rst:133
+msgid "Relays and multiplexers"
+msgstr "中继与多路复用器"
+
+#: docs/silkie/font-protocol.rst:135
+msgid ""
+"A relay that passes bytes through can forward this extension. A multiplexer that rebuilds the "
+"screen must retain and replay the font attributes and only advertise ``font.1`` when it can do "
+"so. Applications query support and retain ordinary text rendering as their fallback."
+msgstr "透传字节的中继可以转发此扩展。重建屏幕的多路复用器必须保留并重放字体属性，且仅在具备这一能力时公布 ``font.1``。应用应查询支持情况，并保留普通文本渲染作为回退方案。"
+
+
+# Installer and Extended-width defaults.
+msgid "Silkie uses Iosevka's wider Extended faces by default, including automatic bold and italic variants, with Iosevka Slab for the ``serif`` role. The :doc:`installer <install>` includes Iosevka and its SIL Open Font License notice. Install additional families from `Iosevka's releases <https://github.com/be5invis/Iosevka/releases>`_. Fonts are selected from the local system; the protocol does not transmit font files. If a family is absent, normal platform font substitution applies."
+msgstr "Silkie 默认使用 Iosevka 较宽的 Extended 字形，自动选择的粗体和斜体也采用相同字宽；``serif`` 角色使用 Iosevka Slab。:doc:`安装脚本 <install>` 包含 Iosevka 字体及其 SIL 开源字体许可证声明。其他字体族可从 `Iosevka 发布页 <https://github.com/be5invis/Iosevka/releases>`_ 安装。字体从本地系统中选择，协议不传输字体文件。字体族缺失时，使用平台的正常字体替代机制。"

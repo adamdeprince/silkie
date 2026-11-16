@@ -21,7 +21,7 @@ class Kitten(RemoteCommand):
         'Run a kitten over the specified windows (active window by default).'
         ' The :italic:`kitten_name` can be either the name of a builtin kitten'
         ' or the path to a Python file containing a custom kitten. If a relative path'
-        ' is used it is searched for in the :ref:`kitty config directory <confloc>`. If the kitten is a'
+        ' is used it is searched for in the :ref:`Silkie config directory <confloc>`. If the kitten is a'
         ' :italic:`no_ui` kitten and its handle response method returns a string or boolean, this'
         ' is printed out to stdout.'
     )

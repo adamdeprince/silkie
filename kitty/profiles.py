@@ -6,7 +6,7 @@ Profiles, in the sense of iTerm2: named sets of settings for a kind of work, for
 example a profile with its own colors, font and shell for a production machine.
 
 A profile is a file in the profiles folder of the configuration directory, in the
-syntax of kitty.conf plus a few profile_* keys. It sets only what differs from the
+syntax of silkie.conf plus a few profile_* keys. It sets only what differs from the
 global settings. Most of kitty's options are process wide, and native tabs make every
 tab its own OS window, so a profile holds the options that can really differ between
 OS windows: PROFILE_PAGES lists them, and applying them is below.

@@ -724,7 +724,7 @@ class TestDataTypes(BaseTest):
                 else:
                     with self.assertRaises(ex, msg=x):
                         makedirs(q)
-        saved = {x: os.environ.get(x) for x in 'KITTY_CONFIG_DIRECTORY XDG_CONFIG_DIRS XDG_CONFIG_HOME'.split()}
+        saved = {x: os.environ.get(x) for x in 'SILKIE_CONFIG_DIRECTORY XDG_CONFIG_DIRS XDG_CONFIG_HOME'.split()}
         try:
             dot_config = os.path.expanduser('~/.config')
             rmtree_in_test_home(dot_config)
@@ -733,7 +733,7 @@ class TestDataTypes(BaseTest):
                     print('kitty --title from-file', file=f)
                 if is_macos:
                     env = os.environ.copy()
-                    env['KITTY_CONFIG_DIRECTORY'] = tdir
+                    env['SILKIE_CONFIG_DIRECTORY'] = tdir
                     env['KITTY_LAUNCHED_BY_LAUNCH_SERVICES'] = '1'
                     # Test 1: file args are loaded when no extra user args are present
                     cp = subprocess.run([kitty_exe(), '+testing-launcher-code'], env=env, stdout=subprocess.PIPE)
@@ -750,18 +750,18 @@ class TestDataTypes(BaseTest):
                         raise AssertionError(f'kitty +testing-launcher-code failed with return code: {cp.returncode}')
                     # from-args overrides from-file because user args are appended after file args
                     self.assertIn('from-args', actual)
-                os.makedirs(tdir + '/good/kitty')
-                open(tdir + '/good/kitty/kitty.conf', 'w').close()
+                os.makedirs(tdir + '/good/silkie')
+                open(tdir + '/good/silkie/silkie.conf', 'w').close()
                 data = os.urandom(32879)
                 with open(tdir + '/f', 'wb') as f:
                     f.write(data)
                 self.ae(data, read_file(f.name))
                 for x in (
-                    (f'KITTY_CONFIG_DIRECTORY={tdir}', f'{tdir}'),
-                    (f'XDG_CONFIG_HOME={tdir}/good', f'{tdir}/good/kitty'),
-                    (f'XDG_CONFIG_DIRS={tdir}:{tdir}/good', f'{tdir}/good/kitty'),
-                    (f'XDG_CONFIG_DIRS={tdir}:{tdir}/bad:{tdir}/f', f'{dot_config}/kitty'),
-                    (f'{dot_config}/kitty',),
+                    (f'SILKIE_CONFIG_DIRECTORY={tdir}', f'{tdir}'),
+                    (f'XDG_CONFIG_HOME={tdir}/good', f'{tdir}/good/silkie'),
+                    (f'XDG_CONFIG_DIRS={tdir}:{tdir}/good', f'{tdir}/good/silkie'),
+                    (f'XDG_CONFIG_DIRS={tdir}:{tdir}/bad:{tdir}/f', f'{dot_config}/silkie'),
+                    (f'{dot_config}/silkie',),
                 ):
                     for k in saved:
                         os.environ.pop(k, None)

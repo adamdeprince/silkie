@@ -1,0 +1,551 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="低延迟协议" href="latency-protocol.html"><link rel="prev" title="字符单元背景透明度" href="cell-alpha-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/display-protocol.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>显示信息协议 - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../display-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="display-protocol.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="项目资源">
+  <a href="index.html">项目概览</a>
+  <a href="install.html">安装 Silkie</a>
+  <a href="games.html">游戏与实机视频</a>
+  <a href="browser-demo.html">试用浏览器演示</a>
+  <a href="browser-ssh.html">浏览器 SSH 设置</a>
+  <a href="developer-guide.html">开发者指南</a>
+  <a href="reference.html">扩展参考手册</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档 ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档 ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支 ↗</a>
+  <a href="../display-protocol.html" lang="en">English</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="搜索" name="q" aria-label="搜索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">安装 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Silkie 与 kitty 游戏</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">在浏览器中试用 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">浏览器演示中的 SSH</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">为 Silkie 开发软件</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie 扩展参考手册</a><input aria-label="Toggle navigation of Silkie 扩展参考手册" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">显示信息协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="display-protocol">
+<h1>显示信息协议<a class="headerlink" href="#display-protocol" title="链接到此标题。">¶</a></h1>
+<div class="versionadded">
+<p><span class="versionmodified added">在 0.50.0 版本加入.</span></p>
+</div>
+<p>绘图程序通常不了解输出最终到达的屏幕：彩色 LCD 还是十六级灰度电子墨水屏、覆盖多少色域、亮度有多高、每个字符单元有多少物理像素、以什么频率刷新。这些都会影响最佳渲染方式，从调色板和抖动策略，到是否值得运行动画。显示信息协议让程序查询这些信息，并在答案变化时收到通知，例如窗口被移到另一块屏幕。它与其他 kitty 协议一样，是小巧、低干扰、易于实现的开放终端扩展，不改变 TTY 的本质。</p>
+<section id="framing">
+<h2>消息封装<a class="headerlink" href="#framing" title="链接到此标题。">¶</a></h2>
+<p>帧使用带有 <code class="docutils literal notranslate"><span class="pre">display</span></code> 选择器的 <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">777</span></code>：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">query</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>帧遵循 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a> 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧、单位和时钟。终端报告中的值为单词，或可带小数、不带前导 <code class="docutils literal notranslate"><span class="pre">+</span></code> 的十进制数，例如 <code class="docutils literal notranslate"><span class="pre">headroom=1.5</span></code>。协议版本 <code class="docutils literal notranslate"><span class="pre">v</span></code> 为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，<code class="docutils literal notranslate"><span class="pre">op</span></code> 为 <code class="docutils literal notranslate"><span class="pre">query</span></code>、<code class="docutils literal notranslate"><span class="pre">cap</span></code>、<code class="docutils literal notranslate"><span class="pre">mode</span></code> 或 <code class="docutils literal notranslate"><span class="pre">event</span></code>。</p>
+</section>
+<section id="query">
+<h2>查询<a class="headerlink" href="#query" title="链接到此标题。">¶</a></h2>
+<p>程序查询窗口所在的显示器：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">query</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">id</span></code> 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">p3</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">8333</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">254</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>不支持本协议的终端会忽略查询，因此程序必须设置超时，并回退为假定普通彩色显示器。</p>
+<p>回复字段如下：</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">mode</span></code></dt><dd><p>下述模式的当前状态，<code class="docutils literal notranslate"><span class="pre">0</span></code> 或 <code class="docutils literal notranslate"><span class="pre">1</span></code>。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">kind</span></code></dt><dd><p><code class="docutils literal notranslate"><span class="pre">lcd</span></code>、<code class="docutils literal notranslate"><span class="pre">oled</span></code>、<code class="docutils literal notranslate"><span class="pre">eink</span></code> 或 <code class="docutils literal notranslate"><span class="pre">unknown</span></code>。电子墨水屏更新较慢且会残影，因此程序应避免动画和平滑滚动，采用低频、大步幅重绘。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">color</span></code></dt><dd><p>One of <code class="docutils literal notranslate"><span class="pre">rgb</span></code> (independent red, green and blue channels), <code class="docutils literal notranslate"><span class="pre">gray</span></code>
+(one grayscale channel) and <code class="docutils literal notranslate"><span class="pre">mono</span></code> (only black and white).</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">bits</span></code></dt><dd><p>Bits per color channel, <code class="docutils literal notranslate"><span class="pre">0</span></code> when unknown or RGB channels have different
+widths. This field remains for older clients; use the individual widths
+below when available. Sixteen levels of gray are
+<code class="docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">:</span> <span class="pre">bits=4</span></code>. Together with <code class="docutils literal notranslate"><span class="pre">color</span></code> this is what a program
+needs to choose a palette and whether and how to dither; antialiasing
+works fine with a few levels and is not what this field decides.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">red_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">green_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">blue_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">gray_bits</span></code></dt><dd><p>Individual channel precision in bits, <code class="docutils literal notranslate"><span class="pre">0</span></code> when unknown or not applicable.
+RGB reports use the first three fields and set <code class="docutils literal notranslate"><span class="pre">gray_bits=0</span></code>; grayscale
+and monochrome reports use <code class="docutils literal notranslate"><span class="pre">gray_bits</span></code> and set all three RGB widths to
+<code class="docutils literal notranslate"><span class="pre">0</span></code>. For example RGB565 is <code class="docutils literal notranslate"><span class="pre">color=rgb</span> <span class="pre">:</span> <span class="pre">bits=0</span> <span class="pre">:</span> <span class="pre">red_bits=5</span> <span class="pre">:</span>
+<span class="pre">green_bits=6</span> <span class="pre">:</span> <span class="pre">blue_bits=5</span> <span class="pre">:</span> <span class="pre">gray_bits=0</span></code>. A sixteen-level grayscale
+display is <code class="docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">:</span> <span class="pre">bits=4</span> <span class="pre">:</span> <span class="pre">gray_bits=4</span></code>. A monochrome display has
+<code class="docutils literal notranslate"><span class="pre">color=mono</span> <span class="pre">:</span> <span class="pre">bits=1</span> <span class="pre">:</span> <span class="pre">gray_bits=1</span></code>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">precision</span></code></dt><dd><p>Where the channel widths came from: <code class="docutils literal notranslate"><span class="pre">framebuffer</span></code> for the system's
+display mode or window visual, <code class="docutils literal notranslate"><span class="pre">configured</span></code> for a user's declaration,
+or <code class="docutils literal notranslate"><span class="pre">unknown</span></code>. A framebuffer width does not establish the physical
+panel's precision: the compositor, display link, panel, or dithering may
+change what is finally shown. These fields describe available color
+representation, not a measurement of calibration or color error.</p>
+</dd>
+</dl>
+<p>The individual widths and <code class="docutils literal notranslate"><span class="pre">precision</span></code> are additive version-1 fields. Clients
+must ignore unknown fields and treat missing individual widths as unknown;
+an older terminal's nonzero <code class="docutils literal notranslate"><span class="pre">bits</span></code> still applies equally to its active
+channels.</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">gamut</span></code></dt><dd><p><code class="docutils literal notranslate"><span class="pre">srgb</span></code>、<code class="docutils literal notranslate"><span class="pre">p3</span></code>、<code class="docutils literal notranslate"><span class="pre">rec2020</span></code> 或 <code class="docutils literal notranslate"><span class="pre">unknown</span></code>，表示显示器覆盖的最宽色彩空间。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">headroom</span></code></dt><dd><p>终端可显示亮度相对于普通文本白色的倍数；没有额外亮度时为 <code class="docutils literal notranslate"><span class="pre">1</span></code>。使用方式见 HDR 亮度协议。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">scale</span></code></dt><dd><p>系统要求应用使用的帧缓冲区缩放比例：一个系统逻辑单位需要多少物理像素。多数高密度显示器为 <code class="docutils literal notranslate"><span class="pre">2</span></code>，其他显示器常用 <code class="docutils literal notranslate"><span class="pre">1.25</span></code> 或 <code class="docutils literal notranslate"><span class="pre">1.5</span></code> 等小数。未知时为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。用途见 <a class="reference internal" href="#pixels">像素</a>。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">period</span></code></dt><dd><p>显示器刷新周期，单位微秒，未知时为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">ppi</span></code></dt><dd><p>每英寸的物理像素数：程序绘制的多少像素对应屏幕上一英寸，供程序按真实尺寸绘制。未知时为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。</p>
+</dd>
+</dl>
+<p>终端无法确定的值为 <code class="docutils literal notranslate"><span class="pre">unknown</span></code> 或 <code class="docutils literal notranslate"><span class="pre">0</span></code>，绝不猜测。例如未连接客户端的多路复用器，若不了解显示器，所有字段均回答未知，程序的处境不会比查询前更差。</p>
+</section>
+<section id="pixels">
+<h2>像素<a class="headerlink" href="#pixels" title="链接到此标题。">¶</a></h2>
+<p>本协议及终端所有以像素度量的协议（窗口和字符单元尺寸、图像尺寸和放置、指针／笔／手指位置、滚动距离）均使用物理像素，即终端绘制的帧缓冲区中的一个像素。不使用系统逻辑单位（每个逻辑单位对应 <code class="docutils literal notranslate"><span class="pre">scale</span></code> 个像素），终端也不会拉伸程序绘制的内容来弥补差异。因此，程序绘制的一像素宽直线就是一像素，而非扩散到多个像素的模糊斑块，程序能使用显示器提供的每一个像素。</p>
+<p><code class="docutils literal notranslate"><span class="pre">scale</span></code> 表示系统希望应用采用的尺寸，使内容看起来符合用户选择的大小。程序用它决定绘制多大，例如将一个逻辑单位粗的标尺绘制为 <code class="docutils literal notranslate"><span class="pre">scale</span></code> 像素；不要用它换算已经以物理像素表示的位置或尺寸。<code class="docutils literal notranslate"><span class="pre">ppi</span></code> 则把这些像素与屏幕的实际尺寸联系起来。</p>
+</section>
+<section id="mode">
+<h2>模式<a class="headerlink" href="#mode" title="链接到此标题。">¶</a></h2>
+<p>程序可按终端窗口开启变化通知：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">mode</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">1</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>用 <code class="docutils literal notranslate"><span class="pre">mode=0</span></code> 关闭。模式仅作用于当前窗口，并由 <code class="docutils literal notranslate"><span class="pre">RIS</span></code> 重置。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他终端状态一起保存它，并在脱离连接时关闭。终端可允许用户针对全部或部分程序拒绝模式；被拒绝时读回为关闭，不产生任何报告，因此程序应读回状态，而不是假定已获准。</p>
+<p>不带 <code class="docutils literal notranslate"><span class="pre">mode</span></code> 字段的 <code class="docutils literal notranslate"><span class="pre">mode</span></code> 请求读取状态而不修改，回复为：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">mode</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">1</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>程序重连后恢复时，应读回模式，确认是否仍然有效，而非假定状态保留。</p>
+</section>
+<section id="events">
+<h2>事件<a class="headerlink" href="#events" title="链接到此标题。">¶</a></h2>
+<p>开启模式会先发送一次包含当前值的事件，无需单独查询。此后，只要模式开启，任何字段变化都会产生一条事件：窗口移到缩放比例或刷新率不同的显示器、显示亮度设置改变了亮度余量，或切换了色彩配置文件：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">srgb</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">16666</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">96</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>字段与 <code class="docutils literal notranslate"><span class="pre">cap</span></code> 回复相同，但不含 <code class="docutils literal notranslate"><span class="pre">id</span></code> 和 <code class="docutils literal notranslate"><span class="pre">mode</span></code>，并带有 <code class="docutils literal notranslate"><span class="pre">t</span></code>，表示终端获知变化的时刻，以全部扩展共用时钟上的毫秒表示，见 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a>。变化相对于上次事件计算，因此关闭再开启模式会报告一次当前值，此后仅报告变化。变化可能稍后才报告，程序关闭模式后仍可能收到已经在途的事件。终端和中继绝不合并或丢弃事件。</p>
+</section>
+<section id="relays-and-multiplexers">
+<h2>中继与多路复用器<a class="headerlink" href="#relays-and-multiplexers" title="链接到此标题。">¶</a></h2>
+<p>类似 mosh 客户端、将终端画面绘制到自己显示器的中继，应使用自身显示器回答查询，因为远端终端无法得知这些信息。中继重连到不同客户端时，会向每个开启模式的窗口发送一次事件，使原本按手机布局的程序能改为桌面布局，反之亦然。</p>
+<p>多路复用器根据所连接客户端的显示器回答；脱离连接时所有字段为未知，连接到不同显示器的客户端时发送事件。</p>
+</section>
+<section id="configuration">
+<h2>配置<a class="headerlink" href="#configuration" title="链接到此标题。">¶</a></h2>
+<p>操作系统能报告多数属性，但并非全部；例如没有信息直接告诉终端它位于电子墨水屏上。在 Silkie 中，<a class="reference internal" href="configuration.html#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a> 声明电子纸显示器，并在未明确选择浅色或深色配色时启用白底黑字。它优先于检测到的显示器类型和 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=...</span></code>。运行时用 <code class="docutils literal notranslate"><span class="pre">set_eink_mode</span></code> 切换会立即通知显示信息订阅者。<a class="reference internal" href="configuration.html#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> 可声明操作系统无法提供的个别属性，并覆盖检测；仅设置 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> 会改变报告而不改变颜色。两种设置都不猜测电子纸是灰度还是彩色。目前 Silkie 仅在 macOS 上报告 <code class="docutils literal notranslate"><span class="pre">kind</span></code>，在 macOS 及实现色彩管理协议的 Wayland 合成器上报告 <code class="docutils literal notranslate"><span class="pre">gamut</span></code>。后者由合成器提供显示器基色，<code class="docutils literal notranslate"><span class="pre">gamut</span></code> 选择显示器在 CIE 1931 色度图上覆盖面积至少十分之九的最宽色域；两种较宽色域均未达到时为 <code class="docutils literal notranslate"><span class="pre">srgb</span></code>。<code class="docutils literal notranslate"><span class="pre">headroom</span></code> 是 <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a> 的亮度余量，已应用 <a class="reference internal" href="configuration.html#opt-hdr_max_headroom"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr_max_headroom</span></code></a> 上限；除非启用 <a class="reference internal" href="configuration.html#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> 且窗口实际显示 HDR，否则为 <code class="docutils literal notranslate"><span class="pre">1</span></code>。macOS 和 Wayland 何时可使用 HDR 见该页。</p>
+<p>For a known ten-bit RGB panel or a sixteen-level grayscale panel, configure:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">10</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">10</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">10</span>
+</pre></div>
+</div>
+<p>or:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">4</span>
+</pre></div>
+</div>
+<p>For a black-and-white panel, use <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=mono</span></code>. Monochrome means
+exactly one bit, so wider <code class="docutils literal notranslate"><span class="pre">bits</span></code> or <code class="docutils literal notranslate"><span class="pre">gray_bits</span></code> declarations are ignored;
+use <code class="docutils literal notranslate"><span class="pre">color=gray</span></code> for more than two levels. The legacy <code class="docutils literal notranslate"><span class="pre">bits=8</span></code> declaration
+sets all active channel widths; individual declarations take precedence
+regardless of their order. Changing from RGB to grayscale clears detected RGB
+precision rather than guessing the gray panel's depth.</p>
+<p>macOS reports the screen's color-space model and bits per sample. X11 reports
+the actual window visual's RGB masks or grayscale depth, including unequal
+RGB channel widths. These are labeled <code class="docutils literal notranslate"><span class="pre">precision=framebuffer</span></code> and do not
+detect a panel that accepts RGB input but displays only gray. Wayland does
+not provide channel precision through the output and color-management
+protocols currently used by Silkie, so it reports zero widths rather than
+assuming eight bits. Declare physical panel properties explicitly when the
+system cannot supply them. Applications may query the fields with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">printf</span> <span class="s1">'</span><span class="se">\033</span><span class="s1">]777;display;v=1:op=query:id=42</span><span class="se">\033\\</span><span class="s1">'</span>
+</pre></div>
+</div>
+<p>Responses and subscribed events both carry the channel widths; moving to a
+display with a different width triggers an event even if its other properties
+are unchanged.</p>
+<p><code class="docutils literal notranslate"><span class="pre">scale</span></code> 是窗口系统提供给窗口的比例：macOS 的 backing scale factor、Wayland 表面的首选比例（合成器支持时可为小数），以及 X11 从 <code class="docutils literal notranslate"><span class="pre">Xft.dpi</span></code> 取得的桌面比例。在 X11 和能声明小数比例的 Wayland 合成器上，Silkie 绘制的像素对应面板像素。在 macOS 上，它们是系统为显示器保存的帧缓冲区像素，默认分辨率下对应面板原生像素。选择缩放分辨率（显示设置中的“更多空间”及相邻选项）时，系统会将帧缓冲区重采样到面板，类似 Wayland 合成器对只能提供整数缩放比例的窗口所做的处理。这时 Silkie 的像素不再严格对应面板像素，任何应用都无法避免；macOS 上的 <code class="docutils literal notranslate"><span class="pre">ppi</span></code> 统计的是 Silkie 绘制的像素。</p>
+<p>不提供物理尺寸的显示器（例如远程会话或虚拟机中的虚拟显示器），其 <code class="docutils literal notranslate"><span class="pre">ppi</span></code> 为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。窗口系统可能假定每英寸 96 或 72 像素，但这是猜测，不会转发给程序。</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="latency-protocol.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">低延迟协议</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="cell-alpha-protocol.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">字符单元背景透明度</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">显示信息协议</a><ul>
+<li><a class="reference internal" href="#framing">消息封装</a></li>
+<li><a class="reference internal" href="#query">查询</a></li>
+<li><a class="reference internal" href="#pixels">像素</a></li>
+<li><a class="reference internal" href="#mode">模式</a></li>
+<li><a class="reference internal" href="#events">事件</a></li>
+<li><a class="reference internal" href="#relays-and-multiplexers">中继与多路复用器</a></li>
+<li><a class="reference internal" href="#configuration">配置</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

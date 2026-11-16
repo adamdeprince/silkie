@@ -198,7 +198,7 @@ typedef struct Options {
     double window_drag_tolerance;
     bool generate_256_palette;
     int drag_threshold;
-    /* 0 means no limit. See kitty.conf "Input limits". */
+    /* 0 means no limit. See silkie.conf "Input limits". */
     unsigned long csi_limit, escape_limit, vector_depth_limit, vector_dash_limit, vector_raster_limit, vector_curve_limit;
     float text_fg_override_threshold;
 } Options;
@@ -545,6 +545,14 @@ typedef struct OSWindow {
         bool is_set, was_maximized;
     } before_fullscreen;
     int viewport_width, viewport_height, window_width, window_height;
+    struct {
+        unsigned mode; // 0 off, 1 follows head, 2 anchored wall
+        bool tracking;
+        bool red_blue;
+        int eye, output_width, output_height;
+        float scale, requested_scale, fov, positive, negative, phase_limit, multiplier, rotation[9];
+        int texture_limit; // Actual GL_MAX_TEXTURE_SIZE of this window's context.
+    } spatial;
     double viewport_x_ratio, viewport_y_ratio;
     Tab *tabs;
     struct {
@@ -753,6 +761,7 @@ OSWindow *os_window_for_kitty_window(id_type);
 void os_window_display_info(OSWindow *w, DisplayInfo *d);
 unsigned os_window_refresh_period_us(OSWindow *w);
 OSWindow *os_window_for_id(id_type);
+void spatial_map_pointer(OSWindow *, double *, double *);
 OSWindow *add_os_window(void);
 OSWindow *current_os_window(void);
 void os_window_regions(const OSWindow *, Region *main, Region *tab_bar);

@@ -62,6 +62,53 @@ def clamp_font_size(new_size: float, configured_size: float) -> float:
     return max(MINIMUM_FONT_SIZE, min(new_size, upper))
 
 
+def spatial_angle(value: str) -> float:
+    from math import isfinite
+    number = float(value)
+    if not isfinite(number) or not 0 < number < 180:
+        raise ValueError('Angle must be greater than zero and less than 180 degrees')
+    return number
+
+
+def spatial_divergence(value: str) -> float:
+    number = float(value)
+    if number == 0:
+        return 0.
+    return spatial_angle(value)
+
+
+def spatial_scale(value: str) -> float:
+    from math import isfinite
+    number = float(value)
+    if not isfinite(number) or number < 1:
+        raise ValueError('Wall scale must be finite and at least one')
+    return number
+
+
+def spatial_phase_limit(value: str) -> float:
+    from math import isfinite
+    number = float(value)
+    if not isfinite(number) or number < 0:
+        raise ValueError('Vertical phase limit must be finite and nonnegative')
+    return number
+
+
+def spatial_exponent(value: str) -> float:
+    from math import isfinite
+    number = float(value)
+    if not isfinite(number) or not -6 <= number <= 6:
+        raise ValueError('Divergence exponent must be between -6 and 6')
+    return number
+
+
+def hdr_multiplier(value: str) -> float:
+    from math import isfinite
+    number = float(value)
+    if not isfinite(number) or number < 1:
+        raise ValueError('HDR brightness must be finite and at least 1.0 times SDR white')
+    return number
+
+
 default_tab_separator = ' ┇'
 mod_map = {
     '⌃': 'CONTROL',
@@ -226,6 +273,8 @@ def detach_tab_parse(func: str, rest: str) -> FuncArgsType:
     'simulate_color_scheme_preference_change',
     'set_color_scheme',
     'set_eink_mode',
+    'set_spatial_mode',
+    'set_spatial_output',
 )
 def simple_parse(func: str, rest: str) -> FuncArgsType:
     return func, (rest,)

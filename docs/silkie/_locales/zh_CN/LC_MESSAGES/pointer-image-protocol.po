@@ -1,0 +1,87 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:40+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/pointer-image-protocol.rst:2
+msgid "Image pointer extension"
+msgstr "图像指针扩展"
+
+#: docs/silkie/pointer-image-protocol.rst:4
+msgid ""
+"Silkie adds image-backed pointers to `kitty's pointer shape protocol "
+"<https://sw.kovidgoyal.net/kitty/pointer-shapes/>`_. That specification defines the OSC 22 "
+"framing, shape stack, and queries."
+msgstr ""
+"Silkie 为 `kitty 指针形状协议 <https://sw.kovidgoyal.net/kitty/pointer-shapes/>`_ 添加了基于图像的指针。该规范定义 OSC "
+"22 封装、形状栈和查询。"
+
+#: docs/pointer-shapes.rst:4
+msgid "Image shapes"
+msgstr "图像形状"
+
+#: docs/pointer-shapes.rst:8
+msgid ""
+"A program can use an image it has sent with the :doc:`graphics-protocol` as the pointer, for "
+"example a drawing program showing the size and color of the current brush under the pen. Anywhere"
+" a shape name is accepted, the name::"
+msgstr "程序可将通过 :doc:`graphics-protocol` 发送的图像用作指针，例如绘图程序在笔下显示当前画笔的大小和颜色。在任何接受形状名称的位置，以下名称：::"
+
+#: docs/pointer-shapes.rst:14
+msgid ""
+"refers to the image transmitted with that ``i=`` id in the same window. The hotspot is the pixel "
+"of the image that sits under the pointer position, with the origin at the top left corner; one or"
+" both coordinates may be left out and default to zero. For example, a 2 pixel wide outline of a "
+"circle with a 48 pixel diameter, sent as image ``9``, centered on the pointer::"
+msgstr ""
+"引用同一窗口中以该 ``i=`` ID 传输的图像。热点是图像中位于指针位置的像素，以左上角为原点；可以省略一个或两个坐标，默认值为零。例如，将宽 2 像素、直径 48 像素的圆形轮廓作为图像 "
+"``9`` 发送，并让其中心与指针对齐：::"
+
+#: docs/pointer-shapes.rst:22
+msgid ""
+"The image is shown with one image pixel per physical pixel, exactly as the graphics protocol "
+"displays an image placed without scaling, so a brush preview drawn at the size the brush has on "
+"the canvas lines up with it. The window and cell sizes reported by ``CSI 14 t`` and ``CSI 16 t`` "
+"are in the same pixels. The current frame of an animated image is used, changes to the frames of "
+"the image are reflected on the pointer."
+msgstr ""
+"图像的每个像素对应一个物理像素，与图形协议显示未缩放放置图像的方式相同，因此按画布中实际画笔大小绘制的预览可与画笔对齐。``CSI 14 t`` 和 ``CSI 16 t`` "
+"报告的窗口和字符单元尺寸也使用相同的像素单位。动画图像使用当前帧；图像帧的变化会反映到指针上。"
+
+#: docs/pointer-shapes.rst:29
+msgid ""
+"The name is only a reference to the image. If no image with that id exists when the shape is set,"
+" or the image is deleted later, the entry is ignored and the pointer falls back to the shape "
+"below it on the stack, or to the default shape, until an image with that id is transmitted again."
+" Deleting the image therefore does not pop the stack. The reply to ``?__current__`` is the image "
+"name, with both hotspot coordinates, when an image shape is in effect. The query form "
+"``?image:1:2:3`` answers ``1`` when the terminal supports image shapes, regardless of whether "
+"image ``1`` exists."
+msgstr ""
+"名称只是对图像的引用。设置形状时若对应 ID 的图像不存在，或图像随后被删除，则忽略该条目，指针回退到栈中下一层形状或默认形状，直到再次传输该 ID "
+"的图像。因此删除图像不会弹出栈条目。图像形状生效时，``?__current__`` 的回复是带有两个热点坐标的图像名称。只要终端支持图像形状，查询形式 ``?image:1:2:3`` 就返回"
+" ``1``，无论图像 ``1`` 是否存在。"
+
+#: docs/pointer-shapes.rst:38
+msgid ""
+"An image larger than the platform allows for a pointer, which happens on X11 for big images, is "
+"ignored as if it did not exist. A multiplexer or a relay such as mosh passes the name through "
+"unchanged, the terminal at the far end resolves the id among the images of that window."
+msgstr "图像超过平台允许的指针尺寸时（例如 X11 上的大图像），按不存在处理。多路复用器或 mosh 等中继原样透传名称，由远端终端在该窗口的图像中解析 ID。"
+

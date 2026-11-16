@@ -1,0 +1,209 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:46+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/graphics-protocol.rst:4
+msgid "GPU surfaces (zero-copy)"
+msgstr "GPU 表面（零拷贝）"
+
+#: docs/graphics-protocol.rst:6
+msgid ""
+"A local client that renders on the GPU, a video player or a drawing canvas, can share its output "
+"with the terminal without a single CPU copy by transmitting a *GPU surface*, ``t=g``. The payload"
+" is the name of the surface: an IOSurface on macOS and a dma-buf on Linux, as below. Other kinds "
+"of surface are refused with ``EINVAL``, as is ``t=g`` on platforms without an implementation. "
+"Chunking (``m``) and compression (``o``) are not allowed with ``t=g``."
+msgstr ""
+"在 GPU 上渲染的本地客户端，例如视频播放器或绘图画布，可通过传输 *GPU 表面* ``t=g`` 与终端共享输出，无需 CPU 拷贝。载荷是表面的名称：macOS 使用 "
+"IOSurface，Linux 使用如下 dma-buf。其他表面类型及未实现此功能的平台上的 ``t=g`` 均以 ``EINVAL`` 拒绝。``t=g`` "
+"不允许分块（``m``）和压缩（``o``）。"
+
+#: docs/graphics-protocol.rst:13
+msgid ""
+"On macOS the payload is ``iosurface:<id>`` where ``<id>`` is the integer returned by "
+"``IOSurfaceGetID()``. The surface must be created with ``kIOSurfaceIsGlobal`` set, otherwise "
+"``IOSurfaceLookup()`` in the terminal cannot find it. The surface must be 32-bit ``BGRA`` or "
+"``RGBA`` with straight (not pre-multiplied) alpha, as for ``f=32``. The ``f``, ``s`` and ``v`` "
+"keys are ignored, the dimensions and pixel format come from the surface itself."
+msgstr ""
+"macOS 的载荷为 ``iosurface:<id>``，其中 ``<id>`` 是 ``IOSurfaceGetID()`` 返回的整数。创建表面时必须设置 "
+"``kIOSurfaceIsGlobal``，否则终端中的 ``IOSurfaceLookup()`` 无法找到它。表面必须为 32 位 ``BGRA`` 或 ``RGBA``，Alpha 与 "
+"``f=32`` 一样采用直通值（非预乘）。``f``、``s`` 和 ``v`` 被忽略，尺寸和像素格式取自表面本身。"
+
+#: docs/graphics-protocol.rst:20
+msgid ""
+"On Linux it is a *dma-buf*, the kind of buffer that GPU drivers, Vulkan, GBM and udmabuf share "
+"between processes. A dma-buf is a file descriptor and has no name that another process could look"
+" up, so the payload names the process that holds it and its descriptors there::"
+msgstr ""
+"Linux 使用 *dma-buf*，即 GPU 驱动、Vulkan、GBM 和 udmabuf 在进程间共享的缓冲区。dma-buf "
+"是文件描述符，没有可供其他进程查找的名称，因此载荷指定持有它的进程及该进程中的描述符：::"
+
+#: docs/graphics-protocol.rst:27
+msgid "``<pid>``"
+msgstr "``<pid>``"
+
+#: docs/graphics-protocol.rst:28
+msgid ""
+"The id of the process that holds the buffer, as the terminal sees it, so a client in a container "
+"with process ids of its own cannot use this."
+msgstr "持有缓冲区的进程 ID，以终端所见的 PID 为准，因此拥有独立 PID 命名空间的容器客户端无法使用。"
+
+#: docs/graphics-protocol.rst:31
+msgid "``<fourcc>``"
+msgstr "``<fourcc>``"
+
+#: docs/graphics-protocol.rst:32
+msgid ""
+"The DRM format, as the four characters of its code. ``AB24`` (``DRM_FORMAT_ABGR8888``) has the "
+"bytes R, G, B, A in memory, the order of ``f=32``, and ``AR24`` (``DRM_FORMAT_ARGB8888``) has B, "
+"G, R, A. ``XB24`` and ``XR24`` are the same with the fourth byte ignored. Alpha is straight, as "
+"for ``f=32``."
+msgstr ""
+"DRM 格式的四字符代码。``AB24``（``DRM_FORMAT_ABGR8888``）在内存中的字节顺序为 R、G、B、A，与 ``f=32`` "
+"相同；``AR24``（``DRM_FORMAT_ARGB8888``）为 B、G、R、A。``XB24`` 和 ``XR24`` 分别相同，但忽略第四字节。Alpha 与 ``f=32`` "
+"一样为直通值。"
+
+#: docs/graphics-protocol.rst:38
+msgid "``<modifier>``"
+msgstr "``<modifier>``"
+
+#: docs/graphics-protocol.rst:39
+msgid ""
+"The DRM format modifier of the buffer, in decimal or in hexadecimal after ``0x``: ``0`` for a "
+"linear buffer, ``0x00ffffffffffffff`` (``DRM_FORMAT_MOD_INVALID``) to leave the layout to the "
+"driver, or the one the allocator chose."
+msgstr ""
+"缓冲区的 DRM 格式修饰符，以十进制或带 ``0x`` 前缀的十六进制表示：线性缓冲区用 ``0``，将布局交给驱动用 "
+"``0x00ffffffffffffff``（``DRM_FORMAT_MOD_INVALID``），也可使用分配器选择的修饰符。"
+
+#: docs/graphics-protocol.rst:44
+msgid "``<fd>,<offset>,<stride>``"
+msgstr "``<fd>,<offset>,<stride>``"
+
+#: docs/graphics-protocol.rst:45
+msgid ""
+"One to four planes, each the number of the descriptor in the process that holds the buffer, the "
+"offset of the plane in it and its stride in bytes, as the allocator gives them. The formats above"
+" have one plane, a modifier can add more."
+msgstr "一至四个平面，每个包含持有缓冲区进程中的描述符编号、平面偏移，以及字节步长，按分配器提供的值填写。上述格式具有一个平面；修饰符可能增加更多平面。"
+
+#: docs/graphics-protocol.rst:50
+msgid ""
+"A dma-buf does not know its size, so ``s`` and ``v`` are required and give the width and height "
+"in pixels; ``f`` is ignored."
+msgstr "dma-buf 不知道自身尺寸，因此必须用 ``s`` 和 ``v`` 指定像素宽高；``f`` 被忽略。"
+
+#: docs/graphics-protocol.rst:53
+msgid ""
+"The terminal takes duplicates of the descriptors with ``pidfd_getfd(2)``, as a debugger could, "
+"and only from a process in the session of the program the window runs: the shell of the window "
+"and everything started from it. Any other process is refused, so that a program cannot have the "
+"terminal show the buffers of another window or of a program that is not its own. The kernel adds "
+"a condition of its own, that the terminal be allowed to trace the process. With Yama's "
+"``ptrace_scope`` at ``0`` or ``1``, the default of most distributions, that holds for the "
+"processes the terminal started; at ``2`` or ``3`` it holds for none, and every dma-buf is "
+"refused. A descriptor that is not a dma-buf is refused too. The terminal closes its duplicates "
+"once the buffer is imported, the driver keeping the buffer for as long as the image exists, and "
+"the client may close its own descriptors whenever it likes after the reply."
+msgstr ""
+"终端像调试器一样使用 ``pidfd_getfd(2)`` 复制描述符，且仅接受窗口所运行程序会话内的进程，即该窗口的 shell "
+"及由其启动的程序。其他进程会被拒绝，避免程序让终端显示其他窗口或非自身程序的缓冲区。内核还要求终端有权跟踪目标进程。多数发行版默认的 Yama ``ptrace_scope`` 为 ``0`` "
+"或 ``1``，终端启动的进程满足条件；设为 ``2`` 或 ``3`` 时均不满足，全部 dma-buf 会被拒绝。非 dma-buf "
+"描述符也会被拒绝。缓冲区导入后，终端关闭自己的描述符副本，由驱动在图像存在期间保留缓冲区；客户端收到回复后可随时关闭自己的描述符。"
+
+#: docs/graphics-protocol.rst:67
+msgid ""
+"The buffer is imported with ``EGL_EXT_image_dma_buf_import``, and "
+"``EGL_EXT_image_dma_buf_import_modifiers`` for a modifier other than ``0`` and "
+"``0x00ffffffffffffff``, so it works where kitty draws with EGL: under Wayland, and not under X11,"
+" where it draws with GLX. Every refusal is an ``EINVAL`` with a message that says why: under X11,"
+" a payload that is not as above, no ``s`` or ``v``, a process outside the session, a descriptor "
+"that cannot be taken or is not a dma-buf, or a driver that cannot import the buffer. A query, "
+"``a=q``, does all of it but the import, so its answer says whether the terminal could take the "
+"buffer."
+msgstr ""
+"使用 ``EGL_EXT_image_dma_buf_import`` 导入缓冲区；修饰符不是 ``0`` 或 ``0x00ffffffffffffff`` 时，还需 "
+"``EGL_EXT_image_dma_buf_import_modifiers``。因此适用于 kitty 使用 EGL 绘制的 Wayland，而不适用于使用 GLX 的 "
+"X11。所有拒绝都回复 ``EINVAL`` 并说明原因：X11 平台、载荷格式不符、缺少 ``s`` 或 ``v``、进程不在会话内、描述符无法获取或不是 dma-"
+"buf，或驱动无法导入缓冲区。查询 ``a=q`` 会执行除实际导入以外的全部检查，其答案说明终端能否获取该缓冲区。"
+
+#: docs/graphics-protocol.rst:77
+msgid ""
+"When it copies a dma-buf, the terminal relies on the synchronization that the drivers of dma-bufs"
+" do implicitly for the rendering the client submitted before it sent the command. A client whose "
+"driver does not, or that writes the buffer with the CPU, finishes its writes before it sends the "
+"command."
+msgstr "复制 dma-buf 时，终端依赖 dma-buf 驱动对客户端发送命令前所提交渲染的隐式同步。如果驱动不提供此同步，或客户端用 CPU 写入缓冲区，客户端必须在发送命令前完成写入。"
+
+#: docs/graphics-protocol.rst:82
+msgid ""
+"This was tried on Ubuntu 26.04 with Mesa's software renderer, under a headless sway, with buffers"
+" made from memory with udmabuf in the formats ``AB24`` and ``XR24`` and the modifiers ``0`` and "
+"``0x00ffffffffffffff``: the content of the buffer showed, and after a refresh its new content. It"
+" has not been tried with buffers of a GPU driver or with other modifiers."
+msgstr ""
+"已在 Ubuntu 26.04、无头 sway 和 Mesa 软件渲染器下测试，使用 udmabuf 从内存创建 ``AB24`` 和 ``XR24`` 缓冲区，修饰符为 ``0`` 和 "
+"``0x00ffffffffffffff``：可显示缓冲区内容，并在刷新后显示更新内容。尚未测试 GPU 硬件驱动的缓冲区或其他修饰符。"
+
+#: docs/graphics-protocol.rst:88
+msgid ""
+"The terminal keeps the surface for as long as the image exists, and copies it into the image on "
+"the GPU when it is transmitted and again on every refresh, so the image shows what the surface "
+"held at the last of those. After updating the surface, the client sends the refresh action::"
+msgstr "图像存在期间，终端保持表面引用，并在传输时及每次刷新时在 GPU 上将其复制到图像，因此图像显示最近一次复制时的表面内容。更新表面后，客户端发送刷新操作：::"
+
+#: docs/graphics-protocol.rst:95
+msgid ""
+"which copies the surface again and marks the image as changed so that the next frame shows the "
+"new content. The terminal responds ``OK`` unless responses are suppressed with ``q``. Sending "
+"``a=t`` or ``a=T`` again with ``t=g`` and the same surface for an existing image id is equivalent"
+" to a refresh followed by the usual placement. Deleting the image releases the surface. Animation"
+" frames (``a=f``) and composition (``a=c``) are not supported for surface backed images, the "
+"terminal responds with ``EINVAL``. ``a=q`` with ``t=g`` can be used to check for support, a "
+"terminal that does not know the medium responds with an error."
+msgstr ""
+"这会重新复制表面并标记图像已更改，下一帧即可显示新内容。除非用 ``q`` 抑制回复，否则终端回答 ``OK``。对已有图像 ID，再次用 ``t=g``、同一表面和 ``a=t`` 或 "
+"``a=T`` 传输，等同于先刷新再执行通常的放置。删除图像会释放表面。基于表面的图像不支持动画帧（``a=f``）和合成（``a=c``），终端回复 ``EINVAL``。可用 ``a=q``"
+" 与 ``t=g`` 检查支持情况；不认识此介质的终端回复错误。"
+
+#: docs/graphics-protocol.rst:105
+msgid ""
+"Relays such as multiplexers or Goblin Skiff that forward a terminal session to another machine "
+"cannot pass the surface along, but they can read it. On macOS any process of the same user can "
+"call ``IOSurfaceLookup()`` with the id, then ``IOSurfaceLock()`` and "
+"``IOSurfaceGetBaseAddress()`` to read the pixels. On Linux a relay that started the client can "
+"take the descriptors with ``pidfd_getfd(2)`` as the terminal does, and read the pixels of a "
+"linear buffer with ``mmap(2)``; the terminal itself refuses a dma-buf named through a "
+"multiplexer, whose clients are not in the session of the window. A relay can poll the surface, "
+"for instance on every refresh action, and forward the pixels to the far side with an ordinary "
+"``t=d`` transmission."
+msgstr ""
+"多路复用器或 Goblin Skiff 等将终端会话转发到另一台机器的中继，不能传送表面本身，但可以读取它。在 macOS 上，同一用户的任何进程都可用 ID 调用 "
+"``IOSurfaceLookup()``，再通过 ``IOSurfaceLock()`` 和 ``IOSurfaceGetBaseAddress()`` 读取像素。在 Linux "
+"上，由中继启动的客户端可像终端一样用 ``pidfd_getfd(2)`` 获取描述符，并用 ``mmap(2)`` 读取线性缓冲区；终端自身会拒绝通过多路复用器指定的 dma-"
+"buf，因为这些客户端不在窗口的会话内。中继可以轮询表面，例如每次收到刷新操作时，将像素用普通 ``t=d`` 传输发送到远端。"
+
+#: docs/silkie/gpu-surface-protocol.rst:7
+msgid ""
+"The base transmission, placement, deletion, and reply rules are specified by the `kitty graphics "
+"protocol <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_."
+msgstr "基础传输、放置、删除和回复规则由 `kitty 图形协议 <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_ 规定。"
+

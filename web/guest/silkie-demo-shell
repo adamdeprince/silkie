@@ -1,0 +1,3 @@
+#!/bin/sh
+# Browser-generated files are mounted as data, never executable guest code.
+exec /usr/local/libexec/silkie-console-session --shell /bin/bash --rcfile /etc/silkie-demo.bashrc -i

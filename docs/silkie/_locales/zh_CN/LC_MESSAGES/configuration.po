@@ -1,0 +1,401 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:40+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/configuration.rst:2
+msgid "Silkie configuration"
+msgstr "Silkie 配置"
+
+#: docs/silkie/configuration.rst:4
+msgid ""
+"These options configure Silkie's extensions in ``kitty.conf``. For the file location, syntax, and"
+" inherited settings, see `kitty's configuration reference "
+"<https://sw.kovidgoyal.net/kitty/conf/>`_."
+msgstr ""
+"这些选项用于在 ``kitty.conf`` 中配置 Silkie 的扩展。文件位置、语法和继承的设置见 `kitty 配置参考 "
+"<https://sw.kovidgoyal.net/kitty/conf/>`_。"
+
+#: docs/silkie/configuration.rst:8
+msgid "The option defaults and descriptions below come from Silkie's configuration definitions."
+msgstr "下面的默认值和说明来自 Silkie 的配置定义。"
+
+#: docs/silkie/configuration.rst:12
+msgid "E-paper and color switching"
+msgstr "电子纸与配色切换"
+
+#: docs/silkie/configuration.rst:14
+msgid ""
+"For an external e-paper monitor, including a BOOX monitor that the operating system treats as an "
+"ordinary display, add this to ``kitty.conf``::"
+msgstr "对于外接电子纸显示器，包括被操作系统识别为普通显示器的 BOOX 显示器，请在 ``kitty.conf`` 中添加：::"
+
+#: docs/silkie/configuration.rst:19
+msgid ""
+"Silkie uses black text on white and reports ``kind=eink`` to applications through the :doc"
+":`display-protocol`. Applications can use that information to avoid animation, smooth scrolling "
+"and frequent redraws. Software must support the protocol to use it."
+msgstr ""
+"Silkie 使用白底黑字，并通过 :doc:`display-protocol` 向应用报告 "
+"``kind=eink``。应用可利用这一信息避免动画、平滑滚动和频繁重绘。软件需要支持该协议才能使用此信息。"
+
+#: docs/silkie/configuration.rst:24
+msgid ""
+"Press ``ctrl+shift+f12`` to switch between black on white and white on black. The display is "
+"still reported as e-paper in either scheme. Press ``ctrl+shift+alt+f12`` to toggle e-paper mode. "
+"These shortcuts use ``kitty_mod`` (by default ``ctrl+shift``) and affect all Silkie windows. The "
+"actions are also available from the command palette. To choose your own shortcuts::"
+msgstr ""
+"按 ``ctrl+shift+f12`` 在白底黑字和黑底白字之间切换。两种配色下，显示器都仍报告为电子纸。按 ``ctrl+shift+alt+f12`` 切换电子纸模式。这些快捷键使用 "
+"``kitty_mod``（默认 ``ctrl+shift``），并影响全部 Silkie 窗口。命令面板中也可执行这些操作。自定义快捷键：::"
+
+#: docs/silkie/configuration.rst:33
+msgid ""
+"Use ``color_scheme light`` or ``color_scheme dark`` for a persistent color choice on any display."
+" ``set_color_scheme auto`` returns to configured colors and automatic themes, or to black on "
+"white while e-paper mode is enabled. Explicit light and dark choices take precedence over "
+"automatic themes and OS appearance changes. Reloading the configuration restores the saved "
+"choices."
+msgstr ""
+"在任意显示器上使用 ``color_scheme light`` 或 ``color_scheme dark`` 可固定配色。``set_color_scheme auto`` "
+"恢复配置颜色和自动主题；若启用电子纸模式，则恢复白底黑字。明确指定的浅色和深色优先于自动主题及操作系统外观变化。重新加载配置会恢复已保存的选择。"
+
+#: docs/silkie/configuration.rst:39
+msgid ""
+"E-paper mode declares the display kind without assuming its color depth or refresh timing. For a "
+"panel known to have sixteen levels of gray, also set::"
+msgstr "电子纸模式声明显示器类型，但不假定其色深或刷新时序。如果已知面板有十六级灰度，还可设置：::"
+
+#: docs/silkie/configuration.rst:44
+msgid ""
+"Leave that line out for a color e-paper monitor, or declare its actual capabilities. "
+"``display_info kind=eink`` remains available as a reporting-only override that leaves the color "
+"scheme unchanged. These declarations apply to all windows in the Silkie process, so toggle the "
+"mode when moving between an ordinary monitor and an e-paper monitor."
+msgstr ""
+"彩色电子纸显示器可省略这一行，或声明其实际能力。仍可使用 ``display_info kind=eink`` 仅覆盖报告信息，而不改变配色。这些声明应用于 Silkie "
+"进程的全部窗口，因此在普通显示器和电子纸显示器之间移动时，应切换相应模式。"
+
+#: docs/silkie/configuration.rst:51
+msgid "Fonts and CJK text"
+msgstr "字体与中日韩文本"
+
+#: docs/silkie/configuration.rst:53
+msgid ""
+"Silkie's default ``font_family`` is ``Iosevka``. Install Iosevka and, for the serif role, Iosevka"
+" Slab. See :doc:`font-protocol` for protocol selection, font installation links and CJK behavior."
+" Font files are not bundled."
+msgstr ""
+"Silkie 默认的 ``font_family`` 是 ``Iosevka``。请安装 Iosevka，以及衬线字体角色所需的 Iosevka "
+"Slab。协议选择、字体下载链接和中日韩文本行为见 :doc:`font-protocol`。应用不附带字体文件。"
+
+#: docs/silkie/configuration.rst:57
+msgid "``font_role``"
+msgstr "``font_role``"
+
+#: docs/silkie/configuration.rst:58
+msgid ""
+"Repeatable role-to-font mappings, using kitty's font specification syntax. The defaults are "
+"``sans Iosevka`` and ``serif Iosevka Slab``. ``default`` is reserved for ``font_family``. "
+"Configured roles can carry features and variable-axis settings, and there is no fixed role count."
+msgstr ""
+"可重复指定的角色到字体映射，使用 kitty 的字体描述语法。默认为 ``sans Iosevka`` 和 ``serif Iosevka Slab``。``default`` 保留给 "
+"``font_family``。配置的角色可包含字体特性和可变轴设置；角色数量没有固定限制。"
+
+#: docs/silkie/configuration.rst:63
+msgid "``cjk_font``"
+msgstr "``cjk_font``"
+
+#: docs/silkie/configuration.rst:64
+msgid ""
+"Default: ``auto``. Prefer regional Sarasa Term, Noto Sans CJK or Noto Sans Mono CJK, then "
+"regional system fonts and platform glyph fallback. An explicit font specification overrides that "
+"preference."
+msgstr ""
+"默认：``auto``。优先使用对应地区的 Sarasa Term、Noto Sans CJK 或 Noto Sans Mono "
+"CJK，再使用地区系统字体和平台字形回退。明确指定字体可覆盖这一偏好。"
+
+#: docs/silkie/configuration.rst:68
+msgid "``cjk_font_locale``"
+msgstr "``cjk_font_locale``"
+
+#: docs/silkie/configuration.rst:69
+msgid ""
+"Default: ``auto``. Choose ``jp``, ``kr``, ``sc``, ``tc`` or ``hk`` for regional CJK glyph forms. "
+"Automatic selection follows the process locale, defaulting to ``sc`` when unspecified."
+msgstr "默认：``auto``。选择 ``jp``、``kr``、``sc``、``tc`` 或 ``hk``，以使用相应地区的中日韩字形。自动选择遵循进程的区域设置；未指定时默认为 ``sc``。"
+
+#: docs/silkie/configuration.rst:74
+msgid "Input limits"
+msgstr "输入限制"
+
+#: docs/silkie/configuration.rst:76
+msgid ""
+"These limits apply to data a program writes to the terminal. Each one is a maximum. ``0``, the "
+"default, means there is no limit. Set one only to contain a program that tries to exhaust memory "
+"or time. Goblin View uses ``csi-limit`` and ``escape-limit``. Goblin Skiff uses ``--csi-limit``, "
+"``--escape-limit`` and ``--vector-depth-limit``. The dash, raster and curve limits apply when "
+"Silkie rasterizes a vector image."
+msgstr ""
+"这些限制适用于程序写入终端的数据，每项都表示最大值。默认值 ``0`` 表示不限制。仅当需要约束试图耗尽内存或时间的程序时才应设置。Goblin View 使用 ``csi-limit`` 和 "
+"``escape-limit``；Goblin Skiff 使用 ``--csi-limit``、``--escape-limit`` 和 ``--vector-depth-"
+"limit``。虚线、光栅和曲线限制适用于 Silkie 栅格化矢量图像时。"
+
+#: docs/silkie/configuration.rst:83
+msgid "``csi_limit``"
+msgstr "``csi_limit``"
+
+#: docs/silkie/configuration.rst:84
+msgid ""
+"The maximum number of bytes in one CSI sequence, everything after ``ESC [`` up to and including "
+"its final byte. A longer sequence is ignored. ``0`` means a CSI may be of any length. Cursor "
+"motion and editing that name a count are still clamped to the screen."
+msgstr "单条 CSI 序列的最大字节数，即 ``ESC [`` 之后直到并包括最终字节的全部内容。更长的序列会被忽略。``0`` 表示 CSI 长度不限。带数量参数的光标移动和编辑操作仍限制在屏幕范围内。"
+
+#: docs/silkie/configuration.rst:89
+msgid "``escape_limit``"
+msgstr "``escape_limit``"
+
+#: docs/silkie/configuration.rst:90
+msgid ""
+"The maximum number of bytes in one OSC, APC, DCS, PM or SOS sequence, not counting its introducer"
+" and terminator. A longer sequence is discarded. ``0`` means these sequences may be of any "
+"length. Clipboard writes are still bounded by ``clipboard_max_size``."
+msgstr ""
+"单条 OSC、APC、DCS、PM 或 SOS 序列的最大字节数，不计引入符和终止符。更长的序列会被丢弃。``0`` 表示这些序列长度不限。剪贴板写入仍受 "
+"``clipboard_max_size`` 限制。"
+
+#: docs/silkie/configuration.rst:95
+msgid "``vector_depth_limit``"
+msgstr "``vector_depth_limit``"
+
+#: docs/silkie/configuration.rst:96
+msgid ""
+"The maximum number of groups a vector element may be nested inside. Deeper elements are not "
+"drawn. ``0`` means any depth. A cycle in the parent chain is rejected either way."
+msgstr "矢量元素可嵌套的最大分组层数。更深的元素不绘制。``0`` 表示深度不限。无论如何设置，父级链中的循环都会被拒绝。"
+
+#: docs/silkie/configuration.rst:100
+msgid "``vector_dash_limit``"
+msgstr "``vector_dash_limit``"
+
+#: docs/silkie/configuration.rst:101
+msgid ""
+"The maximum number of dash boundaries stroked for one path. A path that would need more is drawn "
+"solid. ``0`` means every dash is stroked."
+msgstr "单条路径描边的最大虚线边界数。若路径需要更多边界，则绘制为实线。``0`` 表示绘制全部虚线。"
+
+#: docs/silkie/configuration.rst:104
+msgid "``vector_raster_limit``"
+msgstr "``vector_raster_limit``"
+
+#: docs/silkie/configuration.rst:105
+msgid ""
+"The maximum number of pixels in the raster of one vector image. A larger requested size is scaled"
+" down to fit. ``0`` means the image is rasterized at the size it is shown."
+msgstr "单个矢量图像光栅的最大像素数。请求的尺寸过大时按比例缩小。``0`` 表示按实际显示尺寸栅格化。"
+
+#: docs/silkie/configuration.rst:109
+msgid "``vector_curve_limit``"
+msgstr "``vector_curve_limit``"
+
+#: docs/silkie/configuration.rst:110
+msgid ""
+"The maximum number of line segments used to flatten one curve or circle. ``0`` means as many "
+"segments as the flattening error asks for."
+msgstr "将一条曲线或一个圆展平时使用的最大线段数。``0`` 表示按展平误差需要生成线段。"
+
+#: docs/silkie/configuration.rst:116
+msgid "Default: ``detect``."
+msgstr "默认：``detect``。"
+
+#: docs/silkie/configuration.rst:118
+msgid ""
+"Allow colors brighter than SDR white on HDR displays. Normal (SDR) content is rendered exactly as"
+" it is with this option off, HDR only adds extra brightness requested by programs via the :doc"
+":`/hdr-protocol`, by :opt:`cursor_brightness` and by HDR images. The default, :code:`detect`, "
+"keeps HDR enabled on displays where it is available without switching display modes: EDR-capable "
+"displays on macOS, including built-in MacBook displays, and displays already offering HDR "
+"headroom on Wayland. This follows the display as the window moves between screens. :code:`no` "
+"disables HDR. :code:`auto` enables the extended range only while something brighter than SDR "
+"white is on screen; :code:`always` keeps it enabled regardless of display detection. Silkie does "
+"not switch a display into HDR mode; an external display that requires this must be enabled in the"
+" system's display settings. Restart Silkie after changing this option. Supported on macOS, and on"
+" Wayland where the compositor implements color management and the graphics driver has floating "
+"point window surfaces, see :doc:`/hdr-protocol`."
+msgstr ""
+"允许 HDR 显示器显示高于 SDR 白色的亮度。普通 SDR 内容与关闭此选项时完全相同；HDR 仅为程序通过 :doc:`/hdr-"
+"protocol`、:opt:`cursor_brightness` 和 HDR 图像请求的内容增加亮度。默认值 :code:`detect` 会在无需切换显示模式、且具备相应能力的显示器上启用"
+" HDR：包括 macOS 上支持 EDR 的显示器（含 MacBook 内置显示器），以及 Wayland 上已经提供 HDR "
+"亮度余量的显示器。窗口移到其他屏幕时会跟随显示器变化。:code:`no` 禁用 HDR；:code:`auto` 仅在屏幕上存在亮于 SDR "
+"白色的内容时启用扩展范围；:code:`always` 则不论检测结果都保持启用。Silkie 不会将显示器切换为 HDR "
+"模式；需要这样做的外接显示器必须在系统显示设置中启用。修改此选项后请重启 Silkie。支持 macOS；Wayland 还需要合成器实现色彩管理，并由图形驱动提供浮点窗口表面，详见 :doc"
+":`/hdr-protocol`。"
+
+#: docs/silkie/configuration.rst:136
+msgid "Default: ``4.0``."
+msgstr "默认：``4.0``。"
+
+#: docs/silkie/configuration.rst:138
+msgid ""
+"The maximum brightness, as a multiple of SDR white, that Silkie will use for HDR content. The "
+"display may offer more headroom than this, particularly at low brightness settings, but very "
+"bright text is unpleasant to look at. Requests for more brightness are clamped to this value. The"
+" display's own limit always applies."
+msgstr ""
+"Silkie 用于 HDR 内容的最大亮度，以 SDR "
+"白色的倍数表示。显示器可能提供更大的亮度余量，尤其在较低亮度设置下，但过亮的文本不适合阅读。超出此值的请求会被钳制。显示器自身的限制始终适用。"
+
+#: docs/silkie/configuration.rst:145
+msgid "Default: ``1.0``."
+msgstr "默认：``1.0``。"
+
+#: docs/silkie/configuration.rst:147
+msgid ""
+"The brightness of the block cursor as a multiple of SDR white, so :code:`2.0` makes it twice as "
+"bright as normal white text. Values above one only take effect on an HDR display with :opt:`hdr` "
+"enabled, otherwise the cursor is rendered as usual. See :doc:`/hdr-protocol`."
+msgstr ""
+"块状光标的亮度，以 SDR 白色的倍数表示，例如 :code:`2.0` 表示普通白色文本亮度的两倍。大于一的值仅在 HDR 显示器且启用 :opt:`hdr` "
+"时生效，否则按普通方式绘制光标。参阅 :doc:`/hdr-protocol`。"
+
+#: docs/silkie/configuration.rst:154
+msgid "Default: ``srgb``."
+msgstr "默认：``srgb``。"
+
+#: docs/silkie/configuration.rst:156
+msgid ""
+"The colorspace OS windows are drawn in on Wayland. With the default of :code:`srgb` a window is "
+"what it always was. With :code:`displayp3` or :code:`rec2020` the compositor is told the window "
+"is in that wider gamut, and colors and images that a program tags with a wide gamut, see :doc"
+":`wide-gamut-protocol`, are shown in it rather than being clipped to sRGB. :code:`auto` picks the"
+" widest of the three that the display the window is on can show in full. Everything that is not "
+"tagged with a gamut is sRGB and keeps its appearance, unlike with :opt:`macos_colorspace`. This "
+"needs a compositor that implements color management, on any other the window stays sRGB. A wide "
+"window is drawn with one extra pass over its pixels."
+msgstr ""
+"Wayland 上操作系统窗口所用的色彩空间。默认 :code:`srgb` 保持原有行为。:code:`displayp3` 或 :code:`rec2020` "
+"会告知合成器窗口属于相应广色域；程序标注了广色域的颜色和图像会在该色域显示，而非裁剪到 sRGB，详见 :doc:`wide-gamut-protocol`。:code:`auto` "
+"在三者中选择窗口所在显示器能够完整显示的最宽色域。所有未标注色域的内容均按 sRGB 处理并保持原貌，这与 :opt:`macos_colorspace` "
+"不同。需要合成器支持色彩管理；否则窗口保持 sRGB。广色域窗口会额外对像素执行一次处理。"
+
+#: docs/silkie/configuration.rst:169 docs/silkie/configuration.rst:222
+msgid "Default: ``no``."
+msgstr "默认：``no``。"
+
+#: docs/silkie/configuration.rst:171
+msgid ""
+"Declare an e-paper display even when the operating system identifies it as an ordinary monitor, "
+"for example an external BOOX monitor. Silkie reports :code:`kind=eink` through the :doc:`display "
+"protocol </display-protocol>` and uses black text on white when :opt:`color_scheme` is "
+":code:`auto`. An explicit :code:`color_scheme dark` also works on e-paper."
+msgstr ""
+"即使操作系统将显示器识别为普通显示器，也声明它为电子纸，例如外接 BOOX 显示器。Silkie 通过 :doc:`显示协议 </display-protocol>` 报告 "
+":code:`kind=eink`，并在 :opt:`color_scheme` 为 :code:`auto` 时使用白底黑字。明确设置 :code:`color_scheme dark` "
+"在电子纸上也有效。"
+
+#: docs/silkie/configuration.rst:177
+msgid ""
+"This setting applies to all Silkie windows. Switch at runtime with :code:`set_eink_mode yes`, "
+":code:`no` or :code:`toggle`; the default shortcut is :code:`ctrl+shift+alt+f12`. Display "
+"subscribers receive the change. Reloading the configuration restores the configured setting."
+msgstr ""
+"此设置适用于全部 Silkie 窗口。运行时可用 :code:`set_eink_mode yes`、:code:`no` 或 :code:`toggle` 切换，默认快捷键为 "
+":code:`ctrl+shift+alt+f12`。显示信息订阅者会收到变化通知。重新加载配置会恢复配置中的设置。"
+
+#: docs/silkie/configuration.rst:182
+msgid ""
+"Color capability and refresh timing are not inferred from e-paper mode. Use :opt:`display_info` "
+"to declare them if needed, for example :code:`display_info color=gray bits=4` for a sixteen-level"
+" grayscale panel. E-paper mode takes precedence over :code:`display_info kind=...`."
+msgstr ""
+"电子纸模式不会推断色彩能力和刷新时序。如有需要，使用 :opt:`display_info` 声明，例如十六级灰度面板可设置 :code:`display_info color=gray "
+"bits=4`。电子纸模式优先于 :code:`display_info kind=...`。"
+
+#: docs/silkie/configuration.rst:189
+msgid "Default: ``auto``."
+msgstr "默认：``auto``。"
+
+#: docs/silkie/configuration.rst:191
+msgid ""
+"Use :code:`light` for black text on white or :code:`dark` for white text on black. These built-in"
+" high contrast schemes also set cursor, selection and tab colors. :code:`auto` uses your "
+"configured colors and automatic theme files, except that :opt:`eink_mode` selects the light "
+"scheme."
+msgstr ""
+"用 :code:`light` 选择白底黑字，:code:`dark` 选择黑底白字。这些内置高对比度配色也会设置光标、选区和标签栏颜色。:code:`auto` "
+"使用配置的颜色和自动主题文件，但 :opt:`eink_mode` 启用时会选择浅色配色。"
+
+#: docs/silkie/configuration.rst:196
+msgid ""
+"Switch at runtime with :code:`set_color_scheme light`, :code:`dark`, :code:`auto` or "
+":code:`toggle`. The default shortcut is :code:`ctrl+shift+f12`. Changes apply to all windows, "
+"including new windows, until the configuration is reloaded. Applications that subscribe to "
+"kitty's color preference notifications are notified."
+msgstr ""
+"运行时可用 :code:`set_color_scheme light`、:code:`dark`、:code:`auto` 或 :code:`toggle` 切换。默认快捷键为 "
+":code:`ctrl+shift+f12`。变化适用于全部窗口，包括新窗口，直至重新加载配置。订阅 kitty 色彩偏好通知的应用会收到通知。"
+
+#: docs/silkie/configuration.rst:204
+msgid "Default: empty (no overrides)."
+msgstr "默认：空（不覆盖）。"
+
+#: docs/silkie/configuration.rst:206
+msgid ""
+"Properties of the display that the operating system cannot report, used to answer programs that "
+"ask with the :doc:`display protocol </display-protocol>`. A space separated list of "
+":code:`key=value` pairs that override what Silkie detects, for example on an e-ink display::"
+msgstr ""
+"用于补充操作系统无法报告的显示属性，回答通过 :doc:`显示协议 </display-protocol>` 发起查询的程序。以空格分隔的 :code:`key=value` 键值对会覆盖 "
+"Silkie 的检测结果，例如电子墨水显示器：::"
+
+#: docs/silkie/configuration.rst:213
+msgid ""
+"The keys are :code:`kind` (:code:`lcd`, :code:`oled`, :code:`eink` or :code:`unknown`), "
+":code:`color` (:code:`rgb`, :code:`gray` or :code:`mono`), :code:`bits` (bits per color channel),"
+" :code:`gamut` (:code:`srgb`, :code:`p3`, :code:`rec2020` or :code:`unknown`), :code:`headroom`, "
+":code:`scale`, :code:`period` (refresh period in microseconds) and :code:`ppi`."
+msgstr ""
+"可用的键为 :code:`kind`（:code:`lcd`、:code:`oled`、:code:`eink` 或 "
+":code:`unknown`）、:code:`color`（:code:`rgb`、:code:`gray` 或 "
+":code:`mono`）、:code:`bits`（每个颜色通道的位数）、:code:`gamut`（:code:`srgb`、:code:`p3`、:code:`rec2020` 或 "
+":code:`unknown`）、:code:`headroom`、:code:`scale`、:code:`period`（刷新周期，单位微秒）和 :code:`ppi`。"
+
+#: docs/silkie/configuration.rst:224
+msgid ""
+"Whether a program may be told the hardware identifiers of pens and tablets with the :doc"
+":`/tablet-protocol`: the serial number of a pen, the identifier of its type, and the vendor and "
+"product ids of a tablet. A serial number tells whose pen it is, and the program asking may be "
+"running on another machine, so by default a program that asks for them with bit :code:`8` of the "
+"mode is refused: the bit reads back as off and no identifier is sent. Everything else about a "
+"pen, a tablet or a pad is reported as before."
+msgstr ""
+"是否允许通过 :doc:`/tablet-protocol` 告知程序笔和数位板的硬件标识：笔的序列号、类型标识，以及数位板的厂商和产品 "
+"ID。序列号可识别笔的所有者，而查询程序可能运行在另一台机器上，因此默认拒绝通过模式位 :code:`8` 请求这些信息：读回的该位为关闭，且不发送标识。笔、数位板和控制板的其他信息仍照常报告。"
+
+#: docs/silkie/configuration.rst:234
+msgid "Default: ``yes``."
+msgstr "默认：``yes``。"
+
+#: docs/silkie/configuration.rst:236
+msgid ""
+"Allow programs to play haptic feedback on the trackpad, see :doc:`/haptic-protocol`. Only "
+"available on macOS."
+msgstr "允许程序在触控板上播放触觉反馈，参阅 :doc:`/haptic-protocol`。仅适用于 macOS。"
+

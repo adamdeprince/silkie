@@ -257,7 +257,7 @@ def launcher(self):
         if launch_services:
             env['KITTY_LAUNCHED_BY_LAUNCH_SERVICES'] = '1'
         if config_dir:
-            env['KITTY_CONFIG_DIRECTORY'] = config_dir
+            env['SILKIE_CONFIG_DIRECTORY'] = config_dir
         cp = subprocess.run([kexe, '+testing-launcher-code'] + args, env=env, stdout=subprocess.PIPE)
         self.assertEqual(cp.returncode, 0)
         ans = {}

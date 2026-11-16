@@ -1374,6 +1374,26 @@ class Window:
 
     # screen callbacks {{{
 
+    def ssh_agent_protocol(self, raw: memoryview) -> None:
+        from .child import default_env
+        from .ssh_agent import AgentProvider, source
+
+        if not hasattr(self, '_ssh_agent_provider'):
+            self._ssh_agent_provider = AgentProvider(
+                self.write_to_child, lambda: source.address(getattr(self.child, 'final_env', default_env())))
+            self._ssh_agent_timer: int | None = None
+        self._ssh_agent_provider.handle(b'777;' + bytes(raw), allowed=get_options().ssh_agent_forwarding)
+        if self._ssh_agent_provider.pending and self._ssh_agent_timer is None:
+            self._ssh_agent_timer = add_timer(self._poll_ssh_agent, 0.02, False)
+
+    def _poll_ssh_agent(self, timer_id: int | None) -> None:
+        self._ssh_agent_timer = None
+        if self.destroyed:
+            return
+        self._ssh_agent_provider.tick()
+        if self._ssh_agent_provider.pending:
+            self._ssh_agent_timer = add_timer(self._poll_ssh_agent, 0.02, False)
+
     def osc_1337(self, raw_data: str) -> None:
         for record in raw_data.split(';'):
             key, _, val = record.partition('=')
@@ -1655,6 +1675,23 @@ class Window:
         pty_size = self.last_reported_pty_size
         if pty_size[0] > -1 and self.screen.in_band_resize_notification:
             self.screen.send_escape_code_to_child(ESC_CSI, f'48;{pty_size[0]};{pty_size[1]};{pty_size[3]};{pty_size[2]}t')
+
+    def notify_child_of_color_change(self) -> None:
+        # TIOCSWINSZ does not signal a resize when the dimensions are unchanged.
+        # A user palette/display change still needs the foreground application to redraw.
+        import signal
+
+        if not getattr(self, 'child_is_launched', False) or self.destroyed or self.child_died:
+            return
+        fd = self.child.child_fd
+        if fd is None:
+            return
+        self.last_resized_at = monotonic()
+        self.notify_child_of_resize()
+        with suppress(OSError):
+            group = os.tcgetpgrp(fd)
+            if group > 0:
+                os.killpg(group, signal.SIGWINCH)
 
     def color_control(self, code: int, value: str | bytes | memoryview = '') -> None:
         response = color_control(self.screen.color_profile, code, value)
@@ -2122,6 +2159,8 @@ class Window:
                 traceback.print_exc()
 
     def destroy(self) -> None:
+        if hasattr(self, '_ssh_agent_provider'):
+            self._ssh_agent_provider.close()
         self.call_watchers(self.watchers.on_close, {})
         self.destroyed = True
         self.clipboard_request_manager.close()

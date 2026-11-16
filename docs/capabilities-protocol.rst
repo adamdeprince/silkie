@@ -62,13 +62,20 @@ The same reply says which transmission media and pixel formats of the
 lists the values of the ``t`` key: ``d`` direct, ``f`` a file, ``t`` a
 temporary file, ``s`` shared memory, and any medium an extension adds, such
 as ``g`` for a GPU surface. ``format`` lists the values of the ``f`` key:
-``24`` RGB, ``32`` RGBA, ``100`` PNG, and any format an extension adds, such
-as ``64`` for HDR images and ``200`` for vector images. Both describe what the
+``1``, ``2``, ``4`` and ``8`` grayscale, ``16`` RGB565 (see
+:doc:`packed-image-protocol`), ``24`` RGB, ``32`` RGBA, ``100`` PNG, and any
+format an extension adds, such as ``64`` for HDR images and ``200`` for vector
+images. Both describe what the
 terminal accepts, not what is wise over a given connection, and the graphics
 protocol's own query action (``a=q``) remains the check for one particular
 image. A relay answers with what it can carry to the terminal behind it:
 files, shared memory and GPU surfaces do not cross machines, so over a
 network relay only ``d`` is available.
+
+The accepted source formats are independent of the display's reported color
+model and precision. A one-bit display can accept RGB images, and an RGB
+display can accept packed one-bit pixels; :doc:`display-protocol` describes
+output capabilities rather than restricting input.
 
 Reading a mode
 -----------------

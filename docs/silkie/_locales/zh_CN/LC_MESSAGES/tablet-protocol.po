@@ -1,0 +1,1784 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:56+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/tablet-protocol.rst:2
+msgid "Tablet pointer protocol"
+msgstr "数位板指针协议"
+
+#: docs/tablet-protocol.rst:6
+msgid ""
+"Pens and fingers carry far more than the mouse protocol can express: pressure, tilt, rotation of "
+"the barrel, which end of the pen is in use, hovering, several fingers at once, the shape of each "
+"finger on the glass. A tablet has keys, rings and dials of its own beside the pen. The tablet "
+"pointer protocol is an open terminal extension that reports all of it, from graphics tablets, pen"
+" displays, touchscreens and touchpads, with room for whatever a device measures. It belongs to no"
+" terminal: silkie (this kitty fork) implements it and this page is its specification. The goals "
+"are those of the other extensions here: small, unobtrusive, easy to implement, and no change to "
+"what the TTY is."
+msgstr ""
+"笔和手指包含远超鼠标协议表达能力的信息：压力、倾斜、笔杆旋转、正在使用笔的哪一端、悬停、多个同时接触的手指，以及手指在玻璃上的形状。数位板在笔之外还有按键、触控环和旋钮。数位板指针协议是报告所有这些信息的开放终端扩展，支持绘图数位板、数位屏、触摸屏和触控板，并为设备测量的其他信息预留扩展空间。它不专属于任何终端：silkie（本"
+" kitty 分支）实现了它，本页是其规范。目标与其他扩展相同：小巧、低干扰、易于实现，不改变 TTY 的本质。"
+
+#: docs/tablet-protocol.rst:18
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/tablet-protocol.rst:20
+msgid "Frames are ``OSC 777`` with the ``tablet-pointer`` selector::"
+msgstr "帧使用带有 ``tablet-pointer`` 选择器的 ``OSC 777``：::"
+
+#: docs/tablet-protocol.rst:24
+msgid ""
+"They are framed as :doc:`extension-framing` says, which is also where the units, the clock of "
+"``t``, the reports that may be merged and the refusal of a mode are described for every "
+"extension. ``v``, the protocol version, is ``1``, and ``op`` is one of ``query``, ``cap``, "
+"``mode``, ``device``, ``label`` and ``event``."
+msgstr ""
+"封装遵循 :doc:`extension-framing`，其中也说明了全部扩展共有的单位、``t`` 的时钟、可合并的报告及模式拒绝规则。协议版本 ``v`` 为 ``1``，``op`` 为"
+" ``query``、``cap``、``mode``、``device``、``label`` 或 ``event``。"
+
+#: docs/tablet-protocol.rst:30
+msgid ""
+"The protocol grows without a new version. Beyond what every extension ignores, a program ignores "
+"a report whose ``kind`` it does not know and any bit of ``valid`` it does not know, and treats a "
+"``tool`` value it does not know as ``0``. A new kind of report is sent only to a program that "
+"asked for it with a mode bit of its own, so a program is never sent what it was not written for."
+msgstr ""
+"协议可在不升级版本的情况下扩展。除了各扩展共用的忽略规则外，程序还应忽略不认识 ``kind`` 的报告和不认识的 ``valid`` 位，将未知 ``tool`` 值视为 "
+"``0``。新增报告种类只有在程序通过独立模式位请求后才发送，确保程序不会收到其设计时无法处理的种类。"
+
+#: docs/tablet-protocol.rst:38
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/tablet-protocol.rst:40
+msgid "A program asks the terminal whether it supports the protocol::"
+msgstr "程序询问终端是否支持本协议：::"
+
+#: docs/tablet-protocol.rst:44
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#: docs/tablet-protocol.rst:50
+msgid "``caps`` is a bit set of what the terminal can report:"
+msgstr "``caps`` 是终端可报告能力的位集合："
+
+#: docs/tablet-protocol.rst:53 docs/tablet-protocol.rst:90
+msgid "``1``"
+msgstr "``1``"
+
+#: docs/tablet-protocol.rst:53
+msgid "Tools"
+msgstr "工具"
+
+#: docs/tablet-protocol.rst:54 docs/tablet-protocol.rst:91
+msgid "``2``"
+msgstr "``2``"
+
+#: docs/tablet-protocol.rst:54
+msgid "Fingers on a touchscreen"
+msgstr "触摸屏上的手指"
+
+#: docs/tablet-protocol.rst:55 docs/tablet-protocol.rst:92
+msgid "``4``"
+msgstr "``4``"
+
+#: docs/tablet-protocol.rst:55
+msgid "Fingers on a touchpad"
+msgstr "触控板上的手指"
+
+#: docs/tablet-protocol.rst:56 docs/tablet-protocol.rst:93
+msgid "``8``"
+msgstr "``8``"
+
+#: docs/tablet-protocol.rst:56
+msgid "The shape of a finger contact"
+msgstr "手指接触形状"
+
+#: docs/tablet-protocol.rst:57 docs/tablet-protocol.rst:94
+msgid "``16``"
+msgstr "``16``"
+
+#: docs/tablet-protocol.rst:57 docs/tablet-protocol.rst:515
+msgid "Pads"
+msgstr "控制板"
+
+#: docs/tablet-protocol.rst:58 docs/tablet-protocol.rst:95
+msgid "``32``"
+msgstr "``32``"
+
+#: docs/tablet-protocol.rst:58 docs/tablet-protocol.rst:461
+msgid "Tool actions"
+msgstr "工具动作"
+
+#: docs/tablet-protocol.rst:59 docs/tablet-protocol.rst:96
+msgid "``64``"
+msgstr "``64``"
+
+#: docs/tablet-protocol.rst:59
+msgid "The hardware identifiers of tools and pads"
+msgstr "工具和控制板的硬件标识"
+
+#: docs/tablet-protocol.rst:60
+msgid "``128``"
+msgstr "``128``"
+
+#: docs/tablet-protocol.rst:60
+msgid "Estimated and predicted samples"
+msgstr "估算与预测采样"
+
+#: docs/tablet-protocol.rst:61
+msgid "``256``"
+msgstr "``256``"
+
+#: docs/tablet-protocol.rst:61
+msgid "Fingers the system judges accidental"
+msgstr "系统判定为意外接触的手指"
+
+#: docs/tablet-protocol.rst:64
+msgid ""
+"It describes the terminal on the system it runs on, not the hardware attached right now. A bit is"
+" set only for what the terminal knows it can report. Where the system does not say beforehand "
+"whether it gives the shape of a contact, bit ``8`` stays clear until a contact has had one, so a "
+"program does not wait for the bit: a report has a shape when its ``valid`` says so. What goes "
+"beyond tools and fingers, the bits from ``16`` up, is sent only when asked for with the mode. "
+"``mode`` is the current state of the mode described below. ``w,h`` are the size of the cell area "
+"in pixels (1 to 65535) and ``cw,ch`` the cell size (1 to 4096). Pixels, here and in the reports, "
+"are physical pixels: those of the framebuffer the terminal draws into, not the scaled units of "
+"the window system, so a position is as fine as the display is. A program queries again after a "
+"resize. A terminal that does not support the protocol ignores the query, so a program must time "
+"out and fall back to mouse reporting. A query does not change the mode."
+msgstr ""
+"能力位描述终端在所运行系统上能报告什么，而非当前连接了什么硬件。只有终端确定能报告的能力才设置相应位。如果系统不预先说明是否提供接触形状，则位 ``8`` "
+"在实际出现带形状的接触前保持清除；程序不应等待该位，只要报告的 ``valid`` 声明存在，就应使用形状信息。超出工具和手指范围的能力（``16`` "
+"及以上的位）只有通过模式请求后才发送。``mode`` 为下述模式的当前状态。``w,h`` 是字符单元区域的像素尺寸（1 至 65535），``cw,ch`` 为字符单元尺寸（1 至 "
+"4096）。此处及报告中的像素均为终端帧缓冲区的物理像素，而非窗口系统缩放后的逻辑单位，因此位置精度与显示器一致。调整窗口大小后程序应重新查询。不支持本协议的终端会忽略查询，程序必须设置超时并回退到鼠标报告。查询不改变模式。"
+
+#: docs/tablet-protocol.rst:80
+msgid "Mode"
+msgstr "模式"
+
+#: docs/tablet-protocol.rst:82
+msgid "Reports are off by default and turned on per terminal window with::"
+msgstr "报告默认关闭，按终端窗口开启：::"
+
+#: docs/tablet-protocol.rst:86
+msgid "``mode`` is a bit set of what the program wants, and ``0`` turns everything off:"
+msgstr "``mode`` 是程序请求的能力位集合，``0`` 关闭全部报告："
+
+#: docs/tablet-protocol.rst:90
+msgid "Reports of tools"
+msgstr "工具报告"
+
+#: docs/tablet-protocol.rst:91
+msgid "Reports of fingers"
+msgstr "手指报告"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:92
+msgid "Reports of pads, see `Pads`_"
+msgstr "控制板报告，见 `控制板 <Pads_>`_ #noqa"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:93
+msgid "The hardware identifiers of tools and pads, see `Devices`_"
+msgstr "工具和控制板的硬件标识，见 `设备 <Devices_>`_ #noqa"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:94
+msgid "Reports of tool actions, see `Tool actions`_"
+msgstr "工具动作报告，见 `工具动作 <Tool actions_>`_ #noqa"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:95
+msgid "Estimated and predicted samples, see `Estimates and predictions`_"
+msgstr "估算与预测采样，见 `估算与预测 <Estimates and predictions_>`_ #noqa"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:96
+msgid "Fingers the system judges accidental, see `Fingers`_"
+msgstr "系统判定为意外接触的手指，见 `手指 <Fingers_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:99
+msgid ""
+"While bit ``1`` or ``2`` is on, that kind of input over the window is reported with this protocol"
+" instead of as mouse events, so with ``mode=1`` a pen draws while a finger still taps and scrolls"
+" as a mouse, and with ``mode=3`` a tap is not a click and a drag does not select. A physical "
+"mouse, and the mouse and scroll events a touchpad produces by itself, continue to use whatever "
+"mouse reporting the program asked for. Programs that merely want pen input to act as a mouse need"
+" not use the protocol at all. Bit ``4`` takes nothing away: what the system itself does with the "
+"controls of a pad, such as a shortcut the user has put on a key, goes on."
+msgstr ""
+"开启位 ``1`` 或 ``2`` 时，窗口内对应输入通过本协议报告，不再作为鼠标事件。因此 ``mode=1`` 可用笔绘图，手指仍作为鼠标点击和滚动；``mode=3`` "
+"下，轻点不再点击，拖动不再选择。物理鼠标，以及触控板自行产生的鼠标和滚动事件，仍使用程序请求的鼠标报告方式。只希望笔作为鼠标使用的程序无须使用本协议。位 ``4`` "
+"不会剥夺既有功能：系统对控制板控件的操作，例如用户绑定到某个按键的快捷键，仍会执行。"
+
+#: docs/tablet-protocol.rst:109
+msgid ""
+"The mode is local to the window, is reset by ``RIS``, and changing it cancels every active "
+"contact and lets go of every held key of a pad. Programs must turn it off when they exit, suspend"
+" or fail, and turn it back on when resumed. Multiplexers keep it with the rest of the terminal "
+"state, restore it on reconnect, and turn it off when detaching. A terminal may let its user "
+"refuse a mode, or some of its bits, for every program or for some. A refused bit reads back as "
+"off and nothing it would have turned on is reported. kitty refuses bit ``8``, the hardware "
+"identifiers, unless its user allows them with :opt:`tablet_hardware_ids`, since a serial number "
+"says whose pen it is and the program asking may be on another machine. A refusal shows in the "
+"mode, not in ``caps``, which says what the terminal can report on the system it runs on."
+msgstr ""
+"模式仅作用于当前窗口，由 ``RIS`` "
+"重置；改变模式会取消所有活动接触，并释放控制板上所有按住的按键。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他状态一起保存它，重连时恢复，脱离连接时关闭。终端可允许用户针对全部或部分程序拒绝模式或某些位；被拒绝的位读回为关闭，不发送其本应启用的报告。kitty"
+" 默认拒绝硬件标识位 ``8``，除非用户通过 :opt:`tablet_hardware_ids` 允许，因为序列号可识别笔的所有者，查询程序可能运行在远程机器上。拒绝体现在模式中，而非 "
+"``caps``；后者描述终端在该系统上具有的报告能力。"
+
+#: docs/tablet-protocol.rst:122
+msgid ""
+"A ``mode`` request without a ``mode`` field reads the state instead of changing it, and is "
+"answered with::"
+msgstr "不带 ``mode`` 字段的 ``mode`` 请求读取状态而不修改，回复为：::"
+
+#: docs/tablet-protocol.rst:127
+msgid ""
+"A terminal keeps only the bits it supports and that its user has not refused, so a program that "
+"asked for more than it was given finds out by reading the mode back. A program resuming after a "
+"reconnection reads the mode to learn whether it survived, rather than assuming it did."
+msgstr "终端仅保留其支持且用户未拒绝的位，因此请求超出获准范围的程序可通过读回模式获知。程序重连后恢复时，应读回模式确认是否保留，而非假定状态仍在。"
+
+#: docs/tablet-protocol.rst:134
+msgid "Devices"
+msgstr "设备"
+
+#: docs/tablet-protocol.rst:136
+msgid ""
+"Before the first report of a tool, each time the tool comes into proximity over a window that has"
+" tool reports on, the terminal describes it::"
+msgstr "每次工具进入一个已启用工具报告的窗口感应范围时，终端在第一条工具报告之前描述该工具：::"
+
+#: docs/tablet-protocol.rst:141
+msgid ""
+"``device`` is the id the reports of that tool carry, ``kind`` is ``1`` and ``tool`` is the type "
+"of the tool, with the values it has in reports. The other fields are present when the system "
+"provides them:"
+msgstr "``device`` 是该工具报告所携带的 ID，``kind`` 为 ``1``，``tool`` 为工具类型，取值与事件报告相同。系统提供时还携带下列字段："
+
+#: docs/tablet-protocol.rst:146
+msgid "``axes``"
+msgstr "``axes``"
+
+#: docs/tablet-protocol.rst:146
+msgid ""
+"The measurements the reports of this tool can carry, a bit set with the bits of ``valid``, so a "
+"program can set up a brush before the first stroke"
+msgstr "该工具可测量的项目，位集合与 ``valid`` 相同，供程序在第一笔之前配置画笔"
+
+#: docs/tablet-protocol.rst:149 docs/tablet-protocol.rst:580
+msgid "``name``"
+msgstr "``name``"
+
+#: docs/tablet-protocol.rst:149
+msgid ""
+"The name of the tablet the tool is on, or of the tool itself, at most 127 bytes of UTF-8 encoded "
+"as base64 with padding"
+msgstr "工具所在数位板或工具本身的名称，最多 127 字节 UTF-8，使用带填充的 base64 编码"
+
+#: docs/tablet-protocol.rst:151
+msgid "``serial``"
+msgstr "``serial``"
+
+#: docs/tablet-protocol.rst:151
+msgid "The serial number of the tool, an unsigned 64 bit integer"
+msgstr "工具序列号，无符号 64 位整数"
+
+#: docs/tablet-protocol.rst:152
+msgid "``hwid``"
+msgstr "``hwid``"
+
+#: docs/tablet-protocol.rst:152
+msgid ""
+"The hardware id of the tool, an unsigned 64 bit integer; on Wacom tablets it tells the model of "
+"the pen"
+msgstr "工具硬件 ID，无符号 64 位整数；在 Wacom 数位板上表示笔型号"
+
+#: docs/tablet-protocol.rst:154 docs/tablet-protocol.rst:581
+msgid "``vid``, ``pid``"
+msgstr "``vid``、``pid``"
+
+#: docs/tablet-protocol.rst:154
+msgid "The vendor and product ids of the tablet, unsigned 32 bit integers"
+msgstr "数位板的厂商和产品 ID，无符号 32 位整数"
+
+#: docs/tablet-protocol.rst:156
+msgid "``bat``"
+msgstr "``bat``"
+
+#: docs/tablet-protocol.rst:156
+msgid "The charge of the battery of the tool, ``0`` to ``100``"
+msgstr "工具电池电量，``0`` 至 ``100``"
+
+#: docs/tablet-protocol.rst:157 docs/tablet-protocol.rst:578
+msgid "``tablet``"
+msgstr "``tablet``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:157
+msgid "Which of the tablets that are attached the tool is on, a number from ``1``, see `Tablets`_"
+msgstr "工具位于哪块已连接数位板上，从 ``1`` 开始编号，见 `数位板 <Tablets_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:159 docs/tablet-protocol.rst:329
+msgid "``w``, ``h``"
+msgstr "``w``、``h``"
+
+#: docs/tablet-protocol.rst:159
+msgid "The size of the active surface of that tablet in 1/256 millimeter"
+msgstr "该数位板有效表面尺寸，以 1/256 毫米为单位"
+
+#: docs/tablet-protocol.rst:161
+msgid "``direct``"
+msgstr "``direct``"
+
+#: docs/tablet-protocol.rst:161
+msgid "``1`` when that surface is a display, ``0`` when it is not"
+msgstr "该表面为显示器时为 ``1``，否则为 ``0``"
+
+#: docs/tablet-protocol.rst:162
+msgid "``pcolor``,"
+msgstr "``pcolor``，"
+
+#: docs/tablet-protocol.rst:162
+msgid "The color, line width and line style that are stored in the tool"
+msgstr "工具自身存储的颜色、线宽和线条样式"
+
+#: docs/tablet-protocol.rst:163
+msgid "``pwidth``,"
+msgstr "``pwidth``，"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:163
+msgid "itself, see `Settings stored in a pen`_"
+msgstr "参阅 `笔内存储的设置 <Settings stored in a pen_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:164 docs/tablet-protocol.rst:242
+msgid "``pstyle``"
+msgstr "``pstyle``"
+
+#: docs/tablet-protocol.rst:167
+msgid ""
+"``serial``, ``hwid``, ``vid`` and ``pid`` are the hardware identifiers, and they are sent only "
+"while mode bit ``8`` is on. A serial number names one physical pen, and so its owner, to every "
+"program that turns reports on, including one on a remote host at the far end of an ssh session. A"
+" program that keeps settings per pen asks for them; a program that only draws has no need to know"
+" whose pen it is."
+msgstr ""
+"``serial``、``hwid``、``vid`` 和 ``pid`` 属于硬件标识，仅在模式位 ``8`` 开启时发送。序列号让每个开启报告的程序识别同一支物理笔及其所有者，包括 SSH "
+"会话另一端远程主机上的程序。按笔保存设置的程序可请求它们；只绘图的程序无需知道笔属于谁。"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:174
+msgid ""
+"The description is sent again when the tool comes back after leaving proximity, when it moves "
+"over another window, and when the program changes the mode while the tool is in proximity. It is "
+"also sent again whenever something it says is no longer so while the tool is in use: the battery "
+"runs down, the user picks another color on the pen, the system learns more of the tool than it "
+"knew at first. A description replaces the one before it as a whole, so a field it leaves out is "
+"no longer known, and it changes nothing about a stroke that is open. A program must not depend on"
+" getting one: a terminal that knows nothing about a tool beyond its reports need not describe it."
+" A pad is described in the same way, with ``kind=3`` and fields of its own, see `Pads`_. The "
+"device of a finger report is not described."
+msgstr ""
+"工具离开感应范围后再次进入、移到另一窗口，或仍在感应范围时程序更改模式，都会重新发送描述。使用期间，描述内容变化时也重新发送，例如电量下降、用户在笔上选择另一种颜色，或系统获得更多工具信息。新描述整体替换旧描述，省略字段表示该属性不再已知，不影响已开始笔划。程序不得依赖一定收到描述：如果终端只知道事件报告包含的信息，就不必单独描述工具。控制板以类似方式描述，``kind=3``"
+" 并使用自身字段，见 `控制板 <Pads_>`_。手指报告中的设备不发送描述。 #noqa"
+
+#: docs/tablet-protocol.rst:188
+msgid "Tablets"
+msgstr "数位板"
+
+#: docs/tablet-protocol.rst:190
+msgid ""
+"More than one tablet can be attached at once, and a pen can be carried from one to the other. "
+"``tablet`` says which of them a tool is on: a number from ``1`` that the terminal gives each "
+"tablet, that stays with the tablet for as long as it is attached, and that every tool on the "
+"tablet and every pad that belongs to it carries, so a program can tell that these keys and that "
+"pen are parts of one device. It is absent, or ``0``, when the system does not say which tablet a "
+"tool is on. It is a count and not a hardware identifier: it says nothing of the tablet that "
+"outlasts its being plugged in, so it needs no mode bit."
+msgstr ""
+"可以同时连接多块数位板，笔也可在不同板之间移动。``tablet`` 表示工具当前所在数位板：终端为每块板分配从 ``1`` "
+"起的编号，在该板连接期间保持稳定，板上的每个工具和所属控制板都携带相同编号，程序因此知道这些按键和那支笔属于同一设备。系统未提供归属关系时省略或为 "
+"``0``。它是计数编号，不是硬件标识，断开连接后不再具有识别意义，因此不需要额外模式位。"
+
+#: docs/tablet-protocol.rst:200
+msgid ""
+"``w`` and ``h`` are the width and height of the active surface of the tablet, the area in which "
+"it tracks a tool, and are present together or not at all. ``direct`` says whether that surface is"
+" a display. On a display the tool points at what it draws and ``x,y`` are all a program needs. On"
+" a tablet that is not one, the hand moves in one place and the mark appears in another, where the"
+" system has put the pointer after a mapping of its own, and a program that wants to map the "
+"tablet to its canvas itself, or to know how far the hand really moved, needs the place on the "
+"tablet. That is ``rx`` and ``ry`` in the reports of the tool, with ``valid`` bit ``256``: ``0`` "
+"to ``65535`` across and down the active surface from its top left corner. With ``w`` and ``h`` "
+"they are a position in millimeters. ``x,y`` are reported all the same, and are where the system "
+"put the pointer."
+msgstr ""
+"``w`` 和 ``h`` 是数位板跟踪工具的有效表面宽高，要么同时出现，要么都省略。``direct`` 表示该表面是否为显示器。屏幕上，工具直接指向所绘内容，程序只需 "
+"``x,y``。非屏幕数位板上，手在一处移动，笔迹出现在另一处，其指针位置经过系统映射；希望自行将板映射到画布，或获知手实际移动距离的程序，需要数位板上的位置。这是工具报告的 "
+"``rx``、``ry``，由 ``valid`` 位 ``256`` 声明：从有效表面左上角起，水平和竖直范围均为 ``0`` 至 ``65535``。结合 ``w`` 和 ``h`` "
+"可换算成毫米。``x,y`` 仍照常报告，表示系统放置指针的位置。"
+
+#: docs/tablet-protocol.rst:213
+msgid ""
+"The pointer input of Windows has all of these: every pointer names the device it comes from, and "
+"the device says whether it is a pen built into a display or one on a tablet of its own, the "
+"rectangle of its surface in hundredths of a millimeter, and where on it the pen is. So has the "
+"kernel of Linux, whose devices give the range and the resolution of their position and say "
+"whether they are a display. What a terminal gets depends on what stands between it and those. The"
+" ``tablet-v2`` protocol of Wayland says which tablet a tool and a pad are on and no more, but it "
+"names the device node of the tablet, by which a terminal on the same machine can ask the kernel "
+"for the size and for whether the tablet is a display. X11 has the position and its range, with a "
+"resolution where the driver states one, and no tablet that tools belong to. AppKit numbers the "
+"tablets, and gives a position in units of the tablet whose range it does not tell."
+msgstr ""
+"Windows 指针输入提供上述全部信息：每个指针指明来源设备，设备说明它是显示器内置笔还是独立数位板上的笔、表面矩形尺寸（百分之一毫米）及笔在板上的位置。Linux "
+"内核也提供位置范围、分辨率及是否为显示器。终端实际能得到什么，取决于中间层。Wayland ``tablet-v2`` "
+"只说明工具和控制板所属数位板，但提供数位板设备节点，同机终端可据此向内核查询尺寸及是否为显示器。X11 提供位置和范围，驱动声明时也提供分辨率，但不提供工具所属数位板关系。AppKit "
+"为数位板编号，并提供数位板单位的位置，却不告知其取值范围。"
+
+#: docs/tablet-protocol.rst:228
+msgid "Settings stored in a pen"
+msgstr "笔内存储的设置"
+
+#: docs/tablet-protocol.rst:230
+msgid ""
+"Some pens keep a color, a line width and a line style in the pen itself, set with a switch on it "
+"or written to it by a program, so that a pen picked up at another device draws there as it did at"
+" the last. They are the *Preferred Color*, *Preferred Line Width* and *Preferred Line Style* of "
+"the HID usage tables for digitizers, which the pens of the Universal Stylus Initiative implement."
+" A terminal that has them puts them into the description of the tool:"
+msgstr ""
+"某些笔将颜色、线宽和线条样式保存在笔自身，可用开关设置或由程序写入，因此换到另一设备时仍按原来的设置绘制。这些是数字化仪 HID 用途表中的 *Preferred "
+"Color*、*Preferred Line Width* 和 *Preferred Line Style*，Universal Stylus Initiative "
+"的笔实现了它们。获得这些信息的终端应将其放入工具描述："
+
+#: docs/tablet-protocol.rst:239
+msgid "``pcolor``"
+msgstr "``pcolor``"
+
+#: docs/tablet-protocol.rst:239
+msgid "The color, six hexadecimal digits ``RRGGBB`` in sRGB"
+msgstr "颜色，sRGB 中的六位十六进制 ``RRGGBB``"
+
+#: docs/tablet-protocol.rst:240
+msgid "``pwidth``"
+msgstr "``pwidth``"
+
+#: docs/tablet-protocol.rst:240
+msgid ""
+"The width of the line in 1/256 millimeter; ``0`` is the thinnest line there is, one physical "
+"pixel at any magnification"
+msgstr "线宽，以 1/256 毫米为单位；``0`` 表示可用的最细线条，即任意缩放下的一个物理像素"
+
+#: docs/tablet-protocol.rst:242
+msgid ""
+"``1`` ink, as of a ballpoint, a gel or a fountain pen, ``2`` pencil, ``3`` highlighter with a "
+"flat tip, ``4`` marker with a chisel tip, ``5`` round brush"
+msgstr "``1`` 墨水笔（圆珠笔、签字笔或钢笔），``2`` 铅笔，``3`` 平头荧光笔，``4`` 斜头记号笔，``5`` 圆头画笔"
+
+#: docs/tablet-protocol.rst:247
+msgid ""
+"HID gives the color in one of two forms. A value of 24 bits is red, green and blue of eight bits "
+"each, in that order, and is passed on as it is; the usage tables do not say what color space it "
+"is in, and it is taken for sRGB, which is the space of the other form. A value of 8 bits is an "
+"index into the named colors of CSS in alphabetical order, with *gray* spelled one way only: ``0``"
+" AliceBlue to ``140`` YellowGreen, as Appendix A of the HID Usage Tables 1.7 lists them. The "
+"terminal sends the color the name stands for, so index ``7``, Black, is ``pcolor=000000`` and "
+"index ``9``, Blue, is ``pcolor=0000ff``. Index ``255``, an index the appendix reserves, and the "
+"*No Preferred Color* flag beside a value of 24 bits each mean that the pen has no color, and "
+"``pcolor`` is left out."
+msgstr ""
+"HID 用两种形式表示颜色。24 位值依次为各八位的红、绿、蓝，原样转发；用途表未指定色彩空间，此处按另一种形式所用的 sRGB 解释。8 位值是按字母顺序排列的 CSS "
+"命名颜色索引，*gray* 仅保留一种拼写：从 ``0`` AliceBlue 到 ``140`` YellowGreen，见 HID Usage Tables 1.7 附录 "
+"A。终端发送名称对应的实际颜色，因此索引 ``7`` Black 为 ``pcolor=000000``，索引 ``9`` Blue 为 ``pcolor=0000ff``。附录保留的索引 "
+"``255``，以及 24 位值旁的 *No Preferred Color* 标志，均表示笔没有首选颜色，省略 ``pcolor``。"
+
+#: docs/tablet-protocol.rst:259
+msgid ""
+"The width comes in the units the pen declares for it. The usage tables recommend steps of a tenth"
+" of a millimeter and leave the pen free to declare others, so a terminal converts from what the "
+"report descriptor gives as the physical range and unit of the value, and leaves ``pwidth`` out "
+"when the descriptor gives none. The line styles *Ink*, *Pencil*, *Highlighter*, *Chisel Marker* "
+"and *Brush* are ``1`` to ``5``; *No Preference* is no style, and ``pstyle`` is left out."
+msgstr ""
+"宽度使用笔声明的单位。用途表建议十分之一毫米的步长，但允许笔声明其他单位，因此终端按报告描述符中的物理范围和单位换算；描述符未提供时省略 ``pwidth``。线条样式 "
+"*Ink*、*Pencil*、*Highlighter*、*Chisel Marker* 和 *Brush* 对应 ``1`` 至 ``5``；*No Preference* "
+"表示未指定样式，省略 ``pstyle``。"
+
+#: docs/tablet-protocol.rst:267
+msgid ""
+"These are what the pen would like and not orders, and a program is free to draw otherwise. HID "
+"also says of each whether the pen lets it be changed, which matters only to something that writes"
+" to the pen and is not passed on. A pen whose setting changes while it is in use is described "
+"again. Only the reports of the pen itself carry these settings, so a terminal has them where it "
+"reads the digitizer directly; the tablet interfaces of Windows, macOS, Wayland and X11 do not "
+"pass them on."
+msgstr ""
+"这些是笔的偏好而非命令，程序可采用其他绘制方式。HID "
+"还说明笔是否允许修改各项设置，但这只与写入笔设置的程序有关，不向终端程序转发。笔在使用中改变设置时会重新发送描述。只有笔自身报告携带这些设置，因此终端直接读取数字化仪时才能获得；Windows、macOS、Wayland"
+" 和 X11 的数位板接口均不转发它们。"
+
+#: docs/tablet-protocol.rst:276
+msgid "Reports"
+msgstr "报告"
+
+#: docs/tablet-protocol.rst:278
+msgid "A report is a single frame per event::"
+msgstr "每个事件对应一帧报告：::"
+
+#: docs/tablet-protocol.rst:282
+msgid ""
+"In the reports of tools and fingers ``kind``, ``phase``, ``device``, ``t``, ``contact``, ``x`` "
+"and ``y`` are required. The other fields in this table default to zero, except ``tool``, which "
+"defaults to ``1``:"
+msgstr ""
+"工具和手指报告必须包含 ``kind``、``phase``、``device``、``t``、``contact``、``x`` 和 ``y``。表中其他字段默认零，只有 ``tool`` "
+"默认 ``1``："
+
+#: docs/tablet-protocol.rst:287
+msgid "``kind``"
+msgstr "``kind``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:287
+msgid ""
+"``1`` tool, ``2`` finger. ``3`` is a pad and ``4`` a tool action, which have fields of their own,"
+" see `Pads`_ and `Tool actions`_"
+msgstr "``1`` 工具，``2`` 手指。``3`` 是控制板，``4`` 是工具动作，它们使用各自字段，见 `控制板 <Pads_>`_ 和 `工具动作 <Tool actions_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:290
+msgid "``phase``"
+msgstr "``phase``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:290
+msgid ""
+"``0`` hover, ``1`` down, ``2`` move, ``3`` up, ``4`` cancel, ``5`` the tool left proximity, ``6``"
+" frame, see `Fingers`_, ``7`` correction, see `Estimates and predictions`_"
+msgstr ""
+"``0`` 悬停，``1`` 落下，``2`` 移动，``3`` 抬起，``4`` 取消，``5`` 工具离开感应范围，``6`` 帧（见 `手指 <Fingers_>`_），``7`` "
+"修正（见 `估算与预测 <Estimates and predictions_>`_） #noqa"
+
+#: docs/tablet-protocol.rst:293 docs/tablet-protocol.rst:470
+msgid "``device``"
+msgstr "``device``"
+
+#: docs/tablet-protocol.rst:293
+msgid ""
+"Identifies the tool or touch device for as long as it is in proximity, a non-negative 31 bit "
+"integer, ``0`` when the system does not tell devices apart"
+msgstr "工具或触摸设备在感应范围内期间的标识，为非负 31 位整数；系统不区分设备时为 ``0``"
+
+#: docs/tablet-protocol.rst:296
+msgid "``t``"
+msgstr "``t``"
+
+#: docs/tablet-protocol.rst:296
+msgid ""
+"The time of the event in milliseconds on the clock the terminal uses for every extension, see "
+":doc:`extension-framing`: when the system says it happened, or when the terminal learnt of it "
+"where the system does not say"
+msgstr "事件时间，以终端全部扩展共用时钟的毫秒表示，见 :doc:`extension-framing`：系统认定发生的时刻；系统未提供时刻时，使用终端获知事件的时刻"
+
+#: docs/tablet-protocol.rst:301
+msgid "``tu``"
+msgstr "``tu``"
+
+#: docs/tablet-protocol.rst:301
+msgid ""
+"Microseconds past ``t``, ``0`` to ``999``, present only when the system stamps events more finely"
+" than a millisecond. A report without it is on a grid of whole milliseconds"
+msgstr "``t`` 之后的微秒数，范围 ``0`` 至 ``999``，仅在系统时间戳精度高于毫秒时出现；省略时报告仅精确到整毫秒"
+
+#: docs/tablet-protocol.rst:304
+msgid "``contact``"
+msgstr "``contact``"
+
+#: docs/tablet-protocol.rst:304
+msgid ""
+"Identifies one contact of a device, stable for its lifetime. A pen is normally contact ``0``, "
+"fingers get the system's touch ids, which it may reuse once a finger has lifted"
+msgstr "标识某设备的一次接触，在该接触生命周期中保持稳定。笔通常为接触 ``0``，手指使用系统触摸 ID；手指抬起后系统可复用 ID"
+
+#: docs/tablet-protocol.rst:307 docs/tablet-protocol.rst:485
+msgid "``x``, ``y``"
+msgstr "``x``、``y``"
+
+#: docs/tablet-protocol.rst:307
+msgid ""
+"Position in 1/256 of a physical pixel, signed, zero based, relative to the top left of the cell "
+"area, within ±1073741823; for a finger on a touchpad (``src=1``) the position on the pad instead,"
+" ``0`` to ``65535`` on each axis with the origin at its top left"
+msgstr ""
+"位置以物理像素 1/256 为单位，有符号、从零开始，相对于字符单元区域左上角，范围 ±1073741823；对于触控板上的手指（``src=1``），改为板上坐标，各轴为 ``0`` 至 "
+"``65535``，原点位于左上角"
+
+#: docs/tablet-protocol.rst:312
+msgid "``buttons``"
+msgstr "``buttons``"
+
+#: docs/tablet-protocol.rst:312
+msgid ""
+"Held buttons: tip or left ``1``, barrel or right ``2``, second barrel or middle ``4``, back "
+"``8``, forward ``16``, third barrel ``32``. A finger has ``1`` while it is down"
+msgstr "按住的按钮：笔尖或左键 ``1``，笔杆按钮或右键 ``2``，第二笔杆按钮或中键 ``4``，后退 ``8``，前进 ``16``，第三笔杆按钮 ``32``。手指落下期间为 ``1``"
+
+#: docs/tablet-protocol.rst:315 docs/tablet-protocol.rst:486
+msgid "``mods``"
+msgstr "``mods``"
+
+#: docs/tablet-protocol.rst:315
+msgid "Shift ``1``, Alt ``2``, Control ``4``, Super ``8``"
+msgstr "Shift ``1``，Alt ``2``，Control ``4``，Super ``8``"
+
+#: docs/tablet-protocol.rst:316
+msgid "``tool``"
+msgstr "``tool``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:316
+msgid ""
+"``0`` finger or unknown, ``1`` pen, ``2`` eraser, ``3`` brush, ``4`` pencil, ``5`` airbrush, "
+"``6`` mouse, ``7`` lens, ``8`` totem, see `Totems`_"
+msgstr ""
+"``0`` 手指或未知，``1`` 笔，``2`` 橡皮，``3`` 画笔，``4`` 铅笔，``5`` 喷枪，``6`` 鼠标，``7`` 镜头工具，``8`` 图腾工具（见 `图腾工具 "
+"<Totems_>`_） #noqa"
+
+#: docs/tablet-protocol.rst:319
+msgid "``valid``"
+msgstr "``valid``"
+
+#: docs/tablet-protocol.rst:319
+msgid "The measurements the report carries, a bit set, see below"
+msgstr "报告携带哪些测量值的位集合，见下文"
+
+#: docs/tablet-protocol.rst:320
+msgid "``src``"
+msgstr "``src``"
+
+#: docs/tablet-protocol.rst:320
+msgid "For a finger, ``1`` when it is on a touchpad rather than on the screen; absent otherwise"
+msgstr "手指位于触控板而非屏幕上时为 ``1``，其他情况省略"
+
+#: docs/tablet-protocol.rst:322
+msgid "``stage``"
+msgstr "``stage``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:322
+msgid "For a finger on a touchpad that measures force, how hard the pad is pressed, see `Fingers`_"
+msgstr "能测量力度的触控板上的手指，其按压力度，见 `手指 <Fingers_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:324
+msgid "``conf``"
+msgstr "``conf``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:324
+msgid ""
+"For a finger, ``1`` when the system takes the contact to be meant and ``0`` when it takes it for "
+"an accident, such as a palm; absent when the system has not said which. A contact with ``0`` is "
+"reported only while mode bit ``64`` is on, see `Fingers`_"
+msgstr ""
+"对于手指，系统认为接触是有意操作时为 ``1``，判定为手掌等意外接触时为 ``0``，尚未判断时省略。``0`` 的接触仅在模式位 ``64`` 开启时报告，见 `手指 "
+"<Fingers_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:329
+msgid ""
+"For a finger on a touchpad, the size of the pad in 1/256 millimeter when the system knows it, so "
+"a program can turn positions into distances or map the pad onto its canvas with the right aspect "
+"ratio"
+msgstr "对于触控板上的手指，系统已知时提供触控板尺寸，单位 1/256 毫米，使程序能将位置转换为距离，或按正确宽高比将触控板映射到画布"
+
+#: docs/tablet-protocol.rst:333
+msgid "``ink``"
+msgstr "``ink``"
+
+#: docs/tablet-protocol.rst:333
+msgid ""
+"In the ``down`` of a tool, the element of a vector image that the terminal is drawing the stroke "
+"into, for a program that gave it a brush, see :doc:`ink-protocol`; absent otherwise"
+msgstr "工具 ``down`` 时，如果程序已提供画笔，此字段为终端正向其中绘制笔划的矢量元素 ID，见 :doc:`ink-protocol`；否则省略"
+
+#: docs/tablet-protocol.rst:338
+msgid ""
+"A measurement is present exactly when its bit is set in ``valid``. A clear bit means the device "
+"does not measure it, never that the value is zero, and a terminal must not make a measurement up."
+" The measurements, with their ``valid`` bit:"
+msgstr "仅在 ``valid`` 对应位被设置时，该测量值才存在。位清除表示设备不测量该项，绝不表示值为零；终端不得捏造测量值。各测量值及其 ``valid`` 位如下："
+
+#: docs/tablet-protocol.rst:344
+msgid "``p``"
+msgstr "``p``"
+
+#: docs/tablet-protocol.rst:344
+msgid "1"
+msgstr "1"
+
+#: docs/tablet-protocol.rst:344
+msgid "Pressure, 0 to 65535"
+msgstr "压力，0 至 65535"
+
+#: docs/tablet-protocol.rst:345
+msgid "``tx``, ``ty``"
+msgstr "``tx``、``ty``"
+
+#: docs/tablet-protocol.rst:345
+msgid "2"
+msgstr "2"
+
+#: docs/tablet-protocol.rst:345
+msgid "Tilt in hundredths of a degree, −9000 to 9000, positive towards the right and bottom of the screen"
+msgstr "倾斜角，单位百分之一度，−9000 至 9000，朝屏幕右侧和下方为正"
+
+#: docs/tablet-protocol.rst:347
+msgid "``twist``"
+msgstr "``twist``"
+
+#: docs/tablet-protocol.rst:347
+msgid "4"
+msgstr "4"
+
+#: docs/tablet-protocol.rst:347
+msgid "Rotation of the tool around its axis in hundredths of a degree, 0 to 35999 clockwise"
+msgstr "工具绕自身轴线旋转的角度，单位百分之一度，顺时针，0 至 35999"
+
+#: docs/tablet-protocol.rst:349
+msgid "``tangent``"
+msgstr "``tangent``"
+
+#: docs/tablet-protocol.rst:349
+msgid "8"
+msgstr "8"
+
+#: docs/tablet-protocol.rst:349
+msgid "Tangential pressure, the airbrush wheel, −65535 to 65535"
+msgstr "切向压力，即喷枪滚轮，−65535 至 65535"
+
+#: docs/tablet-protocol.rst:351
+msgid "``z``"
+msgstr "``z``"
+
+#: docs/tablet-protocol.rst:351
+msgid "16"
+msgstr "16"
+
+#: docs/tablet-protocol.rst:351
+msgid "Height in device units, −1000000 to 1000000"
+msgstr "高度，设备单位，−1000000 至 1000000"
+
+#: docs/tablet-protocol.rst:352
+msgid "``dist``"
+msgstr "``dist``"
+
+#: docs/tablet-protocol.rst:352
+msgid "32"
+msgstr "32"
+
+#: docs/tablet-protocol.rst:352
+msgid "Distance from the tablet, 0 to 65535"
+msgstr "距数位板的距离，0 至 65535"
+
+#: docs/tablet-protocol.rst:353
+msgid "``wheel``, ``wclicks``"
+msgstr "``wheel``、``wclicks``"
+
+#: docs/tablet-protocol.rst:353
+msgid "64"
+msgstr "64"
+
+#: docs/tablet-protocol.rst:353
+msgid ""
+"Rotation of the wheel on the tool since the last report, in hundredths of a degree and in clicks."
+" A mouse or a lens has one, and so may any other tool"
+msgstr "工具滚轮自上次报告以来的转动，分别以百分之一度和格数表示。鼠标或镜头工具具有此项，其他工具也可能具有"
+
+#: docs/tablet-protocol.rst:356
+msgid "``major``, ``minor``,"
+msgstr "``major``、``minor``，"
+
+#: docs/tablet-protocol.rst:356
+msgid "128"
+msgstr "128"
+
+#: docs/tablet-protocol.rst:356
+msgid "The shape of a finger or a totem on the screen: the"
+msgstr "屏幕上手指或图腾的接触形状："
+
+#: docs/tablet-protocol.rst:357
+msgid "``angle``"
+msgstr "``angle``"
+
+#: docs/tablet-protocol.rst:357
+msgid ""
+"axes of the ellipse of the contact in 1/256 of a physical pixel and its orientation in hundredths"
+" of a degree, clockwise from the vertical"
+msgstr "接触椭圆的轴长，单位物理像素 1/256；方向以百分之一度表示，从竖直方向顺时针计算"
+
+#: docs/tablet-protocol.rst:360
+msgid "``rx``, ``ry``"
+msgstr "``rx``、``ry``"
+
+#: docs/tablet-protocol.rst:360
+msgid "256"
+msgstr "256"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:360
+msgid ""
+"Where the tool is on the active surface of its tablet, 0 to 65535 from the top left corner, see "
+"`Tablets`_"
+msgstr "工具在其数位板有效表面上的位置，从左上角起 0 至 65535，见 `数位板 <Tablets_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:363
+msgid "``grip``"
+msgstr "``grip``"
+
+#: docs/tablet-protocol.rst:363
+msgid "512"
+msgstr "512"
+
+#: docs/tablet-protocol.rst:363
+msgid "How hard the barrel of the tool is held, 0 to 65535"
+msgstr "握持工具笔杆的力度，0 至 65535"
+
+#: docs/tablet-protocol.rst:366
+msgid ""
+"A wheel is reported for whatever tool has one, not only for the two that always do: ``tablet-v2``"
+" and libinput make it a capability of the tool, whatever its type. AppKit and XInput have no "
+"wheel in what they report of a tool."
+msgstr ""
+"任何具有滚轮的工具都可报告滚轮，不只限于始终带滚轮的两类：``tablet-v2`` 和 libinput 将它视为工具能力，而非工具类型限定。AppKit 和 XInput "
+"的工具报告不提供滚轮。"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:371
+msgid ""
+"``grip`` is the force of the hand on the barrel of a pen that measures it, the *Barrel Pressure* "
+"of the HID usage tables. It is a measurement like ``p``, comes with every report of the tool, and"
+" can thicken a line or open a nozzle as steadily as the hand tightens. The squeeze of `Tool "
+"actions`_ is something else: what a system makes of that force when it crosses a threshold, which"
+" happens once and has no size. A pen can give either, both or neither. As with the settings "
+"stored in a pen, only the reports of the pen itself carry ``grip``, and the tablet interfaces of "
+"Windows, macOS, Wayland and X11 do not pass it on."
+msgstr ""
+"``grip`` 是支持测量的笔所感知的手握笔杆力度，对应 HID 用途表的 *Barrel Pressure*。它与 ``p`` "
+"一样属于测量值，随每条工具报告发送，可随握持力度连续增加线宽或打开喷嘴。`工具动作 <Tool actions_>`_ "
+"中的挤压是另一种信息：系统在力度跨过阈值时识别出的动作，只发生一次，没有量值。笔可提供其中任一、两者或都不提供。与笔内设置一样，只有笔自身报告携带 "
+"``grip``；Windows、macOS、Wayland 和 X11 的数位板接口均不转发。 #noqa"
+
+#: docs/tablet-protocol.rst:382
+msgid "Fingers"
+msgstr "手指"
+
+#: docs/tablet-protocol.rst:384
+msgid ""
+"Finger reports have ``kind=2``, ``tool=0``, ``buttons=1`` while down, one ``contact`` per finger,"
+" and usually no measurements beyond the shape. A touch system delivers all the fingers that moved"
+" together before any of them is acted on, and the terminal keeps that grouping: after the reports"
+" of one such group it sends a frame report, which carries only ``kind=2``, ``phase=6``, "
+"``device`` and ``t``, with ``tu`` when the reports have it::"
+msgstr ""
+"手指报告为 ``kind=2``、``tool=0``，落下期间 ``buttons=1``，每个手指使用独立 "
+"``contact``，通常除形状外没有其他测量值。触摸系统会先交付一组同时移动的手指，再处理它们；终端保留分组：每组报告后发送帧报告，仅含 "
+"``kind=2``、``phase=6``、``device`` 和 ``t``，若报告有 ``tu`` 也一并包含：::"
+
+#: docs/tablet-protocol.rst:395
+msgid ""
+"A program that cares about the relation between fingers, as a pinch recognizer does, collects "
+"reports until the frame and applies them at once. A program that paints one stroke per finger can"
+" act on each report as it comes. Frames are sent for fingers only; a tool reports one contact at "
+"a time."
+msgstr "关心手指间关系的程序（如捏合识别器）应收集到帧报告后一起处理；按手指分别绘制笔划的程序可逐条处理。帧报告只用于手指，工具一次只报告一个接触点。"
+
+#: docs/tablet-protocol.rst:401
+msgid ""
+"A touchpad that measures how hard it is pressed reports that with ``p`` and ``stage``. The force "
+"is on the pad as a whole, not under each finger, so every finger on the pad carries the same two "
+"values, and when only the force changes the fingers are reported again as a ``move`` that did not"
+" move. ``stage`` is ``0`` while the pad is pressed less than a click, ``1`` for a click and ``2``"
+" for a click pressed harder, and ``p`` runs from 0 to 65535 within each stage, so it drops back "
+"when the stage goes up."
+msgstr ""
+"支持按压力度的触控板通过 ``p`` 和 ``stage`` 报告。力度属于整块触控板，不属于单个手指，因此板上每个手指携带相同的两个值；仅力度变化时，也会重新报告手指为位置未变的 "
+"``move``。``stage`` 为 ``0`` 表示未达到点击力度，``1`` 为点击，``2`` 为更用力的点击；``p`` 在各阶段内取 0 至 "
+"65535，所以阶段升高时压力值会回落。"
+
+#: docs/tablet-protocol.rst:409
+msgid ""
+"Not everything that touches a screen or a touchpad is meant to. A palm resting on the glass, the "
+"side of the hand that holds a pen, or a thumb lying on the edge of a touchpad is a contact too, "
+"and some systems judge which a contact is from its size, its shape and where the pen is. A finger"
+" report says what the system has judged with ``conf``: ``1`` for a contact it takes to be meant "
+"and ``0`` for one it takes to be an accident. ``conf`` is absent when the system has not said, "
+"which says nothing either way. Some systems do not judge at all. Others only mark the contacts "
+"they take for accidents and say nothing of the rest, and a contact such a system has not marked "
+"has no ``conf``: it was not found to be meant, and a palm the system missed looks the same. Only "
+"a system that says of a contact that it is meant gives it ``conf=1``. The judgement can change "
+"while the contact is down, as when a palm comes down edge first and looks like a finger for a "
+"moment, or a thumb that was resting begins to move."
+msgstr ""
+"接触屏幕或触控板的不一定都是有意操作。放在玻璃上的手掌、握笔手的侧面、停在触控板边缘的拇指也都是接触，一些系统会根据大小、形状和笔位置判断。手指报告通过 ``conf`` "
+"传达系统判断：``1`` 为有意，``0`` 为意外。系统未说明时省略 ``conf``，不代表任一结论。有些系统完全不判断；另一些只标记意外接触，对其他接触不作说明，此类未标记接触没有 "
+"``conf``，不能当作已确认有意，因为系统漏判的手掌也一样。只有系统明确说明有意时才给出 ``conf=1``。接触期间判断可能变化，例如手掌先以侧边接触，短暂像手指，或静止拇指开始移动。"
+
+#: docs/tablet-protocol.rst:424
+msgid ""
+"A contact that is not meant is a contact all the same, and what to do with it is the program's "
+"choice: one program ignores it, another lets the palm rest and smudge. But a program that knows "
+"nothing of ``conf`` would take a resting palm for a finger, so the contacts the system judges "
+"accidental are reported only while mode bit ``64`` is on. Without it a program is not shown a "
+"contact for as long as the system takes it for an accident:"
+msgstr ""
+"意外接触仍然是接触，如何处理由程序决定：有的程序忽略，有的允许手掌涂抹。但不认识 ``conf`` 的程序会把手掌当成手指，因此系统判定为意外的接触仅在模式位 ``64`` "
+"开启时报告。未开启时，只要系统仍认为是意外，就不向程序显示："
+
+#: docs/tablet-protocol.rst:431
+msgid ""
+"A contact that begins as an accident is not reported. If the system stops taking it for one "
+"before it lifts, it is reported from then on, and begins with a ``down``. If it lifts first, "
+"nothing is reported of it."
+msgstr "起初被判为意外的接触不报告。如果在抬起前系统不再认为是意外，则从那时以 ``down`` 开始报告；若先抬起，则始终不报告。"
+
+#: docs/tablet-protocol.rst:434
+msgid ""
+"A contact that is being reported, and that the system comes to take for an accident, is "
+"cancelled: a report with ``phase=4`` and ``conf=0``, after which the program takes back what it "
+"made of the contact, as after every other cancel. That is so also when the contact lifts as an "
+"accident, whose last report is then a ``cancel`` and not an ``up``. A cancelled contact is not "
+"reported again, unless the system stops taking it for an accident before it lifts, and then it "
+"begins with a new ``down``."
+msgstr ""
+"正在报告的接触若被系统改判为意外，则发送 ``phase=4``、``conf=0`` 取消；程序与其他取消一样撤销该接触造成的效果。即使接触以意外状态抬起，最后一条也是 ``cancel`` "
+"而非 ``up``。取消后不再报告，除非抬起前系统不再视其为意外，此时以新的 ``down`` 重新开始。"
+
+#: docs/tablet-protocol.rst:441
+msgid "A frame report follows a group only when something of the group was reported."
+msgstr "只有组内实际报告过内容时，才在该组后发送帧报告。"
+
+#: docs/tablet-protocol.rst:444
+msgid ""
+"With bit ``64`` every contact is reported as it happens, with the ``conf`` the system gave it, "
+"and nothing is cancelled for being an accident: a program reads ``conf`` in every report, and one"
+" that had begun to draw for a contact that turns out to be an accident takes that back itself. "
+"The bit changes nothing where the system does not judge. A terminal that can report these "
+"contacts says so with ``caps`` bit ``256``."
+msgstr ""
+"开启位 ``64`` 后，所有接触按发生情况报告，并携带系统提供的 ``conf``，不会因为意外接触而自动取消。程序应逐条检查 "
+"``conf``，若已绘制的接触后来被判为意外，应自行撤销。系统不执行判断时，该位不改变行为。支持报告这些接触的终端会设置 ``caps`` 位 ``256``。"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:451
+msgid ""
+"Windows gives the judgement as the confidence flag of a pointer, and the HID usage tables have it"
+" as *Touch Valid* in the report of a contact, where a terminal that reads the digitizer finds it."
+" Android judges too, and says so late: it cancels the one finger it has come to take for a palm, "
+"which is a ``cancel`` of that contact with ``conf=0``. AppKit has a mark for the touches on a "
+"trackpad that it takes to be resting there and says nothing of the others, and was not seen to "
+"set it, see `Implementations`_. Wayland and X11 do not say."
+msgstr ""
+"Windows 通过指针的 confidence 标志提供判断；HID 用途表在接触报告中使用 *Touch Valid*，直接读取数字化仪的终端可获得。Android "
+"也会判断，但较晚说明：把某个手指判为手掌后取消它，映射为该接触的 ``cancel``、``conf=0``。AppKit "
+"能标记触控板上静止搁置的接触，但不说明其他接触，实际观察中尚未见到该标记被设置，见 `实现情况 <Implementations_>`_。Wayland 和 X11 不提供此信息。 #noqa"
+
+#: docs/tablet-protocol.rst:463
+msgid ""
+"Some things done with a tool are not a button held down: a double tap on the barrel of a pen, a "
+"squeeze of it, a click of the button on its end. While mode bit ``16`` is on they are reported "
+"with ``kind=4``::"
+msgstr "有些工具操作不是持续按住按钮：双击笔杆、挤压笔杆，或点击笔尾按钮。模式位 ``16`` 开启时，以 ``kind=4`` 报告：::"
+
+#: docs/tablet-protocol.rst:470
+msgid "The tool, as in its reports, ``0`` when the system does not say which tool it was"
+msgstr "工具标识，与工具报告相同；系统未说明是哪支工具时为 ``0``"
+
+#: docs/tablet-protocol.rst:472
+msgid "``t``, ``tu``"
+msgstr "``t``、``tu``"
+
+#: docs/tablet-protocol.rst:472
+msgid "The time of the action, as in the other reports"
+msgstr "动作时刻，与其他报告相同"
+
+#: docs/tablet-protocol.rst:473
+msgid "``action``"
+msgstr "``action``"
+
+#: docs/tablet-protocol.rst:473
+msgid ""
+"``1`` a double tap on the barrel, ``2`` a squeeze, ``3`` a click of the button on the end of the "
+"tool, ``4`` a double click of that button, ``5`` that button pressed and held, ``6`` the tool was"
+" put into its holder, ``7`` it was taken out of it, ``8`` the tool is moved through the air with "
+"its button held"
+msgstr ""
+"``1`` 双击笔杆，``2`` 挤压，``3`` 点击笔尾按钮，``4`` 双击笔尾按钮，``5`` 按住笔尾按钮，``6`` 工具放入收纳槽，``7`` 工具取出，``8`` "
+"按住按钮在空中移动工具"
+
+#: docs/tablet-protocol.rst:479
+msgid "``state``"
+msgstr "``state``"
+
+#: docs/tablet-protocol.rst:479
+msgid ""
+"For an action that lasts, as a squeeze does, ``1`` when it begins and ``0`` when it ends, and for"
+" action ``8`` also ``2`` for each report in between; absent for the others"
+msgstr "持续动作（如挤压）开始时为 ``1``，结束时为 ``0``；动作 ``8`` 的中间报告还使用 ``2``。其他动作省略"
+
+#: docs/tablet-protocol.rst:482
+msgid "``dx``, ``dy``"
+msgstr "``dx``、``dy``"
+
+#: docs/tablet-protocol.rst:482
+msgid ""
+"With ``state=2``, how far the tool has moved through the air since the last report of the action,"
+" −32767 to 32767, positive to the right and down"
+msgstr "``state=2`` 时，自该动作上次报告以来工具在空中的移动量，−32767 至 32767，向右和向下为正"
+
+#: docs/tablet-protocol.rst:485
+msgid "The position of the pointer, as in a tool report"
+msgstr "指针位置，与工具报告相同"
+
+#: docs/tablet-protocol.rst:486
+msgid "As in a tool report"
+msgstr "与工具报告相同"
+
+#: docs/tablet-protocol.rst:489
+msgid ""
+"``device``, ``t``, ``action``, ``x``, ``y`` and ``mods`` are always present. An action has no "
+"``phase`` and no ``contact`` and belongs to no stroke. It goes to the window that has a stroke of"
+" the tool captured, and otherwise to the window under the pointer. What an action does is the "
+"program's choice; a double tap usually switches between the pen and the eraser. A program ignores"
+" an ``action`` it does not know."
+msgstr ""
+"始终含有 ``device``、``t``、``action``、``x``、``y`` 和 ``mods``。动作没有 ``phase`` 或 "
+"``contact``，不属于笔划。若某窗口捕获了该工具的笔划，则发送给该窗口，否则发给指针下的窗口。动作的用途由程序决定；双击通常在笔和橡皮之间切换。程序应忽略未知 ``action``。"
+
+#: docs/tablet-protocol.rst:496
+msgid ""
+"A pen that has a holder in the device, a slot or a magnet that also charges it, tells the system "
+"when it is put in and taken out, which is a good moment to put a palette away or bring it up. "
+"Windows tells applications of both. Neither action lasts, and ``x,y`` is where the pointer "
+"happens to be."
+msgstr "如果设备有笔槽或可充电磁吸收纳位，笔会在放入和取出时告知系统，适合用来隐藏或显示调色板。Windows 向应用通知这两种动作。它们都没有持续状态，``x,y`` 只是当前指针位置。"
+
+#: docs/tablet-protocol.rst:501
+msgid ""
+"A pen with a radio and a motion sensor can be waved like a wand: while its button is held away "
+"from the screen it reports how it moves, as the S Pen of the Samsung models that pair it over "
+"Bluetooth does. That is action ``8``: ``state=1`` when the button goes down, any number of "
+"reports with ``state=2`` that each carry ``dx`` and ``dy``, and ``state=0`` when it comes up. The"
+" two are what the sensor in the pen makes of the motion and have no unit, so only their signs and"
+" their proportions mean anything, and a terminal that is given fractions scales them to whole "
+"numbers by one factor throughout. A program adds them up to move a cursor or reads a flick from "
+"their run. The pen is not over the tablet while this happens, so there are no tool reports and "
+"``x,y`` stays where the pointer was."
+msgstr ""
+"带无线连接和运动传感器的笔，可像魔杖一样挥动：远离屏幕并按住按钮时报告运动，例如部分通过蓝牙配对的 Samsung S Pen。这就是动作 ``8``：按钮按下时 "
+"``state=1``，随后任意数量 ``state=2`` 报告携带 ``dx``、``dy``，松开时 "
+"``state=0``。这些量是笔内传感器对运动的解释，没有单位，只有符号和比例有意义；终端收到小数时应始终用同一系数转换为整数。程序可累加来移动光标，或从序列识别挥动。此时笔不在数位板上方，因此没有工具报告，``x,y``"
+" 保持原指针位置。"
+
+#: docs/tablet-protocol.rst:517
+msgid ""
+"A pad is the keys, touch rings, touch strips and dials on the body of a tablet, or on a remote of"
+" their own. While mode bit ``4`` is on they are reported with ``kind=3``, one control to a "
+"report::"
+msgstr "控制板是数位板本体或独立遥控器上的按键、触控环、触控条和旋钮。模式位 ``4`` 开启时，以 ``kind=3`` 报告，每条对应一个控件：::"
+
+#: docs/tablet-protocol.rst:523
+msgid ""
+"``device``, ``t`` and ``mods`` are always present and mean what they do in the other reports, as "
+"does ``tu``. A pad report has no ``phase``, no ``contact`` and no position. The rest of it is one"
+" of these:"
+msgstr ""
+"``device``、``t`` 和 ``mods`` 始终存在，与其他报告含义相同，``tu`` 也相同。控制板报告没有 ``phase``、``contact`` "
+"或位置，其余字段为下列形式之一："
+
+#: docs/tablet-protocol.rst:528
+msgid "``button``, ``state``"
+msgstr "``button``、``state``"
+
+#: docs/tablet-protocol.rst:528
+msgid "A key went down, ``state=1``, or came up, ``state=0``"
+msgstr "按键按下 ``state=1``，或释放 ``state=0``"
+
+#: docs/tablet-protocol.rst:529
+msgid "``ring``, ``angle``"
+msgstr "``ring``、``angle``"
+
+#: docs/tablet-protocol.rst:529
+msgid ""
+"Where the finger is on a touch ring, in hundredths of a degree, ``0`` to ``35999``, clockwise "
+"from the top of the ring as the tablet is turned"
+msgstr "手指在触控环上的位置，单位百分之一度，``0`` 至 ``35999``，按数位板当前方向从环顶部顺时针计数"
+
+#: docs/tablet-protocol.rst:532
+msgid "``strip``, ``pos``"
+msgstr "``strip``、``pos``"
+
+#: docs/tablet-protocol.rst:532
+msgid "Where the finger is on a touch strip, ``0`` at its top or left end to ``65535`` at the other"
+msgstr "手指在触控条上的位置，顶端或左端为 ``0``，另一端为 ``65535``"
+
+#: docs/tablet-protocol.rst:534
+msgid "``ring`` or ``strip``,"
+msgstr "``ring`` 或 ``strip``，"
+
+#: docs/tablet-protocol.rst:534
+msgid "The finger lifted off the ring or strip, in place of"
+msgstr "手指离开触控环或触控条时，用此形式替代位置报告"
+
+#: docs/tablet-protocol.rst:535
+msgid "``stop=1``"
+msgstr "``stop=1``"
+
+#: docs/tablet-protocol.rst:535
+msgid ""
+"``angle`` or ``pos``. What comes next from that control begins a new movement, so the jump from "
+"the last position to the next one is not a turn"
+msgstr "替代 ``angle`` 或 ``pos``。此控件下次报告开始新的移动，因此上次与下次位置间的跳变不算转动"
+
+#: docs/tablet-protocol.rst:538
+msgid "``dial``, ``delta``"
+msgstr "``dial``、``delta``"
+
+#: docs/tablet-protocol.rst:538
+msgid ""
+"How far a dial was turned since its last report, signed, ``120`` for each detent and less for a "
+"dial that turns smoothly. A dial has no position"
+msgstr "旋钮自上次报告以来的转动量，有符号，每个卡点为 ``120``，平滑旋钮可更小。旋钮没有绝对位置"
+
+#: docs/tablet-protocol.rst:541
+msgid "``group``, ``mode``"
+msgstr "``group``、``mode``"
+
+#: docs/tablet-protocol.rst:541
+msgid "A group of controls went into another mode"
+msgstr "一组控件切换到了另一模式"
+
+#: docs/tablet-protocol.rst:544
+msgid ""
+"The value of ``button``, ``ring``, ``strip`` and ``dial`` is the number of the control, each kind"
+" counted from zero across the pad in the order the system lists them. ``src=1`` is added to a "
+"ring or strip report when the system says a finger is what moves it."
+msgstr ""
+"``button``、``ring``、``strip`` 和 ``dial`` 的值是控件编号，各种类型按系统列举顺序在整块控制板上从零编号。系统说明触控环或触控条由手指操作时，报告添加 "
+"``src=1``。"
+
+#: docs/tablet-protocol.rst:549
+msgid ""
+"The controls of a pad are in groups, and each group has a mode, a number from zero that the user "
+"changes on the pad, usually with a key the system keeps for that, and that the pad may show with "
+"a light. A mode is nothing but a number: it is there so that the same controls can do one set of "
+"things in one mode and another in the next, and the program decides what. A ``group`` report "
+"gives the number of the group and the mode it is now in. Terminals also send one for every group "
+"when the pad comes to the window, so a program does not have to wait for the user to switch "
+"before it knows."
+msgstr ""
+"控制板控件划分为组，每组有一个从零开始编号的模式，用户可在控制板上切换，通常用系统保留的按键，并可能由指示灯显示。模式只是一个数字，用于让相同控件在不同模式中执行不同功能，具体功能由程序决定。``group``"
+" 报告给出分组编号和当前模式。控制板进入窗口时，终端也会为每个分组发送一次，因此程序不必等用户切换才知道状态。"
+
+#: docs/tablet-protocol.rst:558
+msgid ""
+"Pad reports go to the window that has the keyboard focus, not to the one under the pointer. "
+"Before the first of them, each time the pad comes to a window that has pad reports on, the "
+"terminal describes the pad::"
+msgstr "控制板报告发送到获得键盘焦点的窗口，而非指针下的窗口。每次控制板进入启用报告的窗口，在首条报告前，终端描述该控制板：::"
+
+#: docs/tablet-protocol.rst:565
+msgid "``buttons``,"
+msgstr "``buttons``，"
+
+#: docs/tablet-protocol.rst:565
+msgid "How many keys, rings, strips and dials the pad has"
+msgstr "控制板上按键、触控环、触控条和旋钮的数量"
+
+#: docs/tablet-protocol.rst:566
+msgid "``rings``,"
+msgstr "``rings``，"
+
+#: docs/tablet-protocol.rst:567
+msgid "``strips``,"
+msgstr "``strips``，"
+
+#: docs/tablet-protocol.rst:568
+msgid "``dials``"
+msgstr "``dials``"
+
+#: docs/tablet-protocol.rst:569
+msgid "``groups``"
+msgstr "``groups``"
+
+#: docs/tablet-protocol.rst:569
+msgid "How many groups its controls are in"
+msgstr "控件分组的数量"
+
+#: docs/tablet-protocol.rst:570
+msgid "``modes``"
+msgstr "``modes``"
+
+#: docs/tablet-protocol.rst:570
+msgid "How many modes each group has, separated by commas, in the order of the groups"
+msgstr "按分组顺序，以逗号分隔的各组模式数量"
+
+#: docs/tablet-protocol.rst:572
+msgid "``mode``"
+msgstr "``mode``"
+
+#: docs/tablet-protocol.rst:572
+msgid "The mode each group is in, in the same form, present when the terminal knows it at that moment"
+msgstr "各组当前模式，形式相同，终端在当时已知时才提供"
+
+#: docs/tablet-protocol.rst:574
+msgid "``bgroups``,"
+msgstr "``bgroups``，"
+
+#: docs/tablet-protocol.rst:574
+msgid "The group each key, ring, strip and dial is in, see below"
+msgstr "各按键、触控环、触控条和旋钮所属的分组，见下文"
+
+#: docs/tablet-protocol.rst:575
+msgid "``rgroups``,"
+msgstr "``rgroups``，"
+
+#: docs/tablet-protocol.rst:576
+msgid "``sgroups``,"
+msgstr "``sgroups``，"
+
+#: docs/tablet-protocol.rst:577
+msgid "``dgroups``"
+msgstr "``dgroups``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:578
+msgid "The tablet the pad belongs to, the number the tools on that tablet carry, see `Tablets`_"
+msgstr "控制板所属数位板的编号，与该板上的工具相同，见 `数位板 <Tablets_>`_ #noqa"
+
+#: docs/tablet-protocol.rst:580
+msgid "The name of the tablet the pad belongs to, as for a tool"
+msgstr "控制板所属数位板的名称，与工具相同"
+
+#: docs/tablet-protocol.rst:581
+msgid "The ids of that tablet, sent only while mode bit ``8`` is on"
+msgstr "该数位板的硬件 ID，仅在模式位 ``8`` 开启时发送"
+
+#: docs/tablet-protocol.rst:584
+msgid ""
+"A mode is the mode of a group, so a program that shows what a control does has to know which "
+"group the control is in. ``bgroups`` says it for the keys, ``rgroups`` for the rings, ``sgroups``"
+" for the strips and ``dgroups`` for the dials: the number of the group of each control of that "
+"kind, in the order of their numbers and separated by commas, with ``-`` for a control that is in "
+"no group, as a key is that the system keeps for switching modes. ``bgroups=0,0,0,-,1,1`` is three"
+" keys in group 0, one in none and two in group 1. A list has an entry for every control of its "
+"kind. It is absent when the pad has no control of that kind and when the system does not say, and"
+" with a pad of a single group there is nothing to be in doubt about. The system may take a key "
+"out of its group for a use of its own, or give it back, while the pad is in use, and the pad is "
+"then described again, as a tool is when what was said of it changes. The groups come from "
+"libinput, which Wayland compositors pass on through ``tablet-v2``: each group lists its keys and "
+"announces its rings, strips and dials. Nothing else that silkie reads has them."
+msgstr ""
+"模式属于分组，因此显示控件当前功能的程序必须知道控件所属组。``bgroups`` 用于按键，``rgroups`` 用于触控环，``sgroups`` 用于触控条，``dgroups`` "
+"用于旋钮：按各类控件编号顺序，以逗号分隔给出所属组号；不属于任何组的控件（如系统保留用于切换模式的按键）用 ``-``。``bgroups=0,0,0,-,1,1`` 表示三个键属于组 "
+"0，一个不属于组，两个属于组 "
+"1。列表为该类型每个控件提供一项；没有该类控件或系统未说明时省略，只有一个组的控制板不会有归属疑问。系统可能在使用期间为自身用途将按键移出组或归还，此时重新描述控制板，与工具属性变化时一样。分组来自"
+" libinput，Wayland 合成器通过 ``tablet-v2`` 转发：各组列出按键并公布触控环、触控条和旋钮。silkie 读取的其他接口均不提供分组。"
+
+#: docs/tablet-protocol.rst:601
+msgid ""
+"A pad holds nothing open except its keys. When the mode is changed, the terminal is reset, the "
+"keyboard focus goes to another window or the pad goes away, the terminal reports every key that "
+"is down as released, ``state=0``, with the ``t`` of its press, and the release that the pad makes"
+" later is not reported. A key that was already down when the reports began never reports its "
+"release. A program must tolerate a release for a key it does not have down."
+msgstr ""
+"控制板只有按键具有持续按住状态。模式改变、终端重置、键盘焦点转到其他窗口或控制板消失时，终端为每个按住的键报告 ``state=0``，时间 ``t`` "
+"使用原按下时刻；控制板稍后实际产生的释放不再报告。开始报告前已经按住的键，之后释放时也不报告。程序必须容忍释放一个自己并未记录为按下的键。"
+
+#: docs/tablet-protocol.rst:609
+msgid ""
+"A program can say what a control does at the moment, for the system to show the user where it has"
+" a display for that, such as an overlay of the layout of the pad::"
+msgstr "程序可以声明控件当前的功能，供系统在可用界面（如控制板布局蒙层）中展示给用户：::"
+
+#: docs/tablet-protocol.rst:615
+msgid ""
+"``device`` is the pad and exactly one of ``button``, ``ring``, ``strip`` and ``dial`` names the "
+"control, with a number from ``0`` to ``255``. ``text`` is UTF-8 without control characters, "
+"encoded as base64 with padding; a ``text`` that is empty or left out takes the label away. A "
+"window system may carry only so much of a label: a Wayland request holds 4075 bytes of it, and "
+"kitty cuts a longer one there, between characters. A label belongs to the mode the group of the "
+"control is in, so a program sets its labels when the pad is described and again after each "
+"``group`` report. It is accepted only from the program the pad is reporting to, there is no "
+"reply, and a terminal with nowhere to show labels ignores it."
+msgstr ""
+"``device`` 指定控制板，并在 ``button``、``ring``、``strip``、``dial`` 中恰选一个，以 ``0`` 至 ``255`` "
+"编号指定控件。``text`` 为不含控制字符的 UTF-8，使用带填充的 base64 编码；``text`` 为空或省略时表示移除标签。窗口系统可能限制标签长度：Wayland 请求最多容纳 4075 "
+"字节，kitty 会在字符边界截断更长标签。标签属于控件所在组的当前模式，因此程序应在收到控制板描述后，以及每次 ``group`` "
+"报告后重新设置。仅接受来自正在接收该控制板报告的程序的标签，不回复；没有标签显示位置的终端忽略请求。"
+
+#: docs/tablet-protocol.rst:627
+msgid "Totems"
+msgstr "图腾工具"
+
+#: docs/tablet-protocol.rst:629
+msgid ""
+"A totem, ``tool=8``, is a dial or puck that stands on the screen and is tracked by it. It is "
+"reported as a tool: ``x,y`` is its centre, ``twist`` how far it has been turned, and the contact "
+"shape, with ``valid`` bit ``128``, the area of the screen it covers. Pressing it down is button "
+"``1``, so a totem that is pressed and turned is a stroke whose ``twist`` changes."
+msgstr ""
+"图腾 ``tool=8`` 是放在屏幕上、由屏幕跟踪的旋钮或游标装置。它按工具报告：``x,y`` 是中心，``twist`` 为旋转量，``valid`` 位 ``128`` "
+"声明的接触形状为其覆盖的屏幕区域。按下对应按钮 ``1``，因此按住并转动图腾是一个 ``twist`` 变化的笔划。"
+
+#: docs/tablet-protocol.rst:636
+msgid "Estimates and predictions"
+msgstr "估算与预测"
+
+#: docs/tablet-protocol.rst:638
+msgid ""
+"Some systems hand over a sample before all of it has been measured: the pressure of a pen can "
+"arrive by radio after the position of its tip, and until it does the system fills in an estimate."
+" Some also predict, giving samples for where the tool is about to be, which a program draws to "
+"hide the delay to the screen and then replaces. A terminal that can pass these on does so only "
+"while mode bit ``32`` is on, with three more fields in the reports of tools and fingers:"
+msgstr ""
+"某些系统会在全部数据测量完成前交付采样：笔尖位置可能先到，压力随后经无线连接到达，期间系统先填入估算值。有些系统还提供工具即将到达位置的预测采样，程序可先绘制以掩盖显示延迟，再替换。能转发此类信息的终端，仅在模式位"
+" ``32`` 开启时发送，并在工具和手指报告中增加三个字段："
+
+#: docs/tablet-protocol.rst:647
+msgid "``seq``"
+msgstr "``seq``"
+
+#: docs/tablet-protocol.rst:647
+msgid ""
+"A count of the samples of this device, an unsigned 32 bit integer that wraps, by which a later "
+"report names an earlier one"
+msgstr "设备采样计数，无符号 32 位整数，可回绕；后续报告据此引用先前采样"
+
+#: docs/tablet-protocol.rst:650
+msgid "``est``"
+msgstr "``est``"
+
+#: docs/tablet-protocol.rst:650
+msgid "The measurements in this report that are estimates, a bit set with the bits of ``valid``"
+msgstr "本报告中仍为估算的测量项目，使用与 ``valid`` 相同的位集合"
+
+#: docs/tablet-protocol.rst:652
+msgid "``pred``"
+msgstr "``pred``"
+
+#: docs/tablet-protocol.rst:652
+msgid "``1`` for a predicted sample; absent otherwise"
+msgstr "预测采样为 ``1``，否则省略"
+
+#: docs/tablet-protocol.rst:655
+msgid ""
+"An estimate is put right by a correction: a report with ``phase=7`` and the ``seq`` of the report"
+" it corrects, which repeats that report with the measured values. It is not a new point of the "
+"stroke. Its own ``est`` names what is still an estimate, and is absent once nothing is. A "
+"correction can come after the ``up`` of its stroke, and it may never come, in which case the "
+"estimate stands."
+msgstr ""
+"估算值通过修正报告更新：``phase=7``，携带被修正报告的 ``seq``，重复该报告并使用实际测量值，不是笔划的新点。修正自身的 ``est`` "
+"标明哪些项目仍为估算；没有估算项时省略。修正可能在笔划 ``up`` 后到达，也可能永远不来，此时保留估算值。"
+
+#: docs/tablet-protocol.rst:662
+msgid ""
+"A predicted sample is not part of the stroke. A program that draws it takes every predicted "
+"sample of a contact away again when the next report of that contact arrives that is not "
+"predicted. A predicted sample has no ``seq`` and is never corrected."
+msgstr "预测采样不属于实际笔划。绘制预测的程序，在收到同一接触点下一条非预测报告时，应移除该接触点的全部预测采样。预测采样不带 ``seq``，也不会被修正。"
+
+#: docs/tablet-protocol.rst:667
+msgid ""
+"Without bit ``32`` a terminal sends an estimate as an ordinary value and sends no corrections and"
+" no predictions, so a program that knows nothing of this draws what it is given."
+msgstr "未启用位 ``32`` 时，终端把估算值作为普通值发送，不发送修正和预测，因此不认识这些机制的程序直接绘制收到的内容。"
+
+#: docs/tablet-protocol.rst:672
+msgid "Lifecycle"
+msgstr "生命周期"
+
+#: docs/tablet-protocol.rst:674
+msgid ""
+"A stroke begins with ``down`` and ends with ``up`` or ``cancel``; in between every report of that"
+" contact is a ``move``. The stroke stays captured by the window it began in even when the tool or"
+" finger leaves it, so coordinates can be negative or exceed the cell area, and they must not be "
+"clamped into another window. The fingers of one sequence, from the first finger landing to the "
+"last lifting, all go to the window under the first finger, or for a touchpad to the window under "
+"the pointer when the first finger landed. A contact the system judges accidental does not keep a "
+"sequence open, or a thumb left lying on a touchpad would hold every later finger in one window: a"
+" finger that lands, or a contact that stops being an accident, while every contact that is down "
+"is an accident begins a new sequence, with the window that is under it, or under the pointer, at "
+"that moment. When that is another window, the contacts that were down are cancelled in the window"
+" they were reported to, and in the new one each of them begins with a ``down``. ``hover`` reports"
+" follow a tool in proximity without a contact and are not captured. A tool leaving proximity "
+"cancels any stroke it had open, and then, when the system reports it, sends phase ``5``. That "
+"report goes to the window that was last told of the tool, wherever the tool was when it left: a "
+"pen whose stroke was dragged out of the window and ended there is over no window, and the program"
+" still has to learn that it is gone."
+msgstr ""
+"笔划以 ``down`` 开始，以 ``up`` 或 ``cancel`` 结束，期间该接触点每条报告都是 "
+"``move``。工具或手指离开窗口后，笔划仍由起始窗口捕获，因此坐标可为负或超出字符单元区域，不得钳制到另一个窗口。一次手指序列从首个手指落下到最后一个抬起，全部发送给首指下方的窗口；触控板则使用首指落下时指针所在窗口。被判为意外的接触不会保持序列活动，否则留在触控板上的拇指会让之后所有手指锁定同一窗口：若当前按下的接触全为意外，此时新手指落下或某接触不再被判为意外，将以当时该接触（或指针）下方窗口开始新序列。如果换了窗口，原窗口会取消已有接触，新窗口中每个接触都以"
+" ``down`` 开始。``hover`` 跟随感应范围内未接触的工具，不被捕获。工具离开感应范围时取消其未结束笔划，系统提供离开事件时再发送阶段 "
+"``5``。它发给最后获知该工具的窗口，无论工具离开时在哪里；即使笔划曾拖出窗口并在外结束，程序也仍需要知道笔已离开。"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/tablet-protocol.rst:695
+msgid ""
+"The terminal cancels contacts, with ``buttons=0`` and ``p=0``, when the mode changes, the "
+"terminal is reset, the window's size in cells changes, the system takes the fingers over for a "
+"gesture of its own, or the device goes away. After a cancel the rest of that stroke is not "
+"reported, not even its ``up``. If a finger that was cancelled because the system took it for an "
+"accident is reported again, see `Fingers`_, that is a new stroke, which begins with a ``down``. "
+"Programs must tolerate a lost ``hover``, a repeated cancel, and a fresh ``down`` for a contact "
+"they still have open, which replaces the earlier stroke."
+msgstr ""
+"模式改变、终端重置、窗口字符行列数变化、系统为自身手势接管手指，或设备消失时，终端以 ``buttons=0``、``p=0`` 取消接触。取消后不再报告该笔划的任何后续内容，包括 "
+"``up``。因意外接触取消的手指若重新报告（见 `手指 <Fingers_>`_），视为以 ``down`` 开始的新笔划。程序必须容忍丢失的 "
+"``hover``、重复取消，以及对仍被记录为活动的接触收到新 ``down``，后者替换旧笔划。 #noqa"
+
+#: docs/tablet-protocol.rst:706
+msgid ""
+"A terminal or relay that cannot keep up may merge some reports, as :doc:`extension-framing` says."
+" Of this protocol's reports only ``move`` and ``hover`` may be merged: consecutive ones of one "
+"contact, with no other report of that contact between them and the same ``buttons``, into one "
+"with the absolute values of the last and the sum of ``wheel`` and of ``wclicks``, and with them "
+"the frame reports of the groups they were in. Every other report, of a pad, a device, an action "
+"or a correction included, arrives as it was sent."
+msgstr ""
+"终端或中继无法跟上时，可按 :doc:`extension-framing` 合并部分报告。本协议仅允许合并 ``move`` 和 "
+"``hover``：同一接触点连续出现，期间没有该接触点的其他报告，且 ``buttons`` 相同。合并后绝对值取最后一条，``wheel``、``wclicks`` "
+"分别求和，并合并它们所在组的帧报告。其他报告（包括控制板、设备、动作和修正）全部原样到达。"
+
+#: docs/tablet-protocol.rst:715
+msgid ""
+"A multiplexer translates ``x,y`` of on-screen contacts by the pane's origin (borders included) "
+"and scroll offset, forwards every other field unchanged, delivers each stroke and each finger "
+"sequence only to the pane it began in, and cancels contacts when panes move or resize. It keeps "
+"the mode of each pane and asks the terminal for the union of them. It keeps the last description "
+"of each tool in proximity and sends it to a pane before that pane's first report of the tool, "
+"without the hardware identifiers unless that pane asked for them. When the terminal describes a "
+"device again, the multiplexer keeps the new description in place of the old one and sends it on "
+"to the pane the device is reporting to. ``rx``, ``ry``, ``grip`` and ``conf`` are forwarded "
+"unchanged, none of them being a place on the screen. Two panes can differ in mode bit ``64``, so "
+"a multiplexer asks the terminal for it when any pane has it, and for a pane that has not it does "
+"what a terminal does: it keeps back the contacts the system judges accidental, cancels one that "
+"becomes an accident, begins one that stops being one with a ``down``, and sends a frame only "
+"after a group it sent something of. ``tablet`` is the terminal's number and is forwarded "
+"unchanged; a relay that brings the tablets of several terminals together gives them numbers of "
+"its own, so that two tablets never share one and a pad keeps the number of the tools of its "
+"tablet. A tool action goes to the pane that has a stroke of the tool, and otherwise to the pane "
+"under the pointer, with ``x,y`` translated as for a contact and ``dx,dy`` unchanged. Corrections "
+"follow the report they correct to its pane, and ``seq`` is forwarded unchanged. Pad reports go "
+"unchanged to the pane that has the focus, after the description of the pad, and when the focus "
+"moves to another pane the keys that are down are reported released to the pane it left. A label "
+"is passed on only from the pane the pad is reporting to. A multiplexer or relay that detaches or "
+"loses its connection while contacts are live sends ``cancel`` for each of them to the program, so"
+" a program never holds a dead contact, and a relay that reconnects forwards nothing it did not "
+"see: the fingers down at that moment are simply reported from their next ``down``."
+msgstr ""
+"多路复用器按窗格原点（含边框）和滚动偏移转换屏幕接触的 "
+"``x,y``，其余字段不变；笔划和手指序列只交给起始窗格，窗格移动或调整大小时取消接触。保存各窗格模式，并向终端请求其并集。为感应范围内每个工具保存最近描述，在窗格收到首条工具报告前先发送描述；除非窗格请求硬件标识，否则去掉这些标识。终端重新描述设备时，保存新描述替换旧描述，并转发给当前接收该设备报告的窗格。``rx``、``ry``、``grip``"
+" 和 ``conf`` 不表示屏幕位置，原样转发。不同窗格的模式位 ``64`` "
+"可不同；任一窗格启用时向终端请求，对未启用的窗格则按终端规则过滤：隐藏意外接触、取消后来被判为意外的接触、不再意外时以 ``down`` "
+"开始，仅在实际发送过组内内容后发送帧报告。``tablet`` "
+"沿用终端编号；汇集多终端数位板的中继应重新编号，确保板间不冲突，且控制板与所属数位板工具编号相同。工具动作发给捕获该工具笔划的窗格，否则发给指针下方窗格，``x,y`` "
+"像接触位置一样转换，``dx,dy`` 不变。修正跟随原报告进入同一窗格，``seq`` "
+"不变。控制板先发送描述，再原样发送给获得焦点的窗格；焦点离开时，向原窗格报告全部按住键已释放。标签仅从接收控制板报告的窗格转发。多路复用器或中继在有活动接触时脱离或断连，必须向程序为各接触发送 "
+"``cancel``，避免保留失效接触；重连后不补造没见过的事件，当前已落下的手指只从下次 ``down`` 开始报告。"
+
+#: docs/tablet-protocol.rst:748
+msgid "Implementations"
+msgstr "实现情况"
+
+#: docs/tablet-protocol.rst:750
+msgid ""
+"silkie, this fork of kitty: tools on macOS, Wayland and X11; fingers on the touchpad on macOS and"
+" on touchscreens on Wayland, with contact shape, and on X11, without; pads on Wayland, with the "
+"groups of their controls, and the keys of pads on X11; tool actions on macOS; the number of the "
+"tablet on macOS and Wayland; the size of a tablet and whether it is a display on Wayland and X11;"
+" the place of a tool on its tablet on X11. ``kitty --debug-input`` logs the tablet, pad and touch"
+" events it sees."
+msgstr ""
+"silkie（本 kitty 分支）：macOS、Wayland 和 X11 支持工具；macOS 支持触控板手指，Wayland 支持带接触形状的触摸屏手指，X11 "
+"支持无形状的触摸屏手指；Wayland 支持控制板及控件分组，X11 支持控制板按键；macOS 支持工具动作；macOS 和 Wayland 提供数位板编号；Wayland 和 X11 "
+"提供数位板尺寸及是否为显示器；X11 提供工具在数位板上的位置。``kitty --debug-input`` 记录收到的数位板、控制板和触摸事件。"
+
+#: docs/tablet-protocol.rst:759
+msgid ""
+"Inkline, Goblin Skiff and GoblinView carry a codec for an earlier draft of this protocol and are "
+"being brought up to this specification."
+msgstr "Inkline、Goblin Skiff 和 GoblinView 包含较早草案的编解码器，正在更新至本规范。"
+
+#: docs/tablet-protocol.rst:763
+msgid "Implementation notes for silkie"
+msgstr "silkie 实现说明"
+
+#: docs/tablet-protocol.rst:765
+msgid ""
+"silkie reads tablets and touch devices through the window system, so a program gets what the "
+"system reports. It keeps the mode bits ``1``, ``2``, ``4``, ``8``, ``16`` and ``64``, and "
+"``caps`` says which of them the system it runs on can do anything for. None of the systems it "
+"runs on hands over estimates or predictions, so it does not take bit ``32``, and it reports no "
+"totems and no battery charge. ``tu`` is sent on macOS only: Wayland and X11 stamp tablet and "
+"touch events in whole milliseconds."
+msgstr ""
+"silkie 通过窗口系统读取数位板和触摸设备，因此程序得到系统所报告的内容。接受模式位 ``1``、``2``、``4``、``8``、``16`` 和 ``64``，``caps`` "
+"说明当前系统实际能提供哪些能力。现有运行平台均不提供估算或预测，因此不接受位 ``32``，也不报告图腾或电量。仅 macOS 发送 ``tu``；Wayland 和 X11 "
+"的数位板／触摸事件使用整毫秒时间戳。"
+
+#: docs/tablet-protocol.rst:773
+msgid ""
+"Of what a tablet says of itself silkie sends what the window system gives it, which the notes "
+"below go through: ``tablet`` on macOS and Wayland, the groups of the controls of a pad on "
+"Wayland, ``w``, ``h`` and ``direct`` on Wayland and X11, where they are had from the kernel or "
+"the driver, and ``rx`` and ``ry`` on X11. It can write every field of this page, and its tests "
+"do, but nothing it reads has ``grip``, ``pcolor``, ``pwidth``, ``pstyle``, or the actions ``6`` "
+"to ``8``, so it never sends them, and ``conf`` it has from a mark of AppKit that no touch was "
+"seen to carry, so it does not claim ``caps`` bit ``256`` anywhere. It describes a tool or a pad "
+"again when what it said of it has changed, which at present only a pad on Wayland does."
+msgstr ""
+"silkie 转发窗口系统提供的设备信息，具体见下文：macOS 和 Wayland 的 ``tablet``，Wayland 的控制板控件分组，Wayland 与 X11 从内核或驱动读取的 "
+"``w``、``h``、``direct``，以及 X11 的 ``rx``、``ry``。实现能生成本页每个字段，测试也覆盖它们，但实际读取接口均不提供 "
+"``grip``、``pcolor``、``pwidth``、``pstyle`` 或动作 ``6`` 至 ``8``，因此不会发送；``conf`` 来自 AppKit "
+"的标记，但尚未观察到任何实际接触携带它，因此任何平台均不声明 ``caps`` 位 ``256``。描述内容变化时重新描述工具或控制板，目前只有 Wayland 控制板会出现此情况。"
+
+#: docs/tablet-protocol.rst:785
+msgid ""
+"Tilt is defined here on the axes of the screen. A system that turns a tablet, for a left-handed "
+"user or for a pen display that stands rotated, turns the position with it, and not always the "
+"tilt, which the tablet measures on its own axes. silkie turns tilt where the system says how the "
+"tablet is turned, and passes it on as it is given where it does not:"
+msgstr "本规范将倾斜定义在屏幕坐标轴上。系统为左手使用或旋转数位屏而旋转数位板时，会同时变换位置，却不一定变换设备自身坐标轴上的倾斜。系统说明数位板朝向时，silkie 转换倾斜；未说明时原样转发："
+
+#: docs/tablet-protocol.rst:791
+msgid ""
+"libinput turns a tablet only by a half turn, for left-handed use, and then turns tilt and twist "
+"with the position itself."
+msgstr "libinput 仅为左手模式旋转半圈，此时会同时变换位置、倾斜和笔杆旋转。"
+
+#: docs/tablet-protocol.rst:793
+msgid ""
+"On Wayland, ``tablet-v2`` gives tilt on the axes of the tablet, and a compositor that maps a "
+"tablet to a rotated output, or turns it by a calibration of its own, says nothing of that. Tilt "
+"is passed on as given, so on a pen display turned a quarter turn it is on the axes of the panel, "
+"not of the screen."
+msgstr "Wayland ``tablet-v2`` 给出数位板轴上的倾斜；合成器把板映射到旋转显示器或自行校准时，不告知终端，因此原样转发。数位屏旋转四分之一圈时，倾斜仍在面板轴上，而非屏幕轴上。"
+
+#: docs/tablet-protocol.rst:798
+msgid ""
+"On X11 the wacom driver's ``Wacom Rotation`` and the server's ``Coordinate Transformation "
+"Matrix`` turn the position and leave tilt on the axes of the tablet. silkie reads both, again "
+"whenever they change, and turns tilt by them, when the matrix keeps the axes at right angles, as "
+"a quarter turn, a half turn, a mirror or a map to part of the screen does. Tilt is left out for a"
+" matrix that turns the tablet by any other angle or flattens it. Twist is not turned."
+msgstr ""
+"X11 wacom 驱动的 ``Wacom Rotation`` 及服务器的 ``Coordinate Transformation Matrix`` "
+"会转换位置，但将倾斜保留在数位板轴上。silkie "
+"读取两者，并在变化后重新读取；矩阵保持轴线正交时（四分之一圈、半圈、镜像或映射到屏幕局部），相应转换倾斜。矩阵旋转其他角度或将其压平时，省略倾斜。笔杆旋转不做变换。"
+
+#: docs/tablet-protocol.rst:805
+msgid ""
+"AppKit gives tilt as the tablet driver reports it, after whatever orientation the user set in the"
+" driver."
+msgstr "AppKit 提供驱动按用户设置的朝向处理后的倾斜值。"
+
+#: docs/tablet-protocol.rst:808
+msgid "None of this was tried with a turned tablet."
+msgstr "上述行为尚未使用旋转的数位板实测。"
+
+#: docs/tablet-protocol.rst:810
+msgid ""
+"On macOS, tablet data arrives with the mouse events of the tablet driver. Tilt is scaled from the"
+" driver's fraction of maximum tilt assuming 60 degrees, as Wacom tablets report, and ``z`` is the"
+" driver's absolute Z. While a program takes a tool's reports, AppKit's merging of tablet points "
+"is turned off, so every sample the tablet sends is reported. AppKit tells a pen, an eraser and a "
+"puck apart; the airbrush and the lens cursor of a Wacom tablet are recognised from the driver's "
+"own code for the tool. No name is known for the device frame. ``tablet`` is one more than the "
+"index AppKit gives the tablet among those connected. AppKit also gives where the tool is in units"
+" of the tablet, but neither the range of those units nor the size of the tablet, so there is no "
+"``rx``, ``ry``, ``w`` or ``h``. The one tool action is the double tap on an Apple Pencil paired "
+"with an iPad that the Mac uses as a display, and the system does not say which tool it came from,"
+" so ``device`` is ``0`` unless a single tool is in proximity. Fingers are the indirect touches of"
+" the trackpad, as AppKit reports them to the content view; the pad size is the device size AppKit"
+" gives, taken to be in points at 72 to the inch. Trackpad fingers are reported alongside the "
+"mouse and scroll events the system makes from them. A trackpad that measures force gives ``p`` "
+"and ``stage`` once it has been pressed for the first time. AppKit has a mark for the touches it "
+"takes to be resting on the pad, which its documentation gives as a thumb or another touch at "
+"rest, and silkie asks it for those too: a touch with the mark is ``conf=0``, and one that comes "
+"to rest or stops resting is reported even when it has not moved. Of a touch without the mark "
+"AppKit says nothing, so such a touch has no ``conf``. On the trackpad of a 16 inch MacBook Pro "
+"under macOS 26 the mark was never seen: a palm laid on the pad, and a thumb held still at its "
+"edge while another finger moved, both came as touches like any other. So silkie does not claim "
+"``caps`` bit ``256`` on macOS, a program there gets no ``conf`` and judges palms for itself, and "
+"no other interface of AppKit says what a touch is. The code is left in for a trackpad that does "
+"set the mark: a program that turns on mode bit ``64`` regardless is sent such a touch with "
+"``conf=0``, a program that does not has it kept back, as AppKit itself keeps it back from a view "
+"that has not asked, with one difference that is meant: a finger that comes to rest ends with a "
+"``cancel`` where AppKit would have ended it with an ``up``, since a finger that came to rest did "
+"not tap. ``kitty --debug-input`` writes ``accidental`` after a touch that has the mark. The Wacom"
+" tool types, the double tap and the force are written from the documentation of AppKit and have "
+"not been tried with the hardware. There are no pad reports: AppKit has no events for the controls"
+" of a pad, which an application gets only through the request interface of Wacom's own driver."
+msgstr ""
+"macOS 的数位板数据随驱动的鼠标事件到达。倾斜从驱动给出的最大倾斜比例，按 Wacom 报告的 60 度假定换算；``z`` 为驱动的绝对 Z。程序接收工具报告期间，禁用 AppKit "
+"的数位板采样合并，以便上报每个采样。AppKit 区分笔、橡皮和游标；Wacom 喷枪和镜头光标通过驱动工具代码识别。设备描述中没有已知名称。``tablet`` 为 AppKit "
+"在已连接数位板中的索引加一。AppKit 还提供数位板单位下的工具位置，但不提供范围或板尺寸，因此没有 ``rx``、``ry``、``w``、``h``。唯一工具动作是与 iPad 配对的 "
+"Apple Pencil 双击，前提是 Mac 将 iPad 用作显示器；系统不说明来源工具，因此除非只有一个工具处于感应范围内，否则 ``device`` 为 ``0``。手指来自 "
+"AppKit 向内容视图报告的触控板间接触摸；板尺寸取 AppKit 的设备尺寸，按每英寸 72 点解释。触控板手指报告与系统生成的鼠标、滚动事件同时存在。支持力度的触控板首次被按压后提供 "
+"``p`` 和 ``stage``。AppKit 对静止搁置的触摸有一个标记，文档描述为拇指或其他静止接触；silkie 也请求它们：有标记的触摸为 "
+"``conf=0``，开始或停止静止时即使没移动也会报告。对无标记触摸，AppKit 不作判断，因此没有 ``conf``。在 macOS 26 的 16 英寸 MacBook Pro "
+"触控板上从未观察到该标记：手掌压在板上、拇指停在边缘而另一手指移动时，都作为普通触摸到达。因此 silkie 在 macOS 不声明 ``caps`` 位 ``256``，程序得不到 "
+"``conf``，需自行判断手掌，其他 AppKit 接口也不提供分类。相关代码仍保留，以支持实际会设置标记的设备：无论能力位是否声明，程序开启模式位 ``64`` 就会收到带 "
+"``conf=0`` 的该类触摸；未开启时将其过滤，类似 AppKit 对未请求视图的过滤，但有一项刻意差异：手指变为静止时以 ``cancel`` 结束，而非 AppKit 的 "
+"``up``，因为停止移动不等于点击。``kitty --debug-input`` 会在带标记的触摸后输出 ``accidental``。Wacom 工具类型、双击和力度依据 AppKit "
+"文档实现，尚未经相应硬件实测。没有控制板报告：AppKit 不提供这些控件事件，应用只能通过 Wacom 驱动自己的请求接口读取。"
+
+#: docs/tablet-protocol.rst:851
+msgid ""
+"On Wayland, tools come through the ``tablet-v2`` protocol, which reports every measurement above,"
+" identifies the tool and names the tablet, and fingers through ``wl_touch``, with ``shape`` and "
+"``orientation`` on a seat of version 6 or later whose compositor sends them, which sway and GNOME"
+" did not when this was written; ``caps`` claims the shape once a contact has had one. The pointer"
+" cursor follows a tool only on compositors with ``cursor-shape-v1``. GNOME applies its own stylus"
+" button mapping first (by default the lower button is the middle button), sway passes the buttons"
+" through. A tool does not move the pointer as far as silkie is concerned: a compositor can give "
+"tablets a cursor of their own, so what is reported at the pointer, such as a scroll, stays where "
+"the pointer was. Pads come through ``tablet-v2`` as well: keys, rings, strips and modes from its "
+"first version and dials from its second, which the compositor has to offer, and a label is passed"
+" to the compositor as the feedback for that control. The ``name`` and ids of a pad are those of "
+"the tablet it is attached to. ``caps`` claims tools and pads only on a compositor that has the "
+"protocol. ``tablet`` numbers the tablets of the seat in the order the compositor announced them: "
+"a tool has the number of the tablet it came into proximity over, a pad that of the tablet it was "
+"given the focus with. The group of a key is the group that lists it, and the group of a ring, a "
+"strip or a dial the one that announced it. When a compositor lists the keys of a group again "
+"while the pad has the focus, the pad is described again. The protocol has neither the size of a "
+"tablet, nor whether it is a display, nor where on it a tool is, though the compositor knows all "
+"three. It does name the device node of the tablet, and of a node the system says the first two to"
+" anyone who asks, with no access to the device itself. udev keeps the size, which it works out "
+"from the range and the resolution of the position the device reports, as ``ID_INPUT_WIDTH_MM`` "
+"and ``ID_INPUT_HEIGHT_MM`` in its database, in whole millimeters rounded down. The kernel has the"
+" properties of the device in sysfs, in which ``INPUT_PROP_DIRECT`` is a display and "
+"``INPUT_PROP_POINTER`` a tablet that is not one. silkie reads both through libudev, which it "
+"loads when a tablet names a node and does without where there is none, and sends them as ``w``, "
+"``h`` and ``direct``. Of the nodes a tablet has, only that of the pen is read, not that of the "
+"pad or of the fingers on the tablet. A node is a name on the machine the compositor runs on, so "
+"what is found at it counts only when the kernel has that device under the vendor and product ids "
+"the compositor gave for the tablet, or under its name when it gave no ids: a terminal on another "
+"machine than its compositor says nothing. What the kernel does not say is left out, as the size "
+"is for a device that states no resolution. ``rx`` and ``ry`` cannot be had this way. This was "
+"tried against a stand-in for libudev that answers as udev and the kernel do for two tablets, and "
+"the reading of the real one against the devices of a machine that has no tablet; no tablet was at"
+" hand. Pads have been tried against a stand-in for the compositor that sends what wlroots sends, "
+"not with a tablet."
+msgstr ""
+"Wayland 工具通过 ``tablet-v2`` 提供，该协议报告上述测量、工具标识和数位板名称；手指通过 ``wl_touch`` 提供，seat 为版本 6 或以上且合成器发送时，可带 "
+"``shape`` 和 ``orientation``。撰写时 sway 和 GNOME 尚未发送，``caps`` 在实际收到带形状接触后才声明形状能力。仅支持 ``cursor-"
+"shape-v1`` 的合成器会让指针光标跟随工具。GNOME 先应用自身笔按钮映射（默认下方按钮为中键），sway 原样转发。对 silkie "
+"而言，工具不移动鼠标指针：合成器可为数位板提供独立光标，所以滚动等按指针位置报告的事件仍位于原鼠标指针处。控制板也通过 ``tablet-v2`` "
+"提供：第一版有按键、触控环、触控条和模式，第二版新增旋钮，需要合成器公布相应版本；标签作为控件反馈传给合成器。控制板的 ``name`` 和硬件 ID "
+"取自其所属数位板。合成器支持协议时，``caps`` 才声明工具和控制板。``tablet`` 按合成器公布 seat "
+"数位板的顺序编号：工具使用进入感应范围的板号，控制板使用获得焦点时关联的板号。按键属于列出它的组，触控环／触控条／旋钮属于公布它们的组；控制板有焦点时，若合成器重新列出某组按键，就重新发送控制板描述。协议不提供数位板尺寸、是否为显示器或工具在板上的位置，尽管合成器知道三者。但它提供设备节点，系统可向查询者公开前两项，而无须访问设备本身。udev"
+" 根据设备位置范围和分辨率计算尺寸，在数据库中以向下取整的毫米保存为 ``ID_INPUT_WIDTH_MM`` 和 ``ID_INPUT_HEIGHT_MM``。内核在 sysfs "
+"提供设备属性，``INPUT_PROP_DIRECT`` 表示显示器，``INPUT_PROP_POINTER`` 表示非显示器数位板。silkie 在数位板给出节点时加载 "
+"libudev，读取两者并发送 "
+"``w``、``h``、``direct``；没有节点时不使用它。只读取笔对应的节点，不读取控制板或板上手指节点。节点属于合成器所在机器，因此只有内核中的厂商／产品 ID "
+"与合成器提供值匹配，或未提供 ID 时名称匹配，读取结果才有效；终端与合成器位于不同机器时不报告这些信息。内核没提供的属性会省略，例如设备未声明分辨率时不提供尺寸。无法通过此方式获得 "
+"``rx``、``ry``。已用模拟 libudev 检查两块数位板的内核／udev 应答，并在没有数位板的机器上检查实际设备读取，未有真实数位板可用。控制板也只用按 wlroots "
+"行为发送事件的模拟合成器测试，未使用硬件。"
+
+#: docs/tablet-protocol.rst:897
+msgid ""
+"On X11, tools come through XInput 2 devices whose names include the tool type, as the libinput "
+"and wacom drivers name them; that name is the ``name`` of the device frame, and the ids of the "
+"tablet are not known. ``tangent`` carries the device's wheel axis and ``twist`` its rotary Z "
+"axis. The position of a tool is made from the position its own device reports, scaled to the "
+"screen as the server does it, because the server puts the position of the pointer before an event"
+" into that event, which is where the tool was one report earlier. That position is also where "
+"``rx`` and ``ry`` come from. The server puts it through the matrix by which the user maps the "
+"tablet to the screen or to one monitor, so silkie reads that matrix, again whenever it is "
+"changed, and undoes it; a matrix that cannot be undone leaves ``rx`` and ``ry`` out, and so does "
+"the area ratio of the libinput driver, which stretches one axis of the position and cuts off what"
+" falls past its end, by a factor silkie cannot learn exactly. ``w`` and ``h`` are the range of "
+"the position divided by the resolution the driver states for it; no driver that states one was at"
+" hand, so those sizes are untried. The libinput driver states none, and both drivers name the "
+"device node of a tool in its ``Device Node`` property and its vendor and product ids in ``Device "
+"Product ID``. Where the driver states no resolution, silkie reads the size and ``direct`` of the "
+"node from the kernel as on Wayland, the size in whole millimeters rounded down, and believes them"
+" only when its connection to the X server is a local socket, the node being one on the machine of"
+" the server, and when the kernel has the device under those ids. This was tried against devices "
+"of the server's test driver given those properties and a stand-in for libudev, not with a tablet."
+" X has no tablet that tools belong to, each tool being a device of its own, so there is no "
+"``tablet``. The X server does not report a tool leaving proximity, so phase ``5`` arrives only "
+"when the device goes away. Xwayland's tablet devices are recognised too, but under GNOME no "
+"motion reached them in testing; use the Wayland backend there. Nothing of a tablet is reported "
+"for them: their position is one on the desktop and their resolution is made up. Fingers on a "
+"touchscreen come through the touch events of XInput 2.2, and ``caps`` claims them when the server"
+" has that version. X reports each finger in an event of its own, so every finger report is "
+"followed by a frame report of its own and fingers that moved together are not grouped. There is "
+"no contact shape, a touch the system takes over ends with an ordinary ``up`` since the server "
+"does not say that it was taken, and the fingers on a touchpad are not reported. The server also "
+"moves the pointer to where the first finger lands, which is not passed on as mouse reports. This "
+"was tried against Xwayland, which makes these events from the touches of its compositor, not with"
+" a touchscreen. Pads come from the libinput and wacom drivers, which give a pad a device of its "
+"own of the type ``PAD``, and ``caps`` claims them when the server has one of those drivers. Of a "
+"pad, X has only its keys, as the buttons of that device: keys 0 to 2 are buttons 1 to 3, the rest"
+" are from button 8 on, and buttons 4 to 7 are the scrolling the drivers make of the rings and "
+"strips by default, which is not reported. ``buttons`` in the description is the number of buttons"
+" of the device less those four, which is the number of keys under the libinput driver; the wacom "
+"driver can give a device more buttons than its pad has keys. Rings and strips are not reported, "
+"and the description has none: the libinput driver gives every pad the same axes for two rings and"
+" two strips whatever it has, so how many it has cannot be told, and the wacom driver passes on "
+"raw values whose direction and units it does not state. There are no groups and no modes, which "
+"the libinput driver publishes only in properties of its own that silkie does not read, and a "
+"label has nowhere to go. A pad reports to the window with the keyboard focus, but the server "
+"delivers its keys only to a window under the pointer, so a pad key pressed with the pointer over "
+"another application is not reported. This was tried against a device of the server's test driver "
+"marked as a pad with the ``Wacom Tool Type`` property of the wacom driver, not with a pad."
+msgstr ""
+"X11 工具来自 XInput 2 设备，名称按 libinput 或 wacom 驱动惯例包含工具类型；设备描述的 ``name`` 使用此名称，数位板硬件 ID 未知。``tangent``"
+" 携带设备滚轮轴，``twist`` 为旋转 Z "
+"轴。工具位置从其自身设备报告生成，并像服务器一样缩放到屏幕，因为服务器把事件发生前的指针位置放入事件，实际落后工具一条报告。``rx``、``ry`` "
+"也源于该位置。服务器会应用用户将板映射到屏幕或某显示器的矩阵，因此 silkie 读取矩阵并在变化时重读，再反向变换；矩阵不可逆时省略 ``rx``、``ry``。libinput "
+"的区域宽高比也会导致省略，因为它按 silkie 无法精确获知的因子拉伸一轴并截断超出部分。``w``、``h`` "
+"是位置范围除以驱动声明的分辨率；没有可用的、声明分辨率的驱动硬件，因此尺寸尚未实测。libinput 不声明分辨率；两个驱动均通过 ``Device Node`` 属性提供工具节点，通过 "
+"``Device Product ID`` 提供厂商和产品 ID。驱动未声明分辨率时，silkie 与 Wayland 一样从内核读取节点的尺寸和 "
+"``direct``，尺寸按毫米向下取整；仅当连接 X 服务器使用本地套接字，且内核设备 ID 匹配时才信任，因为节点属于服务器所在机器。已通过带这些属性的 X 服务器测试驱动设备和模拟 "
+"libudev 检查，未使用数位板硬件。X 没有工具所属数位板的概念，每个工具都是独立设备，因此不提供 ``tablet``。X 服务器不报告工具离开感应范围，故仅设备消失时发送阶段 "
+"``5``。也识别 Xwayland 数位板设备，但 GNOME 下测试未收到移动事件，那里应使用 Wayland 后端。此类设备不报告数位板信息：位置是桌面位置，分辨率为虚构。触摸屏手指通过 "
+"XInput 2.2 触摸事件提供，服务器具备该版本时 ``caps`` 声明支持。X "
+"将每个手指作为独立事件，因此各手指报告后各跟一个帧报告，同时移动的手指不分组。没有接触形状；系统接管触摸时以普通 ``up`` "
+"结束，因为服务器不说明接管；触控板手指也不上报。服务器会将鼠标指针移到首指落点，但不会将此变化作为鼠标报告转发。已通过 Xwayland 将合成器触摸转换为事件来测试，未使用触摸屏。控制板来自 "
+"libinput 和 wacom 驱动，它们为控制板提供类型 ``PAD`` 的独立设备，服务器具备这些驱动之一时 ``caps`` 声明支持。X 只提供控制板按键，作为设备按钮：键 0 至 2"
+" 对应按钮 1 至 3，其余从按钮 8 起；按钮 4 至 7 是驱动默认从触控环和触控条生成的滚动，不转发。描述的 ``buttons`` 为设备按钮数减四，在 libinput "
+"下等于实际按键数；wacom 可能提供比实际按键更多的按钮。触控环、触控条均不报告，描述也不列出：libinput 不论实际硬件都给出两个环和两个条的相同轴，无法得知数量；wacom "
+"则提供未说明方向和单位的原始值。没有分组和模式，libinput 只通过 silkie "
+"未读取的私有属性发布它们；标签也没有显示位置。控制板应向键盘焦点窗口报告，但服务器只把按键交给指针下的窗口，因此指针位于其他应用时按控制板键，不会报告。已通过 X 服务器测试驱动设备，使用 "
+"wacom 的 ``Wacom Tool Type`` 属性将其标为控制板来检查，未使用实际控制板。"
+

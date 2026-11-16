@@ -379,6 +379,11 @@ class Child:
         ):
             del env['LC_CTYPE']
         env.update(self.env)
+        if opts.ssh_agent_forwarding:
+            from .ssh_agent import source
+
+            if agent_socket := source.address(env):
+                env['SSH_AUTH_SOCK'] = agent_socket
         env['TERM'] = opts.term
         env['COLORTERM'] = 'truecolor'
         env['KITTY_PID'] = getpid()

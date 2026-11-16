@@ -1,0 +1,155 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:40+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/kittens/show_pointer.rst:2
+msgid "Show pointer"
+msgstr "显示指针信息"
+
+#: docs/kittens/show_pointer.rst:7
+msgid "Overview"
+msgstr "概览"
+
+#: docs/kittens/show_pointer.rst:9
+msgid "*Show what the terminal reports for pens, tablets, touch, gestures and scrolling*"
+msgstr "*查看终端上报的笔、数位板、触摸、手势和滚动信息*"
+
+#: docs/kittens/show_pointer.rst:13
+msgid ""
+"The ``show-pointer`` kitten shows what a terminal reports to programs for the input devices that "
+"are more than a mouse: the pens and pads of graphics tablets, touchscreens, touchpads, the "
+"gestures made on them and scrolling. It speaks the tablet pointer, gesture and scroll protocols, "
+"which are open terminal extensions framed as ``OSC 777``. Run it in the terminal you want to know"
+" about::"
+msgstr ""
+"``show-pointer`` "
+"工具显示终端向程序上报的、超出普通鼠标范围的输入设备信息：数位板的笔和控制板、触摸屏、触控板，以及在这些设备上进行的手势和滚动。它使用数位板指针、手势和滚动协议，这些开放终端扩展以 ``OSC "
+"777`` 封装。在希望检查的终端中运行：::"
+
+#: docs/kittens/show_pointer.rst:22
+msgid ""
+"It first asks the terminal which of the protocols it speaks and what it can report with each, and"
+" says so in words. Then it turns on every kind of report the terminal offers and prints one line "
+"for each report it receives, until you press :kbd:`Ctrl+C`, :kbd:`Ctrl+D` or :kbd:`q`::"
+msgstr ""
+"它先询问终端支持哪些协议，以及各协议可报告什么，并以文字说明。然后启用终端提供的全部报告类型，每收到一条报告便打印一行，直至按下 :kbd:`Ctrl+C`、:kbd:`Ctrl+D` 或 "
+":kbd:`q`：::"
+
+#: docs/kittens/show_pointer.rst:32
+msgid ""
+"Values are converted to the units a person reads: positions in pixels and as the zero based "
+"column and row of the cell they fall in, pressure as a fraction of the full range, angles in "
+"degrees. ``dt`` is the time since the previous report of the same contact, which is how to see "
+"the rate a device reports at. A field or a kind of report the kitten has no name for is printed "
+"as the terminal sent it, never dropped, so a terminal that implements a later version of a "
+"protocol can still be examined."
+msgstr ""
+"数值转换为便于阅读的单位：位置以像素及所在字符单元从零开始的列号和行号表示，压力以满量程的比例表示，角度以度表示。``dt`` "
+"是距同一接触点上次报告的时间，可用于查看设备报告频率。工具不认识的字段或报告类型会按终端原样打印，不会丢弃，因此也可检查实现了后续协议版本的终端。"
+
+#: docs/kittens/show_pointer.rst:40
+msgid ""
+"While the kitten runs, a pen or a finger over its window is reported to it instead of acting as a"
+" mouse, and with scroll reports on the terminal does not scroll its scrollback. To watch only "
+"some of the sources, name them::"
+msgstr "工具运行时，其窗口中的笔或手指输入会直接上报，不再作为鼠标操作；启用滚动报告后，终端也不会滚动回滚缓冲区。若只查看部分来源，请列出它们：::"
+
+#: docs/kittens/show_pointer.rst:46
+msgid ""
+"A system that judges whether a contact is meant, or is an accident such as a palm, has its "
+"judgement shown with each finger as ``conf=meant`` or ``conf=accidental``. A finger the system "
+"has said nothing of has neither, which is every finger on a system that does not judge. A "
+"terminal keeps the accidental contacts from a program that does not ask for them, and the kitten "
+"asks a terminal that says it has them, so it shows them all. Leave ``accidental`` out of "
+":option:`--only <kitty +kitten show_pointer --only>` to see what a program that does not ask is "
+"shown instead: a contact that comes to be taken for an accident is cancelled, and begins again "
+"when it no longer is."
+msgstr ""
+"如果系统会判断接触是有意操作，还是手掌等意外接触，每个手指报告中会以 ``conf=meant`` 或 ``conf=accidental`` "
+"显示判断。系统没有做出判断的手指不会带这两项；不执行此类判断的系统中，所有手指都如此。终端不会向未请求意外接触的程序发送此类报告；工具会在终端声明支持时主动请求，因此显示全部接触。在 "
+":option:`--only <kitty +kitten show_pointer --only>` 中省略 "
+"``accidental``，即可查看未请求该功能的程序会收到的内容：接触被判定为意外时取消，不再被视为意外时重新开始。"
+
+#: docs/kittens/show_pointer.rst:57
+msgid ""
+"On exit, and while it is stopped with :kbd:`Ctrl+Z`, the kitten turns off everything it turned "
+"on. In a terminal that speaks none of the protocols it says so and exits with a non-zero status, "
+"which makes it usable as a test in a script."
+msgstr "退出或使用 :kbd:`Ctrl+Z` 挂起时，工具会关闭自己启用的全部模式。如果终端不支持任何相关协议，工具会说明情况并以非零状态退出，因此可在脚本中用作测试。"
+
+#: docs/kittens/show_pointer.rst:64
+msgid "Reporting a problem"
+msgstr "报告问题"
+
+#: docs/kittens/show_pointer.rst:66
+msgid ""
+"To send someone what your terminal reports for your tablet, use :option:`--raw <kitty +kitten "
+"show_pointer --raw>`, which prints the frames exactly as the terminal sent them, and redirect the"
+" output to a file::"
+msgstr "若要向他人提供终端对数位板的报告，请使用 :option:`--raw <kitty +kitten show_pointer --raw>`，按终端发送的原始帧打印，并将输出重定向到文件：::"
+
+#: docs/kittens/show_pointer.rst:72
+msgid ""
+"The terminal you run this in is still the one that is examined, only the output goes to the file."
+" Move the pen, press its buttons and the keys of the tablet, then quit and attach the file. Lines"
+" starting with ``#`` are the kitten's own description of the terminal."
+msgstr "检查的仍是运行命令的终端，只是将输出写入文件。移动笔、按笔按钮和数位板按键，然后退出并附上该文件。以 ``#`` 开头的行是工具对终端的说明。"
+
+#: docs/kittens/show_pointer.rst:77
+msgid ""
+"The serial number of a pen identifies the pen and so its owner. Unless :option:`--ids <kitty "
+"+kitten show_pointer --ids>` is given, the kitten does not ask the terminal for hardware "
+"identifiers, and replaces a serial number the terminal sends regardless with a counter, ``#1`` "
+"for the first pen seen, ``#2`` for the second, which is enough to tell two pens apart."
+msgstr ""
+"笔序列号可识别笔及其所有者。除非指定 :option:`--ids <kitty +kitten show_pointer "
+"--ids>`，工具不会向终端请求硬件标识；对于终端仍然发送的序列号，工具会替换为计数编号，首次见到的笔为 ``#1``，第二支为 ``#2``，足以区分不同笔。"
+
+#: docs/silkie/show-pointer.rst:5
+msgid "Command line options"
+msgstr "命令行选项"
+
+#: docs/silkie/show-pointer.rst:11
+msgid ""
+"Enable only the named sources, separated by commas. This option may be repeated. Sources are "
+"``tools``, ``fingers``, ``pads``, ``actions``, ``estimates``, ``accidental``, ``gestures``, "
+"``hold``, and ``scroll``. ``tablet-pointer`` and ``gesture`` each select all sources of that "
+"protocol. By default, all sources the terminal offers are enabled."
+msgstr ""
+"只启用指定来源，以逗号分隔；可重复指定此选项。来源包括 "
+"``tools``、``fingers``、``pads``、``actions``、``estimates``、``accidental``、``gestures``、``hold`` 和 "
+"``scroll``。``tablet-pointer`` 和 ``gesture`` 分别选择对应协议的全部来源。默认启用终端提供的全部来源。"
+
+#: docs/silkie/show-pointer.rst:19
+msgid ""
+"Request hardware identifiers and show them. Without this option, identifiers are not requested "
+"and any pen serial numbers received are replaced by counters."
+msgstr "请求并显示硬件标识。未指定时不请求标识，并将收到的笔序列号替换为计数编号。"
+
+#: docs/silkie/show-pointer.rst:24
+msgid ""
+"Print the received frames without decoding them, one per line. Other output lines begin with "
+"``#``."
+msgstr "不解码，直接打印收到的帧，每行一帧。其他输出行以 ``#`` 开头。"
+
+#: docs/silkie/show-pointer.rst:29
+msgid "Wait this long for each round of queries. The default is ``2`` seconds."
+msgstr "每轮查询等待的时间，默认为 ``2`` 秒。"
+

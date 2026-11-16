@@ -1,0 +1,339 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:46+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/display-protocol.rst:2
+msgid "Display protocol"
+msgstr "显示信息协议"
+
+#: docs/display-protocol.rst:6
+msgid ""
+"A program that draws knows nothing about the screen its output ends up on: whether it is a color "
+"LCD or sixteen levels of gray on e-ink, how much of the color spectrum it covers, how bright it "
+"can go, how many physical pixels a cell has and how often it refreshes. Each of these changes "
+"what the best rendering is, from the choice of a palette and a dithering strategy to whether "
+"animation is worth doing at all. The display protocol lets a program ask, and be told when the "
+"answer changes, for example because the window was moved to another screen. It is an open "
+"terminal extension in the manner of the other kitty protocols: small, unobtrusive, easy to "
+"implement, and no change to what the TTY is."
+msgstr ""
+"绘图程序通常不了解输出最终到达的屏幕：彩色 LCD "
+"还是十六级灰度电子墨水屏、覆盖多少色域、亮度有多高、每个字符单元有多少物理像素、以什么频率刷新。这些都会影响最佳渲染方式，从调色板和抖动策略，到是否值得运行动画。显示信息协议让程序查询这些信息，并在答案变化时收到通知，例如窗口被移到另一块屏幕。它与其他"
+" kitty 协议一样，是小巧、低干扰、易于实现的开放终端扩展，不改变 TTY 的本质。"
+
+#: docs/display-protocol.rst:18
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/display-protocol.rst:20
+msgid "Frames are ``OSC 777`` with the ``display`` selector::"
+msgstr "帧使用带有 ``display`` 选择器的 ``OSC 777``：::"
+
+#: docs/display-protocol.rst:24
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected, the units and the clock. The values in the "
+"terminal's reports are words, or decimal numbers that may have a fraction, such as "
+"``headroom=1.5``, with no leading ``+``. ``v``, the protocol version, is ``1``, and ``op`` is one"
+" of ``query``, ``cap``, ``mode`` and ``event``."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧、单位和时钟。终端报告中的值为单词，或可带小数、不带前导 ``+`` "
+"的十进制数，例如 ``headroom=1.5``。协议版本 ``v`` 为 ``1``，``op`` 为 ``query``、``cap``、``mode`` 或 ``event``。"
+
+#: docs/display-protocol.rst:32
+msgid "Query"
+msgstr "查询"
+
+#: docs/display-protocol.rst:34
+msgid "A program asks about the display its window is on::"
+msgstr "程序查询窗口所在的显示器：::"
+
+#: docs/display-protocol.rst:38
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#: docs/display-protocol.rst:44
+msgid ""
+"A terminal that does not support the protocol ignores the query, so a program must time out and "
+"fall back to assuming an ordinary color display."
+msgstr "不支持本协议的终端会忽略查询，因此程序必须设置超时，并回退为假定普通彩色显示器。"
+
+#: docs/display-protocol.rst:47
+msgid "The fields of the reply are:"
+msgstr "回复字段如下："
+
+#: docs/display-protocol.rst:49
+msgid "``mode``"
+msgstr "``mode``"
+
+#: docs/display-protocol.rst:50
+msgid "The current state of the mode described below, ``0`` or ``1``."
+msgstr "下述模式的当前状态，``0`` 或 ``1``。"
+
+#: docs/display-protocol.rst:52
+msgid "``kind``"
+msgstr "``kind``"
+
+#: docs/display-protocol.rst:53
+msgid ""
+"One of ``lcd``, ``oled``, ``eink`` and ``unknown``. On e-ink, updates are slow and leave ghosts, "
+"so a program avoids animation and smooth scrolling and redraws in large, infrequent steps."
+msgstr "``lcd``、``oled``、``eink`` 或 ``unknown``。电子墨水屏更新较慢且会残影，因此程序应避免动画和平滑滚动，采用低频、大步幅重绘。"
+
+#: docs/display-protocol.rst:57
+msgid "``color``"
+msgstr "``color``"
+
+#: docs/display-protocol.rst:58
+msgid "One of ``rgb``, ``gray`` and ``mono``."
+msgstr "``rgb``、``gray`` 或 ``mono``。"
+
+#: docs/display-protocol.rst:60
+msgid "``bits``"
+msgstr "``bits``"
+
+#: docs/display-protocol.rst:61
+msgid ""
+"Bits per color channel, ``0`` when unknown. Sixteen levels of gray are ``color=gray : bits=4``. "
+"Together with ``color`` this is what a program needs to choose a palette and whether and how to "
+"dither; antialiasing works fine with a few levels and is not what this field decides."
+msgstr ""
+"每个颜色通道的位数，未知时为 ``0``。十六级灰度表示为 ``color=gray : bits=4``。该字段与 ``color`` "
+"一起供程序选择调色板，并决定是否以及如何抖动；少量灰度级也可进行良好的抗锯齿，此字段不决定抗锯齿策略。"
+
+#: docs/display-protocol.rst:66
+msgid "``gamut``"
+msgstr "``gamut``"
+
+#: docs/display-protocol.rst:67
+msgid "One of ``srgb``, ``p3``, ``rec2020`` and ``unknown``: the widest color space the display covers."
+msgstr "``srgb``、``p3``、``rec2020`` 或 ``unknown``，表示显示器覆盖的最宽色彩空间。"
+
+#: docs/display-protocol.rst:70
+msgid "``headroom``"
+msgstr "``headroom``"
+
+#: docs/display-protocol.rst:71
+msgid ""
+"How much brighter than the white of normal text the terminal can show, as a multiple: ``1`` when "
+"there is no extra brightness. See the HDR brightness protocol for how to use it."
+msgstr "终端可显示亮度相对于普通文本白色的倍数；没有额外亮度时为 ``1``。使用方式见 HDR 亮度协议。"
+
+#: docs/display-protocol.rst:75
+msgid "``scale``"
+msgstr "``scale``"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/display-protocol.rst:76
+msgid ""
+"The scaling of the framebuffer that the system asks applications for: how many physical pixels it"
+" wants used for one of its own logical units, ``2`` on most high density displays and often a "
+"fraction such as ``1.25`` or ``1.5`` on others. ``0`` when unknown. See `Pixels`_ for what it is "
+"for."
+msgstr ""
+"系统要求应用使用的帧缓冲区缩放比例：一个系统逻辑单位需要多少物理像素。多数高密度显示器为 ``2``，其他显示器常用 ``1.25`` 或 ``1.5`` 等小数。未知时为 ``0``。用途见 "
+"`像素 <Pixels_>`_。 #noqa"
+
+#: docs/display-protocol.rst:82
+msgid "``period``"
+msgstr "``period``"
+
+#: docs/display-protocol.rst:83
+msgid "The refresh period of the display in microseconds, ``0`` when unknown."
+msgstr "显示器刷新周期，单位微秒，未知时为 ``0``。"
+
+#: docs/display-protocol.rst:85
+msgid "``ppi``"
+msgstr "``ppi``"
+
+#: docs/display-protocol.rst:86
+msgid ""
+"Physical pixels per inch: how many of the pixels a program draws in fit in an inch of the screen,"
+" so that it can draw at a true size. ``0`` when unknown."
+msgstr "每英寸的物理像素数：程序绘制的多少像素对应屏幕上一英寸，供程序按真实尺寸绘制。未知时为 ``0``。"
+
+#: docs/display-protocol.rst:90
+msgid ""
+"Values the terminal cannot determine are ``unknown`` or ``0``, never guessed. A terminal that "
+"knows nothing about its display, a multiplexer that is not attached, for example, answers with "
+"every field unknown and the program is no worse off than before it asked."
+msgstr "终端无法确定的值为 ``unknown`` 或 ``0``，绝不猜测。例如未连接客户端的多路复用器，若不了解显示器，所有字段均回答未知，程序的处境不会比查询前更差。"
+
+#: docs/display-protocol.rst:96
+msgid "Pixels"
+msgstr "像素"
+
+#: docs/display-protocol.rst:98
+msgid ""
+"A pixel, in this protocol and in every other one of this terminal that measures in pixels (the "
+"size of the window and of a cell, the size and placement of an image, the position of a pointer, "
+"a pen or a finger, the distance of a scroll), is a physical pixel: one pixel of the framebuffer "
+"the terminal draws into. Nothing is expressed in the logical units of the system, which stand for"
+" ``scale`` pixels each, and the terminal never stretches what a program draws to make up the "
+"difference. A line a program draws one pixel wide is therefore one pixel wide, not a soft blob "
+"spread over several, and a program gets every pixel the display has."
+msgstr ""
+"本协议及终端所有以像素度量的协议（窗口和字符单元尺寸、图像尺寸和放置、指针／笔／手指位置、滚动距离）均使用物理像素，即终端绘制的帧缓冲区中的一个像素。不使用系统逻辑单位（每个逻辑单位对应 "
+"``scale`` 个像素），终端也不会拉伸程序绘制的内容来弥补差异。因此，程序绘制的一像素宽直线就是一像素，而非扩散到多个像素的模糊斑块，程序能使用显示器提供的每一个像素。"
+
+#: docs/display-protocol.rst:108
+msgid ""
+"``scale`` is what the system would have had an application do: the size it wants things drawn at "
+"for them to look the size the user chose. A program uses it to decide how big to draw, a rule "
+"that is one logical unit thick as ``scale`` pixels for example, and never to convert a position "
+"or a size, which are in physical pixels already. ``ppi`` relates those same pixels to the screen "
+"itself."
+msgstr ""
+"``scale`` 表示系统希望应用采用的尺寸，使内容看起来符合用户选择的大小。程序用它决定绘制多大，例如将一个逻辑单位粗的标尺绘制为 ``scale`` "
+"像素；不要用它换算已经以物理像素表示的位置或尺寸。``ppi`` 则把这些像素与屏幕的实际尺寸联系起来。"
+
+#: docs/display-protocol.rst:116
+msgid "Mode"
+msgstr "模式"
+
+#: docs/display-protocol.rst:118
+msgid "A program that wants to be told about changes turns them on per terminal window with::"
+msgstr "程序可按终端窗口开启变化通知：::"
+
+#: docs/display-protocol.rst:123
+msgid ""
+"and off with ``mode=0``. The mode is local to the window and is reset by ``RIS``. Programs must "
+"turn it off when they exit, suspend or fail, and turn it back on when resumed. Multiplexers keep "
+"it with the rest of the terminal state and turn it off when detaching. A terminal may let its "
+"user refuse the mode, for every program or for some. A refused mode reads back as off and nothing"
+" is reported, so a program reads the mode back rather than assume it was granted."
+msgstr ""
+"用 ``mode=0`` 关闭。模式仅作用于当前窗口，并由 ``RIS`` "
+"重置。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他终端状态一起保存它，并在脱离连接时关闭。终端可允许用户针对全部或部分程序拒绝模式；被拒绝时读回为关闭，不产生任何报告，因此程序应读回状态，而不是假定已获准。"
+
+#: docs/display-protocol.rst:131
+msgid ""
+"A ``mode`` request without a ``mode`` field reads the state instead of changing it, and is "
+"answered with::"
+msgstr "不带 ``mode`` 字段的 ``mode`` 请求读取状态而不修改，回复为：::"
+
+#: docs/display-protocol.rst:136
+msgid ""
+"A program resuming after a reconnection reads the mode to learn whether it survived, rather than "
+"assuming it did."
+msgstr "程序重连后恢复时，应读回模式，确认是否仍然有效，而非假定状态保留。"
+
+#: docs/display-protocol.rst:140
+msgid "Events"
+msgstr "事件"
+
+#: docs/display-protocol.rst:142
+msgid ""
+"Turning the mode on sends one event with the current values, so a program needs no separate "
+"query. After that, while the mode is on, the terminal sends one event whenever any field changes:"
+" the window was moved to a display with a different scale or refresh rate, the display's "
+"brightness setting changed the headroom, its color profile was switched::"
+msgstr "开启模式会先发送一次包含当前值的事件，无需单独查询。此后，只要模式开启，任何字段变化都会产生一条事件：窗口移到缩放比例或刷新率不同的显示器、显示亮度设置改变了亮度余量，或切换了色彩配置文件：::"
+
+#: docs/display-protocol.rst:150
+msgid ""
+"The fields are those of the ``cap`` reply, without ``id`` and ``mode``, and ``t``, the time the "
+"terminal learnt of the change, in milliseconds on the clock the terminal uses for every "
+"extension, see :doc:`extension-framing`. Changes are relative to the last event sent, so turning "
+"the mode off and on again reports the current values once and then only changes. A change can be "
+"reported a short while after it happens, and a program that has turned the mode off may still "
+"receive an event that was already on its way. An event is never merged with another or dropped, "
+"by the terminal or by a relay."
+msgstr ""
+"字段与 ``cap`` 回复相同，但不含 ``id`` 和 ``mode``，并带有 ``t``，表示终端获知变化的时刻，以全部扩展共用时钟上的毫秒表示，见 :doc:`extension-"
+"framing`。变化相对于上次事件计算，因此关闭再开启模式会报告一次当前值，此后仅报告变化。变化可能稍后才报告，程序关闭模式后仍可能收到已经在途的事件。终端和中继绝不合并或丢弃事件。"
+
+#: docs/display-protocol.rst:160
+msgid "Relays and multiplexers"
+msgstr "中继与多路复用器"
+
+#: docs/display-protocol.rst:162
+msgid ""
+"A relay such as a mosh-like client, that draws the terminal's screen on a display of its own, "
+"answers queries for the display it has, since the terminal at the far end cannot know it. When "
+"the relay reconnects to a different client it sends one event to every window with the mode on, "
+"so a program that laid out its output for a phone can redo it for a desktop, and the other way "
+"round."
+msgstr ""
+"类似 mosh "
+"客户端、将终端画面绘制到自己显示器的中继，应使用自身显示器回答查询，因为远端终端无法得知这些信息。中继重连到不同客户端时，会向每个开启模式的窗口发送一次事件，使原本按手机布局的程序能改为桌面布局，反之亦然。"
+
+#: docs/display-protocol.rst:169
+msgid ""
+"A multiplexer answers for the display of the client it is attached to, with every field unknown "
+"while detached, and sends an event when attached to a client with a different display."
+msgstr "多路复用器根据所连接客户端的显示器回答；脱离连接时所有字段为未知，连接到不同显示器的客户端时发送事件。"
+
+#: docs/display-protocol.rst:174
+msgid "Configuration"
+msgstr "配置"
+
+#: docs/display-protocol.rst:176
+msgid ""
+"The operating system reports most of these values, but not all. Nothing tells a terminal that it "
+"is on e-ink. In Silkie, :opt:`eink_mode` declares an e-paper display and selects black text on "
+"white unless a light or dark color scheme was explicitly chosen. It takes precedence over "
+"detected display kind and over ``display_info kind=...``. Runtime changes with ``set_eink_mode`` "
+"notify display subscribers immediately. The :opt:`display_info` option declares individual "
+"properties that the OS cannot, overriding detection; using only ``display_info kind=eink`` "
+"changes the report without changing colors. Neither setting guesses whether an e-paper panel is "
+"grayscale or color. Currently, Silkie reports ``kind`` only on macOS, and ``gamut`` on macOS and "
+"on Wayland compositors that implement the color management protocol. There the compositor gives "
+"the primaries of the display, and ``gamut`` is the widest of the three whose area in the CIE 1931"
+" chromaticity diagram the display covers at least nine tenths of, ``srgb`` when it covers neither"
+" of the wider two. ``headroom`` is the headroom of the :doc:`hdr-protocol`, after the cap of "
+":opt:`hdr_max_headroom`, so it is ``1`` unless :opt:`hdr` is enabled and the window is actually "
+"showing HDR, which that page says when to expect on macOS and on Wayland."
+msgstr ""
+"操作系统能报告多数属性，但并非全部；例如没有信息直接告诉终端它位于电子墨水屏上。在 Silkie 中，:opt:`eink_mode` "
+"声明电子纸显示器，并在未明确选择浅色或深色配色时启用白底黑字。它优先于检测到的显示器类型和 ``display_info kind=...``。运行时用 ``set_eink_mode`` "
+"切换会立即通知显示信息订阅者。:opt:`display_info` 可声明操作系统无法提供的个别属性，并覆盖检测；仅设置 ``display_info kind=eink`` "
+"会改变报告而不改变颜色。两种设置都不猜测电子纸是灰度还是彩色。目前 Silkie 仅在 macOS 上报告 ``kind``，在 macOS 及实现色彩管理协议的 Wayland 合成器上报告 "
+"``gamut``。后者由合成器提供显示器基色，``gamut`` 选择显示器在 CIE 1931 色度图上覆盖面积至少十分之九的最宽色域；两种较宽色域均未达到时为 "
+"``srgb``。``headroom`` 是 :doc:`hdr-protocol` 的亮度余量，已应用 :opt:`hdr_max_headroom` 上限；除非启用 :opt:`hdr` "
+"且窗口实际显示 HDR，否则为 ``1``。macOS 和 Wayland 何时可使用 HDR 见该页。"
+
+#: docs/display-protocol.rst:194
+msgid ""
+"``scale`` is the scale the window system gives the window: the backing scale factor on macOS, the"
+" preferred scale of the surface on Wayland, fractional where the compositor says so, and the "
+"scale of the desktop taken from ``Xft.dpi`` on X11. On X11, and on Wayland with a compositor that"
+" states its fractional scale, the pixels Silkie draws are the pixels of the panel. On macOS they "
+"are those of the framebuffer the system keeps for the display, which are the panel's own at the "
+"default resolution. At one of the scaled resolutions (*More Space* and its neighbours in the "
+"display settings) the system resamples that framebuffer onto the panel, as a Wayland compositor "
+"does for a window it could only give a whole number scale. A pixel Silkie draws is then not "
+"exactly a pixel of the panel, which no application can avoid, and on macOS ``ppi`` counts the "
+"pixels Silkie draws."
+msgstr ""
+"``scale`` 是窗口系统提供给窗口的比例：macOS 的 backing scale factor、Wayland 表面的首选比例（合成器支持时可为小数），以及 X11 从 "
+"``Xft.dpi`` 取得的桌面比例。在 X11 和能声明小数比例的 Wayland 合成器上，Silkie 绘制的像素对应面板像素。在 macOS "
+"上，它们是系统为显示器保存的帧缓冲区像素，默认分辨率下对应面板原生像素。选择缩放分辨率（显示设置中的“更多空间”及相邻选项）时，系统会将帧缓冲区重采样到面板，类似 Wayland "
+"合成器对只能提供整数缩放比例的窗口所做的处理。这时 Silkie 的像素不再严格对应面板像素，任何应用都无法避免；macOS 上的 ``ppi`` 统计的是 Silkie 绘制的像素。"
+
+#: docs/display-protocol.rst:207
+msgid ""
+"``ppi`` is ``0`` for a display that does not say how large it is, as a virtual one in a remote "
+"session or a virtual machine does not. Window systems assume 96 or 72 to the inch for such a "
+"display, which is a guess and is not passed on."
+msgstr "不提供物理尺寸的显示器（例如远程会话或虚拟机中的虚拟显示器），其 ``ppi`` 为 ``0``。窗口系统可能假定每英寸 96 或 72 像素，但这是猜测，不会转发给程序。"
+

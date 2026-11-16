@@ -20,12 +20,12 @@
 // the slanted edges of the trail, so they look clean rather than jagged
 // (antialiasing).
 //
-// To use it, add the following to kitty.conf:
+// To use it, add the following to silkie.conf:
 //     cursor_trail 1
 //     custom_shaders cursor-trail-motion-blur
 //
 // You can tune the options below without editing this file. Save a pipeline
-// file such as shaders/my-trail.pipeline in your kitty config directory,
+// file such as shaders/my-trail.pipeline in your Silkie config directory,
 // containing, for example:
 //     startgroup
 //         animation_start cursor-trail-move
@@ -34,7 +34,7 @@
 //         var int MOTION_BLUR_SAMPLES 32
 //         shaders cursor-trail-motion-blur
 //     endgroup
-// and then use custom_shaders my-trail in kitty.conf.
+// and then use custom_shaders my-trail in silkie.conf.
 
 import kitty_custom_shader_types;
 

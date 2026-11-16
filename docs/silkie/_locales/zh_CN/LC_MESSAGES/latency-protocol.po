@@ -1,0 +1,148 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:43+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/latency-protocol.rst:2
+msgid "Low latency protocol"
+msgstr "低延迟协议"
+
+#: docs/latency-protocol.rst:6
+msgid ""
+"A terminal does not show output the moment it arrives. It waits a few milliseconds for more, so "
+"that a burst of output is parsed and drawn once rather than many times, and it draws at a steady "
+"rate rather than after every write. For a shell or an editor this costs nothing noticeable and "
+"saves a lot of CPU. For a program drawing a stroke as the pen moves, or moving a view under a "
+"finger, every one of those milliseconds is felt. The low latency protocol lets such a program ask"
+" the terminal to give up that batching for the duration of the interaction. It is an open "
+"terminal extension in the manner of the :doc:`tablet-protocol`: small, unobtrusive, easy to "
+"implement, and no change to what the TTY is."
+msgstr ""
+"终端不会在输出到达时立即显示，而是等待几毫秒收集更多内容，将突发输出一次解析和绘制，保持稳定绘制频率，而非每次写入后都重绘。对于 shell 或编辑器，这种延迟难以察觉，却可节省大量 "
+"CPU。对于随笔移动绘制笔迹、或随手指拖动视图的程序，每一毫秒都能被感知。低延迟协议允许此类程序请求终端在交互期间放弃批处理。它与 :doc:`tablet-protocol` "
+"一样，是小巧、低干扰、易于实现的开放终端扩展，不改变 TTY 的本质。"
+
+#: docs/latency-protocol.rst:18
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/latency-protocol.rst:20
+msgid "Frames are ``OSC 777`` with the ``latency`` selector::"
+msgstr "帧使用带有 ``latency`` 选择器的 ``OSC 777``：::"
+
+#: docs/latency-protocol.rst:24
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected and the units. ``v``, the protocol version, is "
+"``1``, and ``op`` is one of ``query``, ``cap`` and ``mode``. The terminal sends only replies, "
+"which are never merged or dropped."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧，以及单位。协议版本 ``v`` 为 ``1``，``op`` 为 "
+"``query``、``cap`` 或 ``mode``。终端仅发送回复，回复绝不合并或丢弃。"
+
+#: docs/latency-protocol.rst:31
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/latency-protocol.rst:33
+msgid "A program asks the terminal whether it supports the protocol::"
+msgstr "程序询问终端是否支持本协议：::"
+
+#: docs/latency-protocol.rst:37
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#: docs/latency-protocol.rst:42
+msgid ""
+"``caps`` is a bit set of what the terminal can do, currently always ``1`` for the mode below, and"
+" ``mode`` is the current state of that mode. ``input`` is how long the terminal normally waits "
+"for more output before parsing what it has, and ``repaint`` how long it normally waits between "
+"drawing frames, both in microseconds and both ``0`` when the terminal does not batch that way at "
+"all. A program compares them with the time it has to spare to decide whether turning the mode on "
+"is worth the CPU. A terminal that does not support the protocol ignores the query, so a program "
+"must time out and carry on without it."
+msgstr ""
+"``caps`` 是终端能力的位集合，当前始终为 ``1``，表示支持下述模式；``mode`` 为该模式的当前状态。``input`` "
+"表示终端通常在解析已有输出前等待更多内容的时间，``repaint`` 表示通常两帧绘制之间的等待时间，单位均为微秒；如果完全不以这种方式批处理，相应值为 "
+"``0``。程序可比较这些时间与可用时间预算，判断启用模式是否值得增加 CPU 开销。不支持协议的终端会忽略查询，因此程序必须设置超时，并在缺少支持时继续运行。"
+
+#: docs/latency-protocol.rst:52
+msgid "Mode"
+msgstr "模式"
+
+#: docs/latency-protocol.rst:54
+msgid "The mode is off by default and turned on per terminal window with::"
+msgstr "模式默认关闭，按终端窗口开启：::"
+
+#: docs/latency-protocol.rst:58
+msgid ""
+"and off with ``mode=0``. While it is on, the terminal parses and draws the program's output as "
+"soon as it arrives instead of waiting for more, and it delivers the user's input to the program "
+"as soon as it has it. What the mode does not change is the wait for the display: a terminal that "
+"synchronizes with the refresh of the monitor still does so, and a frame still reaches the screen "
+"no sooner than the next refresh. The :doc:`frame-protocol` tells a program when that was."
+msgstr ""
+"用 ``mode=0`` "
+"关闭。模式开启时，终端在程序输出到达后立即解析并绘制，不再等待更多内容；收到用户输入也立即交给程序。该模式不会改变等待显示器刷新的时间：原本与显示器刷新同步的终端仍会同步，一帧也不可能早于下一次刷新到达屏幕。:doc"
+":`frame-protocol` 可告诉程序提交时刻。"
+
+#: docs/latency-protocol.rst:66
+msgid ""
+"The mode is local to the window and is reset by ``RIS``. It costs CPU, since small writes that "
+"would have been coalesced are each parsed and drawn on their own, so it is meant for the duration"
+" of an interaction, a stroke or a drag, not for the lifetime of a program. Programs must turn it "
+"off when they exit, suspend or fail, and turn it back on when resumed. Multiplexers and relays "
+"keep it with the rest of the terminal state and turn it off when detaching; one that cannot "
+"honour it simply keeps the state and passes the query on. A terminal may let its user refuse the "
+"mode, for every program or for some. A refused mode reads back as off and changes nothing, so a "
+"program reads the mode back rather than assume it was granted."
+msgstr ""
+"模式仅作用于当前窗口，``RIS`` 会重置。原本可合并的小型写入会各自解析和绘制，因而增加 CPU "
+"开销，所以只适用于笔划、拖动等交互期间，不应持续整个程序生命周期。程序必须在退出、挂起或失败时关闭模式，恢复时重新开启。多路复用器和中继与其他终端状态一起保存该模式，并在脱离连接时关闭；无法实现该模式的中继可仅保存状态并转发查询。终端可允许用户针对全部或部分程序拒绝此模式；被拒绝时读回为关闭，不产生任何变化，因此程序应读回状态，不要假定已获准。"
+
+#: docs/latency-protocol.rst:77
+msgid ""
+"A ``mode`` request without a ``mode`` field reads the state instead of changing it, and is "
+"answered with::"
+msgstr "不带 ``mode`` 字段的 ``mode`` 请求读取状态而不修改，回复为：::"
+
+#: docs/latency-protocol.rst:82
+msgid ""
+"A program resuming after a reconnection reads the mode to learn whether it survived, rather than "
+"assuming it did."
+msgstr "程序重连后恢复时，应读回模式，确认是否仍然有效，而非假定状态保留。"
+
+#: docs/latency-protocol.rst:86
+msgid "In Silkie"
+msgstr "Silkie 中的实现"
+
+#: docs/latency-protocol.rst:88
+msgid ""
+"The two times reported are the :opt:`input_delay` and :opt:`repaint_delay` options. While a "
+"window has the mode on, output arriving from its program wakes the terminal immediately and is "
+"parsed without waiting for the input delay, and the window is drawn on the same tick. The repaint"
+" delay already does not apply to output in Silkie, so turning the mode on changes only the input "
+"side. Input to the program is written to it as soon as it is produced, with or without the mode."
+msgstr ""
+"报告的两项时间分别来自 :opt:`input_delay` 和 "
+":opt:`repaint_delay`。窗口开启此模式时，其程序输出会立即唤醒终端，无须等待输入延迟即开始解析，并在同一轮事件处理中绘制。Silkie "
+"本来就不对输出应用重绘延迟，因此此模式只改变输入侧的等待。无论是否启用模式，交给程序的输入都会在产生后立即写入。"
+

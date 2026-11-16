@@ -343,7 +343,7 @@ you can send commands to it with :italic:`kitten @` using the
 :option:`kitten @ --to` option as it will automatically read from the
 environment. Note that this will be ignored unless :opt:`allow_remote_control`
 is set to either: :code:`yes`, :code:`socket` or :code:`socket-only`. This can
-also be specified in :file:`kitty.conf`.
+also be specified in :file:`silkie.conf`.
 """
 
 wait_for_single_instance_defn = f"""\
@@ -364,19 +364,19 @@ in sequence, which are merged. Use the special value :code:`NONE` to not load
 any config file.
 
 If this option is not specified, config files are searched for in the order:
-:file:`$XDG_CONFIG_HOME/{appname}/{conf_name}.conf`,
-:file:`~/.config/{appname}/{conf_name}.conf`,{macos_confpath}
-:file:`$XDG_CONFIG_DIRS/{appname}/{conf_name}.conf`. The first one that exists
+:file:`$XDG_CONFIG_HOME/silkie/{conf_name}.conf`,
+:file:`~/.config/silkie/{conf_name}.conf`,{macos_confpath}
+:file:`$XDG_CONFIG_DIRS/silkie/{conf_name}.conf`. The first one that exists
 is used as the config file.
 
-If the environment variable :envvar:`KITTY_CONFIG_DIRECTORY` is specified, that
+If the environment variable :envvar:`SILKIE_CONFIG_DIRECTORY` is specified, that
 directory is always used and the above searching does not happen.
 
-If :file:`/etc/xdg/{appname}/{conf_name}.conf` exists, it is merged before (i.e.
+If :file:`/etc/xdg/silkie/{conf_name}.conf` exists, it is merged before (i.e.
 with lower priority) than any user config files. It can be used to specify
 system-wide defaults for all users. You can use either :code:`-` or
 :file:`/dev/stdin` to read the config from STDIN.
-""".replace('{macos_confpath}', (' :file:`~/Library/Preferences/{appname}/{conf_name}.conf`,' if is_macos else ''), 1)
+""".replace('{macos_confpath}', (' :file:`~/Library/Preferences/silkie/{conf_name}.conf`,' if is_macos else ''), 1)
 
 
 def kitty_options_spec() -> str:
@@ -436,9 +436,9 @@ completion=type:file ext:session,kitty-session,kitty_session relative:conf group
 Path to a file containing the startup :italic:`session` (tabs, windows, layout,
 programs). Use - to read from STDIN. See :ref:`sessions` for details and
 an example. Environment variables in the file name are expanded,
-relative paths are resolved relative to the kitty configuration directory.
+relative paths are resolved relative to the Silkie configuration directory.
 The special value :code:`none` means no session will be used, even if
-the :opt:`startup_session` option has been specified in kitty.conf.
+the :opt:`startup_session` option has been specified in silkie.conf.
 Note that using this option means the command line arguments to kitty specifying
 a program to run are ignored.
 
@@ -557,11 +557,11 @@ type=bool-set
             'ans',
             OPTIONS.format(
                 appname=appname,
-                conf_name=appname,
+                conf_name='silkie',
                 listen_on_defn=listen_on_defn,
                 grab_keyboard_docs=grab_keyboard_docs,
                 wait_for_single_instance_defn=wait_for_single_instance_defn,
-                config_help=CONFIG_HELP.format(appname=appname, conf_name=appname),
+                config_help=CONFIG_HELP.format(appname=appname, conf_name='silkie'),
             ),
         )
     ans: str = getattr(kitty_options_spec, 'ans')

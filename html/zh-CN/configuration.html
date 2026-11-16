@@ -1,0 +1,651 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="显示指针信息" href="show-pointer.html"><link rel="prev" title="画面呈现协议" href="frame-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/configuration.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Silkie 配置 - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../configuration.html">
+<link rel="alternate" hreflang="zh-CN" href="configuration.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="项目资源">
+  <a href="index.html">项目概览</a>
+  <a href="install.html">安装 Silkie</a>
+  <a href="games.html">游戏与实机视频</a>
+  <a href="browser-demo.html">试用浏览器演示</a>
+  <a href="browser-ssh.html">浏览器 SSH 设置</a>
+  <a href="developer-guide.html">开发者指南</a>
+  <a href="reference.html">扩展参考手册</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档 ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档 ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支 ↗</a>
+  <a href="../configuration.html" lang="en">English</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="搜索" name="q" aria-label="搜索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">安装 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Silkie 与 kitty 游戏</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">在浏览器中试用 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">浏览器演示中的 SSH</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">为 Silkie 开发软件</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie 扩展参考手册</a><input aria-label="Toggle navigation of Silkie 扩展参考手册" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
+<li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="silkie-configuration">
+<h1>Silkie 配置<a class="headerlink" href="#silkie-configuration" title="链接到此标题。">¶</a></h1>
+<p>Silkie reads <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code> from its own configuration directory, normally
+<code class="docutils literal notranslate"><span class="pre">~/.config/silkie/</span></code>. It does not automatically read kitty's configuration or
+use <code class="docutils literal notranslate"><span class="pre">KITTY_CONFIG_DIRECTORY</span></code>.</p>
+<section id="configuration-paths">
+<h2>Configuration paths<a class="headerlink" href="#configuration-paths" title="链接到此标题。">¶</a></h2>
+<p>Set <code class="docutils literal notranslate"><span class="pre">SILKIE_CONFIG_DIRECTORY</span></code> to use a different directory. Otherwise,
+Silkie searches for <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code> in the following order and uses the first
+file whose directory is writable:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">$XDG_CONFIG_HOME/silkie/</span></code>, when <code class="docutils literal notranslate"><span class="pre">XDG_CONFIG_HOME</span></code> is set;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">~/.config/silkie/</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">~/Library/Preferences/silkie/</span></code> on macOS;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silkie/</span></code> under each directory in <code class="docutils literal notranslate"><span class="pre">XDG_CONFIG_DIRS</span></code>, in order.</p></li>
+</ul>
+<p>If no configuration exists, Silkie creates <code class="docutils literal notranslate"><span class="pre">$XDG_CONFIG_HOME/silkie/</span></code> or
+<code class="docutils literal notranslate"><span class="pre">~/.config/silkie/</span></code>. System defaults come from
+<code class="docutils literal notranslate"><span class="pre">/etc/xdg/silkie/silkie.conf</span></code> and are read before the user configuration.
+Relative includes, themes, kitten configuration files, and profiles use the
+Silkie configuration directory. The Settings window writes <code class="docutils literal notranslate"><span class="pre">settings.conf</span></code>
+there, which is read after <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--config</span> <span class="pre">/path/to/file.conf</span></code> to load a file explicitly, or
+<code class="docutils literal notranslate"><span class="pre">--config</span> <span class="pre">NONE</span></code> to skip configuration files. To reuse existing kitty settings,
+copy them to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code> or add an explicit include, for example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">include</span> <span class="o">../</span><span class="n">kitty</span><span class="o">/</span><span class="n">kitty</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+<p>The configuration syntax and inherited settings are described in
+<a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty's configuration reference</a>.
+The paths above are specific to Silkie.</p>
+</section>
+<section id="quitting-on-macos">
+<h2>Quitting on macOS<a class="headerlink" href="#quitting-on-macos" title="链接到此标题。">¶</a></h2>
+<p>Silkie does not bind <code class="docutils literal notranslate"><span class="pre">Cmd-Q</span></code> to quit by default. To explicitly enable it,
+add this to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">cmd</span><span class="o">+</span><span class="n">q</span> <span class="n">quit</span>
+</pre></div>
+</div>
+<p>The application menu's Quit command remains available without a keyboard
+shortcut unless you configure one.</p>
+</section>
+<section id="spatial-display">
+<h2>Spatial display<a class="headerlink" href="#spatial-display" title="链接到此标题。">¶</a></h2>
+<p>On macOS, <strong>View → Spatial Display</strong> switches between ordinary rendering,
+stereo content that follows the head, and an anchored terminal wall. Settings
+place XREAL 1S support under <strong>Experimental and untested</strong>, disabled by default.
+Enable <code class="docutils literal notranslate"><span class="pre">experimental_xreal_1s</span> <span class="pre">yes</span></code> to use side-by-side output or XREAL tracking.
+Red/blue output without tracking does not require that opt-in. Spatial settings
+include side-by-side and red/blue output, independent positive and negative
+divergence limits, and a 2^X divergence multiplier with X from -6 to 6 in
+0.1 steps. Fractional pixel depth scales with the physical eye resolution,
+including Retina backing scale. Negative divergence and vertical phase are
+disabled by default and require explicit user configuration. Applications
+can assign depth to text and graphics while leaving unmarked content flat.
+See <a class="reference internal" href="spatial-protocol.html"><span class="doc">Spatial display and depth</span></a> for XREAL setup, configuration, the optional text
+attribute, and current tracking support.</p>
+<p>Numeric controls enforce the setting's domain: opacity stays within its
+documented range, dimensions and durations are nonnegative, and documented
+negative sentinels and signed scroll multipliers remain available. Cursor HDR
+brightness and HDR headroom start at 1× and step by 0.1, with no invented upper
+bound. Composite values retain their complete text rather than losing optional
+parameters to a numeric widget.</p>
+</section>
+<section id="ssh-agent-forwarding">
+<h2>SSH agent forwarding<a class="headerlink" href="#ssh-agent-forwarding" title="链接到此标题。">¶</a></h2>
+<p>Set <code class="docutils literal notranslate"><span class="pre">ssh_agent_forwarding</span> <span class="pre">yes</span></code> to offer the local SSH agent over the terminal
+channel. Odin Seat and Skiff can keep a stable <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code> while the
+provider follows the attached terminal. See <a class="reference internal" href="ssh-agent-protocol.html"><span class="doc">SSH agent transport</span></a> for
+permissions, connection lifetime, fallback behavior, and protocol details.</p>
+<p>下面的默认值和说明来自 Silkie 的配置定义。</p>
+</section>
+<section id="e-paper-and-color-switching">
+<h2>电子纸与配色切换<a class="headerlink" href="#e-paper-and-color-switching" title="链接到此标题。">¶</a></h2>
+<p>For an external e-paper monitor, including a BOOX monitor that the operating
+system treats as an ordinary display, add this to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">eink_mode</span> <span class="n">yes</span>
+</pre></div>
+</div>
+<p>Silkie 使用白底黑字，并通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> 向应用报告 <code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>。应用可利用这一信息避免动画、平滑滚动和频繁重绘。软件需要支持该协议才能使用此信息。</p>
+<p>按 <code class="docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code> 在白底黑字和黑底白字之间切换。两种配色下，显示器都仍报告为电子纸。按 <code class="docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code> 切换电子纸模式。这些快捷键使用 <code class="docutils literal notranslate"><span class="pre">kitty_mod``（默认</span> <span class="pre">``ctrl+shift</span></code>），并影响全部 Silkie 窗口。命令面板中也可执行这些操作。自定义快捷键：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">f6</span> <span class="n">set_color_scheme</span> <span class="n">toggle</span>
+<span class="nb">map</span> <span class="n">f7</span> <span class="n">set_eink_mode</span> <span class="n">toggle</span>
+</pre></div>
+</div>
+<p>在任意显示器上使用 <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">light</span></code> 或 <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> 可固定配色。<code class="docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">auto</span></code> 恢复配置颜色和自动主题；若启用电子纸模式，则恢复白底黑字。明确指定的浅色和深色优先于自动主题及操作系统外观变化。重新加载配置会恢复已保存的选择。</p>
+<p>电子纸模式声明显示器类型，但不假定其色深或刷新时序。如果已知面板有十六级灰度，还可设置：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span>
+</pre></div>
+</div>
+<p>彩色电子纸显示器可省略这一行，或声明其实际能力。仍可使用 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> 仅覆盖报告信息，而不改变配色。这些声明应用于 Silkie 进程的全部窗口，因此在普通显示器和电子纸显示器之间移动时，应切换相应模式。</p>
+</section>
+<section id="display-channel-precision">
+<h2>Display channel precision<a class="headerlink" href="#display-channel-precision" title="链接到此标题。">¶</a></h2>
+<p>The <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> reports whether output is RGB, grayscale, or
+black-and-white, and the precision of each active channel. System-reported
+framebuffer precision does not prove physical panel precision or calibration.
+For a panel whose capabilities the system cannot report, declare them:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">5</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">6</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">5</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=gray</span> <span class="pre">gray_bits=4</span></code> for sixteen gray levels, or
+<code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=mono</span></code> for black and white. The report identifies these
+values as configured and uses zero for unknown widths. The display protocol
+documents the query, replies, subscriptions, and platform detection limits.</p>
+<p>When the user changes the terminal's color scheme, profile colors, or output
+color capabilities, Silkie asks applications to redraw as it does after a
+window resize: it sends <code class="docutils literal notranslate"><span class="pre">SIGWINCH</span></code> to each affected terminal's foreground
+process group. Applications subscribed to in-band resize notifications also
+receive the usual resize report, with the current dimensions even if they have
+not changed. Existing color-scheme and display subscriptions keep working.</p>
+<p>Moving a window between outputs can change the color model, channel precision,
+gamut, or HDR headroom and trigger the same redraw. Refresh-rate changes alone
+do not. Application-issued palette changes through OSC escape sequences do
+not send resize notifications, so an application's own redraw cannot cause a
+palette-change redraw loop.</p>
+</section>
+<section id="fonts-and-cjk-text">
+<h2>字体与中日韩文本<a class="headerlink" href="#fonts-and-cjk-text" title="链接到此标题。">¶</a></h2>
+<p>Silkie 默认的 <code class="docutils literal notranslate"><span class="pre">font_family</span></code> 是 <code class="docutils literal notranslate"><span class="pre">Iosevka</span></code>。请安装 Iosevka，以及衬线字体角色所需的 Iosevka Slab。协议选择、字体下载链接和中日韩文本行为见 <a class="reference internal" href="font-protocol.html"><span class="doc">字体选择协议</span></a>。应用不附带字体文件。</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">font_role</span></code></dt><dd><p>可重复指定的角色到字体映射，使用 kitty 的字体描述语法。默认为 <code class="docutils literal notranslate"><span class="pre">sans</span> <span class="pre">Iosevka</span></code> 和 <code class="docutils literal notranslate"><span class="pre">serif</span> <span class="pre">Iosevka</span> <span class="pre">Slab</span></code>。<code class="docutils literal notranslate"><span class="pre">default</span></code> 保留给 <code class="docutils literal notranslate"><span class="pre">font_family</span></code>。配置的角色可包含字体特性和可变轴设置；角色数量没有固定限制。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">cjk_font</span></code></dt><dd><p>默认：<code class="docutils literal notranslate"><span class="pre">auto</span></code>。优先使用对应地区的 Sarasa Term、Noto Sans CJK 或 Noto Sans Mono CJK，再使用地区系统字体和平台字形回退。明确指定字体可覆盖这一偏好。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">cjk_font_locale</span></code></dt><dd><p>默认：<code class="docutils literal notranslate"><span class="pre">auto</span></code>。选择 <code class="docutils literal notranslate"><span class="pre">jp</span></code>、<code class="docutils literal notranslate"><span class="pre">kr</span></code>、<code class="docutils literal notranslate"><span class="pre">sc</span></code>、<code class="docutils literal notranslate"><span class="pre">tc</span></code> 或 <code class="docutils literal notranslate"><span class="pre">hk</span></code>，以使用相应地区的中日韩字形。自动选择遵循进程的区域设置；未指定时默认为 <code class="docutils literal notranslate"><span class="pre">sc</span></code>。</p>
+</dd>
+</dl>
+</section>
+<section id="input-limits">
+<h2>输入限制<a class="headerlink" href="#input-limits" title="链接到此标题。">¶</a></h2>
+<p>这些限制适用于程序写入终端的数据，每项都表示最大值。默认值 <code class="docutils literal notranslate"><span class="pre">0</span></code> 表示不限制。仅当需要约束试图耗尽内存或时间的程序时才应设置。Goblin View 使用 <code class="docutils literal notranslate"><span class="pre">csi-limit</span></code> 和 <code class="docutils literal notranslate"><span class="pre">escape-limit</span></code>；Goblin Skiff 使用 <code class="docutils literal notranslate"><span class="pre">--csi-limit</span></code>、<code class="docutils literal notranslate"><span class="pre">--escape-limit</span></code> 和 <code class="docutils literal notranslate"><span class="pre">--vector-depth-limit</span></code>。虚线、光栅和曲线限制适用于 Silkie 栅格化矢量图像时。</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">csi_limit</span></code></dt><dd><p>单条 CSI 序列的最大字节数，即 <code class="docutils literal notranslate"><span class="pre">ESC</span> <span class="pre">[</span></code> 之后直到并包括最终字节的全部内容。更长的序列会被忽略。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示 CSI 长度不限。带数量参数的光标移动和编辑操作仍限制在屏幕范围内。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">escape_limit</span></code></dt><dd><p>单条 OSC、APC、DCS、PM 或 SOS 序列的最大字节数，不计引入符和终止符。更长的序列会被丢弃。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示这些序列长度不限。剪贴板写入仍受 <code class="docutils literal notranslate"><span class="pre">clipboard_max_size</span></code> 限制。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">vector_depth_limit</span></code></dt><dd><p>矢量元素可嵌套的最大分组层数。更深的元素不绘制。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示深度不限。无论如何设置，父级链中的循环都会被拒绝。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">vector_dash_limit</span></code></dt><dd><p>单条路径描边的最大虚线边界数。若路径需要更多边界，则绘制为实线。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示绘制全部虚线。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">vector_raster_limit</span></code></dt><dd><p>单个矢量图像光栅的最大像素数。请求的尺寸过大时按比例缩小。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示按实际显示尺寸栅格化。</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">vector_curve_limit</span></code></dt><dd><p>将一条曲线或一个圆展平时使用的最大线段数。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示按展平误差需要生成线段。</p>
+</dd>
+</dl>
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-hdr">
+<span class="sig-name descname"><span class="pre">hdr</span></span><a class="headerlink" href="#opt-hdr" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">detect</span></code>。</p>
+<p>允许 HDR 显示器显示高于 SDR 白色的亮度。普通 SDR 内容与关闭此选项时完全相同；HDR 仅为程序通过 <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>、<a class="reference internal" href="#opt-cursor_brightness"><code class="xref std std-opt docutils literal notranslate"><span class="pre">cursor_brightness</span></code></a> 和 HDR 图像请求的内容增加亮度。默认值 <code class="code docutils literal notranslate"><span class="pre">detect</span></code> 会在无需切换显示模式、且具备相应能力的显示器上启用 HDR：包括 macOS 上支持 EDR 的显示器（含 MacBook 内置显示器），以及 Wayland 上已经提供 HDR 亮度余量的显示器。窗口移到其他屏幕时会跟随显示器变化。<code class="code docutils literal notranslate"><span class="pre">no</span></code> 禁用 HDR；<code class="code docutils literal notranslate"><span class="pre">auto</span></code> 仅在屏幕上存在亮于 SDR 白色的内容时启用扩展范围；<code class="code docutils literal notranslate"><span class="pre">always</span></code> 则不论检测结果都保持启用。Silkie 不会将显示器切换为 HDR 模式；需要这样做的外接显示器必须在系统显示设置中启用。修改此选项后请重启 Silkie。支持 macOS；Wayland 还需要合成器实现色彩管理，并由图形驱动提供浮点窗口表面，详见 <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-hdr_max_headroom">
+<span class="sig-name descname"><span class="pre">hdr_max_headroom</span></span><a class="headerlink" href="#opt-hdr_max_headroom" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">4.0</span></code>。</p>
+<p>Silkie 用于 HDR 内容的最大亮度，以 SDR 白色的倍数表示。显示器可能提供更大的亮度余量，尤其在较低亮度设置下，但过亮的文本不适合阅读。超出此值的请求会被钳制。显示器自身的限制始终适用。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-cursor_brightness">
+<span class="sig-name descname"><span class="pre">cursor_brightness</span></span><a class="headerlink" href="#opt-cursor_brightness" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">1.0</span></code>。</p>
+<p>The brightness of the block cursor as a multiple of SDR white, so <code class="code docutils literal notranslate"><span class="pre">2.0</span></code>
+makes it twice as bright as normal white text. Values above one only take
+effect on an HDR display with <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> enabled, otherwise the cursor is
+rendered as usual. See <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>.
+The minimum is 1.0. Settings increases or decreases this multiplier in steps of 0.1.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-wayland_colorspace">
+<span class="sig-name descname"><span class="pre">wayland_colorspace</span></span><a class="headerlink" href="#opt-wayland_colorspace" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">srgb</span></code>。</p>
+<p>Wayland 上操作系统窗口所用的色彩空间。默认 <code class="code docutils literal notranslate"><span class="pre">srgb</span></code> 保持原有行为。<code class="code docutils literal notranslate"><span class="pre">displayp3</span></code> 或 <code class="code docutils literal notranslate"><span class="pre">rec2020</span></code> 会告知合成器窗口属于相应广色域；程序标注了广色域的颜色和图像会在该色域显示，而非裁剪到 sRGB，详见 <a class="reference internal" href="wide-gamut-protocol.html"><span class="doc">广色域颜色</span></a>。<code class="code docutils literal notranslate"><span class="pre">auto</span></code> 在三者中选择窗口所在显示器能够完整显示的最宽色域。所有未标注色域的内容均按 sRGB 处理并保持原貌，这与 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.macos_colorspace"><code class="xref std std-opt docutils literal notranslate"><span class="pre">macos_colorspace</span></code></a> 不同。需要合成器支持色彩管理；否则窗口保持 sRGB。广色域窗口会额外对像素执行一次处理。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-eink_mode">
+<span class="sig-name descname"><span class="pre">eink_mode</span></span><a class="headerlink" href="#opt-eink_mode" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">no</span></code>。</p>
+<p>即使操作系统将显示器识别为普通显示器，也声明它为电子纸，例如外接 BOOX 显示器。Silkie 通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示协议</span></a> 报告 <code class="code docutils literal notranslate"><span class="pre">kind=eink</span></code>，并在 <a class="reference internal" href="#opt-color_scheme"><code class="xref std std-opt docutils literal notranslate"><span class="pre">color_scheme</span></code></a> 为 <code class="code docutils literal notranslate"><span class="pre">auto</span></code> 时使用白底黑字。明确设置 <code class="code docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> 在电子纸上也有效。</p>
+<p>此设置适用于全部 Silkie 窗口。运行时可用 <code class="code docutils literal notranslate"><span class="pre">set_eink_mode</span> <span class="pre">yes</span></code>、<code class="code docutils literal notranslate"><span class="pre">no</span></code> 或 <code class="code docutils literal notranslate"><span class="pre">toggle</span></code> 切换，默认快捷键为 <code class="code docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code>。显示信息订阅者会收到变化通知。重新加载配置会恢复配置中的设置。</p>
+<p>电子纸模式不会推断色彩能力和刷新时序。如有需要，使用 <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> 声明，例如十六级灰度面板可设置 <code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=gray</span> <span class="pre">bits=4</span></code>。电子纸模式优先于 <code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=...</span></code>。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-color_scheme">
+<span class="sig-name descname"><span class="pre">color_scheme</span></span><a class="headerlink" href="#opt-color_scheme" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">auto</span></code>。</p>
+<p>用 <code class="code docutils literal notranslate"><span class="pre">light</span></code> 选择白底黑字，<code class="code docutils literal notranslate"><span class="pre">dark</span></code> 选择黑底白字。这些内置高对比度配色也会设置光标、选区和标签栏颜色。<code class="code docutils literal notranslate"><span class="pre">auto</span></code> 使用配置的颜色和自动主题文件，但 <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a> 启用时会选择浅色配色。</p>
+<p>运行时可用 <code class="code docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">light</span></code>、<code class="code docutils literal notranslate"><span class="pre">dark</span></code>、<code class="code docutils literal notranslate"><span class="pre">auto</span></code> 或 <code class="code docutils literal notranslate"><span class="pre">toggle</span></code> 切换。默认快捷键为 <code class="code docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code>。变化适用于全部窗口，包括新窗口，直至重新加载配置。订阅 kitty 色彩偏好通知的应用会收到通知。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-display_info">
+<span class="sig-name descname"><span class="pre">display_info</span></span><a class="headerlink" href="#opt-display_info" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：空（不覆盖）。</p>
+<p>用于补充操作系统无法报告的显示属性，回答通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示协议</span></a> 发起查询的程序。以空格分隔的 <code class="code docutils literal notranslate"><span class="pre">key=value</span></code> 键值对会覆盖 Silkie 的检测结果，例如电子墨水显示器：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span>
+</pre></div>
+</div>
+<p>The keys are <code class="code docutils literal notranslate"><span class="pre">kind</span></code> (<code class="code docutils literal notranslate"><span class="pre">lcd</span></code>, <code class="code docutils literal notranslate"><span class="pre">oled</span></code>, <code class="code docutils literal notranslate"><span class="pre">eink</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">unknown</span></code>), <code class="code docutils literal notranslate"><span class="pre">color</span></code> (<code class="code docutils literal notranslate"><span class="pre">rgb</span></code>, <code class="code docutils literal notranslate"><span class="pre">gray</span></code> or <code class="code docutils literal notranslate"><span class="pre">mono</span></code>),
+<code class="code docutils literal notranslate"><span class="pre">bits</span></code> (a common width for all active color channels), <code class="code docutils literal notranslate"><span class="pre">red_bits</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">green_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">blue_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">gray_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">gamut</span></code> (<code class="code docutils literal notranslate"><span class="pre">srgb</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">p3</span></code>, <code class="code docutils literal notranslate"><span class="pre">rec2020</span></code> or <code class="code docutils literal notranslate"><span class="pre">unknown</span></code>), <code class="code docutils literal notranslate"><span class="pre">headroom</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">scale</span></code>, <code class="code docutils literal notranslate"><span class="pre">period</span></code> (refresh period in microseconds) and
+<code class="code docutils literal notranslate"><span class="pre">ppi</span></code>.</p>
+<p>Individual channel widths override <code class="code docutils literal notranslate"><span class="pre">bits</span></code> regardless of order. For RGB565,
+use <code class="code docutils literal notranslate"><span class="pre">color=rgb</span> <span class="pre">red_bits=5</span> <span class="pre">green_bits=6</span> <span class="pre">blue_bits=5</span></code>; the report's legacy
+<code class="code docutils literal notranslate"><span class="pre">bits</span></code> is then zero because the channels differ. A grayscale display uses
+<code class="code docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">gray_bits=4</span></code> for sixteen levels. <code class="code docutils literal notranslate"><span class="pre">color=mono</span></code> always
+means one bit; use <code class="code docutils literal notranslate"><span class="pre">gray</span></code> for more than two levels.</p>
+<p>The report identifies declared precision as <code class="code docutils literal notranslate"><span class="pre">configured</span></code>. Detected
+framebuffer widths are labeled <code class="code docutils literal notranslate"><span class="pre">framebuffer</span></code>, since they do not establish
+physical panel precision or color calibration. Unknown channel widths are zero.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-tablet_hardware_ids">
+<span class="sig-name descname"><span class="pre">tablet_hardware_ids</span></span><a class="headerlink" href="#opt-tablet_hardware_ids" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">no</span></code>。</p>
+<p>是否允许通过 <a class="reference internal" href="tablet-protocol.html"><span class="doc">数位板指针协议</span></a> 告知程序笔和数位板的硬件标识：笔的序列号、类型标识，以及数位板的厂商和产品 ID。序列号可识别笔的所有者，而查询程序可能运行在另一台机器上，因此默认拒绝通过模式位 <code class="code docutils literal notranslate"><span class="pre">8</span></code> 请求这些信息：读回的该位为关闭，且不发送标识。笔、数位板和控制板的其他信息仍照常报告。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-haptic_feedback">
+<span class="sig-name descname"><span class="pre">haptic_feedback</span></span><a class="headerlink" href="#opt-haptic_feedback" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">yes</span></code>。</p>
+<p>允许程序在触控板上播放触觉反馈，参阅 <a class="reference internal" href="haptic-protocol.html"><span class="doc">触觉反馈协议</span></a>。仅适用于 macOS。</p>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="show-pointer.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">显示指针信息</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="frame-protocol.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">画面呈现协议</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Silkie 配置</a><ul>
+<li><a class="reference internal" href="#configuration-paths">Configuration paths</a></li>
+<li><a class="reference internal" href="#quitting-on-macos">Quitting on macOS</a></li>
+<li><a class="reference internal" href="#spatial-display">Spatial display</a></li>
+<li><a class="reference internal" href="#ssh-agent-forwarding">SSH agent forwarding</a></li>
+<li><a class="reference internal" href="#e-paper-and-color-switching">电子纸与配色切换</a></li>
+<li><a class="reference internal" href="#display-channel-precision">Display channel precision</a></li>
+<li><a class="reference internal" href="#fonts-and-cjk-text">字体与中日韩文本</a></li>
+<li><a class="reference internal" href="#input-limits">输入限制</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

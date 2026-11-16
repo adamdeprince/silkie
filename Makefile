@@ -44,9 +44,30 @@ FORCE:
 man:
 	$(MAKE) -C docs man
 
-.PHONY: html
-html:
+.PHONY: html browser-assets wasm browser-guest browser-demo browser-serve browser-test
+html: browser-assets
 	$(MAKE) -C docs html
+
+browser-assets:
+	python3 web/build.py
+
+wasm:
+	python3 web/build-wasm.py
+
+browser-guest:
+	python3 web/build-guest.py $(BROWSER_GUEST_ARGS)
+
+browser-demo: wasm browser-assets browser-guest
+	$(MAKE) html
+
+browser-serve:
+	python3 web/serve.py $(BROWSER_SERVE_ARGS)
+
+browser-test: wasm
+	node --test web/*.test.mjs web/tests/*.test.mjs
+	cargo test --locked --manifest-path web/guest/console-session/Cargo.toml
+	python3 -m unittest discover -s web -p 'test_*.py'
+	python3 -m unittest discover -s web/guest -p 'test_*.py'
 
 dirhtml:
 	$(MAKE) -C docs dirhtml
@@ -54,8 +75,8 @@ dirhtml:
 linkcheck:
 	$(MAKE) -C docs linkcheck
 
-website:
-	./publish.py --only website
+website: html
+	python3 packaging/publish_r2.py
 
 docs: man html
 

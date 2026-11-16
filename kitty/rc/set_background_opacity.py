@@ -34,7 +34,7 @@ class SetBackgroundOpacity(RemoteCommand):
     short_desc = 'Set the background opacity'
     desc = (
         'Set the background opacity for the specified windows. This will only work if you have turned on'
-        ' :opt:`dynamic_background_opacity` in :file:`kitty.conf`. The background opacity affects all kitty windows in a'
+        ' :opt:`dynamic_background_opacity` in :file:`silkie.conf`. The background opacity affects all kitty windows in a'
         ' single OS window. For example::\n\n'
         '    kitten @ set-background-opacity 0.5'
     )
@@ -73,7 +73,7 @@ equal to the specified value, otherwise it will be set to the specified value.
 
         opts = get_options()
         if not opts.dynamic_background_opacity:
-            raise OpacityError('You must turn on the dynamic_background_opacity option in kitty.conf to be able to set background opacity')
+            raise OpacityError('You must turn on the dynamic_background_opacity option in silkie.conf to be able to set background opacity')
         windows = self.windows_for_payload(boss, window, payload_get)
         for os_window_id in {w.os_window_id for w in windows if w}:
             val: float = payload_get('opacity') or 0.0

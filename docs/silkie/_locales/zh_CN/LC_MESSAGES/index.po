@@ -1,0 +1,386 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:35-0400\n"
+"PO-Revision-Date: 2026-10-29 06:36+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/index.rst:-1
+msgid ""
+"Silkie is a terminal emulator built on kitty, extending it with pen and touch input, vector "
+"graphics, HDR, and presentation feedback. Install Silkie and explore its specifications."
+msgstr "Silkie 是基于 kitty 的终端模拟器，扩展了笔和触摸输入、矢量图形、HDR 以及画面呈现反馈。了解安装方法与协议规范。"
+
+#: docs/silkie/index.rst:5
+msgid "A terminal for richer interaction."
+msgstr "让终端拥有更丰富的交互。"
+
+#: docs/silkie/index.rst:7
+msgid ""
+"<figure class=\"hero-game\">\n"
+"  <a href=\"games.html\">\n"
+"    <img src=\"_static/games/sprint-tug.png\" width=\"1100\" height=\"393\"\n"
+"         alt=\"Loki and Skaði playing tug with a Silkie hen in Silkie Sprint\"\n"
+"         fetchpriority=\"high\">\n"
+"  </a>\n"
+"  <figcaption><a href=\"games.html\">Meet the games for Silkie and kitty.</a></figcaption>\n"
+"</figure>"
+msgstr ""
+"<figure class=\"hero-game\">\n"
+"  <a href=\"games.html\">\n"
+"    <img src=\"../_static/games/sprint-tug.png\" width=\"1100\" height=\"393\"\n"
+"         alt=\"Silkie Sprint 中的 Loki 和 Skaði 正在拉扯一只鸡\"\n"
+"         fetchpriority=\"high\">\n"
+"  </a>\n"
+"  <figcaption><a href=\"games.html\">认识为 Silkie 和 kitty 打造的游戏。</a></figcaption>\n"
+"</figure>"
+
+#: docs/silkie/index.rst:20
+msgid ""
+"Silkie is a terminal emulator for macOS and Linux, built on `kitty "
+"<https://sw.kovidgoyal.net/kitty/>`_. It extends the terminal with pen and touch input, vector "
+"graphics, HDR color, and display timing feedback."
+msgstr ""
+"Silkie 是适用于 macOS 和 Linux 的终端模拟器，基于 `kitty <https://sw.kovidgoyal.net/kitty/>`_ "
+"开发。它为终端增添了笔和触摸输入、矢量图形、HDR 色彩以及显示时序反馈。"
+
+#: docs/silkie/index.rst:24
+msgid ""
+"Run your shell and terminal applications. Build software that can draw, respond to a stylus, and "
+"understand the display it is running on."
+msgstr "运行熟悉的 shell 和终端应用，也可以开发能够绘图、响应触控笔，并了解当前显示设备特性的软件。"
+
+#: docs/silkie/index.rst:29
+msgid ""
+"`Install Silkie <#install>`_ :doc:`Try the browser demo <browser-demo>` :doc:`Read the "
+"specifications <developer-guide>`"
+msgstr "`安装 Silkie <#install>`_ :doc:`试用浏览器演示 <browser-demo>` :doc:`阅读协议规范 <developer-guide>`"
+
+#: docs/silkie/index.rst:35
+msgid "Open source · Main branch: `silkie <https://github.com/adamdeprince/silkie/tree/silkie>`_"
+msgstr "开源 · 主分支：`silkie <https://github.com/adamdeprince/silkie/tree/silkie>`_"
+
+#: docs/silkie/_includes/browser-terminal.rst:1
+msgid ""
+"<link rel=\"stylesheet\" href=\"_static/demo/demo.css\">\n"
+"<div class=\"browser-demo-window\">\n"
+"  <section class=\"demo-panel\" id=\"demo-panel\" aria-label=\"Interactive Silkie terminal\">\n"
+"    <div class=\"demo-toolbar\" role=\"group\" aria-label=\"Terminal controls\">\n"
+"      <span class=\"demo-window-title\">silkie<span aria-hidden=\"true\">_</span></span>\n"
+"      <button type=\"button\" id=\"demo-start\" hidden>Restart shell</button>\n"
+"      <button type=\"button\" id=\"demo-fullscreen\" aria-pressed=\"false\">Fullscreen</button>\n"
+"    </div>\n"
+"    <p class=\"demo-status\" id=\"demo-status\" role=\"status\" aria-live=\"polite\">Starting the"
+" shell…</p>\n"
+"    <div id=\"silkie-terminal\" aria-label=\"Silkie Linux terminal\"></div>\n"
+"  </section>\n"
+"  <p class=\"demo-caption\">Play in a full-window terminal:\n"
+"  <a href=\"browser-demo.html?game=presidential\" data-demo-game=\"presidential\" target"
+"=\"silkie-presidential\">Presidential</a> ·\n"
+"  <a href=\"browser-demo.html?game=silkie-loophole\" data-demo-game=\"silkie-loophole\" target"
+"=\"silkie-silkie-loophole\">Silkie Loophole</a> ·\n"
+"  <a href=\"browser-demo.html?game=silkie-sprint\" data-demo-game=\"silkie-sprint\" target"
+"=\"silkie-silkie-sprint\">Silkie Sprint</a> ·\n"
+"  <a href=\"browser-demo.html?game=silkie-scramble\" data-demo-game=\"silkie-scramble\" target"
+"=\"silkie-silkie-scramble\">Silkie Scramble</a>.\n"
+"  Use <strong>Fullscreen</strong> to fill the display.\n"
+"  <a href=\"browser-ssh.html\">SSH setup</a> ·\n"
+"  <a href=\"https://cheerpx.io/\">Powered by CheerpX</a></p>\n"
+"</div>\n"
+"<noscript><p>Enable JavaScript to run the WebAssembly terminal.</p></noscript>\n"
+"<script type=\"module\" src=\"_static/demo/app.mjs\"></script>"
+msgstr ""
+"<link rel=\"stylesheet\" href=\"../_static/demo/demo.css\">\n"
+"<div class=\"browser-demo-window\">\n"
+"  <section class=\"demo-panel\" id=\"demo-panel\" aria-label=\"交互式 Silkie 终端\">\n"
+"    <div class=\"demo-toolbar\" role=\"group\" aria-label=\"终端控件\">\n"
+"      <span class=\"demo-window-title\">silkie<span aria-hidden=\"true\">_</span></span>\n"
+"      <button type=\"button\" id=\"demo-start\" hidden>重新启动 shell</button>\n"
+"      <button type=\"button\" id=\"demo-fullscreen\" aria-pressed=\"false\">全屏</button>\n"
+"    </div>\n"
+"    <p class=\"demo-status\" id=\"demo-status\" role=\"status\" aria-live=\"polite\">正在启动 "
+"shell…</p>\n"
+"    <div id=\"silkie-terminal\" aria-label=\"Silkie Linux 终端\"></div>\n"
+"  </section>\n"
+"  <p class=\"demo-caption\">在独立终端窗口中游玩：\n"
+"  <a href=\"browser-demo.html?game=presidential\" data-demo-game=\"presidential\" target"
+"=\"silkie-presidential\">Presidential</a> ·\n"
+"  <a href=\"browser-demo.html?game=silkie-loophole\" data-demo-game=\"silkie-loophole\" target"
+"=\"silkie-silkie-loophole\">Silkie Loophole</a> ·\n"
+"  <a href=\"browser-demo.html?game=silkie-sprint\" data-demo-game=\"silkie-sprint\" target"
+"=\"silkie-silkie-sprint\">Silkie Sprint</a> ·\n"
+"  <a href=\"browser-demo.html?game=silkie-scramble\" data-demo-game=\"silkie-scramble\" target"
+"=\"silkie-silkie-scramble\">Silkie Scramble</a>.\n"
+"  使用<strong>全屏</strong>占满显示器。\n"
+"  <a href=\"browser-ssh.html\">SSH 设置</a> ·\n"
+"  <a href=\"https://cheerpx.io/\">由 CheerpX 提供支持</a></p>\n"
+"</div>\n"
+"<noscript><p>请启用 JavaScript 以运行 WebAssembly 终端。</p></noscript>\n"
+"<script type=\"module\" src=\"../_static/demo/app.mjs\"></script>"
+
+#: docs/silkie/index.rst
+msgid "Specifications and documentation"
+msgstr "协议规范与文档"
+
+#: docs/silkie/index.rst:46
+msgid "**03 / Silkie extensions**"
+msgstr "**03 / Silkie 扩展**"
+
+#: docs/silkie/index.rst:48
+msgid "Pen, touch, ink, vectors, color, and timing. :doc:`Explore Silkie's additions <reference>`."
+msgstr "笔、触摸、墨迹、矢量图形、色彩与时序。:doc:`了解 Silkie 的扩展 <reference>`。"
+
+#: docs/silkie/index.rst:53
+msgid "**02 / kitty + kitten tools**"
+msgstr "**02 / kitty 与 kitten 工具**"
+
+#: docs/silkie/index.rst:55
+msgid ""
+"The terminal emulator Silkie forks, with graphics, keyboard protocols, and tools called kittens. "
+"`Read kitty's docs <https://sw.kovidgoyal.net/kitty/>`_ and `kitten docs "
+"<https://sw.kovidgoyal.net/kitty/kittens_intro/>`_."
+msgstr ""
+"Silkie 是 kitty 终端模拟器的一个分支。kitty 在传统终端协议之上扩展了图形、键盘等协议，并提供称为 kittens 的工具和插件。阅读 `kitty 文档 "
+"<https://sw.kovidgoyal.net/kitty/>`_ 和 `kitten 工具文档 "
+"<https://sw.kovidgoyal.net/kitty/kittens_intro/>`_。"
+
+#: docs/silkie/index.rst:62
+msgid "**01 / Terminal foundations**"
+msgstr "**01 / 终端基础**"
+
+#: docs/silkie/index.rst:64
+msgid ""
+"The text stream and VT/xterm-style control sequences that kitty extends. :ref:`Read the "
+"underlying references <terminal-foundations>`."
+msgstr "kitty 所扩展的文本流与 VT/xterm 风格控制序列。:ref:`阅读基础参考资料 <terminal-foundations>`。"
+
+#: docs/silkie/index.rst:68
+msgid "Features"
+msgstr "功能"
+
+#: docs/silkie/index.rst:70
+msgid ""
+"Silkie adds protocols that applications can discover and use as needed. Support depends on the "
+"operating system, input device, display, and compositor; each specification describes its "
+"capabilities and limits."
+msgstr "应用可以按需探测和使用 Silkie 的扩展协议。实际支持情况取决于操作系统、输入设备、显示器和窗口合成器；各项规范说明了相应的能力与限制。"
+
+#: docs/silkie/index.rst:75
+msgid "Fonts and typography"
+msgstr "字体与排版"
+
+#: docs/silkie/index.rst:77
+msgid ""
+"Mix Iosevka's sans-serif and slab-serif faces, select weights from Thin to Heavy, and control "
+"slant in either direction. Regional CJK font preferences preserve character widths and the "
+"terminal grid. Font files are installed separately; see :doc:`font-protocol` for configuration "
+"and escape sequences."
+msgstr ""
+"混用 Iosevka 的无衬线与板状衬线字体，选择从 Thin 到 Heavy "
+"的字重，并控制两个方向的倾斜。按地区设置中日韩字体偏好，同时保持字符宽度和终端网格。字体文件需要单独安装；配置与转义序列见 :doc:`font-protocol`。"
+
+#: docs/silkie/index.rst:83
+msgid "Pen, touch, and gestures"
+msgstr "笔、触摸与手势"
+
+#: docs/silkie/index.rst:85
+msgid ""
+"Give applications pressure and tilt information, touch contacts, smooth scrolling, and gesture "
+"events. Inspect what a device reports with the :doc:`show_pointer kitten <show-pointer>`."
+msgstr "让应用获取压力、倾斜、触摸接触点、平滑滚动和手势事件。使用 :doc:`show_pointer 工具 <show-pointer>` 查看设备上报的信息。"
+
+#: docs/silkie/index.rst:89
+msgid ""
+":doc:`Tablet input <tablet-protocol>` · :doc:`Scrolling <scroll-protocol>` · :doc:`Gestures "
+"<gesture-protocol>` · :doc:`Haptics <haptic-protocol>`"
+msgstr ""
+":doc:`数位板输入 <tablet-protocol>` · :doc:`滚动 <scroll-protocol>` · :doc:`手势 <gesture-protocol>` · "
+":doc:`触觉反馈 <haptic-protocol>`"
+
+#: docs/silkie/index.rst:93
+msgid "Vector graphics and ink"
+msgstr "矢量图形与墨迹"
+
+#: docs/silkie/index.rst:95
+msgid ""
+"Send paths, styled text and scenes for the terminal to render at the displayed size, with session"
+" fonts, text measurement, nested window clips and HDR color. Let the terminal draw pen strokes as"
+" input arrives, without waiting for each sample to make a round trip to the application."
+msgstr "发送路径、带样式的文本和场景，由终端按显示尺寸渲染；支持会话字体、文本测量、嵌套窗口裁剪和 HDR 色彩。笔输入到达时即可由终端绘制笔迹，无须等待每个采样点往返应用。"
+
+#: docs/silkie/index.rst:100
+msgid ""
+":doc:`Vector images <vector-protocol>` · :doc:`Terminal-side ink <ink-protocol>` · :doc:`GPU "
+"surfaces <gpu-surface-protocol>`"
+msgstr ":doc:`矢量图像 <vector-protocol>` · :doc:`终端侧墨迹 <ink-protocol>` · :doc:`GPU 表面 <gpu-surface-protocol>`"
+
+#: docs/silkie/index.rst:104
+msgid "Color beyond ordinary SDR"
+msgstr "超越普通 SDR 的色彩"
+
+#: docs/silkie/index.rst:106
+msgid ""
+"Use wider color spaces and request brightness above SDR white on supported displays. Query the "
+"available headroom and control transparency at the cell level."
+msgstr "在支持的显示器上使用更宽的色域，以及高于 SDR 白色的亮度。查询可用的亮度余量，并控制单个字符单元的透明度。"
+
+#: docs/silkie/index.rst:109
+msgid ""
+":doc:`HDR <hdr-protocol>` · :doc:`Wide gamut <wide-gamut-protocol>` · :doc:`Cell alpha <cell-"
+"alpha-protocol>`"
+msgstr ""
+":doc:`HDR <hdr-protocol>` · :doc:`广色域 <wide-gamut-protocol>` · :doc:`字符单元透明度 <cell-alpha-"
+"protocol>`"
+
+#: docs/silkie/index.rst:113
+msgid "Display and presentation feedback"
+msgstr "显示信息与画面呈现反馈"
+
+#: docs/silkie/index.rst:115
+msgid ""
+"Learn about the display, receive input timing information, and track when a frame is presented. "
+"Use those reports to coordinate drawing with the terminal."
+msgstr "了解显示设备、接收输入时序信息，并跟踪画面何时呈现。应用可以利用这些报告与终端协调绘制。"
+
+#: docs/silkie/index.rst:118
+msgid ""
+":doc:`Display information <display-protocol>` · :doc:`Latency <latency-protocol>` · :doc:`Frame "
+"presentation <frame-protocol>`"
+msgstr ":doc:`显示信息 <display-protocol>` · :doc:`延迟 <latency-protocol>` · :doc:`画面呈现 <frame-protocol>`"
+
+#: docs/silkie/index.rst:122
+msgid "Games"
+msgstr "游戏"
+
+#: docs/silkie/index.rst:124
+msgid ""
+"Play **Presidential**, a political satire and economic simulation, or **Silkie Loophole**, a "
+"raccoon's trick-or-treating adventure in Montpelier. **Silkie Sprint** crosses roads and rivers; "
+"**Silkie Scramble** gathers chicks while outwitting garden predators. All four run in the "
+"browser's Linux terminal and support native Silkie and kitty terminals."
+msgstr ""
+"体验政治讽刺与经济模拟游戏 **Presidential**，或在 **Silkie Loophole** 中扮演浣熊，踏上蒙彼利埃的万圣节讨糖冒险。**Silkie Sprint** "
+"带你穿越道路和河流；**Silkie Scramble** 则需要召集小鸡，智取花园里的捕食者。四款游戏均可在浏览器的 Linux 终端中运行，也支持原生 Silkie 和 kitty 终端。"
+
+#: docs/silkie/index.rst:130
+msgid ":doc:`Play the games, watch gameplay, and find installation instructions <games>`."
+msgstr ":doc:`试玩游戏、观看实机视频并了解安装方法 <games>`。"
+
+#: docs/silkie/index.rst:133
+msgid "Install"
+msgstr "安装"
+
+#: docs/silkie/index.rst:135
+msgid ""
+"Binary packages are available from `Homebrew <https://brew.goblinreactor.com/#silkie>`_ for Apple"
+" Silicon macOS, and the `APT repository <https://apt.goblinreactor.com/#silkie>`_ for Linux. See "
+":doc:`install` for the supported targets and installation instructions. For automatic package-"
+"source setup and installation::"
+msgstr ""
+"Apple Silicon macOS 用户可从 `Homebrew <https://brew.goblinreactor.com/#silkie>`_ 安装，Linux 用户可使用 `APT"
+" 软件仓库 <https://apt.goblinreactor.com/#silkie>`_。支持的平台和安装步骤见 :doc:`install`。也可以自动配置软件源并安装：::"
+
+#: docs/silkie/index.rst:142
+msgid "The installer asks before adding or changing Goblin Reactor package sources."
+msgstr "安装脚本会在添加或修改 Goblin Reactor 软件源之前征求许可。"
+
+#: docs/silkie/index.rst:144
+msgid ""
+"To build from source, use the ``silkie`` branch. You will need Git, a C compiler, and Go; Linux "
+"also needs the system libraries listed in the :doc:`installation guide <install>`. The build "
+"script downloads the remaining build dependencies."
+msgstr "从源码构建时，请使用 ``silkie`` 分支。你需要 Git、C 编译器和 Go；Linux 还需要 :doc:`安装指南 <install>` 中列出的系统库。构建脚本会下载其余构建依赖。"
+
+#: docs/silkie/index.rst:151
+msgid ""
+"Launch the installed application with ``silkie`` and use ``silkie-kitten`` for its companion "
+"tools. The source build above runs directly from the checkout. Upstream kitty packages install "
+"upstream kitty; use the Silkie packages or source above to get these additions."
+msgstr ""
+"安装后，运行 ``silkie`` 启动终端，使用 ``silkie-kitten`` 运行配套工具。上面的源码构建命令直接从检出目录运行开发版本。上游 kitty 软件包安装的是上游 "
+"kitty；如需 Silkie 的扩展，请使用上述软件包或源码。"
+
+#: docs/silkie/index.rst:158
+msgid ":doc:`Installation details <install>` :doc:`Configure Silkie <configuration>`"
+msgstr ":doc:`安装详情 <install>` :doc:`配置 Silkie <configuration>`"
+
+#: docs/silkie/index.rst:162
+msgid "Documentation"
+msgstr "文档"
+
+#: docs/silkie/index.rst:164
+msgid ""
+"Silkie's specifications describe the additions. Read them alongside the upstream references to "
+"understand the terminal as a whole."
+msgstr "Silkie 的规范说明其新增功能。理解完整终端行为时，请同时参阅上游参考文档。"
+
+#: docs/silkie/index.rst:168
+msgid "Find the specifications"
+msgstr "查找协议规范"
+
+#: docs/silkie/index.rst:170
+msgid ""
+"The developer guide brings together terminal standards, kitty and kitten manuals, Silkie's "
+"extension specifications, and links to the source."
+msgstr "开发者指南汇集了终端标准、kitty 与 kitten 手册、Silkie 扩展规范和源代码链接。"
+
+#: docs/silkie/index.rst:173
+msgid ":doc:`Developer guide <developer-guide>`"
+msgstr ":doc:`开发者指南 <developer-guide>`"
+
+#: docs/silkie/index.rst:176
+msgid "Use the extension reference"
+msgstr "使用扩展参考手册"
+
+#: docs/silkie/index.rst:178
+msgid ""
+"Find escape sequences, fields, units, replies, and platform limits. Start with capability "
+"discovery and shared framing, then choose a protocol."
+msgstr "查阅转义序列、字段、单位、回复和平台限制。从能力探测与通用消息封装开始，再选择所需协议。"
+
+#: docs/silkie/index.rst:181
+msgid ":doc:`All Silkie specifications <reference>` · :doc:`Capability discovery <capabilities-protocol>`"
+msgstr ":doc:`全部 Silkie 规范 <reference>` · :doc:`能力探测 <capabilities-protocol>`"
+
+#: docs/silkie/index.rst:185
+msgid "Follow the upstream manuals"
+msgstr "参阅上游手册"
+
+#: docs/silkie/index.rst:187
+msgid ""
+"kitty documents inherited terminal behavior. Its kittens are tools and plugins that use and "
+"extend kitty, such as image display, SSH integration, and remote control."
+msgstr "kitty 文档说明 Silkie 继承的终端行为。kittens 是使用并扩展 kitty 的工具和插件，可用于图像显示、SSH 集成和远程控制等任务。"
+
+#: docs/silkie/index.rst:190
+msgid ""
+"`kitty manual <https://sw.kovidgoyal.net/kitty/>`_ · `Kitten tools "
+"<https://sw.kovidgoyal.net/kitty/kittens_intro/>`_ · `kitty protocols "
+"<https://sw.kovidgoyal.net/kitty/protocol-extensions/>`_"
+msgstr ""
+"`kitty 手册 <https://sw.kovidgoyal.net/kitty/>`_ · `Kitten 工具 "
+"<https://sw.kovidgoyal.net/kitty/kittens_intro/>`_ · `kitty 协议 <https://sw.kovidgoyal.net/kitty"
+"/protocol-extensions/>`_"
+
+
+# Installer and Extended-width defaults.
+msgid "Binary packages are available from `Homebrew <https://brew.goblinreactor.com/#silkie>`_ for Apple Silicon macOS, and the `APT repository <https://apt.goblinreactor.com/#silkie>`_ for Linux. See :doc:`install` for the supported targets and installation instructions. To set up package sources and install both Silkie and its Iosevka font::"
+msgstr "二进制软件包可从面向 Apple Silicon macOS 的 `Homebrew <https://brew.goblinreactor.com/#silkie>`_ 和面向 Linux 的 `APT 仓库 <https://apt.goblinreactor.com/#silkie>`_ 获取。支持的平台与安装说明见 :doc:`install`。以下命令可配置软件源，并同时安装 Silkie 和 Iosevka 字体：::"
+
+# Installer and Extended-width defaults.
+msgid "The installer asks before adding or changing Goblin Reactor package sources. It installs unmodified Iosevka with its SIL Open Font License notice. Silkie uses Iosevka's wider Extended faces by default."
+msgstr "安装脚本会在添加或修改 Goblin Reactor 软件源之前征求许可，并安装未经修改的 Iosevka 字体及其 SIL 开源字体许可证声明。Silkie 默认使用较宽的 Extended 字形。"

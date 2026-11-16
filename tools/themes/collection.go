@@ -782,7 +782,7 @@ func (self *Themes) add_from_dir(dirpath string) error {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".conf") {
 			path := filepath.Join(dirpath, e.Name())
 			// ignore files if they are the STDOUT of the current processes
-			// allows using kitten theme --dump-theme name > ~/.config/kitty/themes/name.conf
+			// allows using kitten theme --dump-theme name > ~/.config/silkie/themes/name.conf
 			if utils.Samefile(path, os.Stdout) {
 				continue
 			}

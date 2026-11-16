@@ -10,10 +10,12 @@ in the Cocoa and GTK front ends. Those are renderers of the plain dicts and list
 produced by :func:`settings_pages`, they know nothing about individual options.
 """
 
+import math
 import os
 import re
 import tempfile
 from collections.abc import Iterable, Iterator
+from decimal import Decimal, localcontext
 from typing import Any, NamedTuple
 
 from .conf.types import Group, MouseMapping, MultiOption, Option, ShortcutMapping
@@ -22,7 +24,7 @@ from .constants import defconf, is_macos, settings_conf
 
 
 def settings_conf_path() -> str:
-    # Written by the Settings window and read after kitty.conf, so that kitty.conf stays
+    # Written by the Settings window and read after silkie.conf, so that silkie.conf stays
     # exactly as the user left it.
     return settings_conf
 
@@ -64,7 +66,7 @@ def atomic_write_text(path: str, text: str) -> None:
 
 
 SETTINGS_HEADER = '''\
-# Written by the Settings window. It is read after kitty.conf, so what is set here wins.
+# Written by the Settings window. It is read after silkie.conf, so what is set here wins.
 # Editing it by hand is fine, comments are not preserved.
 '''
 
@@ -81,11 +83,36 @@ def validate(key: str, value: str) -> str:
     ' Returns an error message, empty when the value is acceptable '
     from .options.parse import create_result_dict, parse_conf_item
 
+    opt = option_by_name(key)
+    if isinstance(opt, Option) and field_kind(opt) in ('int', 'float'):
+        try:
+            number = int(value) if field_kind(opt) == 'int' else float(value)
+        except (ValueError, OverflowError):
+            return f'{humanize(key)} requires a number'
+        if isinstance(number, float) and not math.isfinite(number):
+            return f'{humanize(key)} requires a finite number'
+        domain = numeric_domain(opt)
+        low, high = domain['minimum'], domain['maximum']
+        if low is not None and (number < low or (number == low and domain['minimum_exclusive'])):
+            return f'{humanize(key)} must be {"greater than" if domain["minimum_exclusive"] else "at least"} {low:g}'
+        if high is not None and (number > high or (number == high and domain['maximum_exclusive'])):
+            return f'{humanize(key)} must be {"less than" if domain["maximum_exclusive"] else "at most"} {high:g}'
+
     bad: list[BadLine] = []
     lines = value.splitlines() or ['']
     for line in lines:
         ans = create_result_dict()
         parse_config_base([f'{key} {line}'], parse_conf_item, ans, accumulate_bad_lines=bad)
+        def finite(item: Any) -> bool:
+            if isinstance(item, float):
+                return math.isfinite(item)
+            if isinstance(item, dict):
+                return all(finite(v) for v in item.values())
+            if isinstance(item, tuple | list):
+                return all(map(finite, item))
+            return True
+        if not finite(ans):
+            return f'{humanize(key)} requires finite numbers'
     if bad:
         return str(bad[0].exception) or f'Not a valid value for {key}'
     return ''
@@ -125,7 +152,8 @@ ACRONYMS = {
 BOOL_PARSERS = {'to_bool'}
 COLOR_PARSERS = {'to_color', 'to_color_or_none', 'macos_titlebar_color', 'titlebar_color', 'scrollbar_color', 'cursor_text_color'}
 INT_PARSERS = {'int', 'positive_int', 'scrollback_lines', 'tab_bar_min_tabs'}
-FLOAT_PARSERS = {'float', 'positive_float', 'unit_float', 'signed_unit_float', 'to_font_size', 'mouse_hide_wait', 'visual_bell_duration'}
+FLOAT_PARSERS = {'float', 'positive_float', 'unit_float', 'signed_unit_float', 'to_font_size',
+                 'spatial_angle', 'spatial_divergence', 'spatial_scale', 'spatial_phase_limit', 'spatial_exponent', 'hdr_multiplier'}
 FONT_PARSERS = {'parse_font_spec'}
 # Options whose docs say a reload does not change them
 NEEDS_RESTART_PAT = re.compile(r'(reloading\s+the\s+config\s+is\s+not\s+supported|restart\s+\w+\s+after\s+changing|has\s+no\s+effect\s+(on|when)\s+(reload|reloading))', re.I)
@@ -136,13 +164,15 @@ def plain_text(rst: str) -> str:
     ' The documentation of an option as text, without the markup '
     text = MARKUP_PAT.sub(lambda m: (m.group(1) or m.group(2) or '').lstrip('~!'), rst)
     text = text.replace('``', '').replace('::\n', ':\n')
-    # Not in file names such as kitty.conf, or names that cannot change such as kitty_mod
+    # Preserve file names, paths, and identifiers such as kitty_mod.
     text = re.sub(r'(?<![\w./-])kitty(?![\w./-])', 'Silkie', text)
     paras = [' '.join(p.split()) for p in re.split(r'\n\s*\n', text.strip()) if p.strip()]
     return '\n\n'.join(paras)
 
 
 def humanize(name: str) -> str:
+    if name == 'spatial_divergence_exponent':
+        return 'Divergence multiplier (2^X)'
     words = name.split('_')
     if len(words) > 1 and words[0] in ('macos', 'linux', 'wayland', 'x11'):
         words = words[1:]
@@ -176,6 +206,69 @@ def field_kind(opt: Option) -> str:
     if p in FONT_PARSERS:
         return 'font'
     return 'text'
+
+
+def numeric_domain(opt: Option) -> dict[str, Any]:
+    """Semantic bounds, independent of the size of a native widget's counter.
+
+    Signed scroll multipliers, drag tolerance and documented negative disable
+    values stay signed. Composite duration/mouse options use text controls.
+    None means no semantic bound, rather than an invented large number.
+    """
+    parser = parser_name(opt)
+    low: float | int | None = None
+    high: float | int | None = None
+    step = 1. if field_kind(opt) == 'int' else 0.1
+    if parser in ('positive_float', 'positive_int', 'spatial_divergence', 'spatial_phase_limit'):
+        low = 0
+    elif parser in ('hdr_multiplier', 'spatial_scale', 'tab_bar_min_tabs'):
+        low = 1
+    elif parser == 'to_font_size':
+        from .options.utils import MINIMUM_FONT_SIZE
+        low = MINIMUM_FONT_SIZE
+    elif parser == 'unit_float':
+        low, high, step = 0, 1, .05
+    elif parser == 'signed_unit_float':
+        low, high, step = -1, 1, .05
+    elif parser == 'scrollback_lines':
+        low = -1 # canonical unlimited sentinel
+    if parser in ('spatial_angle', 'spatial_divergence'):
+        low, high = 0, 180
+    if parser == 'spatial_exponent':
+        low, high = -6, 6
+    if opt.name.endswith('_opacity'):
+        low, high, step = 0, 1, .05
+    if opt.name in ('background_blur', 'update_check_interval'):
+        low = 0
+    if opt.name in ('window_resize_step_cells', 'window_resize_step_lines', 'tab_title_max_lines'):
+        low = 1
+    if opt.name == 'clipboard_max_size':
+        step = 1.
+    return {'minimum': low, 'maximum': high, 'step': step,
+            'minimum_exclusive': parser == 'spatial_angle',
+            'maximum_exclusive': parser in ('spatial_angle', 'spatial_divergence')}
+
+
+def stepped_value(name: str, text: str, direction: int) -> str:
+    """Step an input-sized decimal exactly, without native counter limits."""
+    opt = option_by_name(name)
+    if not isinstance(opt, Option) or field_kind(opt) not in ('int', 'float') or direction not in (-1, 1) or validate(name, text):
+        return text
+    domain = numeric_domain(opt)
+    value = Decimal(text)
+    step = Decimal(str(domain['step']))
+    with localcontext() as context:
+        context.prec = max(context.prec, len(value.as_tuple().digits) + abs(value.as_tuple().exponent) +
+                           len(step.as_tuple().digits) + abs(step.as_tuple().exponent) + 2)
+        result = value + direction * step
+    if domain['minimum'] is not None and result < Decimal(str(domain['minimum'])):
+        result = Decimal(str(domain['minimum']))
+    if domain['maximum'] is not None and result > Decimal(str(domain['maximum'])):
+        result = Decimal(str(domain['maximum']))
+    rendered = format(result, 'f')
+    if '.' in rendered:
+        rendered = rendered.rstrip('0').rstrip('.')
+    return text if validate(name, rendered) else rendered
 
 
 def default_value(opt: Option) -> str:
@@ -231,6 +324,7 @@ def field_for_option(opt: Option, value_layers: tuple[Layer, ...], scope: str) -
     return {
         'name': opt.name,
         'title': humanize(opt.name),
+        **(numeric_domain(opt) if kind in ('int', 'float') else {}),
         'kind': kind,
         'value': value,
         'default': default,
@@ -261,12 +355,14 @@ def field_for_multi_option(opt: MultiOption, value_layers: tuple[Layer, ...], sc
 # Pages, in the order of the toolbar. Top level groups that are not listed go to Advanced, so that nothing
 # added to the definition can get lost.
 PAGE_OF_GROUP = {
+    'experimental': 'experimental',
+    'spatial': 'spatial',
     'advanced': 'general', 'bell': 'general', 'scrollback': 'general',
     'fonts': 'appearance', 'cursor': 'appearance', 'window': 'appearance', 'tabbar': 'appearance', 'colors': 'appearance',
     'mouse': 'pointer',
     'shortcuts': 'keys',
 }
-PAGE_TITLES = (('general', 'General'), ('appearance', 'Appearance'), ('profiles', 'Profiles'), ('keys', 'Keys'), ('pointer', 'Pointer'), ('advanced', 'Advanced'))
+PAGE_TITLES = (('general', 'General'), ('appearance', 'Appearance'), ('spatial', 'Spatial Display'), ('profiles', 'Profiles'), ('keys', 'Keys'), ('pointer', 'Pointer'), ('advanced', 'Advanced'), ('experimental', 'Experimental and untested'))
 # The 240 cube and gray colors would drown the sixteen people actually change
 EXTENDED_COLOR_PAT = re.compile(r'color(1[6-9]|[2-9]\d|1\d\d|2[0-5]\d)$')
 SHORTCUT_PREFIX = 'map:'

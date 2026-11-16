@@ -1,0 +1,1 @@
+.. include:: ../spatial-protocol.rst

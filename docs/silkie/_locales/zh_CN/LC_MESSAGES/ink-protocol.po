@@ -1,0 +1,520 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:48+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/ink-protocol.rst:2
+msgid "Terminal-side ink"
+msgstr "终端侧墨迹"
+
+#: docs/ink-protocol.rst:6
+msgid ""
+"A program that draws with a pen receives a report from the :doc:`tablet-protocol`, appends a "
+"point to a pen stroke of a :doc:`vector image <vector-protocol>` and waits for the terminal to "
+"draw it. Every sample of the pen therefore travels from the terminal to the program and back "
+"before any ink shows, and when the program is at the far end of a network connection the network "
+"is crossed twice. The line lags behind the pen, which is the one thing a drawing program cannot "
+"afford."
+msgstr ""
+"使用笔绘图的程序收到 :doc:`tablet-protocol` 报告后，会向 :doc:`矢量图像 <vector-protocol>` "
+"的笔划添加一点，再等待终端绘制。因此每个笔采样都必须从终端到程序再返回，墨迹才显示；程序位于网络另一端时，需要两次跨越网络。线条会落后于笔，这正是绘图程序最不能容忍的情况。"
+
+#: docs/ink-protocol.rst:14
+msgid ""
+"Terminal-side ink lets the terminal draw the stroke itself. The program gives it a brush for one "
+"of its vector images, and from then on the terminal adds the points of each stroke to that image "
+"as the pen moves, at once, while the reports go to the program as they always did. The terminal "
+"draws no overlay of its own: it applies to the image exactly the records the program would have "
+"sent, so the stroke is an ordinary element of the program's scene, with an id the program chose, "
+"which the program keeps, replaces with a better one or deletes. Nothing else about vector images "
+"changes. It is an open terminal extension like the others here: small, unobtrusive, easy to "
+"implement, and no change to what the TTY is."
+msgstr ""
+"终端侧墨迹允许终端自行绘制笔划。程序为某幅矢量图像提供画笔，此后终端随笔移动立即向图像添加各笔划的点，同时仍照常向程序发送报告。终端不绘制独立蒙层，而是向图像应用程序本来会发送的完全相同记录。因此笔划是程序场景中的普通元素，ID"
+" 由程序选择，程序可保留、替换为更好的笔划或删除。矢量图像的其他行为不变。它与其他扩展一样，是小巧、低干扰、易于实现的开放终端扩展，不改变 TTY 的本质。"
+
+#: docs/ink-protocol.rst:26
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/ink-protocol.rst:28
+msgid "Frames are ``OSC 777`` with the ``ink`` selector::"
+msgstr "帧使用带有 ``ink`` 选择器的 ``OSC 777``：::"
+
+#: docs/ink-protocol.rst:32
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected, and the units. Values are decimal integers, "
+"except the widths and the exponent of a brush, which are numbers as the records of a vector image"
+" write them and may have a fraction, and its color. ``v``, the protocol version, is ``1``, and "
+"``op`` is one of ``query``, ``cap``, ``brush`` and ``mode``. The terminal sends only replies, "
+"which are never merged or dropped."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 "
+"共用规则：字段语法、拒绝哪些帧，以及单位。除画笔的宽度、指数和颜色外，数值均为十进制整数；宽度和指数遵循矢量记录的数值格式，可带小数。协议版本 ``v`` 为 ``1``，``op`` 为 "
+"``query``、``cap``、``brush`` 或 ``mode``。终端仅发送回复，回复绝不合并或丢弃。"
+
+#: docs/ink-protocol.rst:42
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/ink-protocol.rst:44
+msgid "A program asks the terminal whether it can ink::"
+msgstr "程序询问终端是否能绘制墨迹：::"
+
+#: docs/ink-protocol.rst:48
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/ink-protocol.rst:54
+msgid ""
+"``caps`` is a bit set, of which only ``1`` is defined: the terminal draws strokes. ``mode`` is "
+"``1`` while ink is on and ``0`` otherwise. When the terminal holds a brush the reply also carries"
+" it, with the fields of `The brush`_ as the terminal has them, ``k`` being the id the next stroke"
+" will get and ``n`` how many ids are left::"
+msgstr ""
+"``caps`` 是位集合，目前仅定义 ``1``，表示终端绘制笔划。墨迹启用时 ``mode`` 为 ``1``，否则为 ``0``。终端保存画笔时，回复还携带 `画笔 <The "
+"brush_>`_ 规定的当前画笔字段，其中 ``k`` 为下一笔将取得的 ID，``n`` 为剩余 ID 数量：:: #noqa"
+
+#: docs/ink-protocol.rst:62
+msgid ""
+"A terminal that does not support the protocol ignores the query, so a program must time out and "
+"go on drawing its strokes itself, which it must be able to do in any case. A query changes "
+"nothing."
+msgstr "不支持本协议的终端会忽略查询，因此程序必须设置超时，并继续自行绘制笔划；无论如何程序都必须具备自行绘制能力。查询不改变状态。"
+
+#: docs/ink-protocol.rst:67
+msgid "The brush"
+msgstr "画笔"
+
+#: docs/ink-protocol.rst:69
+msgid "A program turns ink on by giving the terminal a brush::"
+msgstr "程序通过向终端提供画笔来开启墨迹：::"
+
+#: docs/ink-protocol.rst:74
+msgid "``i``"
+msgstr "``i``"
+
+#: docs/ink-protocol.rst:74
+msgid ""
+"Required. The id of a vector image (``f=200``) of this window, as the graphics protocol knows it."
+" The image need not exist yet; a stroke begins only over an image that does"
+msgstr "必需。本窗口中一幅矢量图像（``f=200``）的图形协议 ID。图像可以尚不存在，但只有在已有图像上才能开始笔划"
+
+#: docs/ink-protocol.rst:77
+msgid "``g``"
+msgstr "``g``"
+
+#: docs/ink-protocol.rst:77
+msgid "The id of the group of that image the strokes go into, ``0``, the root group, by default"
+msgstr "笔划所属图像分组的 ID，默认为根分组 ``0``"
+
+#: docs/ink-protocol.rst:79
+msgid "``k``"
+msgstr "``k``"
+
+#: docs/ink-protocol.rst:79
+msgid "Required. The id the element of the first stroke gets, at least ``1``"
+msgstr "必需。第一笔对应元素的 ID，至少为 ``1``"
+
+#: docs/ink-protocol.rst:81
+msgid "``n``"
+msgstr "``n``"
+
+#: docs/ink-protocol.rst:81
+msgid ""
+"How many ids, counting up from ``k``, the program sets aside for the terminal, ``1`` by default. "
+"The last of them may not exceed 4294967295. The program must not use these ids for anything else"
+msgstr "程序从 ``k`` 起为终端保留的连续 ID 数量，默认 ``1``。最后一个 ID 不得超过 4294967295。程序不得将这些 ID 用于其他用途"
+
+#: docs/ink-protocol.rst:84
+msgid "``fill``"
+msgstr "``fill``"
+
+#: docs/ink-protocol.rst:84
+msgid ""
+"The color of the strokes, as vector records write a color, ``#rrggbb``, ``#rrggbbaa`` or ``@`` "
+"and the id of a gradient. Black by default; ``none`` is refused"
+msgstr "笔划颜色，采用矢量记录格式：``#rrggbb``、``#rrggbbaa``，或 ``@`` 后接渐变 ID。默认黑色；拒绝 ``none``"
+
+#: docs/ink-protocol.rst:87
+msgid "``w1``"
+msgstr "``w1``"
+
+#: docs/ink-protocol.rst:87
+msgid ""
+"Required. The width of the stroke under full pressure, in the units of the group, a finite number"
+" from 0 up"
+msgstr "必需。满压力时的笔划宽度，以分组单位表示，为不小于 0 的有限数"
+
+#: docs/ink-protocol.rst:89
+msgid "``w0``"
+msgstr "``w0``"
+
+#: docs/ink-protocol.rst:89
+msgid "The width under no pressure, the same as ``w1`` by default, which gives a stroke of constant width"
+msgstr "无压力时的宽度，默认与 ``w1`` 相同，即固定宽度"
+
+#: docs/ink-protocol.rst:91
+msgid "``e``"
+msgstr "``e``"
+
+#: docs/ink-protocol.rst:91
+msgid "The exponent of the curve between the two, a finite number greater than 0, ``1`` by default"
+msgstr "两个宽度之间压力曲线的指数，必须为大于 0 的有限数，默认 ``1``"
+
+#: docs/ink-protocol.rst:93
+msgid "``tools``"
+msgstr "``tools``"
+
+#: docs/ink-protocol.rst:93
+msgid ""
+"The tools that draw, a bit set with bit ``1 << tool`` for each ``tool`` value of the tablet "
+"pointer protocol: pen ``2``, eraser ``4``, brush ``8``, pencil ``16``, airbrush ``32``, mouse "
+"``64``, lens ``128``, totem ``256`` and an unknown tool ``1``. By default ``58``, the pen, brush,"
+" pencil and airbrush. From 1 to 511"
+msgstr ""
+"参与绘制的工具位集合，数位板指针协议每个 ``tool`` 值对应位 ``1 << tool``：笔 ``2``、橡皮 ``4``、画笔 ``8``、铅笔 ``16``、喷枪 ``32``、鼠标"
+" ``64``、镜头工具 ``128``、图腾工具 ``256``、未知工具 ``1``。默认 ``58``，包括笔、画笔、铅笔和喷枪。范围为 1 至 511"
+
+#: docs/ink-protocol.rst:100
+msgid ""
+"A brush replaces the one before it, ids included, and turns ink on. The eraser is left out by "
+"default because what erasing means is the program's business; a program that wants the other end "
+"of the pen to paint, with the color of its page for instance, gives a brush that says so."
+msgstr "新画笔替换旧画笔（含 ID 范围），并开启墨迹。默认不包括橡皮，因为擦除含义由程序定义；若希望笔的另一端也绘制，例如用页面颜色涂抹，可提供包含橡皮的画笔。"
+
+#: docs/ink-protocol.rst:106
+msgid "Mode"
+msgstr "模式"
+
+#: docs/ink-protocol.rst:108
+msgid "Ink is turned off with::"
+msgstr "关闭墨迹：::"
+
+#: docs/ink-protocol.rst:112
+msgid ""
+"The terminal keeps the brush, and ``mode=1`` turns ink on again with it and the ids it has left, "
+"so a program can stop the terminal drawing while its own eraser or selection tool is in use and "
+"start it again without sending the brush. ``mode=1`` does nothing when there is no brush. A "
+"``mode`` request without a ``mode`` field reads the state and is answered with::"
+msgstr ""
+"终端保留画笔，``mode=1`` 可用其剩余 ID 重新启用。因此程序在使用自己的橡皮或选择工具时可暂时停止终端绘制，之后无须重传画笔即可恢复。没有画笔时，``mode=1`` "
+"不产生效果。不带 ``mode`` 字段的 ``mode`` 请求读取状态，回复为：::"
+
+#: docs/ink-protocol.rst:120
+msgid ""
+"The mode and the brush are local to the window. ``RIS`` turns ink off and forgets the brush. "
+"Programs must turn ink off when they exit, suspend or fail, and give the brush again when "
+"resumed; a program resuming after a reconnection queries to learn what survived rather than "
+"assuming. A terminal may let its user refuse ink, for every program or for some. A refused mode "
+"reads back as off and nothing is drawn, so a program reads the mode back rather than assume it "
+"was granted."
+msgstr ""
+"模式和画笔均局限于当前窗口。``RIS`` "
+"关闭墨迹并清除画笔。程序必须在退出、挂起或失败时关闭墨迹，恢复时重新提供画笔；重连后应通过查询确认保留了什么，不要假定状态仍在。终端可允许用户针对全部或部分程序拒绝墨迹。被拒绝时读回为关闭且不绘制，因此程序应读回模式，不要假定已获准。"
+
+#: docs/ink-protocol.rst:128
+msgid ""
+"Ink needs the reports of tools: the window must have bit ``1`` of the mode of the :doc:`tablet-"
+"protocol` on. Without it a pen is a mouse, there are no strokes and nothing is drawn. A program "
+"that never sends a brush sees no difference at all."
+msgstr "墨迹依赖工具报告：窗口必须开启 :doc:`tablet-protocol` 模式的位 ``1``。否则笔作为鼠标使用，没有笔划，也不绘制。未发送画笔的程序完全不受影响。"
+
+#: docs/ink-protocol.rst:134
+msgid "Strokes"
+msgstr "笔划"
+
+#: docs/ink-protocol.rst:136
+msgid ""
+"While ink is on, a stroke of the tablet pointer protocol, from the ``down`` of a tool to its "
+"``up``, becomes a stroke of ink when"
+msgstr "墨迹启用期间，从工具 ``down`` 到 ``up`` 的数位板指针笔划，在满足以下条件时转为墨迹笔划："
+
+#: docs/ink-protocol.rst:139
+msgid "the tool is one of those the brush names,"
+msgstr "工具在画笔指定的集合中；"
+
+#: docs/ink-protocol.rst:140
+msgid ""
+"the ``down`` is over a placement of the image, and, when several placements of it are under the "
+"pen, over the one drawn on top of the others: the one with the highest ``z``, and among equals "
+"the one placed last,"
+msgstr "``down`` 位于目标图像的一次放置上；若笔下有同一图像的多次放置，则选择最上层，即 ``z`` 最大、相同 ``z`` 时最后放置的那个；"
+
+#: docs/ink-protocol.rst:144
+msgid "the group exists, is a group, and the transforms from the root group down to it can be inverted,"
+msgstr "目标分组存在且确为分组，从根分组到目标分组的所有变换均可逆；"
+
+#: docs/ink-protocol.rst:146
+msgid ""
+"an id is left, and the terminal has room for another stroke; a terminal may limit how many tools "
+"it draws for at once."
+msgstr "还有剩余 ID，且终端有空间容纳新笔划；终端可能限制同时为多少个工具绘制。"
+
+#: docs/ink-protocol.rst:149
+msgid ""
+"Then the terminal applies to the image, exactly as if the program had sent it with the edit "
+"action of the vector format, the record::"
+msgstr "随后终端向图像应用以下记录，效果与程序通过矢量格式编辑操作发送该记录完全相同：::"
+
+#. Translated reference labels preserve the original explicit section targets.
+#: docs/ink-protocol.rst:154
+msgid ""
+"with the point the ``down`` report gives, see `From a report to a point`_, and uses up that id. "
+"The report of the ``down`` that the program receives carries one more field, ``ink``, with the id"
+" of the element::"
+msgstr ""
+"使用 ``down`` 报告给出的点（见 `从报告换算到点 <From a report to a point_>`_），并消耗该 ID。程序收到的 ``down`` 报告会额外带有 "
+"``ink`` 字段，值为元素 ID：:: #noqa"
+
+#: docs/ink-protocol.rst:160
+msgid "Every later report of that stroke, each ``move`` and the ``up``, appends the point it gives::"
+msgstr "该笔划后续的每次 ``move`` 和最终 ``up`` 都会追加相应的点：::"
+
+#: docs/ink-protocol.rst:165
+msgid ""
+"The ``up`` ends the stroke. A ``down`` without an ``ink`` field began a stroke the terminal is "
+"not drawing, whatever the reason, and the program draws it itself as it would without this "
+"protocol. That is also how a program learns that the ids have run out: it gives a brush with "
+"more."
+msgstr ""
+"``up`` 结束笔划。不带 ``ink`` 字段的 ``down`` 表示终端因某种原因未绘制此笔划；程序应像不支持本协议时一样自行绘制。ID 耗尽时程序也通过这种方式得知，并可提供带有更多 "
+"ID 的新画笔。"
+
+#: docs/ink-protocol.rst:170
+msgid ""
+"The element is the program's from the moment it exists. Usually the program leaves it as it is. "
+"It may replace it, with a ``k`` record of the same id, by a stroke it has smoothed or thinned, or"
+" delete it with an ``x`` record, and should do either after the ``up``: a record that replaces "
+"the element while the stroke is being drawn is followed by the points the terminal goes on "
+"appending to whatever has that id."
+msgstr ""
+"元素自创建起就属于程序。通常程序原样保留；也可在 ``up`` 之后，用相同 ID 的 ``k`` 记录替换为平滑或简化后的笔划，或用 ``x`` "
+"记录删除。如果在绘制期间替换元素，终端仍会继续向占用该 ID 的对象追加后续点。"
+
+#: docs/ink-protocol.rst:177
+msgid ""
+"A stroke that the tablet pointer protocol cancels, with ``phase=4``, never happened: the terminal"
+" deletes its element, as the record ``x id=<that id>`` does, before it sends the report of the "
+"cancel. The id is not given again."
+msgstr "数位板指针协议通过 ``phase=4`` 取消的笔划视为从未发生：终端在发送取消报告前删除元素，等同于 ``x id=<that id>``。该 ID 不会重新使用。"
+
+#: docs/ink-protocol.rst:181
+msgid "Reports of hovering draw nothing, and fingers are not inked."
+msgstr "悬停报告不绘制，手指也不产生墨迹。"
+
+#: docs/ink-protocol.rst:184
+msgid "From a report to a point"
+msgstr "从报告换算到点"
+
+#: docs/ink-protocol.rst:186
+msgid ""
+"The point a report adds is worked out from the report alone and from what the terminal is showing"
+" when it makes the report, so that a program, or a relay that mirrors the scene, arrives at the "
+"same numbers. They are real numbers, computed in double precision; a difference in the last digit"
+" is of no account."
+msgstr "添加的点仅根据报告及终端生成报告时所显示的状态计算，因此程序或镜像场景的中继可以算出相同结果。结果是双精度实数，末位数字差异无需考虑。"
+
+#: docs/ink-protocol.rst:192
+msgid ""
+"Let ``x``, ``y`` be the position in the report, in 1/256 of a physical pixel from the top left of"
+" the cell area. Let the placement the stroke began in be shown in the rectangle with its top left"
+" corner ``L``, ``T`` physical pixels from the top left of the cell area, ``W`` wide and ``H`` "
+"high, and let it show the part of the image with its top left corner at ``sx``, ``sy`` and the "
+"size ``sw`` by ``sh``, in the user units of the image, which is the whole image unless the "
+"placement was made with a source rectangle. The position in the user units of the image is::"
+msgstr ""
+"设报告位置为 ``x``、``y``，单位是相对字符单元区域左上角的物理像素 1/256。笔划开始的图像放置，其显示矩形左上角距字符区域左上角为 ``L``、``T`` 物理像素，宽 "
+"``W``、高 ``H``；所显示的图像区域左上角为 ``sx``、``sy``，尺寸 ``sw`` 乘 "
+"``sh``，单位为图像用户单位；未指定源矩形时就是整幅图像。换算到图像用户单位的位置为：::"
+
+#: docs/ink-protocol.rst:204
+msgid ""
+"Let ``M`` be the product of the transforms of the groups from the root group down to the group of"
+" the stroke, each the matrix the ``t`` of its ``g`` record gives and the identity where there is "
+"none, the root first. The point is given in the coordinate system of that group::"
+msgstr "设 ``M`` 为根分组到笔划分组的变换乘积，按根分组在先的顺序，每个矩阵取自其 ``g`` 记录的 ``t``，缺省为单位矩阵。点在该分组坐标系中的位置为：::"
+
+#: docs/ink-protocol.rst:211
+msgid "The width follows the pressure. With ``p`` the pressure of the report::"
+msgstr "宽度随压力变化。设报告压力为 ``p``：::"
+
+#: docs/ink-protocol.rst:217
+msgid ""
+"A tool that does not measure pressure thus draws at the width of full pressure. The report of an "
+"``up`` has a pressure of ``0`` when the tool measures pressure, so a stroke ends at the width "
+"``w0``."
+msgstr "因此，不测量压力的工具按满压力宽度绘制。能测量压力的工具，其 ``up`` 报告压力为 ``0``，所以笔划以宽度 ``w0`` 结束。"
+
+#: docs/ink-protocol.rst:221
+msgid ""
+"Where a placement is shown is the graphics protocol's business. For a placement at column ``c0`` "
+"and row ``r0`` of the screen, counted from zero from the top left of what is shown now, with the "
+"offsets ``X``, ``Y`` into that cell and a cell of ``cw`` by ``ch`` pixels, kitty has::"
+msgstr ""
+"放置的显示位置由图形协议决定。若放置位于当前可见屏幕从零开始的列 ``c0``、行 ``r0``，单元内偏移为 ``X``、``Y``，字符单元尺寸为 ``cw`` 乘 ``ch`` 像素，则 "
+"kitty 使用：::"
+
+#: docs/ink-protocol.rst:234
+msgid "What happens during a stroke"
+msgstr "笔划进行期间的变化"
+
+#: docs/ink-protocol.rst:236
+msgid ""
+"The stroke stays with the placement it began in. The tablet pointer protocol keeps a stroke "
+"captured by its window when the pen leaves it, and the ink follows in the same way: positions "
+"outside the placement give points outside the image, by the same formulas, and whatever of the "
+"stroke falls outside is not seen."
+msgstr "笔划始终附着于起始放置。数位板指针协议在笔离开窗口时仍将笔划捕获到原窗口，墨迹也同样处理：放置区域外的位置按相同公式算成图像外的点，超出区域的部分不可见。"
+
+#: docs/ink-protocol.rst:242
+msgid "Each point is worked out with what holds when its report is made:"
+msgstr "每个点都依据生成相应报告时的状态计算："
+
+#: docs/ink-protocol.rst:244
+msgid ""
+"When the placement moves, because the screen scrolls or the user scrolls back, ``L`` and ``T`` "
+"are those of where it is shown now, so the ink stays under the pen."
+msgstr "屏幕滚动或用户回滚使放置移动时，``L`` 和 ``T`` 使用当前显示位置，使墨迹仍位于笔下。"
+
+#: docs/ink-protocol.rst:247
+msgid ""
+"When the transform of the group or of a group above it changes, later points are taken through "
+"the new transforms; the points already in the element move with the group, as they do for any "
+"element."
+msgstr "目标分组或其祖先分组的变换改变时，后续点使用新变换；已有点随分组一起移动，与其他元素一样。"
+
+#: docs/ink-protocol.rst:250
+msgid ""
+"A report whose position cannot be taken into the group, because the group has gone or a transform"
+" can no longer be inverted, adds no point. The stroke goes on with the next report."
+msgstr "若分组消失或变换不再可逆，导致报告位置无法换算到分组，则不添加该点，下一条报告仍可继续笔划。"
+
+#: docs/ink-protocol.rst:253
+msgid ""
+"When the image or the placement goes away, deleted, scrolled out of the scrollback or replaced by"
+" a new transmission of the image, the stroke of ink is over. Nothing is deleted on its account, "
+"and the reports of the stroke go on to the program."
+msgstr "图像或放置被删除、滚出回滚缓冲区，或因重新传输图像而替换时，该墨迹笔划结束。不会因此删除已有内容，笔划报告仍继续交给程序。"
+
+#: docs/ink-protocol.rst:257
+msgid ""
+"When the window switches between the main and the alternate screen, the strokes on the images of "
+"the screen that is left are over in the same way."
+msgstr "窗口在主屏幕与备用屏幕间切换时，被离开屏幕上的图像笔划同样结束。"
+
+#: docs/ink-protocol.rst:260
+msgid ""
+"A brush given during a stroke applies from the next stroke; the one being drawn keeps the brush "
+"it began with. Turning ink off during a stroke leaves what has been drawn and adds no more to it."
+msgstr "笔划期间提供的新画笔从下一笔开始应用，当前笔划继续使用起始画笔。中途关闭墨迹会保留已有绘制，不再添加新点。"
+
+#: docs/ink-protocol.rst:265
+msgid "An example"
+msgstr "示例"
+
+#: docs/ink-protocol.rst:267
+msgid ""
+"A program has a vector image ``7`` of 400 by 300 units placed at its own size with its corner 30 "
+"pixels across and 40 pixels down the cell area. It finds out that the terminal inks and gives it "
+"a brush, a dark blue line between one and five units wide, with fifty ids from 1000::"
+msgstr ""
+"程序有一幅 ``7`` 号矢量图像，尺寸 400 乘 300 用户单位，以原尺寸放置，左上角位于字符区域向右 30、向下 40 "
+"像素处。探测到终端支持墨迹后，提供画笔：深蓝色，宽度一至五个用户单位，从 1000 起保留五十个 ID：::"
+
+#: docs/ink-protocol.rst:277
+msgid ""
+"The pen touches down 100 pixels across and 200 down at a fifth of full pressure, moves five "
+"pixels right and two down while pressing harder, and lifts a pixel further on. The program "
+"receives::"
+msgstr "笔在向右 100、向下 200 像素处，以满压力的五分之一落下；随后压力增大，向右移动五像素、向下移动两像素，再向前移动一像素后抬起。程序收到：::"
+
+#: docs/ink-protocol.rst:285
+msgid "and by the time it does the terminal has applied to image ``7``, and drawn::"
+msgstr "程序收到报告时，终端已经对图像 ``7`` 应用并绘制了：::"
+
+#: docs/ink-protocol.rst:291
+msgid ""
+"since ``70 = (25600 / 256 - 30) * 400 / 400`` and ``1.8 = 1 + (5 - 1) * 13107 / 65535``. The "
+"program adds the same three points to its own copy of the scene under the id 1000. If it wants a "
+"smoother line it now sends, with the edit action, a ``k`` record with that id and the points it "
+"prefers; if it decides the stroke was a tap that selects something instead, it sends ``x "
+"id=1000``. Otherwise it sends nothing: the stroke is already there."
+msgstr ""
+"因为 ``70 = (25600 / 256 - 30) * 400 / 400``，且 ``1.8 = 1 + (5 - 1) * 13107 / 65535``。程序在自己的场景副本中，以 "
+"ID 1000 添加相同三点。如果需要更平滑的线条，可通过编辑操作发送相同 ID、使用自选点的 ``k`` 记录；如果判断该笔划实际是选择操作的点击，则发送 ``x "
+"id=1000``。否则无需发送内容：笔划已存在。"
+
+#: docs/ink-protocol.rst:299
+msgid "Relays and multiplexers"
+msgstr "中继与多路复用器"
+
+#: docs/ink-protocol.rst:301
+msgid ""
+"A relay or a multiplexer that passes the bytes of both directions through needs to know nothing "
+"of this protocol, and the ink is drawn by the terminal at the end, which is where the pen is: "
+"this is the case the protocol exists for."
+msgstr "双向透传字节的中继或多路复用器不必了解本协议，墨迹由链路末端、即笔所在位置的终端绘制；这正是本协议的主要用途。"
+
+#: docs/ink-protocol.rst:306
+msgid ""
+"One that keeps the scene of a vector image as a table of records, so as to send it to a terminal "
+"that connects later, has to keep that table true. It either answers the query itself with "
+"``caps=0`` and passes no brush on, or it adds to its table the records this page says the "
+"terminal applies, working them out from the reports it forwards, the brush it passed on and the "
+"placement as its client shows it. One that translates the positions of reports for a pane does so"
+" before it works them out, and one that moves or resizes a pane cancels the strokes in it, as the"
+" tablet pointer protocol requires, which removes their ink."
+msgstr ""
+"将矢量场景保存为记录表、以便稍后发送给新连接终端的中继，必须维持记录表与实际场景一致。它可以自行用 ``caps=0`` "
+"回答查询、不转发画笔；也可根据转发的报告、画笔及客户端显示的放置，计算并加入终端按本页规则应用的记录。若为窗格转换报告位置，应先转换再计算；移动或调整窗格大小时，按数位板指针协议取消其中笔划，从而移除对应墨迹。"
+
+#: docs/ink-protocol.rst:316
+msgid ""
+"A multiplexer keeps the mode and the brush of each pane with the rest of its state and turns ink "
+"off when detaching."
+msgstr "多路复用器与其他状态一起保存每个窗格的模式与画笔，脱离连接时关闭墨迹。"
+
+#: docs/ink-protocol.rst:320
+msgid "Implementations"
+msgstr "实现情况"
+
+#: docs/ink-protocol.rst:322
+msgid "silkie, this fork of kitty, wherever it reports tools."
+msgstr "silkie，即此 kitty 分支，在能报告工具的所有平台上实现。"
+
+#: docs/ink-protocol.rst:325
+msgid "Implementation notes for silkie"
+msgstr "silkie 实现说明"
+
+#: docs/ink-protocol.rst:327
+msgid ""
+"A report is turned into its record and applied before the report is written to the program, and "
+"the image is drawn again with the next frame through the partial redraw of :doc:`vector images "
+"<vector-protocol>`, which draws only the rectangle around the new piece of the stroke. Silkie "
+"grows its active stroke storage as tools begin drawing; there is no fixed limit on simultaneous "
+"tools. The points of a stroke count toward the image storage quota like those a program sends."
+msgstr ""
+"终端在向程序写入报告前，将报告转换为记录并应用；图像在下一帧通过 :doc:`矢量图像 <vector-protocol>` 的局部重绘显示，只重绘新增笔划周围的矩形。Silkie "
+"随工具开始绘制而动态扩展活动笔划存储，同时工具数量没有固定上限。笔划中的点与程序发送的点一样，计入图像存储配额。"
+

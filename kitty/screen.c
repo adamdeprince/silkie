@@ -1522,6 +1522,9 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
         .g = (GPUCell){                                                                                                             \
             .attrs = attrs,                                                                                                         \
             .text_style = self->cursor->sgr.text_style,                                                                               \
+            .depth = self->cursor->sgr.depth,                                                                                         \
+            .depth_pixels = self->cursor->sgr.depth_pixels,                                                                           \
+            .phase = self->cursor->sgr.phase,                                                                                         \
             .fg = self->cursor->sgr.fg & COL_MASK,                                                                                  \
             .bg = self->cursor->sgr.bg & COL_MASK,                                                                                  \
             .decoration_fg = force_underline ? ((OPT(url_color) & COL_MASK) << 8) | 2 : self->cursor->sgr.decoration_fg & COL_MASK, \
@@ -1815,11 +1818,19 @@ send_visibility_report(Screen *self) {
 // clock of every extension, as for the tablet pointer protocol
 static void
 send_display_report(Screen *self, const char *op, int id, const DisplayInfo *d) {
-    char buf[256];
-    int n = snprintf(buf, sizeof(buf), "777;display;v=1:op=%s", op);
-    if (id >= 0) n += snprintf(buf + n, sizeof(buf) - n, ":id=%d:mode=%d", id, self->display_events);
-    else n += snprintf(buf + n, sizeof(buf) - n, ":t=%llu", (unsigned long long)(MAX(0, monotonic()) / MONOTONIC_T_1e6));
-    snprintf(buf + n, sizeof(buf) - n, ":kind=%s:color=%s:bits=%d:gamut=%s:headroom=%g:scale=%g:period=%u:ppi=%g", d->kind, d->color, d->bits, d->gamut, d->headroom, d->scale, d->period_us, d->ppi);
+    const char *key = id >= 0 ? "id" : "t", *mode = id >= 0 ? (self->display_events ? ":mode=1" : ":mode=0") : "";
+    const unsigned long long serial = id >= 0 ? (unsigned)id : (unsigned long long)(MAX(0, monotonic()) / MONOTONIC_T_1e6);
+    const char *format = "777;display;v=1:op=%s:%s=%llu%s:kind=%s:color=%s:bits=%d:gamut=%s:headroom=%g:scale=%g:period=%u:ppi=%g"
+        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s";
+#define DISPLAY_REPORT_ARGS op, key, serial, mode, d->kind, d->color, d->bits, d->gamut, d->headroom, d->scale, d->period_us, d->ppi, \
+    d->red_bits, d->green_bits, d->blue_bits, d->gray_bits, d->precision
+    const int n = snprintf(NULL, 0, format, DISPLAY_REPORT_ARGS);
+    if (n < 0) return;
+    const size_t size = (size_t)n + 1;
+    RAII_ALLOC(char, buf, malloc(size));
+    if (!buf) fatal("Out of memory formatting display report");
+    snprintf(buf, size, format, DISPLAY_REPORT_ARGS);
+#undef DISPLAY_REPORT_ARGS
     write_escape_code_to_child(self, ESC_OSC, buf);
 }
 
@@ -3797,6 +3808,11 @@ clipboard_control(Screen *self, int code, PyObject *data) {
 void
 file_transmission(Screen *self, PyObject *data) {
     CALLBACK("file_transmission", "O", data);
+}
+
+void
+ssh_agent_protocol(Screen *self, PyObject *data) {
+    CALLBACK("ssh_agent_protocol", "O", data);
 }
 
 static void

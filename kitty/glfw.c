@@ -205,7 +205,20 @@ update_os_window_viewport(OSWindow *window, bool notify_boss) {
     float xscale, yscale;
     get_window_content_scale(window->handle, &xscale, &yscale, &new_xdpi, &new_ydpi);
 
-    if (fw == window->viewport_width && fh == window->viewport_height && w == window->window_width && h == window->window_height && xdpi == new_xdpi &&
+    window->spatial.output_width = fw;
+    window->spatial.output_height = fh;
+    const int eye_width = window->spatial.red_blue ? fw : fw / 2;
+    // Moving to a larger backing framebuffer must not overflow an integer or
+    // allocate an unsupported texture. Restore the requested scale when space
+    // becomes available again. This bound comes from the GPU, not a UI cap.
+    if (window->spatial.mode == 2 && eye_width > 0 && fh > 0 && window->spatial.texture_limit > 0)
+        window->spatial.scale = (float)fmin(window->spatial.requested_scale,
+            fmin((double)window->spatial.texture_limit / eye_width, (double)window->spatial.texture_limit / fh));
+    const double spatial_scale = window->spatial.mode == 2 ? window->spatial.scale : 1.;
+    const int canvas_width = window->spatial.mode ? (int)(eye_width * spatial_scale) : fw;
+    const int canvas_height = window->spatial.mode ? (int)(fh * spatial_scale) : fh;
+
+    if (canvas_width == window->viewport_width && canvas_height == window->viewport_height && w == window->window_width && h == window->window_height && xdpi == new_xdpi &&
         ydpi == new_ydpi) {
         return; // no change, ignore
     }
@@ -227,11 +240,11 @@ update_os_window_viewport(OSWindow *window, bool notify_boss) {
         return;
     }
     window->viewport_updated_at_least_once = true;
-    window->viewport_width = fw;
-    window->viewport_height = fh;
+    window->viewport_width = canvas_width;
+    window->viewport_height = canvas_height;
     double xr = window->viewport_x_ratio, yr = window->viewport_y_ratio;
-    window->viewport_x_ratio = (double)window->viewport_width / (double)w;
-    window->viewport_y_ratio = (double)window->viewport_height / (double)h;
+    window->viewport_x_ratio = (double)fw / (double)w;
+    window->viewport_y_ratio = (double)fh / (double)h;
     bool dpi_changed =
         (xr != 0.0 && xr != window->viewport_x_ratio) || (yr != 0.0 && yr != window->viewport_y_ratio) || (xdpi != new_xdpi) || (ydpi != new_ydpi);
 
@@ -630,7 +643,7 @@ static_assert(
     "Options.modifier_remap is indexed by modifier bit position, it must cover every GLFW modifier");
 
 #ifdef __APPLE__
-// Map a modifier named in kitty.conf back to the physical modifier that now
+// Map a modifier named in silkie.conf back to the physical modifier that now
 // produces it (for the macOS menu bar). Unlike apply_modifier_remap() this is not
 // always possible, so it reports failure rather than guessing: false when more
 // than one source maps onto these modifiers, or when a requested modifier has
@@ -770,6 +783,7 @@ refresh_mouse_position_for_hit_test(GLFWwindow *w, OSWindow *window) {
         glfwGetCursorPos(w, &x, &y);
         window->mouse_x = x * window->viewport_x_ratio;
         window->mouse_y = y * window->viewport_y_ratio;
+        spatial_map_pointer(window, &window->mouse_x, &window->mouse_y);
         return true;
     }
 #else
@@ -809,6 +823,7 @@ mouse_button_callback(GLFWwindow *w, int button, int action, int mods) {
                 glfwGetCursorPos(w, &x, &y);
                 window->mouse_x = x * window->viewport_x_ratio;
                 window->mouse_y = y * window->viewport_y_ratio;
+                spatial_map_pointer(window, &window->mouse_x, &window->mouse_y);
             }
             if (is_window_ready_for_callbacks()) mouse_event(-1, mods, -1);
         }
@@ -906,6 +921,7 @@ touch_move_mouse(OSWindow *osw, double x, double y, int mods) {
     osw->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_USER_ACTIVITY);
     osw->mouse_x = x * osw->viewport_x_ratio;
     osw->mouse_y = y * osw->viewport_y_ratio;
+    spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
     osw->has_received_cursor_pos_event = true;
     if (is_window_ready_for_callbacks()) mouse_event(-1, mods, -1);
 }
@@ -997,6 +1013,7 @@ gesture_callback(GLFWwindow *w, const GLFWGestureEvent *ev) {
     osw->last_mouse_activity_at = monotonic();
     osw->mouse_x = ev->x * osw->viewport_x_ratio;
     osw->mouse_y = ev->y * osw->viewport_y_ratio;
+    spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
     const bool reported = is_window_ready_for_callbacks() && gesture_event(ev);
     debug_input(
         "\x1b[33mGesture\x1b[m kind: %d phase: %d x: %.1f y: %.1f delta: %.3f dx: %d dy: %d fingers: %u reported: %d\n",
@@ -1109,6 +1126,7 @@ tablet_callback(GLFWwindow *w, const GLFWTabletEvent *ev) {
     if (ev->type == GLFW_TABLET_POINT || (global_state.is_wayland && ev->type != GLFW_TABLET_ACTION)) {
         osw->mouse_x = ev->x * osw->viewport_x_ratio;
         osw->mouse_y = ev->y * osw->viewport_y_ratio;
+        spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
     }
     const bool consumed = is_window_ready_for_callbacks() && tablet_event(ev);
     if (global_state.is_wayland) {
@@ -3472,18 +3490,35 @@ display_name(const char **names, size_t count, const char *val, const char *fall
     return fallback;
 }
 
+static bool
+display_bits(const char *value, int *out) {
+    if (!*value) return false;
+    int bits = 0;
+    for (; *value; value++) {
+        if (*value < '0' || *value > '9' || bits > (INT_MAX - (*value - '0')) / 10) return false;
+        bits = bits * 10 + (*value - '0');
+    }
+    *out = bits;
+    return true;
+}
+
 void
 os_window_display_info(OSWindow *w, DisplayInfo *d) {
     // The display the window is on, see docs/display-protocol.rst
     GLFWdisplayinfo g = {0};
     char *saveptr = NULL;
     if (w && w->handle) glfwGetWindowDisplayInfo(w->handle, &g);
-    *d = (DisplayInfo){.kind = display_kinds[g.kind], .color = display_colors[g.color], .gamut = display_gamuts[g.gamut], .bits = g.bits, .period_us = g.period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g.scale, .ppi = g.ppi};
+    *d = (DisplayInfo){.kind = display_kinds[g.kind], .color = display_colors[g.color], .gamut = display_gamuts[g.gamut],
+        .bits = g.bits, .red_bits = g.red_bits, .green_bits = g.green_bits, .blue_bits = g.blue_bits, .gray_bits = g.gray_bits,
+        .precision = g.bits || g.red_bits || g.green_bits || g.blue_bits || g.gray_bits ? "framebuffer" : "unknown",
+        .period_us = g.period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g.scale, .ppi = g.ppi};
     // Overrides for what the OS cannot tell us
     if (OPT(eink_mode)) d->kind = display_kinds[GLFW_DISPLAY_KIND_EINK];
     if (!OPT(display_info) || !OPT(display_info)[0]) return;
     RAII_ALLOC(char, buf, strdup(OPT(display_info)));
     if (!buf) fatal("Out of memory parsing display_info");
+    const char *detected_color = d->color;
+    int bits = -1, red_bits = -1, green_bits = -1, blue_bits = -1, gray_bits = -1;
     for (char *tok = strtok_r(buf, " ", &saveptr); tok; tok = strtok_r(NULL, " ", &saveptr)) {
         char *val = strchr(tok, '=');
         if (!val) continue;
@@ -3491,11 +3526,40 @@ os_window_display_info(OSWindow *w, DisplayInfo *d) {
         if (!strcmp(tok, "kind") && !OPT(eink_mode)) d->kind = display_name(display_kinds, arraysz(display_kinds), val, d->kind);
         else if (!strcmp(tok, "color")) d->color = display_name(display_colors, arraysz(display_colors), val, d->color);
         else if (!strcmp(tok, "gamut")) d->gamut = display_name(display_gamuts, arraysz(display_gamuts), val, d->gamut);
-        else if (!strcmp(tok, "bits")) d->bits = atoi(val);
+        else if (!strcmp(tok, "bits")) display_bits(val, &bits);
+        else if (!strcmp(tok, "red_bits")) display_bits(val, &red_bits);
+        else if (!strcmp(tok, "green_bits")) display_bits(val, &green_bits);
+        else if (!strcmp(tok, "blue_bits")) display_bits(val, &blue_bits);
+        else if (!strcmp(tok, "gray_bits")) display_bits(val, &gray_bits);
         else if (!strcmp(tok, "headroom")) d->headroom = (float)atof(val);
         else if (!strcmp(tok, "scale")) d->scale = (float)atof(val);
         else if (!strcmp(tok, "period")) d->period_us = atoi(val);
         else if (!strcmp(tok, "ppi")) d->ppi = (float)atof(val);
+    }
+    if (d->color != detected_color) {
+        // An RGB framebuffer does not establish the precision of a gray panel.
+        d->bits = d->red_bits = d->green_bits = d->blue_bits = d->gray_bits = 0;
+        d->precision = "unknown";
+    }
+    if (d->color == display_colors[GLFW_DISPLAY_COLOR_RGB]) {
+        if (bits >= 0) d->red_bits = d->green_bits = d->blue_bits = bits;
+        if (red_bits >= 0) d->red_bits = red_bits;
+        if (green_bits >= 0) d->green_bits = green_bits;
+        if (blue_bits >= 0) d->blue_bits = blue_bits;
+        d->gray_bits = 0;
+        d->bits = d->red_bits == d->green_bits && d->red_bits == d->blue_bits ? d->red_bits : 0;
+        if (bits >= 0 || red_bits >= 0 || green_bits >= 0 || blue_bits >= 0) d->precision = "configured";
+    } else {
+        if (bits >= 0) d->gray_bits = bits;
+        if (gray_bits >= 0) d->gray_bits = gray_bits;
+        if (d->color == display_colors[GLFW_DISPLAY_COLOR_MONO]) {
+            // Monochrome has exactly two levels. Use color=gray for more.
+            d->gray_bits = 1;
+            if (d->color != detected_color) d->precision = "configured";
+        }
+        d->bits = d->gray_bits;
+        d->red_bits = d->green_bits = d->blue_bits = 0;
+        if (bits >= 0 || gray_bits >= 0) d->precision = "configured";
     }
 }
 
@@ -3769,7 +3833,7 @@ set_custom_cursor(PyObject *self UNUSED, PyObject *args) {
 void
 get_cocoa_key_equivalent(uint32_t key, int mods, char *cocoa_key, size_t key_sz, int *cocoa_mods) {
     memset(cocoa_key, 0, key_sz);
-    // Menu accelerators come from kitty.conf, i.e. they are named in post-remap
+    // Menu accelerators come from silkie.conf, i.e. they are named in post-remap
     // terms. Invert the remap so the menu bar displays and triggers on the
     // physical key that now produces that modifier. Leaving cocoa_key empty
     // makes the caller skip this accelerator, which is what we want whenever the

@@ -43,6 +43,8 @@ struct VertexOutput {
     float4 cursor_color_premult;
     float3 decoration_fg;
     float colored_sprite;
+    nointerpolation uint4 sprite_indices;
+    nointerpolation float spatial_antialias;
 };
 
 // Foreground utility functions {{{
@@ -141,18 +143,30 @@ vertex_main(
     [[vk::location(0)]] uint3 colors,
     [[vk::location(1)]] uint2 sprite_idx,
     [[vk::location(2)]] uint is_selected,
+    [[vk::location(3)]] int depth,
+    [[vk::location(4)]] float phase,
+    [[vk::location(5)]] float depth_pixels,
     uint vertex_id: SV_VertexID,
     uint instance_id: SV_InstanceID,
-    uniform uint draw_bg_bitfield, ) {
+    uniform uint draw_bg_bitfield, uniform float4 spatial_depth, uniform float2 spatial_phase, uniform float spatial_multiplier,
+    uniform float2 spatial_pixel_size, ) {
     VertexOutput vo;
 
     BackgroundOutput bo = compute_background(colors, sprite_idx, is_selected, instance_id, vertex_id);
     vo.position = bo.position;
+    float angle = clamp(float(depth) * 0.001f * spatial_multiplier, -spatial_depth.w, spatial_depth.z);
+    float disparity = tan(angle * 0.008726646259971648f) / spatial_depth.y;
+    if (depth_pixels != 0.f) disparity = clamp(depth_pixels / 1920.f * spatial_multiplier,
+        -tan(spatial_depth.w * 0.008726646259971648f) / spatial_depth.y,
+        tan(spatial_depth.z * 0.008726646259971648f) / spatial_depth.y);
+    vo.position.x += spatial_depth.x * disparity;
+    vo.position.y += spatial_phase.x * clamp(float(phase), -spatial_phase.y, spatial_phase.y);
     float3 background_rgb = bo.background_rgb;
     float3 foreground = bo.foreground;
     uint fg_as_uint = bo.fg_as_uint;
     uint text_attrs = bo.text_attrs;
     CellData cell_data = bo.cell_data;
+    vo.spatial_antialias = spatial_pixel_size.x > 0.f ? 1.f : 0.f;
 
     // Foreground {{{
     if (!ONLY_BACKGROUND) { // background does not depend on foreground
@@ -187,6 +201,18 @@ vertex_main(
         foreground = if_one_then(cell_data.has_block_cursor, final_cursor_text_color, foreground);
         vo.decoration_fg = if_one_then(cell_data.has_block_cursor, final_cursor_text_color, vo.decoration_fg);
         vo.cursor_pos = to_sprite_pos(cell_data.pos, cell_data.cursor_fg_sprite_idx * uint(cell_data.has_cursor));
+        vo.sprite_indices = uint4(sprite_idx[0] & SPRITE_INDEX_MASK, decs[1], cell_data.cursor_fg_sprite_idx * uint(cell_data.has_cursor), decs[0]);
+        if (ONLY_FOREGROUND && vo.spatial_antialias != 0.f) {
+            // Leave a one-pixel transparent apron for fractional glyph coverage.
+            // Samples outside this atlas tile are zero, never a neighboring glyph.
+            float2 sign = float2(cell_data.pos) * 2.f - 1.f;
+            vo.position.xy += float2(sign.x, -sign.y) * spatial_pixel_size;
+            float2 apron = sign / float2(crd.cell_width * crd.sprites_xnum, (crd.cell_height + 1u) * crd.sprites_ynum);
+            vo.sprite_pos.xy += apron;
+            vo.underline_pos.xy += apron;
+            vo.cursor_pos.xy += apron;
+            vo.strike_pos.xy += apron;
+        }
     }
     // }}}
 
@@ -222,6 +248,27 @@ vertex_main(
 }
 
 uniform Sampler2DArray sprites;
+
+float4
+spatial_sprite_texel(int2 pixel, uint3 tile) {
+    int2 first = int2(tile.xy) * int2(crd.cell_width, crd.cell_height + 1u);
+    if (any(pixel < first) || any(pixel >= first + int2(crd.cell_width, crd.cell_height))) return float4(0.f);
+    float4 value = sprites[int3(pixel, int(tile.z))];
+    return float4(value.rgb * value.a, value.a);
+}
+
+float4
+sample_spatial_sprite(float3 pos, uint index, float antialias) {
+    if (antialias == 0.f) return sprites.Sample(pos);
+    float2 size = float2(crd.cell_width * crd.sprites_xnum, (crd.cell_height + 1u) * crd.sprites_ynum);
+    float2 pixel = pos.xy * size - 0.5f;
+    int2 origin = int2(floor(pixel));
+    float2 weight = frac(pixel);
+    uint3 tile = to_sprite_coords(index);
+    float4 value = lerp(lerp(spatial_sprite_texel(origin, tile), spatial_sprite_texel(origin + int2(1, 0), tile), weight.x),
+        lerp(spatial_sprite_texel(origin + int2(0, 1), tile), spatial_sprite_texel(origin + int2(1, 1), tile), weight.x), weight.y);
+    return float4(value.a > 0.f ? value.rgb / value.a : float3(0.f), value.a);
+}
 // Scaling factor for the extra text-alpha adjustment for luminance-difference.
 static const float text_gamma_scaling = 0.5;
 
@@ -264,10 +311,10 @@ foreground_contrast(float4 over, float3 under, float text_contrast, float text_g
 }
 
 float4
-load_text_foreground_color(float3 sprite_pos, float colored_sprite, float3 cell_foreground) {
+load_text_foreground_color(float3 sprite_pos, float colored_sprite, float3 cell_foreground, uint index, float antialias) {
     // For colored sprites use the color from the sprite rather than the text foreground
     // Return non-premultiplied foreground color
-    float4 text_fg = sprites.Sample(sprite_pos);
+    float4 text_fg = sample_spatial_sprite(sprite_pos, index, antialias);
     return float4(lerp(cell_foreground, text_fg.xyz, colored_sprite), text_fg.w);
 }
 
@@ -281,19 +328,19 @@ calculate_premul_foreground_from_sprites(
     float4 text_fg,
     float3 decoration_fg,
     float4 cursor_color_premult,
-    float effective_text_alpha, ) {
+    float effective_text_alpha, uint4 indices, float antialias, ) {
     // Return premul foreground color from decorations (cursor, underline, strikethrough)
     int width, height, layer;
     sprites.GetDimensions(width, height, layer);
     float3 sz = float3(float(width), float(height), float(layer));
 
-    float underline_alpha = sprites.Sample(underline_pos).w;
+    float underline_alpha = sample_spatial_sprite(underline_pos, indices.y, antialias).w;
     int3 fetch_coord = int3(int(sprite_pos.x * sz.x), int(underline_exclusion_pos), int(sprite_pos.z));
     float underline_exclusion = sprites[fetch_coord].w;
 
     underline_alpha *= 1.0 - underline_exclusion;
-    float strike_alpha = sprites.Sample(strike_pos).w;
-    float cursor_alpha = sprites.Sample(cursor_pos).w;
+    float strike_alpha = sample_spatial_sprite(strike_pos, indices.w, antialias).w;
+    float cursor_alpha = sample_spatial_sprite(cursor_pos, indices.z, antialias).w;
 
     float combined_alpha = min(text_fg.w + strike_alpha, 1.0);
 
@@ -316,7 +363,7 @@ fragment_main(VertexOutput vo, uniform float text_contrast, uniform float text_g
 
     if (!ONLY_BACKGROUND) {
         // blend in the foreground color
-        float4 text_fg = load_text_foreground_color(vo.sprite_pos, vo.colored_sprite, vo.cell_foreground);
+        float4 text_fg = load_text_foreground_color(vo.sprite_pos, vo.colored_sprite, vo.cell_foreground, vo.sprite_indices.x, vo.spatial_antialias);
         text_fg = adjust_foreground_contrast_with_background(text_fg, vo.background, text_contrast, text_gamma_adjustment);
         float4 text_fg_premul = calculate_premul_foreground_from_sprites(
             vo.sprite_pos,
@@ -327,7 +374,7 @@ fragment_main(VertexOutput vo, uniform float text_contrast, uniform float text_g
             text_fg,
             vo.decoration_fg,
             vo.cursor_color_premult,
-            vo.effective_text_alpha);
+            vo.effective_text_alpha, vo.sprite_indices, vo.spatial_antialias);
         if (ONLY_FOREGROUND) ans_premul = text_fg_premul;
         else ans_premul = alpha_blend_premul(text_fg_premul, ans_premul);
     }

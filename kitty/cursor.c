@@ -252,6 +252,9 @@ apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, un
                     cell->bg = 0;
                     cell->decoration_fg = 0;
                     cell->text_style = 0;
+                    cell->depth = 0;
+                    cell->depth_pixels = 0;
+                    cell->phase = 0;
                 }
             } break;
             case 1: S(bold, true);
@@ -476,6 +479,9 @@ bg_alpha_set(Cursor *self, PyObject *value, void UNUSED *closure) {
 }
 
 static PyMemberDef members[] = {
+    {"depth", T_INT, offsetof(Cursor, sgr.depth), 0, "Requested divergence in millidegrees"},
+    {"depth_pixels", T_FLOAT, offsetof(Cursor, sgr.depth_pixels), 0, "Requested depth in reference pixels"},
+    {"phase", T_FLOAT, offsetof(Cursor, sgr.phase), 0, "Requested vertical eye offset in physical pixels"},
     {"x", T_UINT, offsetof(Cursor, x), 0, "x"},
     {"y", T_UINT, offsetof(Cursor, y), 0, "y"},
     {"shape", T_INT, offsetof(Cursor, shape), 0, "shape"},

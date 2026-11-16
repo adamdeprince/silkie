@@ -295,7 +295,7 @@ func (self *ConfigParser) ParseFiles(paths ...string) error {
 }
 
 func (self *ConfigParser) LoadConfig(name string, paths []string, overrides []string) (err error) {
-	const SYSTEM_CONF = "/etc/xdg/kitty"
+	const SYSTEM_CONF = "/etc/xdg/silkie"
 	system_conf := filepath.Join(SYSTEM_CONF, name)
 	add_if_exists := func(q string) {
 		err = self.ParseFiles(q)
@@ -487,7 +487,7 @@ func ReadKittyConfig(line_handler func(key, val string) error, override_effectiv
 		}
 	}
 	if kitty_conf_path == "" {
-		kitty_conf_path = filepath.Join(utils.ConfigDir(), "kitty.conf")
+		kitty_conf_path = filepath.Join(utils.ConfigDir(), "silkie.conf")
 	}
 	cp := ConfigParser{LineHandler: line_handler}
 	return cp.ParseFiles(kitty_conf_path)

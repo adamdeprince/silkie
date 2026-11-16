@@ -742,6 +742,27 @@ get_window_size_without_border_in_logical_pixels(_GLFWwindow *window) {
     return [window->ns.object contentRectForFrameRect:[window->ns.object frame]];
 }
 
+static void
+update_window_size(_GLFWwindow *window) {
+    // AppKit can resize the content view when its native tab bar appears or
+    // disappears without resizing the NSWindow. Measure the drawable view and
+    // notify the terminal from both resize paths.
+    const NSRect contentRect = [window->ns.view bounds];
+    const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
+
+    if (fbRect.size.width != window->ns.fbWidth || fbRect.size.height != window->ns.fbHeight) {
+        window->ns.fbWidth = (int)fbRect.size.width;
+        window->ns.fbHeight = (int)fbRect.size.height;
+        _glfwInputFramebufferSize(window, (int)fbRect.size.width, (int)fbRect.size.height);
+    }
+
+    if (contentRect.size.width != window->ns.width || contentRect.size.height != window->ns.height) {
+        window->ns.width = (int)contentRect.size.width;
+        window->ns.height = (int)contentRect.size.height;
+        _glfwInputWindowSize(window, (int)contentRect.size.width, (int)contentRect.size.height);
+    }
+}
+
 // Defines a constant for empty ranges in NSTextInputClient
 //
 static const NSRange kEmptyRange = {NSNotFound, 0};
@@ -828,20 +849,7 @@ static void _glfwUpdateNotchCover(_GLFWwindow *);
         _glfwInputWindowMaximize(window, maximized);
     }
 
-    const NSRect contentRect = get_window_size_without_border_in_logical_pixels(window);
-    const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
-
-    if (fbRect.size.width != window->ns.fbWidth || fbRect.size.height != window->ns.fbHeight) {
-        window->ns.fbWidth = (int)fbRect.size.width;
-        window->ns.fbHeight = (int)fbRect.size.height;
-        _glfwInputFramebufferSize(window, (int)fbRect.size.width, (int)fbRect.size.height);
-    }
-
-    if (contentRect.size.width != window->ns.width || contentRect.size.height != window->ns.height) {
-        window->ns.width = (int)contentRect.size.width;
-        window->ns.height = (int)contentRect.size.height;
-        _glfwInputWindowSize(window, (int)contentRect.size.width, (int)contentRect.size.height);
-    }
+    update_window_size(window);
     // Because of a bug in macOS Tahoe we cannot redraw the window in response
     // to a resize event that was caused by a screen change as the OpenGL
     // context is not ready yet. See: https://github.com/kovidgoyal/kitty/issues/8983
@@ -1142,6 +1150,13 @@ static void _glfwUpdateNotchCover(_GLFWwindow *);
     return YES;
 }
 
+- (void)setFrameSize:(NSSize)size {
+    [super setFrameSize:size];
+    if (!window || window->ns.view != self) return;
+    if (window->context.client != GLFW_NO_API) [window->context.nsgl.object update];
+    update_window_size(window);
+}
+
 - (void)viewWillStartLiveResize {
     if (!window) return;
     window->ns.live_resize_in_progress = true;
@@ -1304,7 +1319,7 @@ static void _glfwUpdateNotchCover(_GLFWwindow *);
 
 - (void)viewDidChangeBackingProperties {
     if (!window) return;
-    const NSRect contentRect = get_window_size_without_border_in_logical_pixels(window);
+    const NSRect contentRect = [window->ns.view bounds];
     const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
 
     if (fbRect.size.width != window->ns.fbWidth || fbRect.size.height != window->ns.fbHeight) {
@@ -3443,7 +3458,7 @@ _glfwPlatformSetWindowPos(_GLFWwindow *window, int x, int y) {
 
 void
 _glfwPlatformGetWindowSize(_GLFWwindow *window, int *width, int *height) {
-    const NSRect contentRect = get_window_size_without_border_in_logical_pixels(window);
+    const NSRect contentRect = [window->ns.view bounds];
 
     if (width) *width = (int)contentRect.size.width;
     if (height) *height = (int)contentRect.size.height;
@@ -3492,7 +3507,7 @@ _glfwPlatformSetWindowSizeIncrements(_GLFWwindow *window, int widthincr, int hei
 
 void
 _glfwPlatformGetFramebufferSize(_GLFWwindow *window, int *width, int *height) {
-    const NSRect contentRect = get_window_size_without_border_in_logical_pixels(window);
+    const NSRect contentRect = [window->ns.view bounds];
     const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
 
     if (width) *width = (int)fbRect.size.width;
@@ -3528,6 +3543,12 @@ _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
     info->kind = CGDisplayIsBuiltin(display) ? GLFW_DISPLAY_KIND_LCD : GLFW_DISPLAY_KIND_UNKNOWN;
     info->color = GLFW_DISPLAY_COLOR_RGB;
     info->bits = (int)NSBitsPerSampleFromDepth([screen depth]);
+    if ([[screen colorSpace] colorSpaceModel] == NSColorSpaceModelGray) {
+        info->color = info->bits == 1 ? GLFW_DISPLAY_COLOR_MONO : GLFW_DISPLAY_COLOR_GRAY;
+        info->gray_bits = info->bits;
+    } else {
+        info->red_bits = info->green_bits = info->blue_bits = info->bits;
+    }
     if ([screen canRepresentDisplayGamut:NSDisplayGamutP3]) info->gamut = GLFW_DISPLAY_GAMUT_P3;
     else if ([screen canRepresentDisplayGamut:NSDisplayGamutSRGB]) info->gamut = GLFW_DISPLAY_GAMUT_SRGB;
     info->scale = (float)[window->ns.object backingScaleFactor];

@@ -11,7 +11,7 @@ from typing import Any, NoReturn, TypeVar, cast
 
 from .cli_stub import CLIOptions
 from .conf.utils import resolve_config
-from .constants import app_class, appname, clear_handled_signals, config_dir, default_pager_for_help, defconf, is_macos, settings_conf, str_version, website_url
+from .constants import app_class, appname, clear_handled_signals, config_dir, config_name, default_pager_for_help, defconf, is_macos, settings_conf, str_version, website_url
 from .fast_data_types import parse_cli_from_spec, wcswidth
 from .options.types import Options as KittyOpts
 from .simple_cli_definitions import (
@@ -251,7 +251,7 @@ def hyperlink_for_path(path: str, text: str) -> str:
 
 @role
 def file(x: str) -> str:
-    if x == 'kitty.conf':
+    if x == 'silkie.conf':
         x = hyperlink_for_path(os.path.join(config_dir, x), x)
     return italic(x)
 
@@ -714,12 +714,12 @@ def parse_args(
     return ans, parse_cmdline(oc, disabled, ans, args=args, track_seen_options=track_seen_options)
 
 
-SYSTEM_CONF = f'/etc/xdg/{appname}/{appname}.conf'
+SYSTEM_CONF = f'/etc/xdg/{config_name}/{config_name}.conf'
 
 
 def default_config_paths(conf_paths: Sequence[str]) -> tuple[str, ...]:
     ans = tuple(resolve_config(SYSTEM_CONF, defconf, conf_paths))
-    # What the Settings window stores is read last, so that it wins over kitty.conf
+    # What the Settings window stores is read last, so that it wins over silkie.conf
     return ans + (settings_conf,) if not conf_paths else ans
 
 

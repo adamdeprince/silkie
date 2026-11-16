@@ -1,0 +1,263 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:47+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/scroll-protocol.rst:2
+msgid "Scroll protocol"
+msgstr "滚动协议"
+
+#: docs/scroll-protocol.rst:6
+msgid ""
+"The mouse protocol reports a scroll as presses of imaginary wheel buttons, one per line, so a "
+"program sees a trackpad as a stuttering wheel and never learns when a gesture begins, ends or "
+"coasts. The scroll protocol is an open terminal extension that reports scrolling as it arrives "
+"from the system: distances in pixels, the device that produced them, and the phase of the "
+"gesture. It is framed like the :doc:`tablet-protocol` and shares its goals: small, unobtrusive, "
+"easy to implement, and no change to what the TTY is."
+msgstr ""
+"鼠标协议将滚动报告为虚拟滚轮按钮的按压，每行一次；程序看到的触控板像不连贯的滚轮，也不知道手势何时开始、结束或进入惯性滚动。滚动协议是开放终端扩展，按系统提供的方式报告滚动：以像素为单位的距离、产生事件的设备和手势阶段。封装与"
+" :doc:`tablet-protocol` 相同，目标也一致：小巧、低干扰、易于实现，不改变 TTY 的本质。"
+
+#: docs/scroll-protocol.rst:15
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/scroll-protocol.rst:17
+msgid "Frames are ``OSC 777`` with the ``scroll`` selector::"
+msgstr "帧使用带有 ``scroll`` 选择器的 ``OSC 777``：::"
+
+#: docs/scroll-protocol.rst:21
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected, the units and the clock. ``v``, the protocol "
+"version, is ``1``, and ``op`` is one of ``query``, ``cap``, ``mode`` and ``event``."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧、单位和时钟。协议版本 ``v`` 为 ``1``，``op`` 为 "
+"``query``、``cap``、``mode`` 或 ``event``。"
+
+#: docs/scroll-protocol.rst:27
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/scroll-protocol.rst:29
+msgid "A program asks the terminal whether it supports the protocol::"
+msgstr "程序询问终端是否支持本协议：::"
+
+#: docs/scroll-protocol.rst:33
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply. A "
+"supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回。支持协议的终端回答：::"
+
+#: docs/scroll-protocol.rst:38
+msgid ""
+"``caps`` is a bit set, of which only ``1`` is defined: the terminal reports pixel distances. "
+"``mode`` is the current state of the mode described below. A terminal that does not support the "
+"protocol ignores the query, so a program must time out and fall back to mouse reporting. A query "
+"does not change the mode."
+msgstr ""
+"``caps`` 为位集合，目前只定义 ``1``，表示终端报告像素距离。``mode`` "
+"为下述模式的当前状态。不支持本协议的终端会忽略查询，因此程序必须设置超时，并回退到鼠标报告。查询不改变模式。"
+
+#: docs/scroll-protocol.rst:45
+msgid "Mode"
+msgstr "模式"
+
+#: docs/scroll-protocol.rst:47
+msgid "Reports are off by default and turned on per terminal window with::"
+msgstr "报告默认关闭，按终端窗口开启：::"
+
+#: docs/scroll-protocol.rst:51
+msgid ""
+"and off with ``mode=0``. While the mode is on, scrolling over the window is reported with this "
+"protocol instead of as wheel button presses, while clicks and motion keep using whatever mouse "
+"reporting the program asked for. The terminal does not scroll its own scrollback either; the "
+"program owns the scroll. The mode is local to the window and reset by ``RIS``. Programs must turn"
+" it off when they exit, suspend or fail, and turn it back on when resumed. Multiplexers keep it "
+"with the rest of the terminal state. A terminal may let its user refuse the mode, for every "
+"program or for some. A refused mode reads back as off and scrolling is not reported, so a program"
+" reads the mode back rather than assume it was granted."
+msgstr ""
+"用 ``mode=0`` "
+"关闭。开启时，窗口中的滚动由本协议报告，不再作为滚轮按钮按压；点击和移动仍使用程序请求的鼠标报告方式。终端也不滚动自己的回滚缓冲区，滚动由程序控制。模式仅作用于当前窗口，并由 ``RIS`` "
+"重置。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他终端状态一起保存它。终端可允许用户针对全部或部分程序拒绝该模式；被拒绝时读回为关闭，不报告滚动，因此程序应读回状态，不要假定已获准。"
+
+#: docs/scroll-protocol.rst:62
+msgid ""
+"A ``mode`` request without a ``mode`` field reads the state instead of changing it, and is "
+"answered with::"
+msgstr "不带 ``mode`` 字段的 ``mode`` 请求读取状态而不修改，回复为：::"
+
+#: docs/scroll-protocol.rst:67
+msgid ""
+"A program resuming after a reconnection reads the mode to learn whether it survived, rather than "
+"assuming it did."
+msgstr "程序重连后恢复时，应读回模式，确认是否仍然有效，而非假定状态保留。"
+
+#: docs/scroll-protocol.rst:71
+msgid "Reports"
+msgstr "报告"
+
+#: docs/scroll-protocol.rst:73
+msgid "One frame per scroll event::"
+msgstr "每个滚动事件一帧：::"
+
+#: docs/scroll-protocol.rst:77
+msgid "All fields but ``tu`` are required:"
+msgstr "除 ``tu`` 外，所有字段均为必需："
+
+#: docs/scroll-protocol.rst:80
+msgid "``t``"
+msgstr "``t``"
+
+#: docs/scroll-protocol.rst:80
+msgid ""
+"When the system says the scroll happened, in milliseconds on the clock the terminal uses for "
+"every extension, see :doc:`extension-framing`. A report the terminal makes itself, of its own "
+"coasting for one, has the time it made it"
+msgstr "系统认定滚动发生的时刻，以终端全部扩展共用时钟的毫秒表示，见 :doc:`extension-framing`。终端自行生成的报告（例如自身惯性滚动）使用生成报告的时刻"
+
+#: docs/scroll-protocol.rst:84
+msgid "``tu``"
+msgstr "``tu``"
+
+#: docs/scroll-protocol.rst:84
+msgid ""
+"Microseconds past ``t``, ``0`` to ``999``, present only when the system stamps events more finely"
+" than a millisecond"
+msgstr "``t`` 之后的微秒数，范围 ``0`` 至 ``999``；仅在系统时间戳精度高于毫秒时出现"
+
+#: docs/scroll-protocol.rst:86
+msgid "``dx, dy``"
+msgstr "``dx, dy``"
+
+#: docs/scroll-protocol.rst:86
+msgid ""
+"The distance the view should move, in hundredths of a physical pixel, positive to the right and "
+"down, signed. A trackpad gives the distance the system measured; a notched wheel gives its lines "
+"converted with the terminal's cell size and scroll multiplier, so a program applies one unit "
+"either way"
+msgstr "视图应移动的距离，以物理像素的百分之一为单位，有符号，向右和向下为正。触控板使用系统测得的距离；有刻度的滚轮将滚动行数按终端字符单元尺寸和滚动倍率转换，因此程序对两者使用相同单位"
+
+#: docs/scroll-protocol.rst:91
+msgid "``x, y``"
+msgstr "``x, y``"
+
+#: docs/scroll-protocol.rst:91
+msgid ""
+"The pointer position in 1/256 of a physical pixel, signed, zero based, relative to the top left "
+"of the cell area"
+msgstr "指针位置，以物理像素的 1/256 为单位，有符号、从零开始，相对于字符单元区域的左上角"
+
+#: docs/scroll-protocol.rst:93
+msgid "``mods``"
+msgstr "``mods``"
+
+#: docs/scroll-protocol.rst:93
+msgid "Shift ``1``, Alt ``2``, Control ``4``, Super ``8``"
+msgstr "Shift ``1``，Alt ``2``，Control ``4``，Super ``8``"
+
+#: docs/scroll-protocol.rst:94
+msgid "``src``"
+msgstr "``src``"
+
+#: docs/scroll-protocol.rst:94
+msgid "``0`` a notched wheel, ``1`` a precise device such as a trackpad"
+msgstr "``0`` 表示有刻度滚轮，``1`` 表示触控板等精密设备"
+
+#: docs/scroll-protocol.rst:95
+msgid "``phase``"
+msgstr "``phase``"
+
+#: docs/scroll-protocol.rst:95
+msgid ""
+"``0`` none, ``1`` a finger gesture began, ``2`` it continues, ``3`` it ended, ``4`` coasting "
+"began after the fingers lifted, ``5`` coasting continues, ``6`` coasting ended, ``7`` the gesture"
+" or the coasting was cancelled"
+msgstr ""
+"``0`` 无阶段，``1`` 手指手势开始，``2`` 手势继续，``3`` 手势结束，``4`` 手指抬起后惯性滚动开始，``5`` 惯性滚动继续，``6`` 惯性滚动结束，``7`` "
+"手势或惯性滚动被取消"
+
+#: docs/scroll-protocol.rst:101
+msgid ""
+"A report may carry a distance of zero, in particular with phases ``1``, ``3``, ``4`` and ``6``. A"
+" program that animates its own coasting should stop at phase ``4``, since the terminal is already"
+" reporting the system's. A wheel reports phase ``0`` only."
+msgstr ""
+"报告中的距离可以为零，尤其是阶段 ``1``、``3``、``4`` 和 ``6``。自行实现惯性动画的程序应在阶段 ``4`` 停止自身动画，因为终端已经开始报告系统的惯性滚动。滚轮仅报告阶段"
+" ``0``。"
+
+#: docs/scroll-protocol.rst:106
+msgid ""
+"A terminal or a relay that cannot keep up with the program may merge consecutive reports of one "
+"device in one phase into one, and nothing else: the merged report has the sum of their distances "
+"and the other fields of the last report merged, its ``t`` and ``tu`` among them. A change of "
+"phase is never merged or dropped, see :doc:`extension-framing`."
+msgstr ""
+"无法跟上程序处理速度的终端或中继，只能将同一设备、同一阶段的连续报告合并：距离求和，其他字段使用最后一条报告的值，包括 ``t`` 和 ``tu``。阶段变化绝不合并或丢弃，见 :doc"
+":`extension-framing`。"
+
+#: docs/scroll-protocol.rst:112
+msgid ""
+"A multiplexer translates ``x,y`` by the pane's origin (borders included), forwards every other "
+"field unchanged and delivers each report to the pane under the pointer."
+msgstr "多路复用器按窗格原点（含边框）转换 ``x,y``，其余字段原样转发，并将报告交给指针下方的窗格。"
+
+#: docs/scroll-protocol.rst:117
+msgid "Implementation notes for silkie"
+msgstr "silkie 实现说明"
+
+#: docs/scroll-protocol.rst:119
+msgid "silkie reports what the window system gives it:"
+msgstr "silkie 报告窗口系统提供的信息："
+
+#: docs/scroll-protocol.rst:121
+msgid ""
+"On macOS, pixel distances and all the phases above, from the trackpad events of AppKit. Distances"
+" are in physical pixels, as ``x,y`` are, so on a Retina display they are twice what the system "
+"gives in its own units. AppKit stamps its events to the microsecond, so ``tu`` is sent on macOS "
+"only: Wayland and X11 stamp them in whole milliseconds."
+msgstr ""
+"macOS：使用 AppKit 触控板事件的像素距离和上述全部阶段。距离与 ``x,y`` 一样以物理像素表示，因此 Retina 显示器上为系统自身单位值的两倍。AppKit "
+"事件带微秒时间戳，因此仅 macOS 发送 ``tu``；Wayland 和 X11 的时间戳为整毫秒。"
+
+#: docs/scroll-protocol.rst:126
+msgid ""
+"On Wayland, pixel distances from ``wl_pointer`` axis events. The finger phases ``1`` to ``3`` "
+"come from the axis source and the axis stop, which the compositor sends when the fingers lift, on"
+" a seat of version 5 or later. The coasting phases ``4`` to ``6`` come from the terminal's own "
+"momentum scroller, so phase ``4`` follows phase ``3`` at once. Phase ``7`` is sent when the "
+"coasting is interrupted, by fingers coming back down for example, or when the pointer leaves the "
+"window while the fingers are still scrolling."
+msgstr ""
+"Wayland：从 ``wl_pointer`` 轴事件取得像素距离。版本 5 及以上的 seat 通过轴来源和手指抬起时合成器发送的轴停止事件，提供手指阶段 ``1`` 至 "
+"``3``。惯性阶段 ``4`` 至 ``6`` 来自终端自己的惯性滚动器，因此阶段 ``4`` 紧跟阶段 "
+"``3``。惯性滚动被打断（例如手指重新落下），或手指仍在滚动时指针离开窗口，会发送阶段 ``7``。"
+
+#: docs/scroll-protocol.rst:134
+msgid ""
+"On X11, pixel distances from XInput 2 smooth scrolling where available, otherwise lines converted"
+" to pixels with ``src=0``, and the coasting phases ``4`` to ``7`` from the terminal's own "
+"momentum scroller. The X server does not say when the fingers lift, which the scroller guesses "
+"from a pause, so the finger phases ``1`` to ``3`` are not reported."
+msgstr ""
+"X11：可用时从 XInput 2 平滑滚动取得像素距离；否则将行数转换为像素，并设置 ``src=0``。惯性阶段 ``4`` 至 ``7`` 由终端自身的惯性滚动器提供。X "
+"服务器不报告手指何时抬起，滚动器只能根据停顿推测，因此不报告手指阶段 ``1`` 至 ``3``。"
+

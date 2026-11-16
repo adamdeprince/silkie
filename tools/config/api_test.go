@@ -9,9 +9,48 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/kovidgoyal/kitty/tools/utils"
 )
 
 var _ = fmt.Print
+
+func TestSilkieConfigLoading(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SILKIE_CONFIG_DIRECTORY", dir)
+	t.Setenv("KITTY_PID", "")
+	original := utils.ConfigDir
+	utils.ConfigDir = func() string { return dir }
+	t.Cleanup(func() { utils.ConfigDir = original })
+	for name, content := range map[string]string{
+		"kitty.conf":  "source kitty\n",
+		"silkie.conf": "include extra.conf\n",
+		"extra.conf":  "source silkie\n",
+		"diff.conf":   "source diff\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var values []string
+	handler := func(key, val string) error {
+		values = append(values, val)
+		return nil
+	}
+	if err := ReadKittyConfig(handler); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{"silkie"}, values); diff != "" {
+		t.Fatal(diff)
+	}
+	values = nil
+	parser := ConfigParser{LineHandler: handler}
+	if err := parser.LoadConfig("diff.conf", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{"diff"}, values); diff != "" {
+		t.Fatal(diff)
+	}
+}
 
 func TestConfigParsing(t *testing.T) {
 	tdir := t.TempDir()

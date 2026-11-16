@@ -36,6 +36,7 @@ html dirhtml linkcheck develop-docs: SOURCEDIR = silkie
 
 html: Makefile
 	$(SPHINXBUILD) -b html -d "$(BUILDDIR)/silkie-doctrees" "$(SOURCEDIR)" "$(HTMLDIR)" $(SPHINXOPTS) $(O)
+	$(SPHINXBUILD) -b html -d "$(BUILDDIR)/silkie-zh-doctrees" "$(SOURCEDIR)" "$(HTMLDIR)/zh-CN" -D language=zh_CN $(SPHINXOPTS) $(O)
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

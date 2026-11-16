@@ -1,0 +1,312 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:47+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/haptic-protocol.rst:2
+msgid "Haptic feedback protocol"
+msgstr "触觉反馈协议"
+
+#: docs/haptic-protocol.rst:6
+msgid ""
+"Some input devices can tap back at the user: the trackpads of Apple laptops and the Magic "
+"Trackpad, pens such as the Surface Slim Pen 2 and the Apple Pencil Pro, and dials such as the "
+"Surface Dial. Applications use that for the moment a dragged object snaps into alignment, for the"
+" end of a gesture, for a pen touching down, and on a pen for the drag of a pencil or a brush over"
+" paper. The haptic feedback protocol lets a terminal program ask for the same. It is small on "
+"purpose: a program asks what can be played, then asks for a tap, or starts and stops the feel of "
+"a tool. A terminal without the hardware, or without the protocol, does nothing."
+msgstr ""
+"某些输入设备可以向用户回馈轻触感：Apple 笔记本触控板和 Magic Trackpad，Surface Slim Pen 2、Apple Pencil Pro 等笔，以及 Surface "
+"Dial "
+"等旋钮。应用可用它表示拖动物体吸附对齐、手势结束、笔落下，或在笔上模拟铅笔／画笔划过纸面的阻力。触觉反馈协议让终端程序请求同类反馈。协议刻意保持简洁：先查询可播放内容，再请求轻触，或开始／停止工具质感。没有硬件或不支持协议的终端不执行操作。"
+
+#: docs/haptic-protocol.rst:17
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/haptic-protocol.rst:19
+msgid "Frames are ``OSC 777`` with the ``haptic`` selector::"
+msgstr "帧使用带有 ``haptic`` 选择器的 ``OSC 777``：::"
+
+#: docs/haptic-protocol.rst:23
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected and the units. ``v``, the protocol version, is "
+"``1``, and ``op`` is one of ``query``, ``cap``, ``play``, ``start`` and ``stop``. A request whose"
+" ``op`` is not one of these, or with a value that is not one of those defined for its key, is "
+"ignored as a whole as well. The terminal sends only replies, which are never merged or dropped."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧，以及单位。协议版本 ``v`` 为 ``1``，``op`` 为 "
+"``query``、``cap``、``play``、``start`` 或 ``stop``。``op`` "
+"不在其中，或某个键的值不是已定义值时，也会忽略整条请求。终端仅发送回复，回复绝不合并或丢弃。"
+
+#: docs/haptic-protocol.rst:31
+msgid ""
+"Feedback is played on a *target*, named by the ``target`` field of the requests below: "
+"``trackpad``, which is what is meant when the field is absent, ``pen``, the pen in use on a "
+"tablet or a screen, or ``dial``. A request for a target the terminal cannot play on is dropped."
+msgstr ""
+"反馈在 *目标* 上播放，由请求中的 ``target`` 指定：``trackpad``（省略字段时的默认目标）、``pen``（当前正在数位板或屏幕上使用的笔），或 "
+"``dial``。无法在指定目标上播放时，终端丢弃请求。"
+
+#: docs/haptic-protocol.rst:37
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/haptic-protocol.rst:39
+msgid "A program asks what the terminal can play::"
+msgstr "程序查询终端可播放哪些反馈：::"
+
+#: docs/haptic-protocol.rst:43
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#: docs/haptic-protocol.rst:48
+msgid ""
+"``caps`` is a bit set. ``1``, ``2`` and ``4`` mean that taps can be played on the trackpad, on a "
+"pen and on a dial: right now, on this machine, and the user has not turned them off. ``8`` means "
+"that continuous feedback, described below, can be played on a pen. A terminal that does not "
+"support the protocol ignores the query, so a program must time out. The answer can change, when a"
+" pen is paired or the user changes a setting, so a program that was told a bit is clear may ask "
+"again later."
+msgstr ""
+"``caps`` 为位集合。``1``、``2`` 和 ``4`` 分别表示当前机器此刻可在触控板、笔和旋钮上播放轻触，且用户没有关闭。``8`` "
+"表示可在笔上播放下述连续反馈。不支持协议的终端会忽略查询，因此程序必须设置超时。配对笔或用户修改设置时，答案可能变化；曾得知某个位未设置的程序可稍后重试查询。"
+
+#: docs/haptic-protocol.rst:57
+msgid "Taps"
+msgstr "轻触反馈"
+
+#: docs/haptic-protocol.rst:64
+msgid "``pattern`` is required and is one of:"
+msgstr "``pattern`` 必需，取以下值之一："
+
+#: docs/haptic-protocol.rst:67 docs/haptic-protocol.rst:120 docs/haptic-protocol.rst:123
+#: docs/haptic-protocol.rst:124
+msgid "``generic``"
+msgstr "``generic``"
+
+#: docs/haptic-protocol.rst:67
+msgid "A single tap, for a drop or a touch"
+msgstr "单次轻触，用于放下物体或接触"
+
+#: docs/haptic-protocol.rst:68 docs/haptic-protocol.rst:121
+msgid "``alignment``"
+msgstr "``alignment``"
+
+#: docs/haptic-protocol.rst:68
+msgid "The tap used when a dragged object snaps into place"
+msgstr "拖动物体吸附到位时的轻触"
+
+#: docs/haptic-protocol.rst:69 docs/haptic-protocol.rst:122
+msgid "``level``"
+msgstr "``level``"
+
+#: docs/haptic-protocol.rst:69
+msgid "The tap used when a pressure sensitive control changes level"
+msgstr "压力感应控件切换档位时的轻触"
+
+#: docs/haptic-protocol.rst:70 docs/haptic-protocol.rst:123
+msgid "``click``"
+msgstr "``click``"
+
+#: docs/haptic-protocol.rst:70
+msgid "The tap of a button being pressed or a dial passing a detent"
+msgstr "按钮按下或旋钮经过卡点时的轻触"
+
+#: docs/haptic-protocol.rst:71 docs/haptic-protocol.rst:124
+msgid "``complete``"
+msgstr "``complete``"
+
+#: docs/haptic-protocol.rst:71
+msgid "The tap that says an action finished: a stroke was recognized as a shape, a path was closed"
+msgstr "表示操作完成的轻触，例如笔迹识别成形状或路径闭合"
+
+#: docs/haptic-protocol.rst:75
+msgid ""
+"A terminal plays taps only for the focused window and at most once every 50 milliseconds per OS "
+"window, and silently drops the rest. There is no reply."
+msgstr "终端仅为获得焦点的窗口播放轻触，每个操作系统窗口最多每 50 毫秒一次，其余静默丢弃。不产生回复。"
+
+#: docs/haptic-protocol.rst:79
+msgid "Continuous feedback"
+msgstr "连续反馈"
+
+#: docs/haptic-protocol.rst:81
+msgid ""
+"A pen with a motor can make the glass feel like paper for as long as it draws. A program starts "
+"that when a stroke begins and stops it when the stroke ends::"
+msgstr "带马达的笔可在绘画期间让玻璃表面产生纸面质感。程序在笔划开始时开启，结束时关闭：::"
+
+#: docs/haptic-protocol.rst:88
+msgid ""
+"``pattern`` is required for ``start`` and names the tool whose feel is wanted: ``ink``, "
+"``pencil``, ``marker``, ``brush`` or ``eraser``. ``intensity`` is a percent of full strength, "
+"``0`` to ``100``, and ``100`` when absent. A ``start`` while feedback is playing on that target "
+"replaces the pattern and the intensity, which is how a program follows the pressure of the pen. "
+"``stop`` ends it; without a ``target`` it ends the continuous feedback on every target. Neither "
+"has a reply, and the limit on how often taps are played does not apply to them."
+msgstr ""
+"``start`` 必须带 ``pattern``，指定所需工具质感：``ink``、``pencil``、``marker``、``brush`` 或 "
+"``eraser``。``intensity`` 为最大强度的百分比，范围 ``0`` 至 ``100``，省略时为 ``100``。目标已播放反馈时，再次 ``start`` "
+"会替换模式和强度，使反馈可跟随笔压力变化。``stop`` 结束反馈；未指定 ``target`` 时，停止所有目标上的连续反馈。两者均无回复，也不受轻触反馈频率限制。"
+
+#: docs/haptic-protocol.rst:97
+msgid ""
+"Continuous feedback must not outlive the program that asked for it, so a terminal stops it by "
+"itself:"
+msgstr "连续反馈不能在请求程序退出后持续，因此终端会在以下情况自行停止："
+
+#: docs/haptic-protocol.rst:100
+msgid "when the window loses focus,"
+msgstr "窗口失去焦点；"
+
+#: docs/haptic-protocol.rst:101
+msgid ""
+"when one second passes without another ``start`` for that target, so a program that wants it to "
+"go on repeats its ``start`` at least twice a second; a repeat with the same values is not felt,"
+msgstr "某目标在一秒内未再次收到 ``start``。因此希望反馈持续的程序至少每秒重复两次 ``start``；相同值的重复不会产生可感知变化；"
+
+#: docs/haptic-protocol.rst:104
+msgid "when the terminal is reset."
+msgstr "终端被重置。"
+
+#: docs/haptic-protocol.rst:106
+msgid ""
+"A relay or a multiplexer forwards these requests for the pane that has the focus and does not "
+"repeat ``start`` on a program's behalf."
+msgstr "中继或多路复用器为获得焦点的窗格转发请求，不代替程序重复 ``start``。"
+
+#: docs/haptic-protocol.rst:110
+msgid "Equivalents"
+msgstr "各系统的对应模式"
+
+#: docs/haptic-protocol.rst:112
+msgid ""
+"The patterns are those the systems with such hardware already offer, under the nearest name each "
+"has. The first column of systems is the only one Silkie plays; the others are for terminals on "
+"those systems."
+msgstr "这些模式使用各硬件系统原有的反馈，采用最接近的名称。系统列中只有第一列由 Silkie 实际播放；其他列供相应系统上的终端实现参考。"
+
+#: docs/haptic-protocol.rst:117
+msgid "Pattern"
+msgstr "模式"
+
+#: docs/haptic-protocol.rst:117
+msgid "macOS trackpad, ``NSHapticFeedbackManager``"
+msgstr "macOS 触控板，``NSHapticFeedbackManager``"
+
+#: docs/haptic-protocol.rst:117
+msgid "Windows pen or dial, ``KnownSimpleHapticsControllerWaveforms``"
+msgstr "Windows 笔或旋钮，``KnownSimpleHapticsControllerWaveforms``"
+
+#: docs/haptic-protocol.rst:117
+msgid "iPadOS Apple Pencil Pro, ``UICanvasFeedbackGenerator``"
+msgstr "iPadOS Apple Pencil Pro，``UICanvasFeedbackGenerator``"
+
+#: docs/haptic-protocol.rst:120 docs/haptic-protocol.rst:123
+msgid "``Click``"
+msgstr "``Click``"
+
+#: docs/haptic-protocol.rst:121
+msgid "``Align``"
+msgstr "``Align``"
+
+#: docs/haptic-protocol.rst:121
+msgid "``alignmentOccurred(at:)``"
+msgstr "``alignmentOccurred(at:)``"
+
+#: docs/haptic-protocol.rst:122
+msgid "``levelChange``"
+msgstr "``levelChange``"
+
+#: docs/haptic-protocol.rst:122
+msgid "``Step``"
+msgstr "``Step``"
+
+#: docs/haptic-protocol.rst:124
+msgid "``Success``"
+msgstr "``Success``"
+
+#: docs/haptic-protocol.rst:124
+msgid "``pathCompleted(at:)``"
+msgstr "``pathCompleted(at:)``"
+
+#: docs/haptic-protocol.rst:125
+msgid "``ink``"
+msgstr "``ink``"
+
+#: docs/haptic-protocol.rst:125
+msgid "``InkContinuous``"
+msgstr "``InkContinuous``"
+
+#: docs/haptic-protocol.rst:126
+msgid "``pencil``"
+msgstr "``pencil``"
+
+#: docs/haptic-protocol.rst:126
+msgid "``PencilContinuous``"
+msgstr "``PencilContinuous``"
+
+#: docs/haptic-protocol.rst:127
+msgid "``marker``"
+msgstr "``marker``"
+
+#: docs/haptic-protocol.rst:127
+msgid "``MarkerContinuous``"
+msgstr "``MarkerContinuous``"
+
+#: docs/haptic-protocol.rst:128
+msgid "``brush``"
+msgstr "``brush``"
+
+#: docs/haptic-protocol.rst:128
+msgid "``BrushContinuous``"
+msgstr "``BrushContinuous``"
+
+#: docs/haptic-protocol.rst:129
+msgid "``eraser``"
+msgstr "``eraser``"
+
+#: docs/haptic-protocol.rst:129
+msgid "``EraserContinuous``"
+msgstr "``EraserContinuous``"
+
+#: docs/haptic-protocol.rst:132
+msgid "Where a cell is empty the system has nothing close, and the terminal drops the request."
+msgstr "表格单元为空时，表示该系统没有相近反馈，终端应丢弃请求。"
+
+#: docs/haptic-protocol.rst:136
+msgid "In Silkie"
+msgstr "Silkie 中的实现"
+
+#: docs/haptic-protocol.rst:138
+msgid ""
+"Silkie plays the taps on the trackpad on macOS, with the generic tap standing in for ``click`` "
+"and ``complete``, and the user turns them off with :opt:`haptic_feedback`. It has no way to drive"
+" a pen or a dial on any system it runs on, so ``caps`` is ``1`` on macOS and ``0`` elsewhere, and"
+" requests for the other targets, ``start`` and ``stop`` are accepted and do nothing."
+msgstr ""
+"Silkie 在 macOS 触控板上播放轻触，用通用轻触代替 ``click`` 和 ``complete``；用户可通过 :opt:`haptic_feedback` 关闭。Silkie "
+"在其运行的各系统上都无法驱动笔或旋钮，因此 macOS 的 ``caps`` 为 ``1``，其他系统为 ``0``；针对其他目标的请求及 ``start``、``stop`` "
+"会被接受，但不产生效果。"
+

@@ -4,13 +4,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="prev" title="Show pointer" href="show-pointer.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/window-actions.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Window actions - Silkie</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -92,7 +93,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="window-actions.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/window-actions.html">
+</head>
   <body>
     
     <script>
@@ -244,11 +250,15 @@
 <nav class="project-links" aria-label="Project resources">
   <a href="index.html">Project overview</a>
   <a href="install.html">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
   <a href="developer-guide.html">Developer guide</a>
   <a href="reference.html">Extension reference</a>
   <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
   <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
   <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/window-actions.html" lang="zh-CN">简体中文</a>
 </nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
@@ -257,6 +267,9 @@
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
 <li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
@@ -317,12 +330,24 @@
         <article role="main" id="furo-main-content">
           <section id="window-actions">
 <h1>Window actions<a class="headerlink" href="#window-actions" title="Link to this heading">¶</a></h1>
+<section id="split-a-pane-vertically">
+<h2>Split a pane vertically<a class="headerlink" href="#split-a-pane-vertically" title="Link to this heading">¶</a></h2>
+<p>Choose <strong>Shell → Split Pane Vertically</strong> to open a new pane to the right of
+the active pane. Silkie switches the tab to the splits layout when needed,
+enabling that layout for the tab if necessary. Repeated splits divide the
+active pane without resetting the existing split arrangement.</p>
+<p>To bind the action in <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">ctrl</span><span class="o">+</span><span class="n">shift</span><span class="o">+</span><span class="n">d</span> <span class="n">split_pane_vertically</span>
+</pre></div>
+</div>
+<p>For inherited layout behavior, see <a class="reference external" href="https://sw.kovidgoyal.net/kitty/layouts/">kitty’s layouts documentation</a>.</p>
+</section>
 <section id="kill-an-unresponsive-window">
 <h2>Kill an unresponsive window<a class="headerlink" href="#kill-an-unresponsive-window" title="Link to this heading">¶</a></h2>
 <p>Silkie adds the <code class="docutils literal notranslate"><span class="pre">kill_window</span></code> action. It sends <code class="docutils literal notranslate"><span class="pre">SIGKILL</span></code> to the foreground
 process group and to the shell, then closes the active terminal window. Use it
 when a program no longer responds; the killed programs cannot save their state.</p>
-<p>To bind the action in <code class="docutils literal notranslate"><span class="pre">kitty.conf</span></code>:</p>
+<p>To bind the action in <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">kitty_mod</span><span class="o">+</span><span class="n">k</span> <span class="n">kill_window</span>
 </pre></div>
 </div>
@@ -378,6 +403,7 @@ and inherited actions, see <a class="reference external" href="https://sw.kovidg
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Window actions</a><ul>
+<li><a class="reference internal" href="#split-a-pane-vertically">Split a pane vertically</a></li>
 <li><a class="reference internal" href="#kill-an-unresponsive-window">Kill an unresponsive window</a></li>
 </ul>
 </li>

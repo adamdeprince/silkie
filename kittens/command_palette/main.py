@@ -305,7 +305,7 @@ def collect_keys_data(opts: Any) -> dict[str, Any]:
 
 
 def main(args: list[str]) -> None:
-    raise SystemExit('This kitten must be used only from a kitty.conf mapping')
+    raise SystemExit('This kitten must be used only from a silkie.conf mapping')
 
 
 def callback(target_window_id: int, action: str, timer_id: int | None) -> None:

@@ -39,7 +39,7 @@ A program asks about the display its window is on::
 the reply so replies can be matched to queries. A supporting terminal
 answers::
 
-    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 <ST>
+    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer <ST>
 
 A terminal that does not support the protocol ignores the query, so a program
 must time out and fall back to assuming an ordinary color display.
@@ -55,13 +55,38 @@ The fields of the reply are:
     and redraws in large, infrequent steps.
 
 ``color``
-    One of ``rgb``, ``gray`` and ``mono``.
+    One of ``rgb`` (independent red, green and blue channels), ``gray``
+    (one grayscale channel) and ``mono`` (only black and white).
 
 ``bits``
-    Bits per color channel, ``0`` when unknown. Sixteen levels of gray are
+    Bits per color channel, ``0`` when unknown or RGB channels have different
+    widths. This field remains for older clients; use the individual widths
+    below when available. Sixteen levels of gray are
     ``color=gray : bits=4``. Together with ``color`` this is what a program
     needs to choose a palette and whether and how to dither; antialiasing
     works fine with a few levels and is not what this field decides.
+
+``red_bits``, ``green_bits``, ``blue_bits``, ``gray_bits``
+    Individual channel precision in bits, ``0`` when unknown or not applicable.
+    RGB reports use the first three fields and set ``gray_bits=0``; grayscale
+    and monochrome reports use ``gray_bits`` and set all three RGB widths to
+    ``0``. For example RGB565 is ``color=rgb : bits=0 : red_bits=5 :
+    green_bits=6 : blue_bits=5 : gray_bits=0``. A sixteen-level grayscale
+    display is ``color=gray : bits=4 : gray_bits=4``. A monochrome display has
+    ``color=mono : bits=1 : gray_bits=1``.
+
+``precision``
+    Where the channel widths came from: ``framebuffer`` for the system's
+    display mode or window visual, ``configured`` for a user's declaration,
+    or ``unknown``. A framebuffer width does not establish the physical
+    panel's precision: the compositor, display link, panel, or dithering may
+    change what is finally shown. These fields describe available color
+    representation, not a measurement of calibration or color error.
+
+The individual widths and ``precision`` are additive version-1 fields. Clients
+must ignore unknown fields and treat missing individual widths as unknown;
+an older terminal's nonzero ``bits`` still applies equally to its active
+channels.
 
 ``gamut``
     One of ``srgb``, ``p3``, ``rec2020`` and ``unknown``: the widest color
@@ -145,7 +170,7 @@ one event whenever any field changes: the window was moved to a display with
 a different scale or refresh rate, the display's brightness setting changed
 the headroom, its color profile was switched::
 
-    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 <ST>
+    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer <ST>
 
 The fields are those of the ``cap`` reply, without ``id`` and ``mode``, and
 ``t``, the time the terminal learnt of the change, in milliseconds on the
@@ -190,6 +215,36 @@ of, ``srgb`` when it covers neither of the wider two. ``headroom`` is the
 headroom of the :doc:`hdr-protocol`, after the cap of :opt:`hdr_max_headroom`,
 so it is ``1`` unless :opt:`hdr` is enabled and the window is actually showing
 HDR, which that page says when to expect on macOS and on Wayland.
+
+For a known ten-bit RGB panel or a sixteen-level grayscale panel, configure::
+
+    display_info color=rgb red_bits=10 green_bits=10 blue_bits=10
+
+or::
+
+    display_info color=gray gray_bits=4
+
+For a black-and-white panel, use ``display_info color=mono``. Monochrome means
+exactly one bit, so wider ``bits`` or ``gray_bits`` declarations are ignored;
+use ``color=gray`` for more than two levels. The legacy ``bits=8`` declaration
+sets all active channel widths; individual declarations take precedence
+regardless of their order. Changing from RGB to grayscale clears detected RGB
+precision rather than guessing the gray panel's depth.
+
+macOS reports the screen's color-space model and bits per sample. X11 reports
+the actual window visual's RGB masks or grayscale depth, including unequal
+RGB channel widths. These are labeled ``precision=framebuffer`` and do not
+detect a panel that accepts RGB input but displays only gray. Wayland does
+not provide channel precision through the output and color-management
+protocols currently used by Silkie, so it reports zero widths rather than
+assuming eight bits. Declare physical panel properties explicitly when the
+system cannot supply them. Applications may query the fields with::
+
+    printf '\033]777;display;v=1:op=query:id=42\033\\'
+
+Responses and subscribed events both carry the channel widths; moving to a
+display with a different width triggers an event even if its other properties
+are unchanged.
 
 ``scale`` is the scale the window system gives the window: the backing scale
 factor on macOS, the preferred scale of the surface on Wayland, fractional

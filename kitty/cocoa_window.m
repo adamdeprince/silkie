@@ -289,6 +289,11 @@ PENDING(quit, QUIT)
 PENDING(paste_from_clipboard, PASTE_FROM_CLIPBOARD)
 PENDING(copy_or_noop, COPY_OR_NOOP)
 
+- (void)split_pane_vertically:(id)sender {
+    (void)sender;
+    set_cocoa_pending_action(USER_MENU_ACTION, "split_pane_vertically");
+}
+
 - (void)show_about_panel:(id)sender {
     (void)sender;
     NSString *url = @"https://silkie.goblinreactor.com/";
@@ -315,7 +320,8 @@ PENDING(copy_or_noop, COPY_OR_NOOP)
         item.action == @selector(close_os_window:) || item.action == @selector(close_tab:) || item.action == @selector(close_window:) || item.action == @selector(kill_window:) ||
         item.action == @selector(reset_terminal:) || item.action == @selector(clear_terminal_and_scrollback:) ||
         item.action == @selector(clear_last_command:) || item.action == @selector(clear_scrollback:) || item.action == @selector(clear_screen:) ||
-        item.action == @selector(previous_tab:) || item.action == @selector(next_tab:) || item.action == @selector(detach_tab:)) {
+        item.action == @selector(previous_tab:) || item.action == @selector(next_tab:) || item.action == @selector(detach_tab:) ||
+        item.action == @selector(split_pane_vertically:)) {
         if (![NSApp keyWindow]) return NO;
     } else if (item.action == @selector(paste_from_clipboard:)) {
         if (![NSApp keyWindow]) return NO;
@@ -359,7 +365,7 @@ typedef struct {
 } GlobalShortcut;
 typedef struct {
     GlobalShortcut new_os_window, close_os_window, close_tab, edit_config_file, open_settings, reload_config;
-    GlobalShortcut previous_tab, next_tab, new_tab, new_window, close_window, kill_window, reset_terminal;
+    GlobalShortcut previous_tab, next_tab, new_tab, new_window, split_pane_vertically, close_window, kill_window, reset_terminal;
     GlobalShortcut clear_terminal_and_scrollback, clear_screen, clear_scrollback, clear_last_command;
     GlobalShortcut toggle_macos_secure_keyboard_entry, toggle_fullscreen, open_kitty_website;
     GlobalShortcut hide_macos_app, hide_macos_other_apps, minimize_macos_window, quit, search_scrollback;
@@ -381,7 +387,7 @@ cocoa_set_global_shortcut(PyObject *self UNUSED, PyObject *args) {
     else Q(close_os_window); else Q(close_tab);
     else Q(edit_config_file); else Q(open_settings); else Q(new_tab);
     else Q(next_tab); else Q(previous_tab);
-    else Q(new_window); else Q(close_window); else Q(kill_window);
+    else Q(new_window); else Q(split_pane_vertically); else Q(close_window); else Q(kill_window);
     else Q(reset_terminal); else Q(clear_terminal_and_scrollback);
     else Q(clear_scrollback); else Q(clear_screen);
     else Q(clear_last_command); else Q(reload_config);
@@ -868,6 +874,7 @@ cocoa_create_global_menu(void) {
     MENU_ITEM(shellMenu, @"New Window", new_os_window);
     MENU_ITEM(shellMenu, @"New Tab", new_tab);
     MENU_ITEM(shellMenu, @"Split Pane", new_window);
+    MENU_ITEM(shellMenu, @"Split Pane Vertically", split_pane_vertically);
     [shellMenu addItem:[NSMenuItem separatorItem]];
     MENU_ITEM(shellMenu, @"Close Window", close_os_window);
     MENU_ITEM(shellMenu, @"Close Tab", close_tab);

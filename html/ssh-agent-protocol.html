@@ -1,0 +1,568 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Vector images" href="vector-protocol.html"><link rel="prev" title="Desktop notification routing" href="notification-routing.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/ssh-agent-protocol.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>SSH agent transport - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+
+<link rel="alternate" hreflang="en" href="ssh-agent-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/ssh-agent-protocol.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="Project resources">
+  <a href="index.html">Project overview</a>
+  <a href="install.html">Install Silkie</a>
+  <a href="games.html">Games and gameplay videos</a>
+  <a href="browser-demo.html">Try the browser demo</a>
+  <a href="browser-ssh.html">Browser SSH setup</a>
+  <a href="developer-guide.html">Developer guide</a>
+  <a href="reference.html">Extension reference</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty documentation ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten documentation ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source · silkie branch ↗</a>
+  <a href="zh-CN/ssh-agent-protocol.html" lang="zh-CN">简体中文</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Install Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Games for Silkie and kitty</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">Try Silkie in your browser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">SSH in the browser demo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">Writing software for Silkie</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie extension reference</a><input aria-label="Toggle navigation of Silkie extension reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">Haptic feedback protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">Image pointer extension</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU surfaces (zero-copy)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR brightness protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">Wide gamut colors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">Cell background alpha</a></li>
+<li class="toctree-l2"><a class="reference internal" href="display-protocol.html">Display protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">Low latency protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">Frame presentation protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">Show pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">Window actions</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="ssh-agent-transport">
+<h1>SSH agent transport<a class="headerlink" href="#ssh-agent-transport" title="Link to this heading">¶</a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">ssh-agent.1</span></code> extension carries SSH agent requests through a terminal
+channel. Odin Seat and Skiff expose a stable Unix socket as <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code>;
+each request travels to the currently attached terminal’s provider. Reattaching
+from a different terminal changes the available keys without replacing the
+socket pathname in the application’s environment.</p>
+<p>The agent’s private keys stay at the provider. The wire payload is a complete
+<a class="reference external" href="https://www.rfc-editor.org/rfc/rfc9987.html">SSH agent packet (RFC 9987)</a>,
+including its four-byte, big-endian length. Key lists and signing operations
+are forwarded on demand, without caching key lists or signatures.</p>
+<section id="enabling-access">
+<h2>Enabling access<a class="headerlink" href="#enabling-access" title="Link to this heading">¶</a></h2>
+<p>In <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ssh_agent_forwarding</span> <span class="n">yes</span>
+</pre></div>
+</div>
+<p>The default is <code class="docutils literal notranslate"><span class="pre">no</span></code>. Enabling it gives programs that can write terminal output
+access to public keys and signing, as SSH agent forwarding does. Key addition,
+removal, smartcard loading, and agent locking are refused by this transport.
+Supported agent requests are identities (11), signing (13), and extension (27)
+requests named <code class="docutils literal notranslate"><span class="pre">session-bind&#64;openssh.com</span></code> or <code class="docutils literal notranslate"><span class="pre">query</span></code>.</p>
+<p>Silkie uses its local <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code>. If there is no available socket and
+<code class="docutils literal notranslate"><span class="pre">ssh-agent</span></code> is installed, it starts an agent, supplies its socket to new local
+shells, and stops that owned process when Silkie exits. Load keys with
+<code class="docutils literal notranslate"><span class="pre">ssh-add</span></code> in a local shell; Silkie does not load private key files itself.</p>
+<p>Odin Seat gives new windows its session socket automatically. To update a
+shell that predates this feature, set its environment once:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">SSH_AUTH_SOCK</span><span class="o">=</span><span class="s2">"$(odin-seat agent-socket)"</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">agent-socket</span> <span class="pre">-s</span> <span class="pre">NAME</span></code> selects a session explicitly. The provider is the most
+recently attached display client. When it disconnects, the previous attached
+client becomes the provider. <code class="docutils literal notranslate"><span class="pre">odin-seat</span> <span class="pre">-A</span> <span class="pre">attach</span></code> explicitly authorizes the
+attached client’s local <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code> as a fallback, including a freshly
+forwarded agent over ordinary SSH. A client without a provider does not silently
+borrow another attached client’s keys. Pane focus does not select the agent.</p>
+<p>Skiff gives its remote child a stable socket automatically and prefers the
+terminal provider. <code class="docutils literal notranslate"><span class="pre">skiff</span> <span class="pre">-A</span></code> additionally authorizes fallback to the client’s
+local <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code> when the terminal refuses or does not answer the query.
+This supports terminals without this extension. The fallback also opens and
+preserves a separate agent connection for each forwarded socket connection.</p>
+</section>
+<section id="framing-and-discovery">
+<h2>Framing and discovery<a class="headerlink" href="#framing-and-discovery" title="Link to this heading">¶</a></h2>
+<p>Frames use OSC 777 and the <code class="docutils literal notranslate"><span class="pre">ssh-agent</span></code> selector:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ESC</span> <span class="p">]</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">ssh</span><span class="o">-</span><span class="n">agent</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">op</span><span class="o">=</span><span class="n">query</span><span class="p">:</span><span class="nb">id</span><span class="o">=</span><span class="n">probe</span><span class="o">-</span><span class="mi">1</span> <span class="n">ST</span>
+<span class="n">ESC</span> <span class="p">]</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">ssh</span><span class="o">-</span><span class="n">agent</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">op</span><span class="o">=</span><span class="n">cap</span><span class="p">:</span><span class="nb">id</span><span class="o">=</span><span class="n">probe</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">caps</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">g</span><span class="o">=</span><span class="n">providerA</span> <span class="n">ST</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">caps=0</span></code> means no provider is available or permitted. <code class="docutils literal notranslate"><span class="pre">caps=1</span></code> requires a
+generation token <code class="docutils literal notranslate"><span class="pre">g</span></code>. The common <code class="docutils literal notranslate"><span class="pre">caps</span></code> extension lists <code class="docutils literal notranslate"><span class="pre">ssh-agent.1</span></code> to
+advertise protocol support; this is separate from permission and availability.</p>
+<p>Fields follow <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 extension framing</span></a>: ASCII <code class="docutils literal notranslate"><span class="pre">key=value</span></code> pairs separated by
+colons, no duplicate keys, unknown keys ignored, and ST or BEL termination.
+For this selector, <code class="docutils literal notranslate"><span class="pre">id</span></code>, <code class="docutils literal notranslate"><span class="pre">c</span></code>, and <code class="docutils literal notranslate"><span class="pre">g</span></code> are nonempty tokens made of ASCII
+letters, digits, periods, underscores, and hyphens, rather than numeric query
+IDs. There is no fixed token length or outstanding-request count.</p>
+</section>
+<section id="requests-and-replies">
+<h2>Requests and replies<a class="headerlink" href="#requests-and-replies" title="Link to this heading">¶</a></h2>
+<p>An application connects to the local <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span></code> and uses the standard
+agent protocol. Its socket proxy queries the terminal for each packet, then
+sends a request naming that provider generation:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ESC</span> <span class="p">]</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">ssh</span><span class="o">-</span><span class="n">agent</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">op</span><span class="o">=</span><span class="n">request</span><span class="p">:</span><span class="nb">id</span><span class="o">=</span><span class="n">request</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">c</span><span class="o">=</span><span class="n">connection</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">g</span><span class="o">=</span><span class="n">providerA</span><span class="p">:</span><span class="n">expires</span><span class="o">=</span><span class="mi">1794787200000</span><span class="p">:</span><span class="n">data</span><span class="o">=</span><span class="n">AAAAAQs</span><span class="o">=</span> <span class="n">ST</span>
+</pre></div>
+</div>
+<p>Here <code class="docutils literal notranslate"><span class="pre">data</span></code> is standard padded base64 of a complete packet. <code class="docutils literal notranslate"><span class="pre">AAAAAQs=</span></code> is
+the five-byte identities request: length 1 followed by message type 11.</p>
+<div class="table-wrapper colwidths-given docutils container" id="id1">
+<table class="docutils align-default" id="id1">
+<caption><span class="caption-text">Request fields</span><a class="headerlink" href="#id1" title="Link to this table">¶</a></caption>
+<colgroup>
+<col style="width: 18.0%" />
+<col style="width: 82.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">id</span></code></p></td>
+<td><p>Unique request identifier, echoed by the response.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">c</span></code></p></td>
+<td><p>Connection token, stable for the lifetime of one local agent connection.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">g</span></code></p></td>
+<td><p>Provider generation returned by the preceding capability query.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">expires</span></code></p></td>
+<td><p>Unsigned 64-bit Unix milliseconds; the last time this request may begin.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data</span></code></p></td>
+<td><p>Base64 of exactly one complete SSH agent packet, including its length.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The terminal returns <code class="docutils literal notranslate"><span class="pre">op=reply</span></code> with the same <code class="docutils literal notranslate"><span class="pre">id</span></code>, <code class="docutils literal notranslate"><span class="pre">c</span></code>, and <code class="docutils literal notranslate"><span class="pre">g</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">data</span></code> containing exactly one complete response packet. A transport failure
+returns an SSH_AGENT_FAILURE packet and an <code class="docutils literal notranslate"><span class="pre">error</span></code> token, such as
+<code class="docutils literal notranslate"><span class="pre">unavailable</span></code>, <code class="docutils literal notranslate"><span class="pre">changed</span></code>, <code class="docutils literal notranslate"><span class="pre">expired</span></code>, <code class="docutils literal notranslate"><span class="pre">closed</span></code>, or <code class="docutils literal notranslate"><span class="pre">timeout</span></code>.
+Ordinary failures from the underlying agent remain ordinary agent responses.</p>
+<p>On local socket close, the proxy sends:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ESC</span> <span class="p">]</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">ssh</span><span class="o">-</span><span class="n">agent</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">op</span><span class="o">=</span><span class="n">close</span><span class="p">:</span><span class="nb">id</span><span class="o">=</span><span class="n">close</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">c</span><span class="o">=</span><span class="n">connection</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="n">g</span><span class="o">=</span><span class="n">providerA</span> <span class="n">ST</span>
+</pre></div>
+</div>
+<p>Close has no response. The provider closes that agent connection and refuses
+subsequent requests using its token. Connection tokens must not be reused.
+Duplicate request IDs on a connection are refused rather than executed again.</p>
+</section>
+<section id="connections-reconnects-and-routing">
+<h2>Connections, reconnects, and routing<a class="headerlink" href="#connections-reconnects-and-routing" title="Link to this heading">¶</a></h2>
+<p>Each connection token maps to one persistent connection to the real agent.
+In particular, <a class="reference external" href="https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.agent">OpenSSH session bindings</a>
+remain on the same backend connection as subsequent signing requests. Opening
+a fresh backend connection for every packet would lose those constraints.</p>
+<p>A socket connection is pinned to the generation it first used. If a later
+query reports another generation, the proxy fails and closes that connection;
+a new connection obtains the new client’s keys. In-flight requests are failed
+when Odin Seat selects another display, and are not retried against its agent.
+Closed or expired requests cannot begin later when queued terminal output is
+finally delivered. Close cannot undo an operation already delivered to an
+underlying agent.</p>
+<p>Odin Seat scopes request and connection IDs per nested window, sends agent
+traffic only to the selected display, and routes the reply to the originating
+window or socket. It drops stale replies instead of treating them as keyboard
+input. Its socket path, listener, selection order, and routing scope survive a
+live server upgrade; existing agent connections fail and can be reopened.</p>
+<p>Skiff carries agent frames on its reliable one-shot terminal event channel,
+outside screen snapshots, input prediction, motion collection, and input
+recordings. A new client announces its attachment and cancels the old socket
+requests. Provider generations prevent queued operations intended for another
+terminal from being executed after reconnecting.</p>
+<p>Socket directories are private to the user (mode 0700); sockets have mode 0600.
+Multiple local connections and multipart reads and writes are supported.
+Storage grows with input and active connections; the SSH packet length is
+limited by its actual unsigned 32-bit wire field, and Unix socket paths by the
+operating system. Skiff also follows the signed message-size representation
+of its protobuf transport. Allocation and representation failures are explicit.</p>
+</section>
+<section id="liveness">
+<h2>Liveness<a class="headerlink" href="#liveness" title="Link to this heading">¶</a></h2>
+<p>The current socket proxies allow five seconds for capability negotiation and
+two minutes for an agent request. Skiff waits one second before using an
+authorized local fallback or reporting an unsupported terminal. An expired
+negotiation or request fails without automatically retrying a signing action.
+The client and provider clocks must be synchronized within the request’s
+remaining validity interval because <code class="docutils literal notranslate"><span class="pre">expires</span></code> is an absolute timestamp.</p>
+<p>Backend sockets are nonblocking. Hardware-key confirmation and slow agents do
+not block terminal drawing or other agent connections. Silkie polls pending
+agent work from its event loop and releases connection state when the socket
+or terminal window closes.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="vector-protocol.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Vector images</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="notification-routing.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Desktop notification routing</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and contributors
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">SSH agent transport</a><ul>
+<li><a class="reference internal" href="#enabling-access">Enabling access</a></li>
+<li><a class="reference internal" href="#framing-and-discovery">Framing and discovery</a></li>
+<li><a class="reference internal" href="#requests-and-replies">Requests and replies</a></li>
+<li><a class="reference internal" href="#connections-reconnects-and-routing">Connections, reconnects, and routing</a></li>
+<li><a class="reference internal" href="#liveness">Liveness</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=7f41d439"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

@@ -150,20 +150,20 @@ the provided arguments, you need to use the special value :code:`self`.
 --url-prefixes
 default=default
 Comma separated list of recognized URL prefixes. Defaults to the list of
-prefixes defined by the :opt:`url_prefixes` option in :file:`kitty.conf`.
+prefixes defined by the :opt:`url_prefixes` option in :file:`silkie.conf`.
 
 
 --url-excluded-characters
 default=default
 Characters to exclude when matching URLs. Defaults to the list of characters
-defined by the :opt:`url_excluded_characters` option in :file:`kitty.conf`.
+defined by the :opt:`url_excluded_characters` option in :file:`silkie.conf`.
 The syntax for this option is the same as for :opt:`url_excluded_characters`.
 
 
 --word-characters
 Characters to consider as part of a word. In addition, all characters marked as
 alphanumeric in the Unicode database will be considered as word characters.
-Defaults to the :opt:`select_by_word_characters` option from :file:`kitty.conf`.
+Defaults to the :opt:`select_by_word_characters` option from :file:`silkie.conf`.
 
 
 --minimum-match-length
@@ -262,7 +262,7 @@ color automatically.
 
 
 --customize-processing
-Name of a python file in the kitty config directory which will be imported to
+Name of a python file in the Silkie config directory which will be imported to
 provide custom implementations for pattern finding and performing actions
 on selected matches. You can also specify absolute paths to load the script from
 elsewhere. See {hints_url} for details.

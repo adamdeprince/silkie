@@ -70,6 +70,24 @@ body[data-theme] .highlight {
     font-size: 0.85rem;
 }
 
+.gameplay {
+    margin: 1.5rem 0;
+}
+
+.gameplay video {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #11130f;
+    border: 1px solid var(--color-background-border);
+}
+
+.gameplay figcaption {
+    margin-top: 0.6rem;
+    color: var(--color-foreground-secondary);
+    font-size: 0.875rem;
+}
+
 /* The homepage uses the reference's type, palette, code, and focus styles. */
 .site-header,
 .home-content,
@@ -153,6 +171,22 @@ body[data-theme] .highlight {
 }
 .hero-lead > p:first-child { margin-top: 0; }
 .hero-lead > p + p { color: var(--color-foreground-secondary); }
+.hero-game {
+    max-width: 27.5rem;
+    margin: 1rem 0 1.25rem;
+}
+.hero-game a { color: var(--color-brand-primary); }
+.hero-game img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.25rem;
+}
+.hero-game figcaption {
+    margin-top: 0.45rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
 .home-actions p {
     display: flex;
     flex-wrap: wrap;
@@ -224,37 +258,37 @@ body[data-theme] .highlight {
     line-height: 1.3;
     letter-spacing: -0.02em;
 }
-.home-content #features,
-.home-content #documentation {
+.home-content :is(#features, #zh-features),
+.home-content :is(#documentation, #zh-documentation) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 4rem;
     row-gap: 1rem;
 }
-.home-content #features > h2,
-.home-content #features > p,
-.home-content #documentation > h2,
-.home-content #documentation > p { grid-column: 1 / -1; }
-.home-content #features > p,
-.home-content #documentation > p { max-width: 48rem; margin-top: 0; }
-.home-content #features > section {
+.home-content :is(#features, #zh-features) > h2,
+.home-content :is(#features, #zh-features) > p,
+.home-content :is(#documentation, #zh-documentation) > h2,
+.home-content :is(#documentation, #zh-documentation) > p { grid-column: 1 / -1; }
+.home-content :is(#features, #zh-features) > p,
+.home-content :is(#documentation, #zh-documentation) > p { max-width: 48rem; margin-top: 0; }
+.home-content :is(#features, #zh-features) > section {
     border-top: 2px solid var(--color-brand-primary);
     padding-top: 0.5rem;
 }
-.home-content #features > section:nth-of-type(2) { border-color: var(--color-brand-visited); }
-.home-content #features > section:nth-of-type(3) { border-color: var(--color-accent-warning); }
-.home-content #features section p:last-child,
-.home-content #documentation section p:last-child { font-size: 0.88rem; line-height: 1.7; }
-.home-content #install { margin-top: 0; }
-.home-content #install > p { max-width: 50rem; }
-.home-content #install .highlight { max-width: 100%; }
-.home-content #install pre { padding: 1.5rem; font-size: 0.95rem; line-height: 1.9; }
-.home-content #documentation {
+.home-content :is(#features, #zh-features) > section:nth-of-type(2) { border-color: var(--color-brand-visited); }
+.home-content :is(#features, #zh-features) > section:nth-of-type(3) { border-color: var(--color-accent-warning); }
+.home-content :is(#features, #zh-features) section p:last-child,
+.home-content :is(#documentation, #zh-documentation) section p:last-child { font-size: 0.88rem; line-height: 1.7; }
+.home-content :is(#install, #zh-install) { margin-top: 0; }
+.home-content :is(#install, #zh-install) > p { max-width: 50rem; }
+.home-content :is(#install, #zh-install) .highlight { max-width: 100%; }
+.home-content :is(#install, #zh-install) pre { padding: 1.5rem; font-size: 0.95rem; line-height: 1.9; }
+.home-content :is(#documentation, #zh-documentation) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem 2.5rem;
     margin-top: 0;
 }
-.home-content #documentation > section {
+.home-content :is(#documentation, #zh-documentation) > section {
     border-top: 1px solid var(--color-background-border);
 }
 .home-content .toctree-wrapper { display: none; }
@@ -273,7 +307,7 @@ body[data-theme] .highlight {
     .site-header { gap: 1rem; }
     .site-header nav { gap: 1rem; }
     .lineage { padding: 1.25rem; }
-    .home-content #features { column-gap: 2rem; }
+    .home-content :is(#features, #zh-features) { column-gap: 2rem; }
 }
 @media (max-width: 700px) {
     .site-header, .home-content, .site-footer { width: calc(100% - 2.5rem); }
@@ -286,10 +320,10 @@ body[data-theme] .highlight {
     .hero-lead { font-size: 1.05rem; }
     .lineage { margin-top: 2.5rem; }
     .home-content > section > section { padding-block: 2.5rem; margin-top: 2.5rem; }
-    .home-content #features, .home-content #documentation { display: block; }
-    .home-content #features > section, .home-content #documentation > section { margin-top: 1.75rem; }
+    .home-content :is(#features, #zh-features), .home-content :is(#documentation, #zh-documentation) { display: block; }
+    .home-content :is(#features, #zh-features) > section, .home-content :is(#documentation, #zh-documentation) > section { margin-top: 1.75rem; }
     .home-content h2 { font-size: 1.85rem; }
-    .home-content #install pre { padding: 1rem; font-size: 0.8rem; }
+    .home-content :is(#install, #zh-install) pre { padding: 1rem; font-size: 0.8rem; }
 }
 @media print {
     .site-header .theme-toggle, .site-header nav, .home-actions { display: none; }

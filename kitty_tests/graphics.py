@@ -2,6 +2,7 @@
 # License: GPL v3 Copyright: 2016, Kovid Goyal <kovid at kovidgoyal.net>
 
 import os
+import struct
 import random
 import sys
 import tempfile
@@ -2467,6 +2468,56 @@ class TestGraphics(BaseTest):
         osc('tablet-pointer', 'op=mode:mode=1')
         s.reset()
         self.ae(ink('op=query:id=9'), '\x1b]777;ink;v=1:op=cap:id=9:caps=1:mode=0\x1b\\')
+
+    def test_vector_many_gradient_stops(self):
+        s = self.create_screen()
+        stops = [(i / 1024, ((i % 31) / 32, (i % 17) / 16, (i % 9) / 8)) for i in range(1025)]
+        # Equal offsets have no specified sort order; either copy must yield the same HDR color.
+        stops[512] = (.5, (2, -.25, .5))
+        stops.insert(513, stops[512])
+        records = ('l id=2 x1=1.5 y1=0 x2=2049.5 y2=0 stops='
+                   + ','.join(f'{offset},linear:{r}/{g}/{b}' for offset, (r, g, b) in stops)
+                   + '\np id=1 d=M0,0L2052,0L2052,1L0,1Z fill=@2')
+        response = parse_full_response(send_command(s, 'a=t,f=200,i=1,s=2052,v=1', records))
+        self.ae(response.code, 'OK', response.msg)
+        pixels = list(struct.iter_unpack('ffff', s.grman.render_vector_linear(1, 2052, 1)))
+        for x, pixel in enumerate(pixels):
+            t = (x - 1) / 2048
+            if t <= stops[0][0]:
+                expected = stops[0][1]
+            elif t >= stops[-1][0]:
+                expected = stops[-1][1]
+            else:
+                right = next(i for i in range(1, len(stops)) if stops[i][0] >= t)
+                offset, color = stops[right - 1]
+                end, other = stops[right]
+                f = (t - offset) / (end - offset) if end > offset else 0
+                expected = tuple(a + (b - a) * f for a, b in zip(color, other))
+            for actual, value in zip(pixel[:3], expected):
+                self.assertAlmostEqual(actual, value, places=6, msg=f'gradient at pixel {x}')
+            self.ae(pixel[3], 1)
+
+    def test_vector_raster_byte_colors(self):
+        s = self.create_screen()
+        rgb = bytes(value for i in range(256) for value in (i, (i + 85) % 256, (i + 171) % 256))
+        rgba = bytes(value for i in range(256) for value in (i, (i + 85) % 256, (i + 171) % 256, i))
+        for fmt, data in ((24, rgb), (32, rgba)):
+            response = parse_full_response(send_command(s, f'a=t,f={fmt},i={fmt},s=256,v=1', data))
+            self.ae(response.code, 'OK', response.msg)
+        response = parse_full_response(send_command(s, 'a=t,f=200,i=1,s=256,v=2',
+                                                   'i id=1 img=24\ni id=2 img=32 t=1,0,0,1,0,1'))
+        self.ae(response.code, 'OK', response.msg)
+        for _ in range(8):
+            pixels = list(struct.iter_unpack('ffff', s.grman.render_vector_linear(1, 256, 2)))
+            for row in range(2):
+                for x in range(256):
+                    pixel = pixels[row * 256 + x]
+                    alpha = 1 if not row else x / 255
+                    self.assertAlmostEqual(pixel[3], alpha, places=6)
+                    for actual, byte in zip(pixel[:3], rgb[3*x:3*x+3]):
+                        value = byte / 255
+                        value = value / 12.92 if value <= .04045 else ((value + .055) / 1.055) ** 2.4
+                        self.assertAlmostEqual(actual, value if alpha else 0, places=6)
 
     def test_vector_growing_geometry(self):
         s = self.create_screen()

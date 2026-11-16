@@ -1,0 +1,472 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="为 Silkie 开发软件" href="developer-guide.html"><link rel="prev" title="在浏览器中试用 Silkie" href="browser-demo.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/browser-ssh.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>浏览器演示中的 SSH - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../browser-ssh.html">
+<link rel="alternate" hreflang="zh-CN" href="browser-ssh.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="项目资源">
+  <a href="index.html">项目概览</a>
+  <a href="install.html">安装 Silkie</a>
+  <a href="games.html">游戏与实机视频</a>
+  <a href="browser-demo.html">试用浏览器演示</a>
+  <a href="#">浏览器 SSH 设置</a>
+  <a href="developer-guide.html">开发者指南</a>
+  <a href="reference.html">扩展参考手册</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档 ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档 ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支 ↗</a>
+  <a href="../browser-ssh.html" lang="en">English</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="搜索" name="q" aria-label="搜索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">安装 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Silkie 与 kitty 游戏</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">在浏览器中试用 Silkie</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">浏览器演示中的 SSH</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">为 Silkie 开发软件</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="reference.html">Silkie 扩展参考手册</a><input aria-label="Toggle navigation of Silkie 扩展参考手册" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
+<li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="ssh-in-the-browser-demo">
+<h1>浏览器演示中的 SSH<a class="headerlink" href="#ssh-in-the-browser-demo" title="链接到此标题。">¶</a></h1>
+<div class="admonition note">
+<p class="admonition-title">备注</p>
+<p>Silkie 的 WebAssembly 演示仍在开发中。本指南记录其网络设计与私有中继设置。<a class="reference internal" href="browser-demo.html"><span class="doc">在浏览器中试用 Silkie</span></a> 提供连接控件；端到端 SSH 验证仍待完成。</p>
+</div>
+<p>浏览器演示使用 CheerpX 运行 Linux shell、基本命令、<code class="docutils literal notranslate"><span class="pre">silkie-sprint</span></code>、<code class="docutils literal notranslate"><span class="pre">silkie-scramble</span></code> 和 OpenSSH 客户端。网络连接为可选功能，使用访问者自己的 Tailscale 网络。<strong>Silkie 不会运营公共 SSH 中继。</strong> shell 和内置游戏必须在未连接 Tailscale 时也能运行。</p>
+<p>网页不能直接向端口 22 打开原始 TCP 套接字。CheerpX 通过 <a class="reference external" href="https://cheerpx.io/docs/guides/Networking">Tailscale 集成</a> 提供连接能力。随后可用 netcat 中继，将 SSH 转发到访问者网络中可达的机器。netcat 本身不提供浏览器传输通道：下面的中继方案同时使用 Tailscale。</p>
+<section id="connect-through-tailscale">
+<h2>通过 Tailscale 连接<a class="headerlink" href="#connect-through-tailscale" title="链接到此标题。">¶</a></h2>
+<p>终端启动横幅包含可点击的 <strong>连接 Tailscale</strong> 链接。点击后会显示另一个用于登录 Tailscale 的链接，将浏览器虚拟机注册到访问者的 tailnet 中。页面会显示连接状态和分配给虚拟机的地址。在宿主计算机的 Tailscale 应用中登录，不会自动连接浏览器虚拟机；虚拟机需要单独登录。</p>
+<p>准备 SSH 目标机器：</p>
+<ol class="arabic">
+<li><p>在目标机器上安装 <a class="reference external" href="https://tailscale.com/download">Tailscale</a>，并登录同一个 tailnet。</p></li>
+<li><p>启用目标机器的 SSH 服务器。在 macOS 中，该设置为系统设置里的 <strong>远程登录</strong>；在 Linux 中，启用发行版提供的 OpenSSH 服务。</p></li>
+<li><p>在 tailnet 访问策略和目标机器防火墙中，允许浏览器虚拟机访问目标的 SSH 端口。</p></li>
+<li><p>浏览器虚拟机连接后，在其 shell 中运行以下命令，将账户和目标 Tailscale IPv4 地址替换为实际值：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ssh</span> <span class="n">your</span><span class="o">-</span><span class="n">user</span><span class="o">@</span><span class="mf">100.101.102.103</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<p>使用目标的 Tailscale 地址，而非 <code class="docutils literal notranslate"><span class="pre">localhost</span></code>：在演示中，<code class="docutils literal notranslate"><span class="pre">localhost</span></code> 指向 Linux 虚拟机。连接 tailnet 内的机器不需要出口节点。参阅 <a class="reference external" href="https://tailscale.com/docs/how-to/connect-to-devices">Tailscale 连接指南</a>。</p>
+<p>此方案使用通过 Tailscale 网络传输的普通 SSH。Tailscale SSH 是另一个可选服务，拥有独立的访问规则；本设置不要求启用它。接受新密钥之前，请验证目标机器的主机密钥指纹。</p>
+</section>
+<section id="run-your-own-netcat-relay">
+<h2>运行自己的 netcat 中继<a class="headerlink" href="#run-your-own-netcat-relay" title="链接到此标题。">¶</a></h2>
+<p>如果 SSH 目标没有运行 Tailscale，但另一台计算机可以访问它，就可以使用中继。中继计算机必须运行 Tailscale，并能向目标的 SSH 端口建立 TCP 连接。</p>
+<p>连接路径如下：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">browser</span> <span class="n">guest</span> <span class="o">-&gt;</span> <span class="n">Tailscale</span> <span class="o">-&gt;</span> <span class="n">your</span> <span class="n">relay</span><span class="p">:</span><span class="mi">2222</span> <span class="o">-&gt;</span> <span class="n">your</span> <span class="n">SSH</span> <span class="n">server</span><span class="p">:</span><span class="mi">22</span>
+</pre></div>
+</div>
+<p>这些命令使用 <strong>Nmap Ncat</strong>，这是可执行文件名为 <code class="docutils literal notranslate"><span class="pre">ncat</span></code> 的 netcat 实现。其他名为 <code class="docutils literal notranslate"><span class="pre">nc</span></code> 的程序使用不同的监听和执行选项。在中继计算机上安装 Ncat，例如：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># macOS (Homebrew)</span>
+<span class="n">brew</span> <span class="n">install</span> <span class="n">nmap</span>
+
+<span class="c1"># Debian / Ubuntu</span>
+<span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">ncat</span>
+</pre></div>
+</div>
+<p>在中继计算机上，将 <code class="docutils literal notranslate"><span class="pre">192.168.1.50</span></code> 替换为 SSH 服务器的局域网地址，然后运行：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ncat</span> <span class="o">--</span><span class="n">listen</span> <span class="s2">"$(tailscale ip -4)"</span> <span class="mi">2222</span> <span class="o">--</span><span class="n">keep</span><span class="o">-</span><span class="nb">open</span> \
+  <span class="o">--</span><span class="n">sh</span><span class="o">-</span><span class="n">exec</span> <span class="s2">"ncat 192.168.1.50 22"</span>
+</pre></div>
+</div>
+<p>监听器仅绑定中继的 Tailscale IPv4 地址。tailnet 策略和本地防火墙必须允许浏览器虚拟机访问 TCP 端口 2222；目标服务器必须允许中继访问。在命令中固定目标地址；每个传入连接都会启动一个独立的转发进程，连接到该目标。<code class="docutils literal notranslate"><span class="pre">--keep-open</span></code> 允许重连及独立的并发会话。</p>
+<p>如果 SSH 服务器就在中继计算机上，请用 <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code> 替换 <code class="docutils literal notranslate"><span class="pre">192.168.1.50</span></code>。如果 <code class="docutils literal notranslate"><span class="pre">tailscale</span> <span class="pre">ip</span> <span class="pre">-4</span></code> 不可用，请明确使用中继的 Tailscale IPv4 地址作为监听地址。</p>
+<p>在浏览器 shell 中，将中继的 Tailscale IPv4 地址和目标账户名替换为实际值：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ssh</span> <span class="o">-</span><span class="n">o</span> <span class="n">HostKeyAlias</span><span class="o">=</span><span class="n">lan</span><span class="o">-</span><span class="n">server</span> <span class="o">-</span><span class="n">p</span> <span class="mi">2222</span> <span class="n">your</span><span class="o">-</span><span class="n">user</span><span class="o">@</span><span class="mf">100.101.102.103</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">HostKeyAlias</span></code> 标识 SSH known-hosts 文件中的目标；为每个目标选择不同且稳定的名称。请核对目标 SSH 服务器的指纹，而不是中继的指纹。SSH 认证和加密在虚拟机与目标之间进行；Ncat 只转发加密数据流，不会代替访问者登录。</p>
+<p>使用期间请保持中继命令运行。按 Ctrl+C 停止接收连接，并关闭已有 SSH 会话。无需配置路由器端口转发、公共监听器或 Tailscale 出口节点。此方案使用 Tailscale 的正常基础设施，Silkie 不提供中继服务。</p>
+<p>参阅 Ncat 手册中的 <a class="reference external" href="https://nmap.org/ncat/guide/ncat-exec.html">命令执行</a> 和 <a class="reference external" href="https://nmap.org/ncat/guide/ncat-tricks.html">端口转发</a>。</p>
+</section>
+<section id="browser-integration-requirements">
+<h2>浏览器集成要求<a class="headerlink" href="#browser-integration-requirements" title="链接到此标题。">¶</a></h2>
+<p>CheerpX 集成必须使用访问者的交互式登录。创建虚拟机时配置 <code class="docutils literal notranslate"><span class="pre">networkInterface.loginUrlCb</span></code>、<code class="docutils literal notranslate"><span class="pre">stateUpdateCb</span></code> 和 <code class="docutils literal notranslate"><span class="pre">netmapUpdateCb</span></code>，再由明确的连接操作调用 <code class="docutils literal notranslate"><span class="pre">cx.networkLogin()</span></code>。将登录 URL 以可打开的链接显示，并在页面上展示认证失败及连接状态变化。参阅 <a class="reference external" href="https://cheerpx.io/docs/guides/Networking">CheerpX 网络功能</a> 和 <a class="reference external" href="https://cheerpx.io/docs/reference/CheerpX.Linux/create">Linux.create 参考</a>。</p>
+<p>不要在页面或虚拟机镜像中嵌入项目持有的 Tailscale 认证密钥，也不要预置公共代理。shell 启动报告必须说明：外部 SSH 需要访问者自己的 Tailscale 连接，并链接到本指南。虚拟机的 SSH 密钥和 known-hosts 数据保存在访问者的虚拟机文件系统中，而不在 Silkie 服务器上。</p>
+</section>
+<section id="validation-status">
+<h2>验证状态<a class="headerlink" href="#validation-status" title="链接到此标题。">¶</a></h2>
+<p>已使用 Ncat 7.991 在回环网络上检查此方案：24 个会话、四个并发客户端，以及累计超过 12 MiB 的重复二进制数据交换均通过。另一个一次发送 1 MiB 突发数据的全双工回显测试发生了停滞，原因尚未解决；流式传输检查并不能证明每种流量模式都可靠。在演示发布前，仍需完成浏览器到服务器的 SSH、批量传输，以及通过 CheerpX 和 Tailscale 重连的端到端验证。</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="developer-guide.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">为 Silkie 开发软件</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="browser-demo.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">在浏览器中试用 Silkie</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">浏览器演示中的 SSH</a><ul>
+<li><a class="reference internal" href="#connect-through-tailscale">通过 Tailscale 连接</a></li>
+<li><a class="reference internal" href="#run-your-own-netcat-relay">运行自己的 netcat 中继</a></li>
+<li><a class="reference internal" href="#browser-integration-requirements">浏览器集成要求</a></li>
+<li><a class="reference internal" href="#validation-status">验证状态</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

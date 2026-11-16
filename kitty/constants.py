@@ -20,11 +20,12 @@ class Version(NamedTuple):
     patch: int
 
 
-# The name of files and of the executable, shared with kitty so that kitty.conf, shell integration and
-# programs that look for the kitty executable keep working. What people read is below.
+# Keep the executable name for shell integration and programs that look for kitty.
+# Silkie uses its own configuration namespace.
 appname: str = 'kitty'
 app_display_name: str = 'Silkie'
 app_class: str = 'silkie'
+config_name: str = 'silkie'
 kitty_face = '🐔'
 version: Version = Version(0, 49, 2)
 str_version: str = '.'.join(map(str, version))
@@ -117,7 +118,7 @@ def _get_config_dir() -> str:
     import atexit
     import tempfile
 
-    ans = tempfile.mkdtemp(prefix='kitty-conf-')
+    ans = tempfile.mkdtemp(prefix='silkie-conf-')
 
     def cleanup() -> None:
         import shutil
@@ -131,7 +132,7 @@ def _get_config_dir() -> str:
 
 config_dir = _get_config_dir()
 del _get_config_dir
-defconf = os.path.join(config_dir, 'kitty.conf')
+defconf = os.path.join(config_dir, f'{config_name}.conf')
 settings_conf = os.path.join(config_dir, 'settings.conf')
 
 

@@ -142,7 +142,7 @@ opt(
     long_text="""
 Control the shell integration on the remote host. See :ref:`shell_integration`
 for details on how this setting works. The special value :code:`inherited` means
-use the setting from :file:`kitty.conf`. This setting is useful for overriding
+use the setting from :file:`silkie.conf`. This setting is useful for overriding
 integration on a per-host basis.
 """,
 )
@@ -193,7 +193,7 @@ opt(
     long_text="""
 Specify a color scheme to use when connecting to the remote host. If this option
 ends with :code:`.conf`, it is assumed to be the name of a config file to load
-from the kitty config directory, otherwise it is assumed to be the name of a
+from the Silkie config directory, otherwise it is assumed to be the name of a
 color theme to load via the :doc:`themes kitten </kittens/themes>`. Note that
 only colors applying to the text/background are changed, other config settings
 in the .conf files/themes are ignored.

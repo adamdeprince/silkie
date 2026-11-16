@@ -1,0 +1,250 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:38+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/install.rst:2
+msgid "Install Silkie"
+msgstr "安装 Silkie"
+
+#: docs/silkie/install.rst:4
+msgid ""
+"Silkie is built from the `silkie branch <https://github.com/adamdeprince/silkie/tree/silkie>`_ of"
+" this repository. The installed executable is ``silkie``; its companion tools use ``silkie-"
+"kitten``. Upstream kitty packages provide upstream kitty rather than Silkie's extensions."
+msgstr ""
+"Silkie 从本仓库的 `silkie 分支 <https://github.com/adamdeprince/silkie/tree/silkie>`_ 构建。安装后的可执行文件为 "
+"``silkie``，配套工具使用 ``silkie-kitten``。上游 kitty 软件包提供上游 kitty，不包含 Silkie 的扩展。"
+
+#: docs/silkie/install.rst:11
+msgid "Binary packages"
+msgstr "二进制软件包"
+
+#: docs/silkie/install.rst:13
+msgid "Install on a supported macOS, Ubuntu, Debian, or Kylin system::"
+msgstr "在支持的 macOS、Ubuntu、Debian 或麒麟系统上安装：::"
+
+#: docs/silkie/install.rst:17
+msgid ""
+"The installer explains which Goblin Reactor package source it needs and asks for permission "
+"before adding or changing it. It reuses an existing matching source, verifies the APT signing "
+"key, and installs ``silkie`` with Homebrew or APT. Source approval is read from your terminal, so"
+" it also works when the script is piped to Bash. macOS needs Apple Silicon and macOS 26 or newer;"
+" Homebrew is installed with your permission if it is missing."
+msgstr ""
+"安装脚本会说明所需的 Goblin Reactor 软件源，并在添加或修改之前征求许可。它会复用已有且匹配的软件源，验证 APT 签名密钥，再通过 Homebrew 或 APT 安装 "
+"``silkie``。许可确认从终端读取，因此将脚本通过管道传给 Bash 时也能使用。macOS 需要 Apple Silicon 和 macOS 26 或更新版本；若未安装 "
+"Homebrew，脚本会征得许可后安装。"
+
+#: docs/silkie/install.rst:24
+msgid "The manual commands are below."
+msgstr "手动安装命令如下。"
+
+#: docs/silkie/install.rst:26
+msgid "On Apple Silicon with macOS 26 Tahoe, install the Homebrew cask::"
+msgstr "在运行 macOS 26 Tahoe 的 Apple Silicon 机器上，安装 Homebrew cask：::"
+
+#: docs/silkie/install.rst:31
+msgid ""
+"The application requires macOS approval before first launch. The `Homebrew repository's Silkie "
+"instructions <https://brew.goblinreactor.com/#silkie>`_ explain app approval and the available "
+"release."
+msgstr ""
+"首次启动应用前，需要在 macOS 中批准运行。`Homebrew 仓库的 Silkie 安装说明 <https://brew.goblinreactor.com/#silkie>`_ "
+"介绍了批准步骤和可用版本。"
+
+#: docs/silkie/install.rst:35
+msgid ""
+"For Linux, the `signed APT repository <https://apt.goblinreactor.com/#silkie>`_ provides "
+"installation instructions, the signing key, and the repository entry for your distribution. "
+"Current targets include Ubuntu 26.04 on amd64 and arm64, and Kylin V10 SP1 on old-world "
+"LoongArch64 (``loongarch64``). Packages for Ubuntu 24.04 and Debian 13 on amd64 are also listed "
+"there. Use the suite matching your system; old-world ``loongarch64`` and new-world ``loong64`` "
+"are different binary targets."
+msgstr ""
+"Linux 的 `已签名 APT 仓库 <https://apt.goblinreactor.com/#silkie>`_ 提供安装说明、签名密钥和各发行版的软件源配置。当前目标包括 "
+"Ubuntu 26.04 的 amd64 和 arm64，以及旧世界 LoongArch64（``loongarch64``）的麒麟 V10 SP1。仓库还列出了 Ubuntu 24.04 和 "
+"Debian 13 的 amd64 软件包。请选择与系统匹配的发行套件；旧世界 ``loongarch64`` 和新世界 ``loong64`` 是不同的二进制目标。"
+
+#: docs/silkie/install.rst:43
+msgid "After configuring the repository as described there::"
+msgstr "按上述说明配置软件源后：::"
+
+#: docs/silkie/install.rst:48
+msgid "Launch ``silkie`` and use ``silkie-kitten`` for its companion tools."
+msgstr "运行 ``silkie`` 启动终端，使用 ``silkie-kitten`` 运行配套工具。"
+
+#: docs/silkie/install.rst:50
+msgid "To check the installed commands::"
+msgstr "检查已安装的命令：::"
+
+#: docs/silkie/install.rst:56
+msgid ""
+"The Linux repository signatures, package checksums, and executable links were checked for all "
+"five targets listed above on October 28, 2026. APT installation and native-module loading were "
+"also tested on Ubuntu 26.04 amd64 (``naamah``) and Kylin V10 SP1 LoongArch64 (``loongson``)."
+msgstr ""
+"2026 年 10 月 28 日，已检查上述五个目标的 Linux 仓库签名、软件包校验和以及可执行文件链接。还在 Ubuntu 26.04 amd64（``naamah``）和麒麟 V10 "
+"SP1 LoongArch64（``loongson``）上测试了 APT 安装与原生模块加载。"
+
+#: docs/silkie/install.rst:60
+msgid ""
+"The :doc:`Silkie Sprint and Silkie Scramble games <games>` are distributed as separate Homebrew "
+"and APT packages. Their game page includes installation commands, supported platforms, controls, "
+"and gameplay videos."
+msgstr ""
+":doc:`Silkie Sprint 和 Silkie Scramble 游戏 <games>` 以独立的 Homebrew 和 APT "
+"软件包分发。游戏页面包含安装命令、支持的平台、操作方法和实机视频。"
+
+#: docs/silkie/install.rst:65
+msgid "Fonts"
+msgstr "字体"
+
+#: docs/silkie/install.rst:67
+msgid ""
+"Install Iosevka for Silkie's default text and Iosevka Slab for the serif role. For CJK text, "
+"install a regional Sarasa Term or Noto Sans CJK family. Font files are separate from the "
+"application; when a preferred font is absent, the operating system substitutes an available face."
+" The :doc:`font-protocol` reference links the font sources and explains regional glyph selection."
+msgstr ""
+"安装 Iosevka 以使用 Silkie 的默认文本字体，安装 Iosevka Slab 以使用衬线字体角色。中日韩文本可安装相应地区的 Sarasa Term 或 Noto Sans CJK"
+" 字体。字体文件与应用分开提供；首选字体缺失时，操作系统会替换为可用字体。:doc:`font-protocol` 列出了字体来源，并说明了地区字形的选择方式。"
+
+#: docs/silkie/install.rst:74
+msgid "Source builds"
+msgstr "从源码构建"
+
+#: docs/silkie/install.rst:77
+msgid "Prerequisites"
+msgstr "前置依赖"
+
+#: docs/silkie/install.rst:79
+msgid ""
+"Install Git, a C compiler, and `Go <https://go.dev/doc/install>`_. The minimum Go version is "
+"declared in `go.mod on the silkie branch "
+"<https://github.com/adamdeprince/silkie/blob/silkie/go.mod>`_."
+msgstr ""
+"安装 Git、C 编译器和 `Go <https://go.dev/doc/install>`_。Go 的最低版本在 `silkie 分支的 go.mod "
+"<https://github.com/adamdeprince/silkie/blob/silkie/go.mod>`_ 中声明。"
+
+#: docs/silkie/install.rst:83
+msgid ""
+"On macOS, install Apple's command line developer tools with ``xcode-select --install`` if they "
+"are not already available. On Linux, install the X11 and D-Bus development libraries listed in "
+"`kitty's build prerequisites <https://sw.kovidgoyal.net/kitty/build/#x11-dev-libs>`_."
+msgstr ""
+"在 macOS 上，若尚未安装 Apple 命令行开发工具，请运行 ``xcode-select --install``。在 Linux 上，安装 `kitty 构建前置条件 "
+"<https://sw.kovidgoyal.net/kitty/build/#x11-dev-libs>`_ 列出的 X11 和 D-Bus 开发库。"
+
+#: docs/silkie/install.rst:88
+msgid ""
+"The ``dev.sh`` build uses prebuilt dependencies for the supported platform, including its Python "
+"environment. The first build needs network access and downloads those dependencies. The `build "
+"implementation <https://github.com/adamdeprince/silkie/blob/silkie/bypy/devenv.go>`_ is in this "
+"repository. For a build against system libraries, consult the `upstream dependency list "
+"<https://sw.kovidgoyal.net/kitty/build/#dependencies>`_ and Silkie's `Brewfile "
+"<https://github.com/adamdeprince/silkie/blob/silkie/Brewfile>`_ on macOS."
+msgstr ""
+"``dev.sh`` 使用支持平台的预构建依赖，包括 Python 环境。首次构建需要联网下载这些依赖。`构建实现 "
+"<https://github.com/adamdeprince/silkie/blob/silkie/bypy/devenv.go>`_ 位于本仓库中。若要使用系统库构建，请参阅 "
+"`上游依赖列表 <https://sw.kovidgoyal.net/kitty/build/#dependencies>`_；macOS 还可参阅 Silkie 的 `Brewfile "
+"<https://github.com/adamdeprince/silkie/blob/silkie/Brewfile>`_。"
+
+#: docs/silkie/install.rst:98
+msgid "Build and launch"
+msgstr "构建与启动"
+
+#: docs/silkie/install.rst:100
+msgid ""
+"The macOS dependency setup uses loader-relative library references so checkout paths do not "
+"overflow the downloaded libraries' Mach-O load commands. Setup is retried automatically if an "
+"earlier download or relocation was incomplete. A fresh checkout with this fix completed the build"
+" and native-module loading checks on October 28, 2026."
+msgstr ""
+"macOS 的依赖配置使用相对于加载器的库引用，避免检出路径超出已下载库的 Mach-O 加载命令空间。如果上次下载或重定位不完整，会自动重试配置。2026 年 10 月 28 "
+"日，包含此修复的全新检出版本已通过构建和原生模块加载检查。"
+
+#: docs/silkie/install.rst:108
+msgid ""
+"Keep the checkout in place when running this development build. Re-run ``./dev.sh build`` after "
+"changing the source. Development builds use the internal ``kitty/launcher/kitty`` and "
+"``kitty/launcher/kitten`` paths rather than the installed ``silkie`` and ``silkie-kitten`` "
+"commands. On macOS, the build also supplies ``kitty/launcher/kitty.app``; see the `upstream build"
+" notes <https://sw.kovidgoyal.net/kitty/build/>`_ for details about unsigned applications and "
+"relocating a checkout."
+msgstr ""
+"运行开发构建时，请保留检出目录。修改源码后重新运行 ``./dev.sh build``。开发构建使用内部路径 ``kitty/launcher/kitty`` 和 "
+"``kitty/launcher/kitten``，而不是安装后的 ``silkie`` 与 ``silkie-kitten`` 命令。在 macOS 上，构建还提供 "
+"``kitty/launcher/kitty.app``；未签名应用和移动检出目录的说明见 `上游构建文档 <https://sw.kovidgoyal.net/kitty/build/>`_。"
+
+#: docs/silkie/install.rst:117
+msgid "Try the input inspector"
+msgstr "试用输入检查工具"
+
+#: docs/silkie/install.rst:119
+msgid "Inside the installed Silkie terminal, run::"
+msgstr "在已安装的 Silkie 终端中运行：::"
+
+#: docs/silkie/install.rst:123
+msgid "For a source build, run the tool from the repository directory. On macOS::"
+msgstr "源码构建请在仓库目录中运行工具。macOS：::"
+
+#: docs/silkie/install.rst:127
+msgid "On Linux::"
+msgstr "Linux：::"
+
+#: docs/silkie/install.rst:131
+msgid ""
+"The :doc:`show_pointer kitten <show-pointer>` queries the input protocols and displays the events"
+" supported by the terminal and connected devices."
+msgstr ":doc:`show_pointer 工具 <show-pointer>` 会查询输入协议，并显示终端和已连接设备支持的事件。"
+
+#: docs/silkie/install.rst:135
+msgid ""
+"Next, read :doc:`configuration` for Silkie-specific options and the `kitty configuration manual "
+"<https://sw.kovidgoyal.net/kitty/conf/>`_ for the inherited settings. Applications should query "
+":doc:`capabilities-protocol` before enabling extensions."
+msgstr ""
+"接下来，阅读 :doc:`configuration` 了解 Silkie 专有选项，参阅 `kitty 配置手册 "
+"<https://sw.kovidgoyal.net/kitty/conf/>`_ 了解继承的设置。应用应在启用扩展之前查询 :doc:`capabilities-protocol`。"
+
+
+# Installer and Extended-width defaults.
+msgid "Install Silkie and Iosevka on a supported macOS, Ubuntu, Debian, or Kylin system::"
+msgstr "在支持的 macOS、Ubuntu、Debian 或麒麟系统上安装 Silkie 和 Iosevka：::"
+
+# Installer and Extended-width defaults.
+msgid "The installer explains which Goblin Reactor package source it needs and asks for permission before adding or changing it. It reuses an existing matching source, verifies the APT signing key, and installs ``silkie`` with Homebrew or APT. It also installs the unmodified Iosevka font: the official Homebrew ``font-iosevka`` cask on macOS, or a checksum-verified upstream release on Linux. Source approval is read from your terminal, so it also works when the script is piped to Bash. macOS needs Apple Silicon and macOS 26 or newer; Homebrew is installed with your permission if it is missing."
+msgstr "安装脚本会说明所需的 Goblin Reactor 软件源，并在添加或修改之前征求许可。它会复用匹配的现有软件源，验证 APT 签名密钥，并通过 Homebrew 或 APT 安装 ``silkie``。此外还会安装未经修改的 Iosevka 字体：macOS 使用官方 Homebrew ``font-iosevka`` cask，Linux 则下载并校验上游发布文件的校验和。软件源许可从终端读取，因此脚本通过管道传给 Bash 时也能使用。macOS 需要 Apple Silicon 和 macOS 26 或更高版本；如果缺少 Homebrew，脚本会征得许可后安装。"
+
+# Installer and Extended-width defaults.
+msgid "The installer includes Iosevka for Silkie's default text, using the wider Extended faces for regular, bold and italic text. For a manual font installation, use ``brew install --cask font-iosevka`` on macOS or download the unmodified fonts from `Iosevka's releases <https://github.com/be5invis/Iosevka/releases>`_ on Linux. The scripted Linux installation currently pins Iosevka 34.9.1."
+msgstr "安装脚本包含 Silkie 默认文本使用的 Iosevka 字体；常规、粗体和斜体均使用较宽的 Extended 字形。手动安装时，macOS 可使用 ``brew install --cask font-iosevka``；Linux 可从 `Iosevka 发布页 <https://github.com/be5invis/Iosevka/releases>`_ 下载未经修改的字体。Linux 安装脚本目前固定使用 Iosevka 34.9.1。"
+
+# Installer and Extended-width defaults.
+msgid "Iosevka is copyright Renzhi Li and is distributed under the `SIL Open Font License 1.1 <https://github.com/be5invis/Iosevka/blob/main/LICENSE.md>`_. This license permits use, installation and bundling with software, provided the font retains its license and copyright notices; the font cannot be sold on its own. The installer downloads the original fonts without modifying or renaming them, and saves the matching ``Iosevka-LICENSE.md`` alongside the font files. The fonts remain licensed separately from Silkie."
+msgstr "Iosevka 的版权属于 Renzhi Li，按 `SIL 开源字体许可证 1.1 <https://github.com/be5invis/Iosevka/blob/main/LICENSE.md>`_ 分发。该许可证允许使用、安装和随软件一起分发字体，前提是保留许可证与版权声明；字体不得单独出售。安装脚本下载原始字体，不修改或重命名字体，并将对应的 ``Iosevka-LICENSE.md`` 保存到字体文件旁。字体与 Silkie 采用各自独立的许可证。"
+
+# Installer and Extended-width defaults.
+msgid "To use Iosevka's narrower original width instead, configure::"
+msgstr "如需使用 Iosevka 原来较窄的字宽，可配置：::"
+
+# Installer and Extended-width defaults.
+msgid "Install Iosevka Slab separately for the serif role. For CJK text, install a regional Sarasa Term or Noto Sans CJK family. Font files are separate from the application; when a preferred font is absent, the operating system substitutes an available face. The :doc:`font-protocol` reference links the font sources and explains regional glyph selection."
+msgstr "衬线字体角色需要另行安装 Iosevka Slab。中日韩文本可安装相应地区的 Sarasa Term 或 Noto Sans CJK 字体。字体文件与应用分开提供；首选字体缺失时，操作系统会替换为可用字体。:doc:`font-protocol` 列出了字体来源，并说明了地区字形的选择方式。"

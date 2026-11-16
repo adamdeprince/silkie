@@ -2261,6 +2261,10 @@ typedef struct GLFWdisplayinfo {
     /*! Bits per color channel.
      */
     int bits;
+    /*! Individual channel widths, 0 when unknown or not applicable. These
+     *  describe the system's display framebuffer, not measured panel precision.
+     */
+    int red_bits, green_bits, blue_bits, gray_bits;
     /*! The scale of the framebuffer the system asks for: physical pixels per
      *  logical unit.
      */

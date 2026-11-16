@@ -284,6 +284,9 @@ typedef struct {
         uint8_t decoration, hdr_fg, hdr_bg, gamut_fg, gamut_bg;
         color_type fg, bg, decoration_fg;
         uint32_t text_style;
+        int32_t depth; // Requested binocular divergence in millidegrees; zero is the terminal plane.
+        float depth_pixels; // Alternate depth, in reference pixels at 1920 pixels per eye.
+        float phase; // Right-eye vertical displacement relative to the left eye, in physical pixels.
     } sgr;
 } Cursor;
 

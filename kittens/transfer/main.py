@@ -97,7 +97,7 @@ is turned off as it just wastes CPU cycles.
 --permissions-bypass -p
 The password to use to skip the transfer confirmation popup in kitty. Must match
 the password set for the :opt:`file_transfer_confirmation_bypass` option in
-:file:`kitty.conf`. Note that leading and trailing whitespace is removed from
+:file:`silkie.conf`. Note that leading and trailing whitespace is removed from
 the password. A password starting with :code:`.`, :code:`/` or :code:`~`
 characters is assumed to be a file name to read the password from. A value of
 :code:`-` means read the password from STDIN. A password that is purely a number

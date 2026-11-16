@@ -13,6 +13,25 @@
 
 GlobalState global_state = {{0}};
 
+void
+spatial_map_pointer(OSWindow *w, double *x, double *y) {
+    if (!w->spatial.mode || w->spatial.output_width < 2 || !w->spatial.output_height) return;
+    const double width = w->spatial.red_blue ? w->spatial.output_width : w->spatial.output_width / 2, height = w->spatial.output_height;
+    const double px = !w->spatial.red_blue && *x >= width ? *x - width : *x;
+    const double f = tan(w->spatial.fov * M_PI / 360.);
+    const double ray[3] = {(2. * px / width - 1.) * f, (1. - 2. * *y / height) * f * height / width, -1.};
+    double world[3] = {0};
+    // Invert the world-to-view orthonormal rotation by transposing it.
+    for (unsigned row = 0; row < 3; row++) for (unsigned col = 0; col < 3; col++)
+        world[row] += w->spatial.rotation[row * 3 + col] * ray[col];
+    if (world[2] >= 0.) { *x = *y = -1.; return; }
+    const double scale = w->spatial.mode == 2 ? w->spatial.scale : 1.;
+    const double cx = -world[0] / (world[2] * f * scale) - (scale - 1.) / scale;
+    const double cy = -world[1] * width / (world[2] * f * scale * height) + (scale - 1.) / scale;
+    *x = (cx + 1.) * 0.5 * w->viewport_width;
+    *y = (1. - cy) * 0.5 * w->viewport_height;
+}
+
 #define REMOVER(array, qid, count, destroy, capacity) \
     {                                                 \
         for (size_t i = 0; i < count; i++) {          \

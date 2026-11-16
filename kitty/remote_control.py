@@ -270,7 +270,7 @@ global_options_spec = partial(
 --to
 An address for the kitty instance to control. Corresponds to the address given
 to the kitty instance via the :option:`kitty --listen-on` option or the
-:opt:`listen_on` setting in :file:`kitty.conf`. If not specified, the
+:opt:`listen_on` setting in :file:`silkie.conf`. If not specified, the
 environment variable :envvar:`KITTY_LISTEN_ON` is checked. If that is also not
 found, messages are sent to the controlling terminal for this process, i.e.
 they will only work if this process is run within a kitty window.
@@ -279,7 +279,7 @@ they will only work if this process is run within a kitty window.
 --password
 A password to use when contacting kitty. This will cause kitty to ask the user
 for permission to perform the specified action, unless the password has been
-accepted before or is pre-configured in :file:`kitty.conf`. To use a blank password
+accepted before or is pre-configured in :file:`silkie.conf`. To use a blank password
 specify :option:`kitten @ --use-password` as :code:`always`.
 
 
@@ -287,10 +287,10 @@ specify :option:`kitten @ --use-password` as :code:`always`.
 completion=type:file relative:conf kwds:-
 default=rc-pass
 A file from which to read the password. Trailing whitespace is ignored. Relative
-paths are resolved from the kitty configuration directory. Use - to read from STDIN.
+paths are resolved from the Silkie configuration directory. Use - to read from STDIN.
 Use :code:`fd:num` to read from the file descriptor :code:`num`.
 Used if no :option:`kitten @ --password` is supplied. Defaults to checking for the
-:file:`rc-pass` file in the kitty configuration directory.
+:file:`rc-pass` file in the Silkie configuration directory.
 
 
 --password-env
@@ -398,7 +398,7 @@ def do_io(to: str | None, original_cmd: dict[str, Any], no_response: bool, respo
 
 
 cli_msg = (
-    'Control {appname} by sending it commands. Set the :opt:`allow_remote_control` option in :file:`kitty.conf` or use a password, for this to work.'
+    'Control {appname} by sending it commands. Set the :opt:`allow_remote_control` option in :file:`silkie.conf` or use a password, for this to work.'
 ).format(appname=appname)
 
 

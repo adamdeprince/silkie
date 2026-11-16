@@ -1,0 +1,221 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:43+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/capabilities-protocol.rst:2
+msgid "Extension capabilities protocol"
+msgstr "扩展能力协议"
+
+#: docs/capabilities-protocol.rst:6
+msgid ""
+"A family of terminal extensions share one framing: ``OSC 777`` followed by a selector naming the "
+"extension, a protocol version and ``key=value`` fields. The tablet pointer, scroll, gesture and "
+"frame presentation protocols are written this way. Each of them can be probed with its own "
+"``query``, but a program at the far end of a slow link pays a round trip per probe, and a program"
+" resuming after a reconnection through a relay wants to know which of the modes it had turned on "
+"are still in effect. This protocol answers both with one exchange. It is an open terminal "
+"extension like the others: small, unobtrusive, easy to implement, and no change to what the TTY "
+"is."
+msgstr ""
+"一组终端扩展共用同一种封装：``OSC 777`` 后接指明扩展的选择器、协议版本和 ``key=value`` 字段。数位板指针、滚动、手势及画面呈现协议都采用这种方式。每项扩展都能用自己的 "
+"``query`` "
+"探测，但慢速连接另一端的程序每次探测都要付出一次往返延迟；经中继重连后恢复的程序，也需要知道之前启用的模式是否仍然有效。本协议通过一次交换回答这两个问题。它与其他协议一样，是小巧、低干扰、易于实现的开放终端扩展，不改变"
+" TTY 的本质。"
+
+#: docs/capabilities-protocol.rst:17
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/capabilities-protocol.rst:19
+msgid "Messages are ``OSC 777`` with the ``caps`` selector::"
+msgstr "消息使用带有 ``caps`` 选择器的 ``OSC 777``：::"
+
+#: docs/capabilities-protocol.rst:23
+msgid ""
+"They follow the rules that every extension of the family shares, which :doc:`extension-framing` "
+"gives: the syntax of the fields, which frames are rejected, the units, the clock, and which "
+"reports may be merged under load. ``v``, the protocol version, is ``1``, and ``op`` is one of "
+"``query``, ``cap`` and ``reset``. The terminal sends only replies, which are never merged or "
+"dropped."
+msgstr ""
+"消息遵循 :doc:`extension-framing` 中规定的共用规则，包括字段语法、拒绝哪些帧、单位、时钟，以及高负载时哪些报告可以合并。协议版本 ``v`` 为 "
+"``1``；``op`` 为 ``query``、``cap`` 或 ``reset``。终端仅发送回复，且回复绝不合并或丢弃。"
+
+#: docs/capabilities-protocol.rst:31
+msgid "Listing the extensions"
+msgstr "列出扩展"
+
+#: docs/capabilities-protocol.rst:33
+msgid "A program asks which selectors the terminal speaks::"
+msgstr "程序询问终端支持哪些选择器：::"
+
+#: docs/capabilities-protocol.rst:37
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. The terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复会原样返回，以便匹配查询。终端回答：::"
+
+#: docs/capabilities-protocol.rst:42
+msgid ""
+"``caps`` is a bit set of what the terminal does with this selector: ``1`` the listing, ``2`` the "
+"reset request described below. ``ext`` is a comma separated list, in no particular order, of "
+"every selector the terminal accepts, each followed by a period and the highest version of its "
+"protocol the terminal speaks. ``caps.1`` is always among them. The list says only that a selector"
+" is understood; what it can do with the display and the input devices at hand is still learned "
+"from that selector's own ``query``, which a program now sends only for the selectors it intends "
+"to use, and may send in the same write as this query since replies arrive in order."
+msgstr ""
+"``caps`` 是该选择器支持能力的位集合：``1`` 表示列举功能，``2`` 表示下述重置请求。``ext`` "
+"以逗号分隔、顺序不定，列出终端接受的全部选择器，每项后接句点和该选择器支持的最高协议版本。其中始终包含 "
+"``caps.1``。列表只表示终端认识该选择器；当前显示器和输入设备实际能做什么，仍需通过该选择器自己的 ``query`` "
+"查询。程序现在只需查询自己打算使用的选择器；由于回复按顺序到达，这些查询可与本查询在同一次写入中发送。"
+
+#: docs/capabilities-protocol.rst:52
+msgid ""
+"The answer is the same for every window of a terminal and does not change while the terminal "
+"runs, so a program needs it once. A terminal that does not support this protocol ignores the "
+"query, so a program must time out and may then fall back to probing the selectors it needs one at"
+" a time."
+msgstr "同一终端的全部窗口得到相同答案，且终端运行期间不会变化，因此程序只需查询一次。不支持本协议的终端会忽略查询；程序必须设置超时，随后可回退为逐个探测所需选择器。"
+
+#: docs/capabilities-protocol.rst:58
+msgid "Graphics media and formats"
+msgstr "图形传输介质与格式"
+
+#: docs/capabilities-protocol.rst:60
+msgid ""
+"The same reply says which transmission media and pixel formats of the :doc:`graphics protocol "
+"<graphics-protocol>` the terminal accepts. ``media`` lists the values of the ``t`` key: ``d`` "
+"direct, ``f`` a file, ``t`` a temporary file, ``s`` shared memory, and any medium an extension "
+"adds, such as ``g`` for a GPU surface. ``format`` lists the values of the ``f`` key: ``24`` RGB, "
+"``32`` RGBA, ``100`` PNG, and any format an extension adds, such as ``64`` for HDR images and "
+"``200`` for vector images. Both describe what the terminal accepts, not what is wise over a given"
+" connection, and the graphics protocol's own query action (``a=q``) remains the check for one "
+"particular image. A relay answers with what it can carry to the terminal behind it: files, shared"
+" memory and GPU surfaces do not cross machines, so over a network relay only ``d`` is available."
+msgstr ""
+"同一回复还说明终端接受 :doc:`图形协议 <graphics-protocol>` 的哪些传输介质和像素格式。``media`` 列出 ``t`` 键的值：``d`` 直接传输、``f`` "
+"文件、``t`` 临时文件、``s`` 共享内存，以及扩展新增的介质，例如 GPU 表面的 ``g``。``format`` 列出 ``f`` 键的值：``24`` RGB、``32`` "
+"RGBA、``100`` PNG，以及扩展新增的格式，例如 HDR 图像的 ``64`` 和矢量图像的 "
+"``200``。两者描述终端接受什么，而非某条连接上应选什么；具体图像仍可用图形协议自身的查询操作（``a=q``）检查。中继应按自己能传送至后端终端的能力回答：文件、共享内存和 GPU "
+"表面不能跨机器传输，因此网络中继只提供 ``d``。"
+
+#: docs/capabilities-protocol.rst:74
+msgid "Reading a mode"
+msgstr "读取模式"
+
+#: docs/capabilities-protocol.rst:76
+msgid ""
+"Most selectors have a per-window mode that a program turns on with ``op=mode : mode=1`` and off "
+"with ``mode=0``. A ``mode`` request without a ``mode`` field is a read, answered with the current"
+" state::"
+msgstr ""
+"多数选择器有一个按窗口设置的模式，程序通过 ``op=mode : mode=1`` 启用，通过 ``mode=0`` 关闭。不带 ``mode`` 字段的 ``mode`` "
+"请求表示读取，回复当前状态：::"
+
+#: docs/capabilities-protocol.rst:83
+msgid ""
+"and the ``cap`` reply of every selector that has a mode carries a ``mode`` field with the same "
+"value, so a single ``query`` tells a program both what the selector offers and whether its mode "
+"is on. A terminal may let its user refuse a mode, or some of its bits, for every program or for "
+"some; a refused bit reads back as off and nothing it would have turned on is reported, so a "
+"program reads a mode back after setting it rather than assume it was granted. The reply uses the "
+"version number the request asked for. A selector the terminal does not speak answers neither, "
+"which is what the listing above is for."
+msgstr ""
+"每个具有模式的选择器，其 ``cap`` 回复也包含同值的 ``mode`` 字段，因此一次 ``query`` "
+"即可得知选择器提供什么，以及模式是否开启。终端可允许用户针对全部或部分程序拒绝某个模式或部分位。被拒绝的位读回为关闭，且不会产生本应由该位启用的报告。因此程序设置模式后应读回，而不是假定请求已获准。回复使用请求中的版本号。不支持的选择器不会回答这两类请求，这正是前述列举功能的用途。"
+
+#: docs/capabilities-protocol.rst:94
+msgid "Turning every mode off"
+msgstr "关闭全部模式"
+
+#: docs/capabilities-protocol.rst:96
+msgid ""
+"Each selector asks a program to turn its mode off before it exits, suspends or fails. A program "
+"that is killed does none of that, and what it leaves behind is worse than a stale color: with the"
+" scroll mode on the wheel no longer scrolls the scrollback, and with tool reports on a pen no "
+"longer clicks. One request turns every mode of the window off::"
+msgstr "各选择器均要求程序在退出、挂起或失败之前关闭自己启用的模式。被强制终止的程序无法做到这一点，遗留状态带来的问题不只是配色残留：滚动模式会阻止滚轮滚动回滚缓冲区，工具报告会让笔无法再执行点击。一条请求即可关闭窗口的全部模式：::"
+
+#: docs/capabilities-protocol.rst:104
+msgid ""
+"It has the effect of ``op=mode : mode=0`` sent to every selector that has a mode, including "
+"whatever else turning that mode off does, such as the ``cancel`` reports for the contacts and "
+"gestures in progress. Selectors without a mode are not affected, nothing that is not an extension"
+" mode is touched, and there is no reply. It is what a shell, a wrapper script or a supervisor "
+"sends on behalf of a program that has gone away, and a program may send it when it starts, to "
+"begin from a known state. A terminal that honours the request sets bit ``2`` of ``caps`` in the "
+"listing; one that does not ignores it."
+msgstr ""
+"其效果等同于向每个具有模式的选择器发送 ``op=mode : mode=0``，并执行关闭模式所需的其他动作，例如为进行中的接触和手势发送 ``cancel`` "
+"报告。无模式的选择器不受影响，非扩展模式的状态不受影响，也不产生回复。shell、包装脚本或监督进程可代替已经退出的程序发送该请求；程序启动时也可发送，以从已知状态开始。支持请求的终端在能力列表的"
+" ``caps`` 中设置位 ``2``；不支持的终端将其忽略。"
+
+#: docs/capabilities-protocol.rst:114
+msgid ""
+"kitty also does this by itself whenever a shell marks the start of a prompt with ``OSC 133 ; A``,"
+" as its shell integration does. A prompt means the shell is reading input, so whatever program "
+"set the modes is no longer in charge of the window, and without this a drawing program that "
+"crashed would leave the user at a prompt they cannot scroll. When no mode is on, which is the "
+"usual case, a prompt costs nothing and sends nothing. What follows from it:"
+msgstr ""
+"每当 shell 像 kitty 的 shell 集成那样，用 ``OSC 133 ; A`` 标记提示符开始时，kitty 也会自动执行这一重置。提示符意味着 shell "
+"正在读取输入，之前设置模式的程序已不再控制窗口；否则绘图程序崩溃后，用户可能面对无法滚动的提示符。通常没有模式开启，此时提示符标记不增加开销，也不发送内容。由此可知："
+
+#: docs/capabilities-protocol.rst:121
+msgid ""
+"A program run by the shell is not affected, since the mark comes before the command starts. A "
+"program stopped with job control finds its modes off when it is resumed, which every selector "
+"already tells it to assume."
+msgstr "shell 启动的程序不受影响，因为标记发生在命令开始前。通过作业控制挂起的程序恢复时，其模式已关闭；这也符合每个选择器要求程序作出的假设。"
+
+#: docs/capabilities-protocol.rst:124
+msgid ""
+"A program that marks prompts of its own and uses a mode, a shell with a drawing widget, for "
+"instance, turns the mode on after it has marked the prompt, each time."
+msgstr "自行标记提示符并使用模式的程序，例如带绘图控件的 shell，每次都应在标记提示符之后启用模式。"
+
+#: docs/capabilities-protocol.rst:129
+msgid "Relays and multiplexers"
+msgstr "中继与多路复用器"
+
+#: docs/capabilities-protocol.rst:131
+msgid ""
+"A multiplexer, or a relay that resynthesizes the screen rather than passing bytes through, "
+"answers the listing itself with the intersection of the selectors it can carry and the selectors "
+"the terminal behind it listed, so a program never sees a selector that cannot reach the display. "
+"It keeps the modes with the rest of the terminal state. A program that reconnects reads the modes"
+" it depends on rather than assuming they survived, since the terminal at the other end may have "
+"been reset with ``RIS`` in the meantime, and turns them on again as needed."
+msgstr ""
+"对于重建屏幕、而非字节透传的多路复用器或中继，它应自行回答能力列表，内容是自身能传送的选择器与后端终端公布的选择器的交集，确保程序不会看到无法抵达显示器的能力。模式应与其他终端状态一起保存。重连后的程序应读回所依赖的模式，而不是假定它们仍然存在，因为另一端的终端可能已被"
+" ``RIS`` 重置；必要时重新开启。"
+
+#: docs/capabilities-protocol.rst:140
+msgid ""
+"A multiplexer applies the reset request to the pane it came from and then works out again what it"
+" needs from the terminal behind it; it does not pass the request on while another pane still has "
+"a mode on. The same goes for a prompt mark: a multiplexer that forwards the marks of its panes to"
+" a terminal that resets on them finds that terminal's modes off after a prompt in any pane, so it"
+" either keeps the marks to itself or turns the modes back on. A relay that passes bytes through "
+"passes the request through."
+msgstr "多路复用器将重置请求应用于发出请求的窗格，再重新计算自己对后端终端的需求；其他窗格仍启用某模式时，不应继续转发重置请求。提示符标记同理：如果将各窗格的标记转发给遇标记即重置的终端，任何窗格出现提示符都会关闭终端模式，因此多路复用器应拦截标记或重新开启所需模式。字节透传中继则原样转发请求。"
+

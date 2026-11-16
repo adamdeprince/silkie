@@ -188,11 +188,12 @@ makedirs(const char *path, int mode) {
 }
 
 static bool
-is_dir_ok_for_config(char *q) {
+is_dir_ok_for_config(char *q, size_t sz) {
     size_t len = strlen(q);
-    memcpy(q + len, "/kitty", sizeof("/kitty"));
-    len += sizeof("/kitty") - 1;
-    memcpy(q + len, "/kitty.conf", sizeof("/kitty.conf"));
+    // access() requires a path shorter than the OS PATH_MAX buffer used by callers.
+    if (sizeof("/silkie/silkie.conf") > sz - len) return false;
+    safe_snprintf(q + len, sz - len, "%s", "/silkie/silkie.conf");
+    len += sizeof("/silkie") - 1;
     if (access(q, F_OK) != 0) return false;
     q[len] = 0;
     return access(q, W_OK) == 0;
@@ -207,15 +208,15 @@ get_config_dir(char *output, size_t outputsz) {
         expand_tilde(x, buf1, sizeof(buf1));   \
         lexical_absolute_path(buf1, dest, sz); \
     }
-    q = getenv("KITTY_CONFIG_DIRECTORY");
+    q = getenv("SILKIE_CONFIG_DIRECTORY");
     if (q && q[0]) {
         expand(q, output, outputsz);
         return true;
     }
-#define check_and_ret(x)                               \
-    if (x && x[0]) {                                   \
-        expand(x, output, outputsz);                   \
-        if (is_dir_ok_for_config(output)) return true; \
+#define check_and_ret(x)                                       \
+    if (x && x[0]) {                                           \
+        expand(x, output, outputsz);                           \
+        if (is_dir_ok_for_config(output, outputsz)) return true; \
     }
     q = getenv("XDG_CONFIG_HOME");
     check_and_ret(q);
@@ -225,17 +226,20 @@ get_config_dir(char *output, size_t outputsz) {
 #endif
     q = getenv("XDG_CONFIG_DIRS");
     if (q && q[0]) {
-        safe_snprintf(buf2, sizeof(buf2), "%s", q);
-        char *s, *token = strtok_r(buf2, ":", &s);
+        char *dirs = strdup(q);
+        if (!dirs) { perror("Cannot allocate config directory list"); exit(1); }
+        char *s, *token = strtok_r(dirs, ":", &s);
         while (token) {
-            check_and_ret(token);
+            expand(token, output, outputsz);
+            if (is_dir_ok_for_config(output, outputsz)) { free(dirs); return true; }
             token = strtok_r(NULL, ":", &s);
         }
+        free(dirs);
     }
     q = getenv("XDG_CONFIG_HOME");
     if (!q || !q[0]) q = "~/.config";
     expand(q, buf2, sizeof(buf2));
-    safe_snprintf(output, outputsz, "%s/kitty", buf2);
+    safe_snprintf(output, outputsz, "%s/silkie", buf2);
     if (makedirs(output, 0755)) return true;
     return false;
 #undef expand

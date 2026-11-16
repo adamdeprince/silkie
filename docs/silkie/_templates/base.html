@@ -1,0 +1,7 @@
+{% extends "!base.html" %}
+{% block extrahead %}
+{{ super() }}
+{% if zh %}<link rel="stylesheet" href="{{ asset_prefix }}_static/silkie.css">{% endif %}
+<link rel="alternate" hreflang="en" href="{{ english_url }}">
+<link rel="alternate" hreflang="zh-CN" href="{{ chinese_url }}">
+{% endblock %}

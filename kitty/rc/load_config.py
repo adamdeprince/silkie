@@ -30,9 +30,9 @@ class LoadConfig(RemoteCommand):
 
     short_desc = '(Re)load a config file'
     desc = (
-        '(Re)load the specified kitty.conf config files(s). If no files are specified the previously specified config file is reloaded.'
+        '(Re)load the specified silkie.conf config files(s). If no files are specified the previously specified config file is reloaded.'
         ' Note that the specified paths must exist and be readable by the kitty process on the computer that process is running on.'
-        ' Relative paths are resolved with respect to the kitty config directory on the computer running kitty.'
+        ' Relative paths are resolved with respect to the Silkie config directory on the computer running kitty.'
     )
     options_spec = f"""\
 --ignore-overrides

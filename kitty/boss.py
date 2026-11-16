@@ -40,7 +40,7 @@ from .clipboard import (
     set_clipboard_string,
     set_primary_selection,
 )
-from .colors import ColorSchemes, theme_colors
+from .colors import ColorSchemes, color_profile_signature, theme_colors
 from .conf.utils import BadLine, KeyAction, to_cmdline
 from .config import common_opts_as_dict, prepare_config_file_for_editing, store_effective_config
 from .constants import (
@@ -551,6 +551,12 @@ class Boss:
             wclass = self.args.cls or app_class
         tm = TabManager(os_window_id, self.args, wclass, wname, startup_session, profile=profile)
         self.os_window_map[os_window_id] = tm
+        if is_macos and get_options().spatial_mode != 'off':
+            from .spatial import controller
+            try:
+                controller.configure(os_window_id, get_options().spatial_mode)
+            except (ValueError, OSError) as error:
+                log_error(f'Spatial display disabled: {error}')
         return os_window_id
 
     def add_os_panel(self, cfg: LayerShellConfig, wclass: str | None = app_class, wname: str | None = app_class) -> int:
@@ -602,10 +608,18 @@ class Boss:
         tm = self.active_tab_manager
         profile = load_profiles().get(profile_id)
         if tm is not None and profile is not None:
+            windows = tuple(w for tab in tm for w in tab)
+            colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in windows}
+            bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in windows}
             tm.profile = profile
             apply_to_os_window(tm)
             tm.apply_options()
             tm.resize()
+            for w in windows:
+                if w.screen.color_profile.default_bg != bg_colors_before[w.id]:
+                    self.default_bg_changed_for(w.id)
+                if color_profile_signature(w.screen.color_profile) != colors_before[w.id]:
+                    w.notify_child_of_color_change()
 
     def list_os_windows(
         self, self_window: Window | None = None, tab_filter: Callable[[Tab], bool] | None = None, window_filter: Callable[[Window], bool] | None = None
@@ -906,9 +920,9 @@ class Boss:
         if q is None:
             if self.ask_if_remote_cmd_is_allowed(pcmd, window, peer_id, self_window):
                 return AsyncResponse()
-        response = {'ok': False, 'error': 'Remote control is disabled. Add allow_remote_control to your kitty.conf'}
+        response = {'ok': False, 'error': 'Remote control is disabled. Add allow_remote_control to your silkie.conf'}
         if q is False and pcmd.get('password'):
-            response['error'] = 'The user rejected this password or it is disallowed by remote_control_password in kitty.conf'
+            response['error'] = 'The user rejected this password or it is disallowed by remote_control_password in silkie.conf'
         no_response = pcmd.get('no_response') or False
         if no_response:
             return None
@@ -1019,7 +1033,7 @@ class Boss:
             map f1 remote_control_script /path/to/script arg1 arg2 ...
 
         See :ref:`rc_mapping` for details. Relative paths are resolved with respect
-        to the kitty config directory.
+        to the Silkie config directory.
         """,
     )
     def remote_control_script(self, path: str, *args: str) -> None:
@@ -1869,7 +1883,7 @@ class Boss:
         if not get_options().dynamic_background_opacity:
             self.show_error(
                 _('Cannot change background opacity'),
-                _('You must set the dynamic_background_opacity option in kitty.conf to be able to change background opacity'),
+                _('You must set the dynamic_background_opacity option in silkie.conf to be able to change background opacity'),
             )
             return
         os_window_id = window.os_window_id
@@ -2216,6 +2230,7 @@ class Boss:
                 w.focus_changed(focused)
                 if is_macos and focused:
                     cocoa_set_menubar_title(w.title or '')
+                    update_native_menus()
             tm.mark_tab_bar_dirty()
             # Redraw borders when focus changes if draw_window_borders_for_single_window is enabled
             # and there's only a single window (to show inactive border when OS window loses focus)
@@ -2521,6 +2536,8 @@ class Boss:
         self, os_window_id: int, x: int, y: int, viewport_width: int, viewport_height: int, was_maximized: bool, is_layer_shell: bool
     ) -> None:
         tm = self.os_window_map.pop(os_window_id, None)
+        from .spatial import controller
+        controller.close(os_window_id)
         opts = get_options()
         if not is_layer_shell:
             if opts.remember_window_position and not is_wayland() and not self.os_window_map:
@@ -2649,7 +2666,7 @@ class Boss:
             )
         return None
 
-    @ac('misc', 'Edit the kitty.conf config file in your favorite text editor')
+    @ac('misc', 'Edit the silkie.conf config file in your favorite text editor')
     def edit_config_file(self, *a: Any) -> None:
         confpath = prepare_config_file_for_editing()
         self.edit_file(confpath)
@@ -2731,7 +2748,7 @@ class Boss:
             if is_wrapped:
                 cmd = [kitten_exe(), kitten]
                 env['KITTEN_RUNNING_AS_UI'] = '1'
-                env['KITTY_CONFIG_DIRECTORY'] = config_dir
+                env['SILKIE_CONFIG_DIRECTORY'] = config_dir
                 if w is not None:
                     env['KITTY_BASIC_COLORS'] = json.dumps(w.screen.color_profile.basic_colors())
             else:
@@ -2875,7 +2892,7 @@ class Boss:
         cmd = [kitten_exe(), '__show_error__', '--title', title]
         env = {}
         env['KITTEN_RUNNING_AS_UI'] = '1'
-        env['KITTY_CONFIG_DIRECTORY'] = config_dir
+        env['SILKIE_CONFIG_DIRECTORY'] = config_dir
         return SpecialWindow(
             cmd,
             override_title=title,
@@ -3076,6 +3093,8 @@ class Boss:
         add_timer(callback, 0, False)
 
     def destroy(self) -> None:
+        from .spatial import controller
+        controller.close()
         self.shutting_down = True
         self.child_monitor.shutdown_monitor()
         self.set_update_check_process()
@@ -3578,8 +3597,11 @@ class Boss:
             window.refresh()
 
     def apply_new_options(self, opts: Options) -> None:
+        spatial_mode_changed = get_options().spatial_mode != opts.spatial_mode
+        spatial_output_changed = get_options().spatial_output != opts.spatial_output
         bg_before = get_options().background
         bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in self.all_windows}
+        colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in self.all_windows}
         theme_colors.refresh()
         theme_colors.patch_opts(opts, self.args.debug_rendering)
         configured_color_scheme_changed = bg_before.is_dark != opts.background.is_dark
@@ -3612,6 +3634,22 @@ class Boss:
         update_native_menus()
         for tm in self.all_tab_managers:
             tm.apply_options()
+        if is_macos:
+            from .spatial import controller, requires_xreal
+            for wid in self.os_window_map:
+                mode = opts.spatial_mode if spatial_mode_changed else controller.windows.get(wid, None)
+                if not isinstance(mode, str):
+                    mode = mode.mode if mode is not None else opts.spatial_mode
+                if mode != 'off' or wid in controller.windows:
+                    try:
+                        previous = controller.windows.get(wid)
+                        output = opts.spatial_output if spatial_output_changed or previous is None else previous.output
+                        if not opts.experimental_xreal_1s and requires_xreal(mode, output):
+                            mode = 'off'
+                        controller.configure(wid, mode, output)
+                    except ValueError as error:
+                        self.show_error(_('Spatial display'), str(error))
+            update_native_menus()
         # Update colors
         from .colors import color_scheme_spec, patch_colors
 
@@ -3631,6 +3669,8 @@ class Boss:
                 # reload, but the application might still want to be notified
                 # that the user's color scheme preference has changed.
                 w.report_color_scheme_preference_if_wanted()
+            if configured_color_scheme_changed or color_profile_signature(w.screen.color_profile) != colors_before.get(w.id):
+                w.notify_child_of_color_change()
             w.refresh(reload_all_gpu_data=True)
         load_shader_programs.recompile_if_needed()
 
@@ -3643,7 +3683,7 @@ class Boss:
         the specified config files, in order. Loading a config file *replaces* all
         config options. For example::
 
-            map f5 load_config_file /path/to/some/kitty.conf
+            map f5 load_config_file /path/to/some/silkie.conf
         """,
     )
     def load_config_file(self, *paths: str, apply_overrides: bool = True, overrides: Sequence[str] = ()) -> None:
@@ -3762,6 +3802,35 @@ class Boss:
         opts.color_scheme = scheme
         theme_colors.apply_color_scheme()
 
+    @ac('misc', 'Set spatial presentation for this OS window: off, follow, or anchored')
+    def set_spatial_mode(self, mode: str = 'off') -> None:
+        from .spatial import controller
+        window = self.active_window
+        if window is not None:
+            try:
+                controller.configure(window.os_window_id, mode)
+            except (ValueError, OSError) as error:
+                self.show_error(_('Spatial display'), str(error))
+            update_native_menus()
+
+    @ac('misc', 'Set stereo output for this OS window: sbs or red-blue')
+    def set_spatial_output(self, output: str = 'sbs') -> None:
+        from .spatial import controller
+        window = self.active_window
+        if window is not None:
+            try:
+                current = controller.windows.get(window.os_window_id)
+                controller.configure(window.os_window_id, current.mode if current else get_options().spatial_mode, output)
+            except (ValueError, OSError) as error:
+                self.show_error(_('Spatial display'), str(error))
+            update_native_menus()
+
+    @ac('misc', 'Recenter the spatial terminal wall at the current head orientation')
+    def recenter_spatial(self) -> None:
+        from .spatial import controller
+        if self.active_window is not None:
+            controller.recenter(self.active_window.os_window_id)
+
     @ac('misc', 'Declare an e-paper display in all windows: yes, no, or toggle')
     def set_eink_mode(self, mode: str = 'toggle') -> None:
         from .fast_data_types import set_eink_mode
@@ -3770,9 +3839,16 @@ class Boss:
         if mode not in ('yes', 'no', 'toggle'):
             self.show_error(_('Invalid e-paper mode'), _('Use yes, no or toggle.'))
             return
-        enabled = not opts.eink_mode if mode == 'toggle' else mode == 'yes'
+        previous = opts.eink_mode
+        enabled = not previous if mode == 'toggle' else mode == 'yes'
+        colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in self.all_windows}
         set_eink_mode(enabled)
         theme_colors.apply_color_scheme()
+        if previous != enabled:
+            for w in self.all_windows:
+                # Palette changes already notified; explicit light/dark can keep it unchanged.
+                if color_profile_signature(w.screen.color_profile) == colors_before[w.id]:
+                    w.notify_child_of_color_change()
 
     @ac(
         'misc',
@@ -4206,6 +4282,12 @@ class Boss:
 
     def on_system_color_scheme_change(self, appearance: ColorSchemes, is_initial_value: bool) -> None:
         theme_colors.on_system_color_scheme_change(appearance, is_initial_value)
+
+    def on_display_color_change(self, os_window_id: int) -> None:
+        if (tm := self.os_window_map.get(os_window_id)) is not None:
+            for tab in tm:
+                for w in tab:
+                    w.notify_child_of_color_change()
 
     @ac(
         'win',

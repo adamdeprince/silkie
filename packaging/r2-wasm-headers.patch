@@ -1,0 +1,14 @@
+--- a/worker.mjs
++++ b/worker.mjs
+@@ -121,6 +121,11 @@
+     const { key, object } = found;
+     if (!Number.isSafeInteger(object.size) || object.size < 0) return empty(503);
+     const headers = objectHeaders(object);
++    if (site.directory === 'silkie.goblinreactor.com') {
++      headers.set('Cross-Origin-Opener-Policy', 'same-origin');
++      headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
++      headers.set('Cross-Origin-Resource-Policy', 'same-origin');
++    }
+     if (site.directory === 'apt.goblinreactor.com' && /^(dists|rpm)\//.test(key)) {
+       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+       headers.set('Cloudflare-CDN-Cache-Control', 'no-store');

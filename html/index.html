@@ -5,11 +5,12 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta content="Silkie is a terminal emulator built on kitty, extending it with pen and touch input, vector graphics, HDR, and presentation feedback. Install Silkie and explore its specifications." name="description" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Install Silkie" href="install.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/index.html">
 
-    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 --><title>Silkie — a terminal emulator with richer input and graphics</title><link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 --><title>Silkie — a terminal emulator with richer input and graphics</title><link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=1501c2de" />
+    <link rel="stylesheet" type="text/css" href="_static/silkie.css?v=5567bb5a" />
     
     
 
@@ -91,7 +92,12 @@
       }
     }
   }
-</style></head>
+</style>
+
+
+<link rel="alternate" hreflang="en" href="index.html">
+<link rel="alternate" hreflang="zh-CN" href="zh-CN/index.html">
+</head>
   <body>
     
 
@@ -206,9 +212,12 @@
   <a class="site-brand" href="#" aria-label="Silkie home"><span class="brand-mark" aria-hidden="true">s<span>_</span></span>silkie</a>
   <nav aria-label="Main navigation">
     <a href="#features">Features</a>
+    <a href="games.html">Games</a>
+    <a href="browser-demo.html">Try Silkie</a>
     <a href="#install">Install</a>
     <a href="#documentation">Documentation</a>
     <a href="https://github.com/adamdeprince/silkie/tree/silkie">Source <span aria-hidden="true">↗</span></a>
+    <a href="zh-CN/index.html" lang="zh-CN" hreflang="zh-CN">简体中文</a>
   </nav>
   <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
     <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
@@ -221,7 +230,14 @@
   <p class="site-eyebrow">Silkie / Terminal emulator / macOS + Linux</p>
   <section id="a-terminal-for-richer-interaction">
 <h1>A terminal for richer interaction.<a class="headerlink" href="#a-terminal-for-richer-interaction" title="Link to this heading">¶</a></h1>
-<div class="hero-lead docutils container">
+<figure class="hero-game">
+  <a href="games.html">
+    <img src="_static/games/sprint-tug.png" width="1100" height="393"
+         alt="Loki and Skaði playing tug with a Silkie hen in Silkie Sprint"
+         fetchpriority="high">
+  </a>
+  <figcaption><a href="games.html">Meet the games for Silkie and kitty.</a></figcaption>
+</figure><div class="hero-lead docutils container">
 <p>Silkie is a terminal emulator for macOS and Linux, built on
 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/">kitty</a>. It extends the terminal with
 pen and touch input, vector graphics, HDR color, and display timing feedback.</p>
@@ -229,13 +245,35 @@ pen and touch input, vector graphics, HDR color, and display timing feedback.</p
 respond to a stylus, and understand the display it is running on.</p>
 <div class="home-actions docutils container">
 <p><a class="reference external" href="#install">Install Silkie</a>
+<a class="reference internal" href="browser-demo.html"><span class="doc">Try the browser demo</span></a>
 <a class="reference internal" href="developer-guide.html"><span class="doc">Read the specifications</span></a></p>
 </div>
 <div class="source-note docutils container">
 <p>Open source · Main branch: <a class="reference external" href="https://github.com/adamdeprince/silkie/tree/silkie">silkie</a></p>
 </div>
 </div>
-<div class="lineage docutils container">
+<link rel="stylesheet" href="_static/demo/demo.css">
+<div class="browser-demo-window">
+  <section class="demo-panel" id="demo-panel" aria-label="Interactive Silkie terminal">
+    <div class="demo-toolbar" role="group" aria-label="Terminal controls">
+      <span class="demo-window-title">silkie<span aria-hidden="true">_</span></span>
+      <button type="button" id="demo-start" hidden>Restart shell</button>
+      <button type="button" id="demo-fullscreen" aria-pressed="false">Fullscreen</button>
+    </div>
+    <p class="demo-status" id="demo-status" role="status" aria-live="polite">Starting the shell…</p>
+    <div id="silkie-terminal" aria-label="Silkie Linux terminal"></div>
+  </section>
+  <p class="demo-caption">Play in a full-window terminal:
+  <a href="browser-demo.html?game=presidential" data-demo-game="presidential" target="silkie-presidential">Presidential</a> ·
+  <a href="browser-demo.html?game=silkie-loophole" data-demo-game="silkie-loophole" target="silkie-silkie-loophole">Silkie Loophole</a> ·
+  <a href="browser-demo.html?game=silkie-sprint" data-demo-game="silkie-sprint" target="silkie-silkie-sprint">Silkie Sprint</a> ·
+  <a href="browser-demo.html?game=silkie-scramble" data-demo-game="silkie-scramble" target="silkie-silkie-scramble">Silkie Scramble</a>.
+  Use <strong>Fullscreen</strong> to fill the display.
+  <a href="browser-ssh.html">SSH setup</a> ·
+  <a href="https://cheerpx.io/">Powered by CheerpX</a></p>
+</div>
+<noscript><p>Enable JavaScript to run the WebAssembly terminal.</p></noscript>
+<script type="module" src="_static/demo/app.mjs"></script><div class="lineage docutils container">
 <p class="rubric">Specifications and documentation</p>
 <div class="lineage-silkie docutils container">
 <p><strong>03 / Silkie extensions</strong></p>
@@ -281,6 +319,9 @@ Let the terminal draw pen strokes as input arrives, without waiting for
 each sample to make a round trip to the application.</p>
 <p><a class="reference internal" href="vector-protocol.html"><span class="doc">Vector images</span></a> · <a class="reference internal" href="ink-protocol.html"><span class="doc">Terminal-side ink</span></a> ·
 <a class="reference internal" href="gpu-surface-protocol.html"><span class="doc">GPU surfaces</span></a></p>
+<p>Send one-, two-, four-, or eight-bit grayscale pixels and RGB565 without
+requiring compression; <a class="reference internal" href="packed-image-protocol.html"><span class="doc">Packed image formats</span></a> describes the compact
+wire encodings, independent of the display’s color model.</p>
 </section>
 <section id="color-beyond-ordinary-sdr">
 <h3>Color beyond ordinary SDR<a class="headerlink" href="#color-beyond-ordinary-sdr" title="Link to this heading">¶</a></h3>
@@ -297,11 +338,27 @@ frame is presented. Use those reports to coordinate drawing with the terminal.</
 <a class="reference internal" href="frame-protocol.html"><span class="doc">Frame presentation</span></a></p>
 </section>
 </section>
+<section id="games">
+<h2>Games<a class="headerlink" href="#games" title="Link to this heading">¶</a></h2>
+<p>Play <strong>Presidential</strong>, a political satire and economic simulation, or
+<strong>Silkie Loophole</strong>, a raccoon’s trick-or-treating adventure in Montpelier.
+<strong>Silkie Sprint</strong> crosses roads and rivers; <strong>Silkie Scramble</strong> gathers
+chicks while outwitting garden predators. All four run in the browser’s
+Linux terminal and support native Silkie and kitty terminals.</p>
+<p><a class="reference internal" href="games.html"><span class="doc">Play the games, watch gameplay, and find installation instructions</span></a>.</p>
+</section>
 <section id="install">
 <h2>Install<a class="headerlink" href="#install" title="Link to this heading">¶</a></h2>
 <p>Binary packages are available from <a class="reference external" href="https://brew.goblinreactor.com/#silkie">Homebrew</a>
 for Apple Silicon macOS, and the <a class="reference external" href="https://apt.goblinreactor.com/#silkie">APT repository</a>
-for Linux. See <a class="reference internal" href="install.html"><span class="doc">Install Silkie</span></a> for the supported targets and installation instructions.</p>
+for Linux. See <a class="reference internal" href="install.html"><span class="doc">Install Silkie</span></a> for the supported targets and installation instructions.
+To set up package sources and install both Silkie and its Iosevka font:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="o">-</span><span class="n">fsSL</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">silkie</span><span class="o">.</span><span class="n">goblinreactor</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">install</span><span class="o">.</span><span class="n">sh</span> <span class="o">|</span> <span class="n">bash</span>
+</pre></div>
+</div>
+<p>The installer asks before adding or changing Goblin Reactor package sources.
+It installs unmodified Iosevka with its SIL Open Font License notice.
+Silkie uses Iosevka’s wider Extended faces by default.</p>
 <p>To build from source, use the <code class="docutils literal notranslate"><span class="pre">silkie</span></code> branch. You will need Git, a C compiler, and
 Go; Linux also needs the system libraries listed in the
 <a class="reference internal" href="install.html"><span class="doc">installation guide</span></a>. The build script downloads the remaining
@@ -312,8 +369,9 @@ build dependencies.</p>
 ./kitty/launcher/kitty
 </pre></div>
 </div>
-<p>The executable retains the name <code class="docutils literal notranslate"><span class="pre">kitty</span></code>. Running this checkout’s executable
-launches Silkie with its extensions. Upstream kitty packages install upstream
+<p>Launch the installed application with <code class="docutils literal notranslate"><span class="pre">silkie</span></code> and use <code class="docutils literal notranslate"><span class="pre">silkie-kitten</span></code> for
+its companion tools. The source build above runs directly from the checkout.
+Upstream kitty packages install upstream
 kitty; use the Silkie packages or source above to get these additions.</p>
 <div class="home-actions docutils container">
 <p><a class="reference internal" href="install.html"><span class="doc">Installation details</span></a>

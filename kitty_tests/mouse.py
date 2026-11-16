@@ -8,6 +8,7 @@ from functools import partial
 from kitty.fast_data_types import (
     GLFW_MOD_ALT,
     GLFW_MOD_CONTROL,
+    GLFW_MOD_SHIFT,
     GLFW_MOUSE_BUTTON_LEFT,
     GLFW_MOUSE_BUTTON_RIGHT,
     MOUSE_SELECTION_WORD_AND_LINE_FROM_POINT,
@@ -101,6 +102,17 @@ class TestMouse(BaseTest):
         self.ae(sel(), '1234')
         press(x=4), release(x=0.6)
         self.ae(sel(), '234')
+
+        # Shift-drag starts a new selection when there is nothing to extend.
+        init()
+        press(modifiers=GLFW_MOD_SHIFT)
+        move(x=3.6, q='1234')
+        release(x=3.6)
+        self.ae(sel(), '1234')
+        # With a selection present, Shift-click still extends the nearest end.
+        press(x=4.6, modifiers=GLFW_MOD_SHIFT)
+        release(x=4.6)
+        self.ae(sel(), '12345')
 
         # multi line movement
         init()

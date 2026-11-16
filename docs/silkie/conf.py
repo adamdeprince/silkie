@@ -25,11 +25,16 @@ copyright = (
     f'Copyright © {copyright_years(2016)} Kovid Goyal and contributors'
 )
 language = 'en'
+locale_dirs = ['_locales']
+gettext_compact = False
+gettext_additional_targets = ['raw', 'image', 'index']
 root_doc = 'index'
 html_theme = 'furo'
 html_title = 'Silkie'
 templates_path = ['_templates']
 html_static_path = ['_static']
+html_extra_path = ['install.sh']
+html_favicon = '../../logo/kitty.png'
 html_css_files = ['silkie.css']
 html_show_sourcelink = False
 html_show_sphinx = False
@@ -95,8 +100,38 @@ SILKIE_OPTIONS = (
 )
 
 
+def localized_build(app: Sphinx, config) -> None:
+    chinese = config.language.startswith('zh')
+    config.html_baseurl = 'https://silkie.goblinreactor.com/' + ('zh-CN/' if chinese else '')
+    if chinese:
+        config.html_search_language = 'zh'
+        # Sphinx otherwise silently omits Chinese words when jieba is absent.
+        try:
+            import jieba  # noqa: F401
+        except ImportError as error:
+            raise ConfigError('Chinese search requires jieba; install docs/silkie/requirements.txt') from error
+        # The translated site shares the large demo image and game assets with
+        # English. Sphinx still installs its own localized theme/search assets.
+        config.html_static_path = []
+        config.html_css_files = []
+        config.html_extra_path = []
+        config.exclude_patterns = [*config.exclude_patterns, 'index.zh-CN.rst']
+        config.copyright = (
+            f'{copyright_years(2026)} Adam DePrince。Silkie 基于 kitty 开发；'
+            f'kitty 版权所有 © {copyright_years(2016)} Kovid Goyal 及贡献者'
+        )
+
+
 def page_template(app: Sphinx, pagename: str, templatename: str, context: dict[str, object], doctree: nodes.document | None) -> str | None:
-    if pagename == 'index':
+    chinese = app.config.language.startswith('zh')
+    context['zh'] = chinese
+    context['language'] = 'zh-CN' if chinese else 'en'
+    context['asset_prefix'] = '../' if chinese else ''
+    context['english_url'] = ('../' if chinese else '') + pagename + '.html'
+    context['chinese_url'] = ('' if chinese else 'zh-CN/') + pagename + '.html'
+    if pagename == 'index.zh-CN':
+        return 'language-redirect.html'
+    if pagename in {'index', 'browser-demo'}:
         return 'home.html'
     return None
 
@@ -106,7 +141,8 @@ def upstream_reference(app: Sphinx, env: BuildEnvironment, node: nodes.Element, 
     kind = node.get('reftype')
     if kind == 'doc' and target in UPSTREAM_DOCS:
         if not node.get('refexplicit'):
-            content = nodes.inline('', UPSTREAM_DOCS[target])
+            titles = {'graphics-protocol': '终端图形协议', 'kittens/query_terminal': '查询终端'}
+            content = nodes.inline('', titles[target] if app.config.language.startswith('zh') else UPSTREAM_DOCS[target])
         url = f'{UPSTREAM}{target}/'
     elif kind == 'opt' and target in UPSTREAM_OPTIONS:
         url = f'{UPSTREAM}conf/#opt-kitty.{target}'
@@ -143,6 +179,7 @@ def configuration_reference(app: Sphinx, docname: str, source: list[str]) -> Non
 
 
 def setup(app: Sphinx) -> None:
+    app.connect('config-inited', localized_build)
     app.add_object_type('opt', 'opt', objname='configuration option')
     app.connect('missing-reference', upstream_reference)
     app.connect('source-read', configuration_reference)

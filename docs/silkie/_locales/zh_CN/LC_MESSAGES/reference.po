@@ -1,0 +1,74 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:36+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/reference.rst:17
+msgid "Discovery and framing"
+msgstr "能力探测与消息封装"
+
+#: docs/silkie/reference.rst:24
+msgid "Text and typography"
+msgstr "文本与排版"
+
+#: docs/silkie/reference.rst:30
+msgid "Input and interaction"
+msgstr "输入与交互"
+
+#: docs/silkie/reference.rst:41
+msgid "Graphics and color"
+msgstr "图形与色彩"
+
+#: docs/silkie/reference.rst:51
+msgid "Display and timing"
+msgstr "显示与时序"
+
+#: docs/silkie/reference.rst:59
+msgid "Using Silkie"
+msgstr "使用 Silkie"
+
+#: docs/silkie/reference.rst:2
+msgid "Silkie extension reference"
+msgstr "Silkie 扩展参考手册"
+
+#: docs/silkie/reference.rst:4
+msgid ""
+"Silkie extends kitty with tablet and touch input, gestures, terminal-side ink, vector graphics, "
+"HDR, and display and presentation feedback. This reference specifies Silkie's additions: their "
+"escape sequences, fields, units, replies, configuration, and implementation limits."
+msgstr "Silkie 为 kitty 增添了数位板与触摸输入、手势、终端侧墨迹、矢量图形、HDR，以及显示信息与画面呈现反馈。本手册规定了 Silkie 扩展的转义序列、字段、单位、回复、配置和实现限制。"
+
+#: docs/silkie/reference.rst:9
+msgid ""
+"Start with :doc:`capabilities-protocol` to discover what a terminal supports, then :doc"
+":`extension-framing` for the framing and timing rules shared by the OSC 777 protocols. :doc"
+":`show-pointer` provides an interactive input inspector."
+msgstr ""
+"先通过 :doc:`capabilities-protocol` 探测终端支持的功能，再阅读 :doc:`extension-framing`，了解 OSC 777 "
+"协议共用的封装与时序规则。:doc:`show-pointer` 提供交互式输入检查工具。"
+
+#: docs/silkie/reference.rst:13
+msgid ""
+"For the project overview, see :doc:`index`. For installation, see :doc:`install`. The :doc"
+":`developer-guide` connects these extensions to kitty's protocols, kitten tools, and the "
+"underlying terminal conventions."
+msgstr ""
+"项目概览见 :doc:`index`，安装方法见 :doc:`install`。:doc:`developer-guide` 介绍这些扩展与 kitty 协议、kitten "
+"工具及基础终端约定之间的关系。"
+

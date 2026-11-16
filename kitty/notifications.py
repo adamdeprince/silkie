@@ -246,6 +246,7 @@ class NotificationCommand:
 
     # metadata
     identifier: str = ''
+    route: str = ''
     done: bool = True
     channel_id: int = 0
     desktop_notification_id: int = -1
@@ -283,6 +284,7 @@ class NotificationCommand:
     def parse_metadata(self, metadata: str, prev: 'NotificationCommand') -> tuple[PayloadType, bool]:
         payload_type = PayloadType.title
         payload_is_encoded = False
+        action_updates: list[tuple[Action, bool]] = []
         if metadata:
             for part in metadata.split(':'):
                 if not part:
@@ -295,6 +297,10 @@ class NotificationCommand:
                         payload_type = PayloadType.unknown
                 elif k == 'i':
                     self.identifier = sanitize_id(v)
+                elif k == 'r':
+                    if v and not valid_notification_route(v):
+                        raise ValueError('Invalid notification return route')
+                    self.route = v
                 elif k == 'e':
                     payload_is_encoded = v == '1'
                 elif k == 'd':
@@ -308,6 +314,7 @@ class NotificationCommand:
                         except ValueError:
                             pass
                         else:
+                            action_updates.append((ac, remove))
                             if remove:
                                 self.actions -= {ac}
                             else:
@@ -347,8 +354,11 @@ class NotificationCommand:
                         self.sound_name = base64_decode(v).decode('utf-8')
                     except Exception:
                         self.log(f'Ignoring invalid sound name in notification: {v!r}')
-        if not prev.done and prev.identifier == self.identifier:
+        if not prev.done and prev.identifier == self.identifier and prev.route == self.route:
             self.merge_metadata(prev)
+            self.actions = prev.actions
+            for action, remove in action_updates:
+                self.actions = self.actions - {action} if remove else self.actions.union({action})
         return payload_type, payload_is_encoded
 
     def merge_metadata(self, prev: 'NotificationCommand') -> None:
@@ -727,13 +737,16 @@ class FreeDesktopIntegration(DesktopIntegration):
                 log_error(f'Could not find dbus_notification_id for {desktop_notification_id=} for event {event}')
         return q
 
-    def created(self, dbus_notification_id: int, desktop_notification_id: int) -> None:
-        self.dbus_to_desktop[desktop_notification_id] = dbus_notification_id
-        self.desktop_to_dbus[dbus_notification_id] = desktop_notification_id
-        if len(self.dbus_to_desktop) > 128:
-            k, v = self.dbus_to_desktop.popitem(False)
-            self.desktop_to_dbus.pop(v, None)
-        if n := self.notification_manager.notification_created(dbus_notification_id):
+    def created(self, desktop_notification_id: int, dbus_notification_id: int) -> None:
+        previous = self.desktop_to_dbus.get(desktop_notification_id)
+        if previous is not None and previous != dbus_notification_id:
+            self.dbus_to_desktop.pop(previous, None)
+        replaced = self.dbus_to_desktop.get(dbus_notification_id)
+        if replaced is not None and replaced != desktop_notification_id:
+            self.desktop_to_dbus.pop(replaced, None)
+        self.dbus_to_desktop[dbus_notification_id] = desktop_notification_id
+        self.desktop_to_dbus[desktop_notification_id] = dbus_notification_id
+        if n := self.notification_manager.notification_created(desktop_notification_id):
             # self.supports_sound does not tell us if the notification server
             # supports named sounds or not so we play the named sound
             # ourselves and tell the server to mute any sound it might play.
@@ -766,6 +779,8 @@ class FreeDesktopIntegration(DesktopIntegration):
                 self.notification_manager.notification_activated(desktop_notification_id, button)
             elif event_type == 'closed':
                 self.notification_manager.notification_closed(desktop_notification_id)
+                self.dbus_to_desktop.pop(dbus_notification_id, None)
+                self.desktop_to_dbus.pop(desktop_notification_id, None)
 
     def notify(self, nc: NotificationCommand, existing_desktop_notification_id: int | None) -> int:
         from .fast_data_types import dbus_send_notification
@@ -865,7 +880,11 @@ def sanitize_identifier_pat() -> 're.Pattern[str]':
 
 
 def sanitize_id(v: str) -> str:
-    return sanitize_identifier_pat().sub('', v)[:512]
+    return sanitize_identifier_pat().sub('', v)
+
+
+def valid_notification_route(route: str) -> bool:
+    return all(re.fullmatch(r'[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/[0-9]+', hop) for hop in route.split(','))
 
 
 class Log:
@@ -891,6 +910,9 @@ class NotificationManager:
         self.channel = channel
         self.base_cache_dir = base_cache_dir
         self.log = log
+        from uuid import uuid4
+
+        self.route_instance = uuid4().hex
         self.icon_data_cache = IconDataCache(base_cache_dir=self.base_cache_dir)
         script_path = os.path.join(config_dir, 'notifications.py')
         self.filter_script: Callable[[NotificationCommand], bool] = lambda nc: False
@@ -907,8 +929,8 @@ class NotificationManager:
     def reset(self) -> None:
         self.icon_data_cache.clear()
         self.in_progress_notification_commands: 'OrderedDict[int, NotificationCommand]' = OrderedDict()
-        self.in_progress_notification_commands_by_client_id: dict[str, NotificationCommand] = {}
-        self.pending_commands: dict[int, NotificationCommand] = {}
+        self.in_progress_notification_commands_by_client_id: dict[tuple[int, str, str], NotificationCommand] = {}
+        self.pending_commands: dict[tuple[int, str, str], NotificationCommand] = {}
 
     def notification_created(self, desktop_notification_id: int) -> NotificationCommand | None:
         if n := self.in_progress_notification_commands.get(desktop_notification_id):
@@ -928,8 +950,13 @@ class NotificationManager:
                 self.purge_notification(n)
             if n.focus_requested:
                 self.channel.focus(n.channel_id, n.activation_token)
-            if n.report_requested:
-                self.channel.send(n.channel_id, f'99;i={n.identifier or "0"};{button or ""}')
+            if n.report_requested or n.route:
+                metadata = f'i={n.identifier or "0"}'
+                if n.route:
+                    route = f'{n.route},silkie/{self.route_instance}/{n.channel_id}'
+                    actions = ','.join(sorted(action.value for action in n.actions))
+                    metadata += f':r={route}:a={actions}'
+                self.channel.send(n.channel_id, f'99;{metadata};{button or ""}')
             if n.on_activation:
                 try:
                     n.on_activation(n, button)
@@ -949,7 +976,7 @@ class NotificationManager:
         if n := self.in_progress_notification_commands.get(desktop_notification_id):
             self.purge_notification(n)
             if n.close_response_requested and self.desktop_integration.supports_close_events:
-                self.send_closed_response(n.channel_id, n.identifier)
+                self.send_closed_response(n.channel_id, n.identifier, route=n.route)
             if n.on_close is not None:
                 try:
                     n.on_close(n)
@@ -1007,7 +1034,7 @@ class NotificationManager:
         if not cmd.title or not self.is_notification_allowed(cmd, channel_id) or self.is_notification_filtered(cmd):
             return None
         existing_desktop_notification_id: int | None = None
-        existing_cmd = self.in_progress_notification_commands_by_client_id.get(cmd.identifier) if cmd.identifier else None
+        existing_cmd = self.in_progress_notification_commands_by_client_id.get((channel_id, cmd.route, cmd.identifier)) if cmd.identifier else None
         if existing_cmd:
             existing_desktop_notification_id = existing_cmd.desktop_notification_id
         desktop_notification_id = self.desktop_integration.notify(cmd, existing_desktop_notification_id)
@@ -1015,7 +1042,7 @@ class NotificationManager:
         if existing_cmd:
             self.notification_replaced(existing_cmd, cmd)
         if not self.desktop_integration.supports_close_events and cmd.close_response_requested:
-            self.send_closed_response(channel_id, cmd.identifier, untracked=True)
+            self.send_closed_response(channel_id, cmd.identifier, untracked=True, route=cmd.route)
         return desktop_notification_id
 
     def expire_notification(self, desktop_notification_id: int, command_id: int, timer_id: int | None) -> None:
@@ -1027,10 +1054,7 @@ class NotificationManager:
         cmd.desktop_notification_id = desktop_notification_id
         self.in_progress_notification_commands[desktop_notification_id] = cmd
         if cmd.identifier:
-            self.in_progress_notification_commands_by_client_id[cmd.identifier] = cmd
-        if len(self.in_progress_notification_commands) > 128:
-            _, cmd = self.in_progress_notification_commands.popitem(False)
-            self.in_progress_notification_commands_by_client_id.pop(cmd.identifier, None)
+            self.in_progress_notification_commands_by_client_id[(cmd.channel_id, cmd.route, cmd.identifier)] = cmd
 
     def parse_notification_cmd(self, prev_cmd: NotificationCommand, channel_id: int, raw: str) -> NotificationCommand | None:
         metadata, payload = raw.partition(';')[::2]
@@ -1041,7 +1065,11 @@ class NotificationManager:
             self.log('Malformed metadata section in OSC 99: ' + metadata)
             return None
         if payload_type is PayloadType.query:
-            self.channel.send(channel_id, self.desktop_integration.query_response(cmd.identifier))
+            response = self.desktop_integration.query_response(cmd.identifier)
+            if cmd.route:
+                metadata, separator, payload = response[3:].partition(';')
+                response = f'99;{metadata}:r={cmd.route}{separator}{payload}:r=1'
+            self.channel.send(channel_id, response)
             return None
         if payload_type is PayloadType.alive:
             if cmd.identifier:
@@ -1049,11 +1077,11 @@ class NotificationManager:
             return None
         if payload_type is PayloadType.close:
             if cmd.identifier:
-                to_close = self.in_progress_notification_commands_by_client_id.get(cmd.identifier)
+                to_close = self.in_progress_notification_commands_by_client_id.get((channel_id, cmd.route, cmd.identifier))
                 if to_close:
                     if not self.desktop_integration.close_notification(to_close.desktop_notification_id):
                         if to_close.close_response_requested:
-                            self.send_closed_response(to_close.channel_id, to_close.identifier)
+                            self.send_closed_response(to_close.channel_id, to_close.identifier, route=to_close.route)
                         self.purge_notification(to_close)
             return None
 
@@ -1064,9 +1092,10 @@ class NotificationManager:
         cmd.set_payload(payload_type, payload_is_encoded, payload, prev_cmd)
         return cmd
 
-    def send_closed_response(self, channel_id: int, client_id: str, untracked: bool = False) -> None:
+    def send_closed_response(self, channel_id: int, client_id: str, untracked: bool = False, route: str = '') -> None:
         payload = 'untracked' if untracked else ''
-        self.channel.send(channel_id, f'99;i={client_id}:p={PayloadType.close.value};{payload}')
+        routing = f':r={route}' if route else ''
+        self.channel.send(channel_id, f'99;i={client_id}{routing}:p={PayloadType.close.value};{payload}')
 
     def send_live_response(self, channel_id: int, client_id: str, live_desktop_ids: Sequence[int]) -> None:
         ids = []
@@ -1083,18 +1112,26 @@ class NotificationManager:
             self.purge_notification(self.in_progress_notification_commands[d])
 
     def purge_notification(self, cmd: NotificationCommand) -> None:
-        self.in_progress_notification_commands_by_client_id.pop(cmd.identifier, None)
+        key = (cmd.channel_id, cmd.route, cmd.identifier)
+        if self.in_progress_notification_commands_by_client_id.get(key) is cmd:
+            self.in_progress_notification_commands_by_client_id.pop(key)
         self.in_progress_notification_commands.pop(cmd.desktop_notification_id, None)
 
     def handle_notification_cmd(self, channel_id: int, osc_code: int, raw: str) -> None:
         if osc_code == 99:
-            cmd = self.pending_commands.pop(channel_id, None) or self.create_notification_cmd()
+            try:
+                metadata = dict(part.split('=', 1) for part in raw.partition(';')[0].split(':') if part)
+            except ValueError:
+                self.log('Malformed metadata section in OSC 99')
+                return
+            key = (channel_id, metadata.get('r', ''), sanitize_id(metadata.get('i', '')))
+            cmd = self.pending_commands.pop(key, None) or self.create_notification_cmd()
             q = self.parse_notification_cmd(cmd, channel_id, raw)
             if q is not None:
                 if q.done:
                     self.notify_with_command(q, channel_id)
                 else:
-                    self.pending_commands[channel_id] = q
+                    self.pending_commands[key] = q
         elif osc_code == 9:
             n = self.create_notification_cmd()
             n.title = raw

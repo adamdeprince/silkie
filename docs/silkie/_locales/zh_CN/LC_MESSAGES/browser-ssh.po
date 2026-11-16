@@ -1,0 +1,237 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:38+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/browser-ssh.rst:2
+msgid "SSH in the browser demo"
+msgstr "浏览器演示中的 SSH"
+
+#: docs/silkie/browser-ssh.rst:6
+msgid ""
+"The Silkie WebAssembly demo is under development. This guide records its networking design and "
+"the private relay setup. The :doc:`browser-demo` includes connection controls; end-to-end SSH "
+"validation is still pending."
+msgstr "Silkie 的 WebAssembly 演示仍在开发中。本指南记录其网络设计与私有中继设置。:doc:`browser-demo` 提供连接控件；端到端 SSH 验证仍待完成。"
+
+#: docs/silkie/browser-ssh.rst:10
+msgid ""
+"The browser demo uses CheerpX to run a Linux shell, basic commands, ``silkie-sprint``, ``silkie-"
+"scramble``, and an OpenSSH client. Networking will be optional, using the visitor's own Tailscale"
+" network. **Silkie will not operate a public SSH relay.** The shell and bundled games must work "
+"without connecting to Tailscale."
+msgstr ""
+"浏览器演示使用 CheerpX 运行 Linux shell、基本命令、``silkie-sprint``、``silkie-scramble`` 和 OpenSSH "
+"客户端。网络连接为可选功能，使用访问者自己的 Tailscale 网络。**Silkie 不会运营公共 SSH 中继。** shell 和内置游戏必须在未连接 Tailscale 时也能运行。"
+
+#: docs/silkie/browser-ssh.rst:16
+msgid ""
+"A web page cannot open a raw TCP socket to port 22. CheerpX provides that connectivity through "
+"its `Tailscale integration <https://cheerpx.io/docs/guides/Networking>`_. A netcat relay can then"
+" forward SSH to a machine reachable from the visitor's network. Netcat alone does not provide a "
+"browser transport: the relay recipe below also uses Tailscale."
+msgstr ""
+"网页不能直接向端口 22 打开原始 TCP 套接字。CheerpX 通过 `Tailscale 集成 <https://cheerpx.io/docs/guides/Networking>`_ "
+"提供连接能力。随后可用 netcat 中继，将 SSH 转发到访问者网络中可达的机器。netcat 本身不提供浏览器传输通道：下面的中继方案同时使用 Tailscale。"
+
+#: docs/silkie/browser-ssh.rst:23
+msgid "Connect through Tailscale"
+msgstr "通过 Tailscale 连接"
+
+#: docs/silkie/browser-ssh.rst:25
+msgid ""
+"The terminal startup banner contains a clickable **Connect to Tailscale** link. It prints a "
+"second link for the visitor's Tailscale login, which registers the browser guest in their "
+"tailnet. The page shows connection status and the guest's assigned address. Signing in to the "
+"host computer's Tailscale app does not automatically connect the guest; it needs its own login."
+msgstr ""
+"终端启动横幅包含可点击的 **连接 Tailscale** 链接。点击后会显示另一个用于登录 Tailscale 的链接，将浏览器虚拟机注册到访问者的 tailnet "
+"中。页面会显示连接状态和分配给虚拟机的地址。在宿主计算机的 Tailscale 应用中登录，不会自动连接浏览器虚拟机；虚拟机需要单独登录。"
+
+#: docs/silkie/browser-ssh.rst:32
+msgid "To prepare an SSH destination:"
+msgstr "准备 SSH 目标机器："
+
+#: docs/silkie/browser-ssh.rst:34
+msgid ""
+"Install `Tailscale <https://tailscale.com/download>`_ on the destination machine and sign in to "
+"the same tailnet."
+msgstr "在目标机器上安装 `Tailscale <https://tailscale.com/download>`_，并登录同一个 tailnet。"
+
+#: docs/silkie/browser-ssh.rst:36
+msgid ""
+"Enable the machine's SSH server. On macOS, this is **Remote Login** in System Settings. On Linux,"
+" enable the distribution's OpenSSH server."
+msgstr "启用目标机器的 SSH 服务器。在 macOS 中，该设置为系统设置里的 **远程登录**；在 Linux 中，启用发行版提供的 OpenSSH 服务。"
+
+#: docs/silkie/browser-ssh.rst:38
+msgid ""
+"Allow the browser guest to reach the destination's SSH port in the tailnet access policy and the "
+"destination's firewall."
+msgstr "在 tailnet 访问策略和目标机器防火墙中，允许浏览器虚拟机访问目标的 SSH 端口。"
+
+#: docs/silkie/browser-ssh.rst:40
+msgid ""
+"Once the browser guest is connected, run this in its shell, substituting your account and the "
+"destination's Tailscale IPv4 address::"
+msgstr "浏览器虚拟机连接后，在其 shell 中运行以下命令，将账户和目标 Tailscale IPv4 地址替换为实际值：::"
+
+#: docs/silkie/browser-ssh.rst:45
+msgid ""
+"Use the destination's Tailscale address, not ``localhost``: inside the demo, ``localhost`` refers"
+" to the Linux guest. An exit node is unnecessary for connections to tailnet machines. See "
+"`Tailscale's connection guide <https://tailscale.com/docs/how-to/connect-to-devices>`_."
+msgstr ""
+"使用目标的 Tailscale 地址，而非 ``localhost``：在演示中，``localhost`` 指向 Linux 虚拟机。连接 tailnet 内的机器不需要出口节点。参阅 "
+"`Tailscale 连接指南 <https://tailscale.com/docs/how-to/connect-to-devices>`_。"
+
+#: docs/silkie/browser-ssh.rst:50
+msgid ""
+"This uses ordinary SSH over Tailscale networking. Tailscale SSH is a separate, optional service "
+"with its own access rules; it is not required for this setup. Verify the destination's host-key "
+"fingerprint before accepting a new key."
+msgstr "此方案使用通过 Tailscale 网络传输的普通 SSH。Tailscale SSH 是另一个可选服务，拥有独立的访问规则；本设置不要求启用它。接受新密钥之前，请验证目标机器的主机密钥指纹。"
+
+#: docs/silkie/browser-ssh.rst:55
+msgid "Run your own netcat relay"
+msgstr "运行自己的 netcat 中继"
+
+#: docs/silkie/browser-ssh.rst:57
+msgid ""
+"Use a relay when an SSH destination does not run Tailscale but another computer can reach it. The"
+" relay computer must run Tailscale and be able to open a TCP connection to the destination's SSH "
+"port."
+msgstr "如果 SSH 目标没有运行 Tailscale，但另一台计算机可以访问它，就可以使用中继。中继计算机必须运行 Tailscale，并能向目标的 SSH 端口建立 TCP 连接。"
+
+#: docs/silkie/browser-ssh.rst:61
+msgid "The connection is::"
+msgstr "连接路径如下：::"
+
+#: docs/silkie/browser-ssh.rst:65
+msgid ""
+"These commands use **Nmap Ncat**, a netcat implementation whose executable is named ``ncat``. "
+"Other programs named ``nc`` have different listener and execution options. Install Ncat on the "
+"relay computer; for example::"
+msgstr ""
+"这些命令使用 **Nmap Ncat**，这是可执行文件名为 ``ncat`` 的 netcat 实现。其他名为 ``nc`` 的程序使用不同的监听和执行选项。在中继计算机上安装 "
+"Ncat，例如：::"
+
+#: docs/silkie/browser-ssh.rst:75
+msgid "On the relay computer, replace ``192.168.1.50`` with the SSH server's LAN address, then run::"
+msgstr "在中继计算机上，将 ``192.168.1.50`` 替换为 SSH 服务器的局域网地址，然后运行：::"
+
+#: docs/silkie/browser-ssh.rst:81
+msgid ""
+"The listener binds only to the relay's Tailscale IPv4 address. Its tailnet policy and local "
+"firewall must allow the browser guest to reach TCP port 2222. The destination must allow "
+"connections from the relay. Keep the destination in the command fixed; each incoming connection "
+"starts a separate forwarder to that destination. ``--keep-open`` permits reconnects and "
+"independent simultaneous sessions."
+msgstr ""
+"监听器仅绑定中继的 Tailscale IPv4 地址。tailnet 策略和本地防火墙必须允许浏览器虚拟机访问 TCP 端口 "
+"2222；目标服务器必须允许中继访问。在命令中固定目标地址；每个传入连接都会启动一个独立的转发进程，连接到该目标。``--keep-open`` 允许重连及独立的并发会话。"
+
+#: docs/silkie/browser-ssh.rst:88
+msgid ""
+"If the SSH server runs on the relay computer itself, use ``127.0.0.1`` in place of "
+"``192.168.1.50``. If ``tailscale ip -4`` is unavailable, use the relay's Tailscale IPv4 address "
+"explicitly as the listener address."
+msgstr ""
+"如果 SSH 服务器就在中继计算机上，请用 ``127.0.0.1`` 替换 ``192.168.1.50``。如果 ``tailscale ip -4`` 不可用，请明确使用中继的 "
+"Tailscale IPv4 地址作为监听地址。"
+
+#: docs/silkie/browser-ssh.rst:92
+msgid ""
+"In the browser shell, substitute the relay's Tailscale IPv4 address and the destination's account"
+" name::"
+msgstr "在浏览器 shell 中，将中继的 Tailscale IPv4 地址和目标账户名替换为实际值：::"
+
+#: docs/silkie/browser-ssh.rst:97
+msgid ""
+"``HostKeyAlias`` identifies the destination in SSH's known-hosts file; choose a distinct, stable "
+"name for each destination. Verify the fingerprint against the destination SSH server, rather than"
+" the relay. SSH authentication and encryption run between the guest and that destination; Ncat "
+"forwards the encrypted stream without logging in on the visitor's behalf."
+msgstr ""
+"``HostKeyAlias`` 标识 SSH known-hosts 文件中的目标；为每个目标选择不同且稳定的名称。请核对目标 SSH 服务器的指纹，而不是中继的指纹。SSH "
+"认证和加密在虚拟机与目标之间进行；Ncat 只转发加密数据流，不会代替访问者登录。"
+
+#: docs/silkie/browser-ssh.rst:103
+msgid ""
+"Leave the relay command running while using it. Press Ctrl+C to stop accepting connections, and "
+"close any existing SSH sessions. No router port forwarding, public listener, or Tailscale exit "
+"node is needed. This recipe uses Tailscale's normal infrastructure; Silkie supplies no relay "
+"service."
+msgstr ""
+"使用期间请保持中继命令运行。按 Ctrl+C 停止接收连接，并关闭已有 SSH 会话。无需配置路由器端口转发、公共监听器或 Tailscale 出口节点。此方案使用 Tailscale "
+"的正常基础设施，Silkie 不提供中继服务。"
+
+#: docs/silkie/browser-ssh.rst:108
+msgid ""
+"See the Ncat manuals for `command execution <https://nmap.org/ncat/guide/ncat-exec.html>`_ and "
+"`port forwarding <https://nmap.org/ncat/guide/ncat-tricks.html>`_."
+msgstr ""
+"参阅 Ncat 手册中的 `命令执行 <https://nmap.org/ncat/guide/ncat-exec.html>`_ 和 `端口转发 "
+"<https://nmap.org/ncat/guide/ncat-tricks.html>`_。"
+
+#: docs/silkie/browser-ssh.rst:113
+msgid "Browser integration requirements"
+msgstr "浏览器集成要求"
+
+#: docs/silkie/browser-ssh.rst:115
+msgid ""
+"The CheerpX integration must use the visitor's interactive login. Configure "
+"``networkInterface.loginUrlCb``, ``stateUpdateCb``, and ``netmapUpdateCb`` when creating the "
+"guest, then call ``cx.networkLogin()`` from the explicit connect action. Present the login URL as"
+" a link the visitor can open and show authentication failures and connection changes on the page."
+" See `CheerpX networking <https://cheerpx.io/docs/guides/Networking>`_ and the `Linux.create "
+"reference <https://cheerpx.io/docs/reference/CheerpX.Linux/create>`_."
+msgstr ""
+"CheerpX 集成必须使用访问者的交互式登录。创建虚拟机时配置 ``networkInterface.loginUrlCb``、``stateUpdateCb`` 和 "
+"``netmapUpdateCb``，再由明确的连接操作调用 ``cx.networkLogin()``。将登录 URL 以可打开的链接显示，并在页面上展示认证失败及连接状态变化。参阅 "
+"`CheerpX 网络功能 <https://cheerpx.io/docs/guides/Networking>`_ 和 `Linux.create 参考 "
+"<https://cheerpx.io/docs/reference/CheerpX.Linux/create>`_。"
+
+#: docs/silkie/browser-ssh.rst:124
+msgid ""
+"Do not embed a project-owned Tailscale auth key or a default public proxy in the page or guest "
+"image. The shell startup report must explain that external SSH requires the visitor's Tailscale "
+"connection and link to this guide. Guest SSH keys and known-hosts data belong to the visitor's "
+"guest filesystem, not a Silkie server."
+msgstr ""
+"不要在页面或虚拟机镜像中嵌入项目持有的 Tailscale 认证密钥，也不要预置公共代理。shell 启动报告必须说明：外部 SSH 需要访问者自己的 Tailscale "
+"连接，并链接到本指南。虚拟机的 SSH 密钥和 known-hosts 数据保存在访问者的虚拟机文件系统中，而不在 Silkie 服务器上。"
+
+#: docs/silkie/browser-ssh.rst:131
+msgid "Validation status"
+msgstr "验证状态"
+
+#: docs/silkie/browser-ssh.rst:133
+msgid ""
+"The Ncat recipe has been checked on loopback with Ncat 7.991: 24 sessions, four concurrent "
+"clients, and repeated binary exchanges totalling more than 12 MiB passed. A separate full-duplex "
+"echo test sending a single 1 MiB burst stalled. This remains unresolved; the streaming check does"
+" not establish reliability for every traffic pattern. Browser-to-server SSH, bulk transfers, and "
+"reconnects through CheerpX and Tailscale still need end-to-end validation before the demo is "
+"released."
+msgstr ""
+"已使用 Ncat 7.991 在回环网络上检查此方案：24 个会话、四个并发客户端，以及累计超过 12 MiB 的重复二进制数据交换均通过。另一个一次发送 1 MiB "
+"突发数据的全双工回显测试发生了停滞，原因尚未解决；流式传输检查并不能证明每种流量模式都可靠。在演示发布前，仍需完成浏览器到服务器的 SSH、批量传输，以及通过 CheerpX 和 "
+"Tailscale 重连的端到端验证。"
+

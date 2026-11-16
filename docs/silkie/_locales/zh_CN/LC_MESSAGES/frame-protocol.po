@@ -1,0 +1,180 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:43+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/frame-protocol.rst:2
+msgid "Frame presentation protocol"
+msgstr "画面呈现协议"
+
+#: docs/frame-protocol.rst:6
+msgid ""
+"Synchronized updates (private mode 2026) let a program hand the terminal a whole frame at once, "
+"so that it is shown without tearing. What the program cannot learn is when that frame reached the"
+" screen, so programs that animate, draw strokes as they are made, or play video pace themselves "
+"with timers and either waste work on frames the display never shows or lag behind it. The frame "
+"presentation protocol is the other half: a report after each frame the terminal presents that "
+"contains output from the program. It is an open terminal extension in the manner of the :doc"
+":`tablet-protocol`: small, unobtrusive, easy to implement, and no change to what the TTY is."
+msgstr ""
+"同步更新（私有模式 "
+"2026）让程序一次提交完整画面，避免撕裂。但程序无法知道该帧何时到达屏幕，因此动画、实时笔迹或视频程序只能用定时器控制节奏，可能浪费工作在从未显示的帧上，也可能落后于显示器。画面呈现协议补足另一半：终端每次呈现包含程序输出的画面后发送一条报告。它与"
+" :doc:`tablet-protocol` 一样，是小巧、低干扰、易于实现的开放终端扩展，不改变 TTY 的本质。"
+
+#: docs/frame-protocol.rst:17
+msgid "Framing"
+msgstr "消息封装"
+
+#: docs/frame-protocol.rst:19
+msgid "Frames are ``OSC 777`` with the ``frame`` selector::"
+msgstr "帧使用带有 ``frame`` 选择器的 ``OSC 777``：::"
+
+#: docs/frame-protocol.rst:23
+msgid ""
+"They follow the rules every OSC 777 extension shares, which :doc:`extension-framing` gives: the "
+"syntax of the fields, which frames are rejected, the units and the clock. ``v``, the protocol "
+"version, is ``1``, and ``op`` is one of ``query``, ``cap``, ``mode`` and ``event``."
+msgstr ""
+"帧遵循 :doc:`extension-framing` 规定的 OSC 777 共用规则：字段语法、拒绝哪些帧、单位和时钟。协议版本 ``v`` 为 ``1``，``op`` 为 "
+"``query``、``cap``、``mode`` 或 ``event``。"
+
+#: docs/frame-protocol.rst:29
+msgid "Discovery"
+msgstr "能力探测"
+
+#: docs/frame-protocol.rst:31
+msgid "A program asks the terminal whether it supports the protocol::"
+msgstr "程序询问终端是否支持本协议：::"
+
+#: docs/frame-protocol.rst:35
+msgid ""
+"``id`` is a non-negative 31 bit integer of the program's choosing, echoed in the reply so replies"
+" can be matched to queries. A supporting terminal answers::"
+msgstr "``id`` 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：::"
+
+#: docs/frame-protocol.rst:40
+msgid ""
+"``caps`` is a bit set of what the terminal can report, currently always ``1`` for presentation "
+"events. ``mode`` is the current state of the mode described below. ``period`` is the refresh "
+"period of the display the window is on, in microseconds, or ``0`` when the terminal does not know"
+" it. It changes when the window moves to another display, so a program that cares queries again "
+"from time to time, or simply uses the value carried by every event. A terminal that does not "
+"support the protocol ignores the query, so a program must time out and fall back to timers."
+msgstr ""
+"``caps`` 是终端报告能力的位集合，当前始终为 ``1``，表示呈现事件。``mode`` 为下述模式的当前状态。``period`` "
+"表示窗口所在显示器的刷新周期，单位微秒；终端不知道时为 "
+"``0``。窗口移到另一显示器时它会变化，有需要的程序可定期重新查询，或直接使用每条事件携带的值。不支持协议的终端会忽略查询，因此程序必须设置超时，并回退到定时器。"
+
+#: docs/frame-protocol.rst:50
+msgid "Mode"
+msgstr "模式"
+
+#: docs/frame-protocol.rst:52
+msgid "Reports are off by default and turned on per terminal window with::"
+msgstr "报告默认关闭，按终端窗口开启：::"
+
+#: docs/frame-protocol.rst:56
+msgid ""
+"and off with ``mode=0``. Turning the mode on resets the sequence counter. The mode is local to "
+"the window and is reset by ``RIS``. Programs must turn it off when they exit, suspend or fail, "
+"and turn it back on when resumed. Multiplexers keep it with the rest of the terminal state and "
+"turn it off when detaching. A terminal may let its user refuse the mode, for every program or for"
+" some. A refused mode reads back as off and no frame is reported, so a program reads the mode "
+"back rather than assume it was granted."
+msgstr ""
+"用 ``mode=0`` 关闭。开启模式会重置序号计数器。模式仅作用于当前窗口，并由 ``RIS`` "
+"重置。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他终端状态一起保存它，并在脱离连接时关闭。终端可允许用户针对全部或部分程序拒绝模式；被拒绝时读回为关闭，不产生画面报告，因此程序应读回状态，而不是假定请求已获准。"
+
+#: docs/frame-protocol.rst:64
+msgid ""
+"A ``mode`` request without a ``mode`` field reads the state instead of changing it, and is "
+"answered with::"
+msgstr "不带 ``mode`` 字段的 ``mode`` 请求读取状态而不修改，回复为：::"
+
+#: docs/frame-protocol.rst:69
+msgid ""
+"A program resuming after a reconnection reads the mode to learn whether it survived, rather than "
+"assuming it did."
+msgstr "程序重连后恢复时，应读回模式，确认是否仍然有效，而非假定状态保留。"
+
+#: docs/frame-protocol.rst:73
+msgid "Reports"
+msgstr "报告"
+
+#: docs/frame-protocol.rst:75
+msgid ""
+"While the mode is on, the terminal sends one report each time it presents a frame to the display "
+"that contains output the program wrote since the previous report::"
+msgstr "模式开启时，终端每次向显示器提交包含自上次报告以来程序新写入内容的画面，都会发送一条报告：::"
+
+#: docs/frame-protocol.rst:81
+msgid ""
+"``seq`` counts reports since the mode was turned on. ``t`` is the time the frame was handed to "
+"the display system, in milliseconds on the clock the terminal uses for every extension, see :doc"
+":`extension-framing`, so that it can be set against the ``t`` of the input a program drew the "
+"frame for. ``tu`` is the microseconds past ``t``, ``0`` to ``999``, present when the terminal "
+"measures the time that finely. This is not the time the frame was shown, which is the next "
+"refresh of the display or later; a later version of the protocol may add that. ``period`` is the "
+"refresh period in microseconds as in the ``cap`` reply."
+msgstr ""
+"``seq`` 从模式启用时起计数。``t`` 为画面交给显示系统的时刻，单位毫秒，使用全部终端扩展共用的时钟（见 :doc:`extension-framing`），可与触发该帧的输入事件的 "
+"``t`` 对照。``tu`` 是 ``t`` 之后的微秒数，范围 ``0`` 至 "
+"``999``，仅在终端能测量到该精度时出现。这不是画面真正显示的时刻，实际显示发生在下一次刷新或更晚；后续协议版本可能补充实际显示时刻。``period`` 与 ``cap`` "
+"回复相同，以微秒表示刷新周期。"
+
+#: docs/frame-protocol.rst:91
+msgid ""
+"Every report stands for a frame, so none is ever merged with another or dropped, by the terminal "
+"or by a relay, see :doc:`extension-framing`."
+msgstr "每条报告都代表一帧，因此终端或中继绝不将其合并或丢弃，见 :doc:`extension-framing`。"
+
+#: docs/frame-protocol.rst:94
+msgid ""
+"A frame is reported once, however much output it contains, and a program that writes nothing "
+"receives nothing, so an idle program is never woken. The command that turns the mode on is itself"
+" output, so the first report follows the next presented frame and tells the program the period "
+"without a query. Output that does not change what is on screen may still be followed by a report,"
+" since the terminal counts output, not visible change. When the window is hidden or on an "
+"inactive tab no frames are presented and no reports are sent, so a program must never block "
+"indefinitely waiting for one: wait with a timeout, a few refresh periods long, and carry on."
+msgstr "无论包含多少输出，一帧只报告一次；程序不写入内容就不会收到报告，因此空闲程序不会被唤醒。开启模式的命令本身也是输出，所以第一条报告会在下一次画面提交后到达，并直接提供周期，无须额外查询。即使输出未改变可见内容，仍可能产生报告，因为终端统计的是输出，而非可见变化。窗口被隐藏或位于非活动标签页时不会呈现画面，也不会发送报告，因此程序绝不能无限阻塞等待报告：应以几个刷新周期为超时，随后继续运行。"
+
+#: docs/frame-protocol.rst:105
+msgid "Pacing with synchronized updates"
+msgstr "配合同步更新控制绘制节奏"
+
+#: docs/frame-protocol.rst:107
+msgid ""
+"The intended use is a render loop that submits a frame inside ``CSI ? 2026 h`` and ``CSI ? 2026 "
+"l``, then waits for the report before starting the next one. With reports arriving once per "
+"presented frame, the program draws exactly as fast as the display shows and no faster, and the "
+"difference between the ``t`` of consecutive reports tells it the frame rate it is actually "
+"achieving. A program that renders faster than the display should drop or merge frames rather than"
+" queue them, since the terminal shows only the most recent output at each presentation."
+msgstr ""
+"预期用法是在渲染循环中，将一帧放在 ``CSI ? 2026 h`` 与 ``CSI ? 2026 l`` "
+"之间提交，等待报告后再开始下一帧。每次画面呈现对应一条报告，程序的绘制速度就与显示速度一致，不会过快；相邻报告的 ``t`` "
+"之差可得实际帧率。渲染快于显示的程序应丢弃或合并帧，而非排队，因为终端每次呈现时只显示最新输出。"
+
+#: docs/frame-protocol.rst:116
+msgid ""
+"Reports are written to the program's input like keystrokes. A program must read its input while "
+"waiting for a report, since other input, such as key presses, arrives in the same stream."
+msgstr "报告像按键一样写入程序输入。等待报告时程序仍必须读取输入，因为按键等其他输入也会通过同一字节流到达。"
+

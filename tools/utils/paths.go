@@ -71,8 +71,11 @@ var KittyExe = sync.OnceValue(func() string {
 	if kitty_pid := os.Getenv("KITTY_PID"); kitty_pid != "" {
 		if kp, err := strconv.ParseInt(kitty_pid, 10, 32); err == nil {
 			if p, err := process.NewProcess(int32(kp)); err == nil {
-				if exe, err := p.Exe(); err == nil && filepath.IsAbs(exe) && filepath.Base(exe) == "kitty" {
-					return exe
+				if exe, err := p.Exe(); err == nil && filepath.IsAbs(exe) {
+					switch filepath.Base(exe) {
+					case "kitty", "silkie", "kitty-quick-access", "silkie-quick-access":
+						return exe
+					}
 				}
 			}
 		}
@@ -87,7 +90,7 @@ var KittyExe = sync.OnceValue(func() string {
 })
 
 func ConfigDirForName(name string) (config_dir string) {
-	if kcd := os.Getenv("KITTY_CONFIG_DIRECTORY"); kcd != "" {
+	if kcd := os.Getenv("SILKIE_CONFIG_DIRECTORY"); kcd != "" {
 		return Abspath(Expanduser(kcd))
 	}
 	var locations []string
@@ -102,18 +105,20 @@ func ConfigDirForName(name string) (config_dir string) {
 	if xh := os.Getenv("XDG_CONFIG_HOME"); xh != "" {
 		add(xh)
 	}
-	if dirs := os.Getenv("XDG_CONFIG_DIRS"); dirs != "" {
-		for candidate := range strings.SplitSeq(dirs, ":") {
-			add(candidate)
-		}
-	}
 	add("~/.config")
 	if runtime.GOOS == "darwin" {
 		add("~/Library/Preferences")
 	}
+	if dirs := os.Getenv("XDG_CONFIG_DIRS"); dirs != "" {
+		for candidate := range strings.SplitSeq(dirs, ":") {
+			if candidate != "" {
+				add(candidate)
+			}
+		}
+	}
 	for _, loc := range locations {
 		if loc != "" {
-			q := filepath.Join(loc, "kitty")
+			q := filepath.Join(loc, "silkie")
 			if _, err := os.Stat(filepath.Join(q, name)); err == nil {
 				if unix.Access(q, unix.W_OK) == nil {
 					config_dir = q
@@ -126,12 +131,12 @@ func ConfigDirForName(name string) (config_dir string) {
 	if config_dir == "" {
 		config_dir = "~/.config"
 	}
-	config_dir = filepath.Join(Expanduser(config_dir), "kitty")
+	config_dir = Abspath(filepath.Join(Expanduser(config_dir), "silkie"))
 	return
 }
 
 var ConfigDir = sync.OnceValue(func() (config_dir string) {
-	return ConfigDirForName("kitty.conf")
+	return ConfigDirForName("silkie.conf")
 })
 
 var CacheDir = sync.OnceValue(func() (cache_dir string) {

@@ -227,8 +227,8 @@ typedef struct ExtraCursor {
 } ExtraCursor;
 
 typedef struct { // see docs/display-protocol.rst
-    const char *kind, *color, *gamut;
-    int bits;
+    const char *kind, *color, *gamut, *precision;
+    int bits, red_bits, green_bits, blue_bits, gray_bits;
     unsigned period_us;
     float headroom, scale, ppi;
 } DisplayInfo;
@@ -394,6 +394,7 @@ bool write_escape_code_to_child(Screen *self, unsigned char which, const char *d
 void screen_visibility_changed(Screen *self, bool potentially_visible);
 void screen_caps_query(Screen *self, const char *data, size_t sz);
 void screen_font_protocol(Screen *self, const char *data, size_t sz);
+void screen_depth_protocol(Screen *self, const char *data, size_t sz);
 void screen_reset_extension_modes(Screen *self);
 void screen_display_protocol(Screen *self, const char *data, size_t sz);
 void screen_display_changed(Screen *self, const DisplayInfo *d);
@@ -470,6 +471,7 @@ void color_control(Screen *self, unsigned int code, PyObject *);
 void clipboard_control(Screen *self, int code, PyObject *);
 void shell_prompt_marking(Screen *self, char *buf);
 void file_transmission(Screen *self, PyObject *);
+void ssh_agent_protocol(Screen *self, PyObject *);
 void set_color_table_color(Screen *self, unsigned int code, PyObject *);
 void process_cwd_notification(Screen *self, unsigned int code, const char *, size_t);
 void screen_request_capabilities(Screen *, char, const char *);

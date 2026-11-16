@@ -13,7 +13,7 @@ from kitty.fast_data_types import font_style_metrics
 from kitty.options.types import Options, defaults
 
 from . import Descriptor, FontSpec, family_name_to_key
-from .common import all_fonts_map, get_fine_grained_font, get_font_files, get_font_from_spec, get_variable_data_for_descriptor, set_axis_values
+from .common import all_fonts_map, font_width, get_fine_grained_font, get_font_files, get_variable_data_for_descriptor, set_axis_values
 
 
 class TextStyle(NamedTuple):
@@ -196,7 +196,12 @@ def descriptor_index(style_id: int, bold: bool, italic: bool, cjk: int) -> int:
     else:
         if spec.is_auto:
             spec = FontSpec(system='monospace')
-        descriptor = get_font_from_spec(spec, bold, italic).copy()
+        # A role's specification selects its regular face. Derive automatic
+        # bold/italic faces from it just as for the default font family.
+        auto = FontSpec(system='auto')
+        role_options = options._replace(font_family=spec, bold_font=auto, italic_font=auto, bold_italic_font=auto)
+        key = 'bi' if bold and italic else 'bold' if bold else 'italic' if italic else 'medium'
+        descriptor = get_font_files(role_options)[key].copy()
     vd = get_variable_data_for_descriptor(descriptor)
     if style.weight:
         weight_axis = next((a for a in vd['axes'] if a['tag'] == 'wght'), None)
@@ -204,10 +209,10 @@ def descriptor_index(style_id: int, bold: bool, italic: bool, cjk: int) -> int:
             set_axis_values({'wght': max(weight_axis['minimum'], min(weight_axis['maximum'], style.weight))}, descriptor, vd)
         else:
             candidates = all_fonts_map(not cjk)['family_map'].get(family_name_to_key(descriptor['family']), ())
-            base_width = descriptor.get('width', 0)
+            base_width = font_width(descriptor)
             def score(candidate: Descriptor) -> tuple:
                 is_italic = 'italic' in candidate['style'].lower() or 'oblique' in candidate['style'].lower()
-                return (is_italic != italic, abs(candidate.get('width', 0) - base_width),
+                return (is_italic != italic, abs(font_width(candidate) - base_width),
                         abs(native_metrics(candidate)[0] - style.weight), candidate['postscript_name'])
             if candidates:
                 features = descriptor.get('features')

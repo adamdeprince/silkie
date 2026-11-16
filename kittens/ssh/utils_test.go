@@ -66,7 +66,7 @@ func TestParseSSHArgs(t *testing.T) {
 
 func TestRelevantKittyOpts(t *testing.T) {
 	tdir := t.TempDir()
-	path := filepath.Join(tdir, "kitty.conf")
+	path := filepath.Join(tdir, "silkie.conf")
 	os.WriteFile(path, []byte("term XXX\nshell_integration changed\nterm abcd"), 0o600)
 	rko := read_relevant_kitty_opts(path)
 	if rko.Term != "abcd" {

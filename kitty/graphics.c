@@ -118,6 +118,7 @@ static void
 free_refs_data(Image *img) {
     iter_refs(img) free(i.data->val);
     vt_cleanup(&img->refs_by_internal_id);
+    vt_cleanup(&img->refs_by_client_id);
 }
 
 static void
@@ -178,6 +179,7 @@ texture_id_for_img(Image *img) {
 static void
 free_image_resources(GraphicsManager *self, Image *img) {
     clear_texture_ref(&img->texture);
+    clear_texture_ref(&img->vector_right_texture);
     vector_doc_free(img->vector);
     img->vector = NULL;
 #if defined(__APPLE__) || defined(__linux__)
@@ -269,7 +271,11 @@ ref_by_internal_id(const Image *img, id_type id) {
 
 static ImageRef *
 ref_by_client_id(const Image *img, uint32_t id) {
-    iter_refs((Image *)img) if (i.data->val->client_id == id) return i.data->val;
+    if (id) {
+        ref_map_itr i = vt_get(&((Image *)img)->refs_by_client_id, id);
+        return vt_is_end(i) ? NULL : i.data->val;
+    }
+    iter_refs((Image *)img) if (!i.data->val->client_id) return i.data->val;
     return NULL;
 }
 
@@ -336,16 +342,20 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
         memcpy(clone, img, sizeof(*clone));
         memset(&clone->refs_by_internal_id, 0, sizeof(clone->refs_by_internal_id));
         vt_init(&clone->refs_by_internal_id);
+        memset(&clone->refs_by_client_id, 0, sizeof(clone->refs_by_client_id));
+        vt_init(&clone->refs_by_client_id);
         clone->extra_frames = NULL;
         clone->vector = NULL;  // the texture is shared, the document stays with the live manager
         iter_refs(img) {
             ImageRef *cr = malloc(sizeof(ImageRef));
             if (cr) {
                 memcpy(cr, i.data->val, sizeof(*cr));
-                vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr);
+                if (vt_is_end(vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr))) fatal("Out of memory");
+                if (cr->client_id && vt_is_end(vt_insert(&clone->refs_by_client_id, cr->client_id, cr))) fatal("Out of memory");
             }
         }
         clone->texture = incref_texture_ref(img->texture);
+        clone->vector_right_texture = incref_texture_ref(img->vector_right_texture);
         vt_insert(&dest->images_by_internal_id, clone->internal_id, clone);
     }
 }
@@ -742,6 +752,7 @@ find_or_create_image(GraphicsManager *self, uint32_t id, bool *existing) {
     ans->internal_id = next_id(&self->image_id_counter);
     ans->texture = new_texture_ref();
     vt_init(&ans->refs_by_internal_id);
+    vt_init(&ans->refs_by_client_id);
     if (vt_is_end(vt_insert(&self->images_by_internal_id, ans->internal_id, ans))) fatal("Out of memory");
     return ans;
 }
@@ -780,7 +791,29 @@ get_free_client_id(const GraphicsManager *self) {
     }
 
 #define MAX_DATA_SZ (4u * 100000000u)
-enum FORMATS { RGB = 24, RGBA = 32, RGBA16F = 64, PNG = 100, VECTOR = 200 };
+enum FORMATS { GRAY1 = 1, GRAY2 = 2, GRAY4 = 4, GRAY8 = 8, RGB565 = 16, RGB = 24, RGBA = 32, RGBA16F = 64, PNG = 100, VECTOR = 200 };
+
+static bool
+is_packed_format(uint32_t format) {
+    return format == GRAY1 || format == GRAY2 || format == GRAY4 || format == GRAY8 || format == RGB565;
+}
+
+static bool
+raw_image_data_size(uint32_t format, uint32_t width, uint32_t height, size_t *size) {
+    if (!width || !height) return false;
+    size_t row;
+    if (format < 8) {
+        const unsigned per_byte = 8 / format;
+        row = (size_t)width / per_byte + (width % per_byte != 0);
+    } else {
+        const unsigned per_pixel = format / 8;
+        if ((size_t)width > SIZE_MAX / per_pixel) return false;
+        row = (size_t)width * per_pixel;
+    }
+    if ((size_t)height > SIZE_MAX / row) return false;
+    *size = row * height;
+    return true;
+}
 
 static inline unsigned
 pixel_size(const bool is_opaque, const bool is_float) {
@@ -915,7 +948,8 @@ load_image_data(
     switch (transmission_type) {
         case 'd': // direct
             if (load_data->buf_capacity - load_data->buf_used < g->payload_sz) {
-                if (load_data->buf_used > limit || g->payload_sz > limit-load_data->buf_used || (data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
+                if (load_data->buf_used > limit || g->payload_sz > limit-load_data->buf_used ||
+                    (!g->compressed && data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
                 const size_t capacity = MAX(load_data->buf_capacity > limit/2 ? limit : 2*load_data->buf_capacity, load_data->buf_used+g->payload_sz);
                 void *next = realloc(load_data->buf, capacity);
                 if (!next) ABRT("ENOMEM", "Out of memory");
@@ -983,6 +1017,47 @@ gamut_of_command(const GraphicsCommand *g) {
     return g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020 ? g->gamut : 0;
 }
 
+// Packed wire formats do not depend on the display. Expand only after reading
+// and decompressing their small payload, then use the existing RGB cache/GPU path.
+static Image *
+unpack_image_data(GraphicsManager *self, Image *img, uint32_t format) {
+    LoadData *ld = &self->currently_loading;
+    size_t size;
+    if (!raw_image_data_size(RGB, ld->width, ld->height, &size)) ABRT("EOVERFLOW", "Expanded image dimensions overflow address space");
+    uint8_t *rgb = malloc(size);
+    if (!rgb) ABRT("ENOMEM", "Out of memory expanding packed image");
+    const size_t row_size = ld->data_sz / ld->height;
+    uint8_t *dst = rgb;
+    for (uint32_t y = 0; y < ld->height; y++) {
+        const uint8_t *src = ld->data + y * row_size;
+        if (format == RGB565) {
+            for (uint32_t x = 0; x < ld->width; x++, dst += 3) {
+                // The wire word is little-endian; normalize each channel to
+                // 8 bits with round-to-nearest, independently of host byte order.
+                const unsigned value = src[2 * x] | ((unsigned)src[2 * x + 1] << 8);
+                dst[0] = (((value >> 11) & 31) * 255 + 15) / 31;
+                dst[1] = (((value >> 5) & 63) * 255 + 31) / 63;
+                dst[2] = ((value & 31) * 255 + 15) / 31;
+            }
+        } else {
+            const unsigned per_byte = 8 / format, maximum = (1u << format) - 1;
+            for (uint32_t x = 0; x < ld->width; x++, dst += 3) {
+                const unsigned shift = 8 - format - (x % per_byte) * format;
+                const unsigned value = (src[x / per_byte] >> shift) & maximum;
+                dst[0] = dst[1] = dst[2] = value * (255 / maximum);
+            }
+        }
+    }
+    free_load_data(ld);
+    ld->buf = ld->data = rgb;
+    ld->buf_capacity = ld->buf_used = ld->data_sz = size;
+    ld->is_opaque = true;
+    ld->is_float = false;
+    ld->is_4byte_aligned = ld->width % 4 == 0;
+    ld->loading_completed_successfully = true;
+    return img;
+}
+
 static Image *
 process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, const uint32_t data_fmt, const bool is_frame) {
     if (data_fmt == VECTOR) {  // text records of a size known only once loaded
@@ -1005,7 +1080,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
     }
     bool needs_processing = g->compressed || data_fmt == PNG;
     // An HDR image is linear extended sRGB whatever the command says, see docs/hdr-protocol.rst
-    self->currently_loading.gamut = data_fmt == RGBA16F ? 0 : gamut_of_command(g);
+    self->currently_loading.gamut = data_fmt == RGBA16F || data_fmt <= GRAY8 ? 0 : gamut_of_command(g);
     if (needs_processing) {
         uint8_t *buf;
         size_t bufsz;
@@ -1046,7 +1121,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         } else self->currently_loading.data = self->currently_loading.buf;
         self->currently_loading.loading_completed_successfully = true;
     }
-    return img;
+    return is_packed_format(data_fmt) ? unpack_image_data(self, img, data_fmt) : img;
 }
 
 static Image *
@@ -1065,13 +1140,19 @@ initialize_load_data(
             self->currently_loading.is_opaque = false;
             self->currently_loading.data_sz = g->data_sz ? g->data_sz : 1024 * 100;
             break;
+        case GRAY1:
+        case GRAY2:
+        case GRAY4:
+        case GRAY8:
+        case RGB565:
         case RGB:
         case RGBA:
         case RGBA16F:
-            self->currently_loading.data_sz = (size_t)g->data_width * g->data_height * (data_fmt / 8);
-            if (!self->currently_loading.data_sz) ABRT("EINVAL", "Zero width/height not allowed");
-            self->currently_loading.is_4byte_aligned = data_fmt != RGB || (self->currently_loading.width % 4 == 0);
-            self->currently_loading.is_opaque = data_fmt == RGB;
+            if (!g->data_width || !g->data_height) ABRT("EINVAL", "Zero width/height not allowed");
+            if (!raw_image_data_size(data_fmt, g->data_width, g->data_height, &self->currently_loading.data_sz))
+                ABRT("EOVERFLOW", "Image dimensions overflow address space");
+            self->currently_loading.is_opaque = data_fmt == RGB || is_packed_format(data_fmt);
+            self->currently_loading.is_4byte_aligned = !self->currently_loading.is_opaque || self->currently_loading.width % 4 == 0;
             self->currently_loading.is_float = data_fmt == RGBA16F;
             break;
         default: ABRT("EINVAL", "Unknown image format: %u", data_fmt);
@@ -1079,7 +1160,9 @@ initialize_load_data(
     self->currently_loading.loading_for.image_id = img->internal_id;
     self->currently_loading.loading_for.frame_id = frame_id;
     if (transmission_type == 'd') {
-        self->currently_loading.buf_capacity = self->currently_loading.data_sz + (g->compressed ? 1024 : 10); // compression header
+        const size_t extra = g->compressed ? 1024 : 10; // initial slack; compressed data can grow as it arrives
+        if (self->currently_loading.data_sz > SIZE_MAX - extra) ABRT("EOVERFLOW", "Image buffer size overflows address space");
+        self->currently_loading.buf_capacity = self->currently_loading.data_sz + extra;
         self->currently_loading.buf = malloc(self->currently_loading.buf_capacity);
         self->currently_loading.buf_used = 0;
         if (self->currently_loading.buf == NULL) {
@@ -1479,13 +1562,8 @@ grman_put_cell_image(
     ImageRef *virt_img_ref = NULL;
     if (placement_id) {
         // Find the placement by the id. It must be a virtual placement.
-        iter_refs(img) {
-            ImageRef *r = i.data->val;
-            if (r->is_virtual_ref && r->client_id == placement_id) {
-                virt_img_ref = r;
-                break;
-            }
-        }
+        ImageRef *r = ref_by_client_id(img, placement_id);
+        if (r && r->is_virtual_ref) virt_img_ref = r;
     } else {
         // Find the first virtual image placement.
         iter_refs(img) {
@@ -1503,6 +1581,9 @@ grman_put_cell_image(
     // reference if the image is completely out of bounds.
     ImageRef ref = {0};
     ref.virtual_ref_id = virt_img_ref->internal_id;
+    ref.depth = virt_img_ref->depth;
+    ref.depth_pixels = virt_img_ref->depth_pixels;
+    ref.phase = virt_img_ref->phase;
 
     uint32_t img_rows = virt_img_ref->num_rows;
     uint32_t img_columns = virt_img_ref->num_cols;
@@ -1690,24 +1771,20 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
     }
     ImageRef *ref = NULL;
     if (g->placement_id && img->client_id) {
-        iter_refs(img) {
-            ImageRef *r = i.data->val;
-            if (r->client_id == g->placement_id) {
-                ref = r;
-                if (parent_id && parent_id == img->internal_id && parent_placement_id && parent_placement_id == r->internal_id) {
-                    set_command_failed_response("EINVAL", "Put command refers to itself as its own parent");
-                    return g->id;
-                }
-                if (parent_id && parent_placement_id) {
-                    id_type rp = ref->parent.img, rpp = ref->parent.ref;
-                    ref->parent.img = parent_id;
-                    ref->parent.ref = parent_placement_id;
-                    bool ok = has_good_ancestry(self, ref);
-                    ref->parent.img = rp;
-                    ref->parent.ref = rpp;
-                    if (!ok) return g->id;
-                }
-                break;
+        ref = ref_by_client_id(img, g->placement_id);
+        if (ref) {
+            if (parent_id && parent_id == img->internal_id && parent_placement_id && parent_placement_id == ref->internal_id) {
+                set_command_failed_response("EINVAL", "Put command refers to itself as its own parent");
+                return g->id;
+            }
+            if (parent_id && parent_placement_id) {
+                id_type rp = ref->parent.img, rpp = ref->parent.ref;
+                ref->parent.img = parent_id;
+                ref->parent.ref = parent_placement_id;
+                bool ok = has_good_ancestry(self, ref);
+                ref->parent.img = rp;
+                ref->parent.ref = rpp;
+                if (!ok) return g->id;
             }
         }
     }
@@ -1723,13 +1800,19 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
     ref->src_width = MIN(ref->src_width, img->width - ((float)img->width > ref->src_x ? ref->src_x : (float)img->width));
     ref->src_height = MIN(ref->src_height, img->height - ((float)img->height > ref->src_y ? ref->src_y : (float)img->height));
     ref->z_index = g->z_index;
+    ref->depth = c->sgr.depth;
+    ref->depth_pixels = c->sgr.depth_pixels;
+    ref->phase = c->sgr.phase;
     ref->start_row = c->y;
     ref->start_column = c->x;
     ref->cell_x_offset = MIN(g->cell_x_offset, cell.width - 1);
     ref->cell_y_offset = MIN(g->cell_y_offset, cell.height - 1);
     ref->num_cols = g->num_cells;
     ref->num_rows = g->num_lines;
-    if (img->client_id) ref->client_id = g->placement_id;
+    if (img->client_id) {
+        if (!ref->client_id && g->placement_id && vt_is_end(vt_insert(&img->refs_by_client_id, g->placement_id, ref))) fatal("Out of memory");
+        ref->client_id = g->placement_id;
+    }
     update_src_rect(ref, img);
     update_dest_rect(ref, g->num_cells, g->num_lines, cell);
     ref->parent.img = parent_id;
@@ -1908,6 +1991,9 @@ grman_update_layers(
             self->render_data.has_hdr |= img->root_frame.is_float;
             self->render_data.count++;
             rd->z_index = ref->z_index;
+            rd->depth = ref->depth;
+            rd->depth_pixels = ref->depth_pixels;
+            rd->phase = ref->phase;
             rd->image_id = img->internal_id;
             rd->ref_id = ref->internal_id;
             rd->texture_id = texture_id_for_img(img);
@@ -2225,31 +2311,44 @@ unsigned long kitty_vector_curve_limit(void) { return OPT(vector_curve_limit); }
 // Brings the texture of a vector image up to date, at the size the image is
 // shown at. A change of that size draws all of it, a change to the document
 // only the rectangle that change reaches. vector_raster_limit 0 keeps that size.
-static void
-update_vector_texture(GraphicsManager *self, Image *img, double width, double height) {
-    if (!self->window_id || width < 1 || height < 1) return;
+static bool
+update_vector_eye(GraphicsManager *self, Image *img, double width, double height, VectorStereo stereo, bool all) {
+    if (!self->window_id || width < 1 || height < 1) return false;
     const unsigned long cap = OPT(vector_raster_limit);
     if (cap && width * height > (double)cap) {
         double scale = sqrt((double)cap / (width * height));
         if (scale < 1) width *= scale, height *= scale;
     }
     uint32_t w = (uint32_t)lround(width), h = (uint32_t)lround(height);
-    const bool has_pixels = img->texture && img->texture->id && w == img->vector_tex_width && h == img->vector_tex_height;
+    const bool has_pixels = !all && img->texture && img->texture->id && w == img->vector_tex_width && h == img->vector_tex_height;
     VectorRect rect;
     rect = (VectorRect){0, 0, w, h};
-    if (has_pixels && !vector_doc_damage(img->vector, w, h, &rect)) return;
-    float *linear = vector_doc_render_linear(img->vector, w, h, rect, vector_lookup, self);
-    if (!linear) return;
+    if (has_pixels && !vector_doc_damage(img->vector, w, h, &rect)) return true;
+    float *linear = vector_doc_render_stereo(img->vector, w, h, rect, vector_lookup, self, stereo);
+    if (!linear) return false;
     const size_t count = (size_t)rect.width * rect.height * 4;
     uint16_t *data = malloc(count * sizeof(uint16_t));
-    if (!data) { free(linear); return; }
+    if (!data) { free(linear); return false; }
     float peak = 0;
-    for (size_t i = 0; i < count; i++) {
-        // RGBA16F is the existing GPU transport format, so saturate only to
-        // its representable range, never to SDR or the display's headroom.
-        const float value = fminf(65504, fmaxf(-65504, linear[i]));
-        data[i] = float_to_half(value);
-        if ((i & 3) != 3) peak = fmaxf(peak, value);
+    for (size_t i = 0; i < count; i += 4) {
+        if (linear[i + 3] == 0.f) {
+            // Transparent damage often contains mostly untouched pixels. Only
+            // bitwise zero RGBA may skip conversion: preserve negative zero
+            // and RGB values (including HDR) even when alpha is zero.
+            uint64_t bits[2];
+            memcpy(bits, linear + i, sizeof(bits));
+            if (!(bits[0] | bits[1])) {
+                memset(data + i, 0, 4 * sizeof(*data));
+                continue;
+            }
+        }
+        for (unsigned k = 0; k < 4; k++) {
+            // RGBA16F is the existing GPU transport format, so saturate only to
+            // its representable range, never to SDR or the display's headroom.
+            const float value = fminf(65504, fmaxf(-65504, linear[i + k]));
+            data[i + k] = float_to_half(value);
+            if (k != 3) peak = fmaxf(peak, value);
+        }
     }
     free(linear);
     img->peak = has_pixels ? MAX(img->peak, peak) : peak;
@@ -2262,9 +2361,53 @@ update_vector_texture(GraphicsManager *self, Image *img, double width, double he
         self->render_data.item[i].texture_id = texture_id_for_img(img);
     }
     free(data);
-    vector_doc_clear_damage(img->vector);
     img->vector_tex_width = w;
     img->vector_tex_height = h;
+    return true;
+}
+
+static void
+update_vector_texture(GraphicsManager *self, Image *img, double width, double height) {
+    OSWindow *w = os_window_for_kitty_window(self->window_id);
+    VectorStereo stereo = {.multiplier = 1.};
+    const bool enabled = w && w->spatial.mode && vector_doc_has_depth(img->vector);
+    if (enabled) stereo = (VectorStereo){
+        .eye_pixels = -w->viewport_width / (w->spatial.mode == 2 ? 2. * w->spatial.scale : 2.),
+        .positive = w->spatial.positive, .negative = w->spatial.negative, .fov = w->spatial.fov,
+        .phase_pixels = -0.5, .phase_limit = w->spatial.phase_limit, .multiplier = w->spatial.multiplier};
+    const bool changed = memcmp(&stereo, &img->vector_stereo, sizeof(stereo)) != 0;
+    VectorRect damage;
+    const bool dirty = vector_doc_damage(img->vector, img->vector_tex_width, img->vector_tex_height, &damage);
+    if (enabled) {
+        const bool resized = lround(width) != img->vector_tex_width || lround(height) != img->vector_tex_height;
+        if (changed || dirty || resized || !img->vector_right_texture) {
+            if (!img->vector_right_texture) img->vector_right_texture = new_texture_ref();
+            if (!update_vector_eye(self, img, width, height, stereo, true)) return;
+            const float left_peak = img->peak;
+            TextureRef *left = img->texture;
+            img->texture = img->vector_right_texture;
+            stereo.eye_pixels = -stereo.eye_pixels;
+            stereo.phase_pixels = -stereo.phase_pixels;
+            const bool success = update_vector_eye(self, img, width, height, stereo, true);
+            stereo.eye_pixels = -stereo.eye_pixels;
+            stereo.phase_pixels = -stereo.phase_pixels;
+            img->vector_right_texture = img->texture;
+            img->texture = left;
+            if (!success) return;
+            img->peak = MAX(img->peak, left_peak);
+        }
+    } else if (!update_vector_eye(self, img, width, height, stereo, changed)) return;
+    img->vector_stereo = stereo;
+    vector_doc_clear_damage(img->vector);
+    for (size_t i = 0; i < self->render_data.count; i++) if (self->render_data.item[i].image_id == img->internal_id) {
+        self->render_data.item[i].texture_id = texture_id_for_img(img);
+        self->render_data.item[i].right_texture_id = enabled && img->vector_right_texture ? img->vector_right_texture->id : 0;
+        self->render_data.item[i].peak = img->peak;
+        if (enabled) {
+            self->render_data.item[i].depth = 0;
+            self->render_data.item[i].depth_pixels = self->render_data.item[i].phase = 0.f;
+        }
+    }
 }
 
 // Terminal-side ink, see docs/ink-protocol.rst. The terminal applies to a
@@ -2897,6 +3040,7 @@ handle_compose_command(GraphicsManager *self, bool *is_dirty, const GraphicsComm
 
 static ref_map_itr
 remove_ref_itr(Image *img, ref_map_itr x) {
+    if (x.data->val->client_id) vt_erase(&img->refs_by_client_id, x.data->val->client_id);
     free(x.data->val);
     return vt_erase_itr(&img->refs_by_internal_id, x);
 }
@@ -3660,10 +3804,11 @@ W(render_vector_image) {
 W(render_vector_linear) {
     unsigned long id;
     unsigned width, height;
-    PA("kII", &id, &width, &height);
+    VectorStereo stereo = {.multiplier = 1.};
+    PA("kII|ddddddd", &id, &width, &height, &stereo.eye_pixels, &stereo.positive, &stereo.negative, &stereo.fov, &stereo.phase_pixels, &stereo.phase_limit, &stereo.multiplier);
     Image *img = vector_image_for_tests(self, id);
     if (!img) return NULL;
-    float *pixels = vector_doc_render_linear(img->vector, width, height, (VectorRect){0, 0, width, height}, vector_lookup, self);
+    float *pixels = vector_doc_render_stereo(img->vector, width, height, (VectorRect){0, 0, width, height}, vector_lookup, self, stereo);
     if (!pixels) return PyErr_Format(PyExc_RuntimeError, "Vector render failed");
     PyObject *ans = PyBytes_FromStringAndSize((char *)pixels, (Py_ssize_t)width * height * 4 * sizeof(float));
     free(pixels);

@@ -33,7 +33,7 @@ class Action(RemoteCommand):
         'Run the specified mappable action. For a list of all available mappable actions, see :doc:`actions`.'
         ' Any arguments for ACTION should follow the action. Note that parsing of arguments is action dependent'
         ' so for best results specify all arguments as single string on the command line in the same format as you would'
-        ' use for that action in kitty.conf.'
+        ' use for that action in silkie.conf.'
     )
     options_spec = (
         """\

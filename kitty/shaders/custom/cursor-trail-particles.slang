@@ -13,13 +13,13 @@
 //               of the cursor.
 //
 // Every style has a ready made pipeline, so to use it, add the following to
-// kitty.conf:
+// silkie.conf:
 //     cursor_trail 1
 //     custom_shaders cursor-trail-railgun
 // or cursor-trail-torpedo or cursor-trail-pixiedust.
 //
 // You can tune the options below without editing this file. Save a pipeline
-// file such as shaders/my-particles.pipeline in your kitty config directory,
+// file such as shaders/my-particles.pipeline in your Silkie config directory,
 // containing, for example:
 //     startgroup
 //         animation_start cursor-trail-move
@@ -30,7 +30,7 @@
 //         var float4 PARTICLE_COLOR float4(1, 0.8, 0.2, 1)
 //         shaders cursor-trail-default cursor-trail-particles
 //     endgroup
-// and then use custom_shaders my-particles in kitty.conf. Particles are drawn
+// and then use custom_shaders my-particles in silkie.conf. Particles are drawn
 // for a few recent cursor moves at a time, so they keep flying while you move
 // the cursor again. The number in animation_stop is how many milliseconds
 // after the last cursor move to keep drawing, it must be more than
@@ -46,7 +46,7 @@ static const int PIXIEDUST = 2;
 // Which style to use, 0 for railgun, 1 for torpedo and 2 for pixiedust.
 static const int MODE = RAILGUN;
 // The color of the particles. When the alpha is zero, the color of the cursor
-// trail is used, see the cursor_trail_color option in kitty.conf.
+// trail is used, see the cursor_trail_color option in silkie.conf.
 static const float4 PARTICLE_COLOR = float4(0.0);
 // How opaque the particles are, from 0 to 1.
 static const float OPACITY = 1.0;

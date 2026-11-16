@@ -956,7 +956,7 @@ class TestScreen(BaseTest):
         s = self.create_screen()
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-        self.ae(c.wtcbuf, f'\x1b]777;caps;v=1:op=cap:id=7:caps=3:ext=caps.1,display.1,font.1,frame.1,gesture.1,haptic.1,ink.1,latency.1,scroll.1,tablet-pointer.1:media=d,f,t,s{g}:format=24,32,64,100,200\x1b\\'.encode())
+        self.ae(c.wtcbuf, f'\x1b]777;caps;v=1:op=cap:id=7:caps=3:ext=depth.1,ssh-agent.1,caps.1,display.1,font.1,frame.1,gesture.1,haptic.1,ink.1,latency.1,scroll.1,tablet-pointer.1:media=d,f,t,s{g}:format=1,2,4,8,16,24,32,64,100,200\x1b\\'.encode())
         c.clear()
         parse_bytes(s, b'\x1b]777;caps;v=2:op=query:id=7\x1b\\')
         parse_bytes(s, b'\x1b]777;caps;v=1:op=query\x1b\\')
@@ -1018,7 +1018,8 @@ class TestScreen(BaseTest):
         s = self.create_screen()
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=7\x1b\\')
-        self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=7:mode=0:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0\x1b\\')
+        self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=7:mode=0:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
+                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown\x1b\\')
         c.clear()
         before = int(monotonic() * 1000)
         parse_bytes(s, b'\x1b]777;display;v=1:op=mode:mode=1\x1b\\')
@@ -1026,13 +1027,15 @@ class TestScreen(BaseTest):
         t = int(re.search(rb':t=([0-9]+):', c.wtcbuf).group(1))
         self.assertGreaterEqual(t, before - 1)
         self.assertLessEqual(t, int(monotonic() * 1000) + 1)
-        self.ae(c.wtcbuf, f'\x1b]777;display;v=1:op=event:t={t}:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0\x1b\\'.encode())
+        self.ae(c.wtcbuf, (f'\x1b]777;display;v=1:op=event:t={t}:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
+                          ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown\x1b\\').encode())
         c.clear()
         parse_bytes(s, b'\x1b]777;display;v=1:op=mode\x1b\\')
         self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=mode:mode=1\x1b\\')
         c.clear()
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=8\x1b\\')
-        self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=8:mode=1:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0\x1b\\')
+        self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=8:mode=1:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
+                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown\x1b\\')
         c.clear()
         parse_bytes(s, b'\x1b]777;display;v=2:op=query:id=7\x1b\\')
         parse_bytes(s, b'\x1b]777;display;v=1:op=query\x1b\\')
@@ -1046,7 +1049,8 @@ class TestScreen(BaseTest):
         s = self.create_screen(options={'display_info': 'kind=eink color=gray bits=4 ppi=226 bogus=1 nonsense'})
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=0\x1b\\')
-        self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=0:mode=0:kind=eink:color=gray:bits=4:gamut=unknown:headroom=1:scale=0:period=0:ppi=226\x1b\\')
+        self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=0:mode=0:kind=eink:color=gray:bits=4:gamut=unknown:headroom=1:scale=0:period=0:ppi=226'
+                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured\x1b\\')
         # A frame from a program follows the rules every extension shares, see docs/extension-framing.rst
         assert_extension_frames(self, s, 'display')
 

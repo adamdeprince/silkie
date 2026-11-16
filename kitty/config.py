@@ -220,7 +220,7 @@ def store_effective_config() -> tuple[str, str]:
     except OSError as err:
         # effective config is used by some kittens to read the config of the
         # current kitty instance. If missing they fallback to parsing
-        # kitty.conf so ignore the error which would prevent kitty from
+        # silkie.conf so ignore the error which would prevent kitty from
         # starting.
         msg = f'Failed to store effective config with error: {err}'
         log_error(msg)

@@ -1,0 +1,6 @@
+#!/bin/sh
+if [ -r /run/silkie/browser-features.txt ]; then
+    exec /usr/local/libexec/silkie-console-session --features /run/silkie/browser-features.txt
+else
+    printf '%s\n' 'Browser feature report is unavailable.'
+fi

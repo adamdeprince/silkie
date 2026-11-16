@@ -210,6 +210,7 @@ def set_cocoa_global_shortcuts(opts: Options) -> dict[str, SingleKey]:
             'next_tab',
             'new_tab',
             'new_window',
+            'split_pane_vertically',
             'close_window',
             'kill_window',
             'toggle_macos_secure_keyboard_entry',
@@ -644,7 +645,7 @@ def kitty_main(called_from_panel: bool = False) -> None:
         from .window import global_watchers
 
         global_watchers.set_extra(cli_opts.watcher)
-        log_error('The --watcher command line option has been deprecated in favor of using the watcher option in kitty.conf')
+        log_error('The --watcher command line option has been deprecated in favor of using the watcher option in silkie.conf')
     # mask the signals now as on some platforms the display backend starts
     # threads. These threads must not handle the masked signals, to ensure
     # kitty can handle them. See https://github.com/kovidgoyal/kitty/issues/4636

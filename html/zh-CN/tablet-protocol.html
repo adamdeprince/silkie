@@ -1,0 +1,932 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="滚动协议" href="scroll-protocol.html"><link rel="prev" title="字体选择协议" href="font-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/tablet-protocol.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>数位板指针协议 - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../tablet-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="tablet-protocol.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="项目资源">
+  <a href="index.html">项目概览</a>
+  <a href="install.html">安装 Silkie</a>
+  <a href="games.html">游戏与实机视频</a>
+  <a href="browser-demo.html">试用浏览器演示</a>
+  <a href="browser-ssh.html">浏览器 SSH 设置</a>
+  <a href="developer-guide.html">开发者指南</a>
+  <a href="reference.html">扩展参考手册</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档 ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档 ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支 ↗</a>
+  <a href="../tablet-protocol.html" lang="en">English</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="搜索" name="q" aria-label="搜索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">安装 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Silkie 与 kitty 游戏</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">在浏览器中试用 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">浏览器演示中的 SSH</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">为 Silkie 开发软件</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie 扩展参考手册</a><input aria-label="Toggle navigation of Silkie 扩展参考手册" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">数位板指针协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
+<li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="tablet-pointer-protocol">
+<h1>数位板指针协议<a class="headerlink" href="#tablet-pointer-protocol" title="链接到此标题。">¶</a></h1>
+<div class="versionadded">
+<p><span class="versionmodified added">在 0.50.0 版本加入.</span></p>
+</div>
+<p>笔和手指包含远超鼠标协议表达能力的信息：压力、倾斜、笔杆旋转、正在使用笔的哪一端、悬停、多个同时接触的手指，以及手指在玻璃上的形状。数位板在笔之外还有按键、触控环和旋钮。数位板指针协议是报告所有这些信息的开放终端扩展，支持绘图数位板、数位屏、触摸屏和触控板，并为设备测量的其他信息预留扩展空间。它不专属于任何终端：silkie（本 kitty 分支）实现了它，本页是其规范。目标与其他扩展相同：小巧、低干扰、易于实现，不改变 TTY 的本质。</p>
+<section id="framing">
+<h2>消息封装<a class="headerlink" href="#framing" title="链接到此标题。">¶</a></h2>
+<p>帧使用带有 <code class="docutils literal notranslate"><span class="pre">tablet-pointer</span></code> 选择器的 <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">777</span></code>：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">query</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>封装遵循 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a>，其中也说明了全部扩展共有的单位、<code class="docutils literal notranslate"><span class="pre">t</span></code> 的时钟、可合并的报告及模式拒绝规则。协议版本 <code class="docutils literal notranslate"><span class="pre">v</span></code> 为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，<code class="docutils literal notranslate"><span class="pre">op</span></code> 为 <code class="docutils literal notranslate"><span class="pre">query</span></code>、<code class="docutils literal notranslate"><span class="pre">cap</span></code>、<code class="docutils literal notranslate"><span class="pre">mode</span></code>、<code class="docutils literal notranslate"><span class="pre">device</span></code>、<code class="docutils literal notranslate"><span class="pre">label</span></code> 或 <code class="docutils literal notranslate"><span class="pre">event</span></code>。</p>
+<p>协议可在不升级版本的情况下扩展。除了各扩展共用的忽略规则外，程序还应忽略不认识 <code class="docutils literal notranslate"><span class="pre">kind</span></code> 的报告和不认识的 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 位，将未知 <code class="docutils literal notranslate"><span class="pre">tool</span></code> 值视为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。新增报告种类只有在程序通过独立模式位请求后才发送，确保程序不会收到其设计时无法处理的种类。</p>
+</section>
+<section id="discovery">
+<h2>能力探测<a class="headerlink" href="#discovery" title="链接到此标题。">¶</a></h2>
+<p>程序询问终端是否支持本协议：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">query</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">id</span></code> 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">caps</span><span class="o">=</span><span class="mi">101</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">w</span><span class="o">=</span><span class="mi">1200</span> <span class="p">:</span> <span class="n">h</span><span class="o">=</span><span class="mi">800</span> <span class="p">:</span> <span class="n">cw</span><span class="o">=</span><span class="mi">12</span> <span class="p">:</span> <span class="n">ch</span><span class="o">=</span><span class="mi">24</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">caps</span></code> 是终端可报告能力的位集合：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+<td><p>工具</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">2</span></code></p></td>
+<td><p>触摸屏上的手指</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>触控板上的手指</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">8</span></code></p></td>
+<td><p>手指接触形状</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">16</span></code></p></td>
+<td><p>控制板</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">32</span></code></p></td>
+<td><p>工具动作</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">64</span></code></p></td>
+<td><p>工具和控制板的硬件标识</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">128</span></code></p></td>
+<td><p>估算与预测采样</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">256</span></code></p></td>
+<td><p>系统判定为意外接触的手指</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>能力位描述终端在所运行系统上能报告什么，而非当前连接了什么硬件。只有终端确定能报告的能力才设置相应位。如果系统不预先说明是否提供接触形状，则位 <code class="docutils literal notranslate"><span class="pre">8</span></code> 在实际出现带形状的接触前保持清除；程序不应等待该位，只要报告的 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 声明存在，就应使用形状信息。超出工具和手指范围的能力（<code class="docutils literal notranslate"><span class="pre">16</span></code> 及以上的位）只有通过模式请求后才发送。<code class="docutils literal notranslate"><span class="pre">mode</span></code> 为下述模式的当前状态。<code class="docutils literal notranslate"><span class="pre">w,h</span></code> 是字符单元区域的像素尺寸（1 至 65535），<code class="docutils literal notranslate"><span class="pre">cw,ch</span></code> 为字符单元尺寸（1 至 4096）。此处及报告中的像素均为终端帧缓冲区的物理像素，而非窗口系统缩放后的逻辑单位，因此位置精度与显示器一致。调整窗口大小后程序应重新查询。不支持本协议的终端会忽略查询，程序必须设置超时并回退到鼠标报告。查询不改变模式。</p>
+</section>
+<section id="mode">
+<h2>模式<a class="headerlink" href="#mode" title="链接到此标题。">¶</a></h2>
+<p>报告默认关闭，按终端窗口开启：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">mode</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">3</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">mode</span></code> 是程序请求的能力位集合，<code class="docutils literal notranslate"><span class="pre">0</span></code> 关闭全部报告：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+<td><p>工具报告</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">2</span></code></p></td>
+<td><p>手指报告</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>控制板报告，见 <a class="reference internal" href="#pads">控制板</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">8</span></code></p></td>
+<td><p>工具和控制板的硬件标识，见 <a class="reference internal" href="#devices">设备</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">16</span></code></p></td>
+<td><p>工具动作报告，见 <a class="reference internal" href="#tool-actions">工具动作</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">32</span></code></p></td>
+<td><p>估算与预测采样，见 <a class="reference internal" href="#estimates-and-predictions">估算与预测</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">64</span></code></p></td>
+<td><p>系统判定为意外接触的手指，见 <a class="reference internal" href="#fingers">手指</a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>开启位 <code class="docutils literal notranslate"><span class="pre">1</span></code> 或 <code class="docutils literal notranslate"><span class="pre">2</span></code> 时，窗口内对应输入通过本协议报告，不再作为鼠标事件。因此 <code class="docutils literal notranslate"><span class="pre">mode=1</span></code> 可用笔绘图，手指仍作为鼠标点击和滚动；<code class="docutils literal notranslate"><span class="pre">mode=3</span></code> 下，轻点不再点击，拖动不再选择。物理鼠标，以及触控板自行产生的鼠标和滚动事件，仍使用程序请求的鼠标报告方式。只希望笔作为鼠标使用的程序无须使用本协议。位 <code class="docutils literal notranslate"><span class="pre">4</span></code> 不会剥夺既有功能：系统对控制板控件的操作，例如用户绑定到某个按键的快捷键，仍会执行。</p>
+<p>模式仅作用于当前窗口，由 <code class="docutils literal notranslate"><span class="pre">RIS</span></code> 重置；改变模式会取消所有活动接触，并释放控制板上所有按住的按键。程序必须在退出、挂起或失败时关闭，恢复时重新开启。多路复用器与其他状态一起保存它，重连时恢复，脱离连接时关闭。终端可允许用户针对全部或部分程序拒绝模式或某些位；被拒绝的位读回为关闭，不发送其本应启用的报告。kitty 默认拒绝硬件标识位 <code class="docutils literal notranslate"><span class="pre">8</span></code>，除非用户通过 <a class="reference internal" href="configuration.html#opt-tablet_hardware_ids"><code class="xref std std-opt docutils literal notranslate"><span class="pre">tablet_hardware_ids</span></code></a> 允许，因为序列号可识别笔的所有者，查询程序可能运行在远程机器上。拒绝体现在模式中，而非 <code class="docutils literal notranslate"><span class="pre">caps</span></code>；后者描述终端在该系统上具有的报告能力。</p>
+<p>不带 <code class="docutils literal notranslate"><span class="pre">mode</span></code> 字段的 <code class="docutils literal notranslate"><span class="pre">mode</span></code> 请求读取状态而不修改，回复为：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">mode</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">3</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>终端仅保留其支持且用户未拒绝的位，因此请求超出获准范围的程序可通过读回模式获知。程序重连后恢复时，应读回模式确认是否保留，而非假定状态仍在。</p>
+</section>
+<section id="devices">
+<h2>设备<a class="headerlink" href="#devices" title="链接到此标题。">¶</a></h2>
+<p>每次工具进入一个已启用工具报告的窗口感应范围时，终端在第一条工具报告之前描述该工具：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">device</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">tool</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">axes</span><span class="o">=</span><span class="mi">7</span> <span class="p">:</span> <span class="n">name</span><span class="o">=</span><span class="n">V2Fjb20gSW50dW9zIFBybyBN</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">device</span></code> 是该工具报告所携带的 ID，<code class="docutils literal notranslate"><span class="pre">kind</span></code> 为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，<code class="docutils literal notranslate"><span class="pre">tool</span></code> 为工具类型，取值与事件报告相同。系统提供时还携带下列字段：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">axes</span></code></p></td>
+<td><p>该工具可测量的项目，位集合与 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 相同，供程序在第一笔之前配置画笔</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">name</span></code></p></td>
+<td><p>工具所在数位板或工具本身的名称，最多 127 字节 UTF-8，使用带填充的 base64 编码</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">serial</span></code></p></td>
+<td><p>工具序列号，无符号 64 位整数</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hwid</span></code></p></td>
+<td><p>工具硬件 ID，无符号 64 位整数；在 Wacom 数位板上表示笔型号</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">vid</span></code>、<code class="docutils literal notranslate"><span class="pre">pid</span></code></p></td>
+<td><p>数位板的厂商和产品 ID，无符号 32 位整数</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bat</span></code></p></td>
+<td><p>工具电池电量，<code class="docutils literal notranslate"><span class="pre">0</span></code> 至 <code class="docutils literal notranslate"><span class="pre">100</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tablet</span></code></p></td>
+<td><p>工具位于哪块已连接数位板上，从 <code class="docutils literal notranslate"><span class="pre">1</span></code> 开始编号，见 <a class="reference internal" href="#tablets">数位板</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">h</span></code></p></td>
+<td><p>该数位板有效表面尺寸，以 1/256 毫米为单位</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">direct</span></code></p></td>
+<td><p>该表面为显示器时为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，否则为 <code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pcolor</span></code>，</p></td>
+<td><p>工具自身存储的颜色、线宽和线条样式</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pwidth</span></code>，</p></td>
+<td><p>参阅 <a class="reference internal" href="#settings-stored-in-a-pen">笔内存储的设置</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pstyle</span></code></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">serial</span></code>、<code class="docutils literal notranslate"><span class="pre">hwid</span></code>、<code class="docutils literal notranslate"><span class="pre">vid</span></code> 和 <code class="docutils literal notranslate"><span class="pre">pid</span></code> 属于硬件标识，仅在模式位 <code class="docutils literal notranslate"><span class="pre">8</span></code> 开启时发送。序列号让每个开启报告的程序识别同一支物理笔及其所有者，包括 SSH 会话另一端远程主机上的程序。按笔保存设置的程序可请求它们；只绘图的程序无需知道笔属于谁。</p>
+<p>工具离开感应范围后再次进入、移到另一窗口，或仍在感应范围时程序更改模式，都会重新发送描述。使用期间，描述内容变化时也重新发送，例如电量下降、用户在笔上选择另一种颜色，或系统获得更多工具信息。新描述整体替换旧描述，省略字段表示该属性不再已知，不影响已开始笔划。程序不得依赖一定收到描述：如果终端只知道事件报告包含的信息，就不必单独描述工具。控制板以类似方式描述，<code class="docutils literal notranslate"><span class="pre">kind=3</span></code> 并使用自身字段，见 <a class="reference internal" href="#pads">控制板</a>。手指报告中的设备不发送描述。</p>
+<section id="tablets">
+<h3>数位板<a class="headerlink" href="#tablets" title="链接到此标题。">¶</a></h3>
+<p>可以同时连接多块数位板，笔也可在不同板之间移动。<code class="docutils literal notranslate"><span class="pre">tablet</span></code> 表示工具当前所在数位板：终端为每块板分配从 <code class="docutils literal notranslate"><span class="pre">1</span></code> 起的编号，在该板连接期间保持稳定，板上的每个工具和所属控制板都携带相同编号，程序因此知道这些按键和那支笔属于同一设备。系统未提供归属关系时省略或为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。它是计数编号，不是硬件标识，断开连接后不再具有识别意义，因此不需要额外模式位。</p>
+<p><code class="docutils literal notranslate"><span class="pre">w</span></code> 和 <code class="docutils literal notranslate"><span class="pre">h</span></code> 是数位板跟踪工具的有效表面宽高，要么同时出现，要么都省略。<code class="docutils literal notranslate"><span class="pre">direct</span></code> 表示该表面是否为显示器。屏幕上，工具直接指向所绘内容，程序只需 <code class="docutils literal notranslate"><span class="pre">x,y</span></code>。非屏幕数位板上，手在一处移动，笔迹出现在另一处，其指针位置经过系统映射；希望自行将板映射到画布，或获知手实际移动距离的程序，需要数位板上的位置。这是工具报告的 <code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code>，由 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 位 <code class="docutils literal notranslate"><span class="pre">256</span></code> 声明：从有效表面左上角起，水平和竖直范围均为 <code class="docutils literal notranslate"><span class="pre">0</span></code> 至 <code class="docutils literal notranslate"><span class="pre">65535</span></code>。结合 <code class="docutils literal notranslate"><span class="pre">w</span></code> 和 <code class="docutils literal notranslate"><span class="pre">h</span></code> 可换算成毫米。<code class="docutils literal notranslate"><span class="pre">x,y</span></code> 仍照常报告，表示系统放置指针的位置。</p>
+<p>Windows 指针输入提供上述全部信息：每个指针指明来源设备，设备说明它是显示器内置笔还是独立数位板上的笔、表面矩形尺寸（百分之一毫米）及笔在板上的位置。Linux 内核也提供位置范围、分辨率及是否为显示器。终端实际能得到什么，取决于中间层。Wayland <code class="docutils literal notranslate"><span class="pre">tablet-v2</span></code> 只说明工具和控制板所属数位板，但提供数位板设备节点，同机终端可据此向内核查询尺寸及是否为显示器。X11 提供位置和范围，驱动声明时也提供分辨率，但不提供工具所属数位板关系。AppKit 为数位板编号，并提供数位板单位的位置，却不告知其取值范围。</p>
+</section>
+<section id="settings-stored-in-a-pen">
+<h3>笔内存储的设置<a class="headerlink" href="#settings-stored-in-a-pen" title="链接到此标题。">¶</a></h3>
+<p>某些笔将颜色、线宽和线条样式保存在笔自身，可用开关设置或由程序写入，因此换到另一设备时仍按原来的设置绘制。这些是数字化仪 HID 用途表中的 <em>Preferred Color</em>、<em>Preferred Line Width</em> 和 <em>Preferred Line Style</em>，Universal Stylus Initiative 的笔实现了它们。获得这些信息的终端应将其放入工具描述：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pcolor</span></code></p></td>
+<td><p>颜色，sRGB 中的六位十六进制 <code class="docutils literal notranslate"><span class="pre">RRGGBB</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pwidth</span></code></p></td>
+<td><p>线宽，以 1/256 毫米为单位；<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示可用的最细线条，即任意缩放下的一个物理像素</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pstyle</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code> 墨水笔（圆珠笔、签字笔或钢笔），<code class="docutils literal notranslate"><span class="pre">2</span></code> 铅笔，<code class="docutils literal notranslate"><span class="pre">3</span></code> 平头荧光笔，<code class="docutils literal notranslate"><span class="pre">4</span></code> 斜头记号笔，<code class="docutils literal notranslate"><span class="pre">5</span></code> 圆头画笔</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>HID 用两种形式表示颜色。24 位值依次为各八位的红、绿、蓝，原样转发；用途表未指定色彩空间，此处按另一种形式所用的 sRGB 解释。8 位值是按字母顺序排列的 CSS 命名颜色索引，<em>gray</em> 仅保留一种拼写：从 <code class="docutils literal notranslate"><span class="pre">0</span></code> AliceBlue 到 <code class="docutils literal notranslate"><span class="pre">140</span></code> YellowGreen，见 HID Usage Tables 1.7 附录 A。终端发送名称对应的实际颜色，因此索引 <code class="docutils literal notranslate"><span class="pre">7</span></code> Black 为 <code class="docutils literal notranslate"><span class="pre">pcolor=000000</span></code>，索引 <code class="docutils literal notranslate"><span class="pre">9</span></code> Blue 为 <code class="docutils literal notranslate"><span class="pre">pcolor=0000ff</span></code>。附录保留的索引 <code class="docutils literal notranslate"><span class="pre">255</span></code>，以及 24 位值旁的 <em>No Preferred Color</em> 标志，均表示笔没有首选颜色，省略 <code class="docutils literal notranslate"><span class="pre">pcolor</span></code>。</p>
+<p>宽度使用笔声明的单位。用途表建议十分之一毫米的步长，但允许笔声明其他单位，因此终端按报告描述符中的物理范围和单位换算；描述符未提供时省略 <code class="docutils literal notranslate"><span class="pre">pwidth</span></code>。线条样式 <em>Ink</em>、<em>Pencil</em>、<em>Highlighter</em>、<em>Chisel Marker</em> 和 <em>Brush</em> 对应 <code class="docutils literal notranslate"><span class="pre">1</span></code> 至 <code class="docutils literal notranslate"><span class="pre">5</span></code>；<em>No Preference</em> 表示未指定样式，省略 <code class="docutils literal notranslate"><span class="pre">pstyle</span></code>。</p>
+<p>这些是笔的偏好而非命令，程序可采用其他绘制方式。HID 还说明笔是否允许修改各项设置，但这只与写入笔设置的程序有关，不向终端程序转发。笔在使用中改变设置时会重新发送描述。只有笔自身报告携带这些设置，因此终端直接读取数字化仪时才能获得；Windows、macOS、Wayland 和 X11 的数位板接口均不转发它们。</p>
+</section>
+</section>
+<section id="reports">
+<h2>报告<a class="headerlink" href="#reports" title="链接到此标题。">¶</a></h2>
+<p>每个事件对应一帧报告：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">phase</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">contact</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">x</span><span class="o">=</span><span class="mi">25600</span> <span class="p">:</span> <span class="n">y</span><span class="o">=</span><span class="mi">51200</span> <span class="p">:</span> <span class="n">buttons</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">mods</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">tool</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">valid</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">p</span><span class="o">=</span><span class="mi">32000</span> <span class="p">:</span> <span class="n">tx</span><span class="o">=-</span><span class="mi">1200</span> <span class="p">:</span> <span class="n">ty</span><span class="o">=</span><span class="mi">600</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>工具和手指报告必须包含 <code class="docutils literal notranslate"><span class="pre">kind</span></code>、<code class="docutils literal notranslate"><span class="pre">phase</span></code>、<code class="docutils literal notranslate"><span class="pre">device</span></code>、<code class="docutils literal notranslate"><span class="pre">t</span></code>、<code class="docutils literal notranslate"><span class="pre">contact</span></code>、<code class="docutils literal notranslate"><span class="pre">x</span></code> 和 <code class="docutils literal notranslate"><span class="pre">y</span></code>。表中其他字段默认零，只有 <code class="docutils literal notranslate"><span class="pre">tool</span></code> 默认 <code class="docutils literal notranslate"><span class="pre">1</span></code>：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kind</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code> 工具，<code class="docutils literal notranslate"><span class="pre">2</span></code> 手指。<code class="docutils literal notranslate"><span class="pre">3</span></code> 是控制板，<code class="docutils literal notranslate"><span class="pre">4</span></code> 是工具动作，它们使用各自字段，见 <a class="reference internal" href="#pads">控制板</a> 和 <a class="reference internal" href="#tool-actions">工具动作</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">phase</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code> 悬停，<code class="docutils literal notranslate"><span class="pre">1</span></code> 落下，<code class="docutils literal notranslate"><span class="pre">2</span></code> 移动，<code class="docutils literal notranslate"><span class="pre">3</span></code> 抬起，<code class="docutils literal notranslate"><span class="pre">4</span></code> 取消，<code class="docutils literal notranslate"><span class="pre">5</span></code> 工具离开感应范围，<code class="docutils literal notranslate"><span class="pre">6</span></code> 帧（见 <a class="reference internal" href="#fingers">手指</a>），<code class="docutils literal notranslate"><span class="pre">7</span></code> 修正（见 <a class="reference internal" href="#estimates-and-predictions">估算与预测</a>）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">device</span></code></p></td>
+<td><p>工具或触摸设备在感应范围内期间的标识，为非负 31 位整数；系统不区分设备时为 <code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t</span></code></p></td>
+<td><p>事件时间，以终端全部扩展共用时钟的毫秒表示，见 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a>：系统认定发生的时刻；系统未提供时刻时，使用终端获知事件的时刻</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tu</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">t</span></code> 之后的微秒数，范围 <code class="docutils literal notranslate"><span class="pre">0</span></code> 至 <code class="docutils literal notranslate"><span class="pre">999</span></code>，仅在系统时间戳精度高于毫秒时出现；省略时报告仅精确到整毫秒</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">contact</span></code></p></td>
+<td><p>标识某设备的一次接触，在该接触生命周期中保持稳定。笔通常为接触 <code class="docutils literal notranslate"><span class="pre">0</span></code>，手指使用系统触摸 ID；手指抬起后系统可复用 ID</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x</span></code>、<code class="docutils literal notranslate"><span class="pre">y</span></code></p></td>
+<td><p>位置以物理像素 1/256 为单位，有符号、从零开始，相对于字符单元区域左上角，范围 ±1073741823；对于触控板上的手指（<code class="docutils literal notranslate"><span class="pre">src=1</span></code>），改为板上坐标，各轴为 <code class="docutils literal notranslate"><span class="pre">0</span></code> 至 <code class="docutils literal notranslate"><span class="pre">65535</span></code>，原点位于左上角</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">buttons</span></code></p></td>
+<td><p>按住的按钮：笔尖或左键 <code class="docutils literal notranslate"><span class="pre">1</span></code>，笔杆按钮或右键 <code class="docutils literal notranslate"><span class="pre">2</span></code>，第二笔杆按钮或中键 <code class="docutils literal notranslate"><span class="pre">4</span></code>，后退 <code class="docutils literal notranslate"><span class="pre">8</span></code>，前进 <code class="docutils literal notranslate"><span class="pre">16</span></code>，第三笔杆按钮 <code class="docutils literal notranslate"><span class="pre">32</span></code>。手指落下期间为 <code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mods</span></code></p></td>
+<td><p>Shift <code class="docutils literal notranslate"><span class="pre">1</span></code>，Alt <code class="docutils literal notranslate"><span class="pre">2</span></code>，Control <code class="docutils literal notranslate"><span class="pre">4</span></code>，Super <code class="docutils literal notranslate"><span class="pre">8</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code> 手指或未知，<code class="docutils literal notranslate"><span class="pre">1</span></code> 笔，<code class="docutils literal notranslate"><span class="pre">2</span></code> 橡皮，<code class="docutils literal notranslate"><span class="pre">3</span></code> 画笔，<code class="docutils literal notranslate"><span class="pre">4</span></code> 铅笔，<code class="docutils literal notranslate"><span class="pre">5</span></code> 喷枪，<code class="docutils literal notranslate"><span class="pre">6</span></code> 鼠标，<code class="docutils literal notranslate"><span class="pre">7</span></code> 镜头工具，<code class="docutils literal notranslate"><span class="pre">8</span></code> 图腾工具（见 <a class="reference internal" href="#totems">图腾工具</a>）</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">valid</span></code></p></td>
+<td><p>报告携带哪些测量值的位集合，见下文</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">src</span></code></p></td>
+<td><p>手指位于触控板而非屏幕上时为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，其他情况省略</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stage</span></code></p></td>
+<td><p>能测量力度的触控板上的手指，其按压力度，见 <a class="reference internal" href="#fingers">手指</a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf</span></code></p></td>
+<td><p>对于手指，系统认为接触是有意操作时为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，判定为手掌等意外接触时为 <code class="docutils literal notranslate"><span class="pre">0</span></code>，尚未判断时省略。<code class="docutils literal notranslate"><span class="pre">0</span></code> 的接触仅在模式位 <code class="docutils literal notranslate"><span class="pre">64</span></code> 开启时报告，见 <a class="reference internal" href="#fingers">手指</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">h</span></code></p></td>
+<td><p>对于触控板上的手指，系统已知时提供触控板尺寸，单位 1/256 毫米，使程序能将位置转换为距离，或按正确宽高比将触控板映射到画布</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ink</span></code></p></td>
+<td><p>工具 <code class="docutils literal notranslate"><span class="pre">down</span></code> 时，如果程序已提供画笔，此字段为终端正向其中绘制笔划的矢量元素 ID，见 <a class="reference internal" href="ink-protocol.html"><span class="doc">终端侧墨迹</span></a>；否则省略</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>仅在 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 对应位被设置时，该测量值才存在。位清除表示设备不测量该项，绝不表示值为零；终端不得捏造测量值。各测量值及其 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 位如下：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">p</span></code></p></td>
+<td><p>1</p></td>
+<td><p>压力，0 至 65535</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tx</span></code>、<code class="docutils literal notranslate"><span class="pre">ty</span></code></p></td>
+<td><p>2</p></td>
+<td><p>倾斜角，单位百分之一度，−9000 至 9000，朝屏幕右侧和下方为正</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">twist</span></code></p></td>
+<td><p>4</p></td>
+<td><p>工具绕自身轴线旋转的角度，单位百分之一度，顺时针，0 至 35999</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tangent</span></code></p></td>
+<td><p>8</p></td>
+<td><p>切向压力，即喷枪滚轮，−65535 至 65535</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">z</span></code></p></td>
+<td><p>16</p></td>
+<td><p>高度，设备单位，−1000000 至 1000000</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dist</span></code></p></td>
+<td><p>32</p></td>
+<td><p>距数位板的距离，0 至 65535</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">wheel</span></code>、<code class="docutils literal notranslate"><span class="pre">wclicks</span></code></p></td>
+<td><p>64</p></td>
+<td><p>工具滚轮自上次报告以来的转动，分别以百分之一度和格数表示。鼠标或镜头工具具有此项，其他工具也可能具有</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">major</span></code>、<code class="docutils literal notranslate"><span class="pre">minor</span></code>，</p></td>
+<td><p>128</p></td>
+<td><p>屏幕上手指或图腾的接触形状：</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">angle</span></code></p></td>
+<td></td>
+<td><p>接触椭圆的轴长，单位物理像素 1/256；方向以百分之一度表示，从竖直方向顺时针计算</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code></p></td>
+<td><p>256</p></td>
+<td><p>工具在其数位板有效表面上的位置，从左上角起 0 至 65535，见 <a class="reference internal" href="#tablets">数位板</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">grip</span></code></p></td>
+<td><p>512</p></td>
+<td><p>握持工具笔杆的力度，0 至 65535</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>任何具有滚轮的工具都可报告滚轮，不只限于始终带滚轮的两类：<code class="docutils literal notranslate"><span class="pre">tablet-v2</span></code> 和 libinput 将它视为工具能力，而非工具类型限定。AppKit 和 XInput 的工具报告不提供滚轮。</p>
+<p><code class="docutils literal notranslate"><span class="pre">grip</span></code> 是支持测量的笔所感知的手握笔杆力度，对应 HID 用途表的 <em>Barrel Pressure</em>。它与 <code class="docutils literal notranslate"><span class="pre">p</span></code> 一样属于测量值，随每条工具报告发送，可随握持力度连续增加线宽或打开喷嘴。<a class="reference internal" href="#tool-actions">工具动作</a> 中的挤压是另一种信息：系统在力度跨过阈值时识别出的动作，只发生一次，没有量值。笔可提供其中任一、两者或都不提供。与笔内设置一样，只有笔自身报告携带 <code class="docutils literal notranslate"><span class="pre">grip</span></code>；Windows、macOS、Wayland 和 X11 的数位板接口均不转发。</p>
+<section id="fingers">
+<h3>手指<a class="headerlink" href="#fingers" title="链接到此标题。">¶</a></h3>
+<p>手指报告为 <code class="docutils literal notranslate"><span class="pre">kind=2</span></code>、<code class="docutils literal notranslate"><span class="pre">tool=0</span></code>，落下期间 <code class="docutils literal notranslate"><span class="pre">buttons=1</span></code>，每个手指使用独立 <code class="docutils literal notranslate"><span class="pre">contact</span></code>，通常除形状外没有其他测量值。触摸系统会先交付一组同时移动的手指，再处理它们；终端保留分组：每组报告后发送帧报告，仅含 <code class="docutils literal notranslate"><span class="pre">kind=2</span></code>、<code class="docutils literal notranslate"><span class="pre">phase=6</span></code>、<code class="docutils literal notranslate"><span class="pre">device</span></code> 和 <code class="docutils literal notranslate"><span class="pre">t</span></code>，若报告有 <code class="docutils literal notranslate"><span class="pre">tu</span></code> 也一并包含：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">phase</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">contact</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">x</span><span class="o">=</span><span class="mi">25600</span> <span class="p">:</span> <span class="n">y</span><span class="o">=</span><span class="mi">51200</span> <span class="p">:</span> <span class="n">buttons</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">mods</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">tool</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">valid</span><span class="o">=</span><span class="mi">0</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">phase</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">contact</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">x</span><span class="o">=</span><span class="mi">38400</span> <span class="p">:</span> <span class="n">y</span><span class="o">=</span><span class="mi">51200</span> <span class="p">:</span> <span class="n">buttons</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">mods</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">tool</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">valid</span><span class="o">=</span><span class="mi">0</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">phase</span><span class="o">=</span><span class="mi">6</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>关心手指间关系的程序（如捏合识别器）应收集到帧报告后一起处理；按手指分别绘制笔划的程序可逐条处理。帧报告只用于手指，工具一次只报告一个接触点。</p>
+<p>支持按压力度的触控板通过 <code class="docutils literal notranslate"><span class="pre">p</span></code> 和 <code class="docutils literal notranslate"><span class="pre">stage</span></code> 报告。力度属于整块触控板，不属于单个手指，因此板上每个手指携带相同的两个值；仅力度变化时，也会重新报告手指为位置未变的 <code class="docutils literal notranslate"><span class="pre">move</span></code>。<code class="docutils literal notranslate"><span class="pre">stage</span></code> 为 <code class="docutils literal notranslate"><span class="pre">0</span></code> 表示未达到点击力度，<code class="docutils literal notranslate"><span class="pre">1</span></code> 为点击，<code class="docutils literal notranslate"><span class="pre">2</span></code> 为更用力的点击；<code class="docutils literal notranslate"><span class="pre">p</span></code> 在各阶段内取 0 至 65535，所以阶段升高时压力值会回落。</p>
+<p>接触屏幕或触控板的不一定都是有意操作。放在玻璃上的手掌、握笔手的侧面、停在触控板边缘的拇指也都是接触，一些系统会根据大小、形状和笔位置判断。手指报告通过 <code class="docutils literal notranslate"><span class="pre">conf</span></code> 传达系统判断：<code class="docutils literal notranslate"><span class="pre">1</span></code> 为有意，<code class="docutils literal notranslate"><span class="pre">0</span></code> 为意外。系统未说明时省略 <code class="docutils literal notranslate"><span class="pre">conf</span></code>，不代表任一结论。有些系统完全不判断；另一些只标记意外接触，对其他接触不作说明，此类未标记接触没有 <code class="docutils literal notranslate"><span class="pre">conf</span></code>，不能当作已确认有意，因为系统漏判的手掌也一样。只有系统明确说明有意时才给出 <code class="docutils literal notranslate"><span class="pre">conf=1</span></code>。接触期间判断可能变化，例如手掌先以侧边接触，短暂像手指，或静止拇指开始移动。</p>
+<p>意外接触仍然是接触，如何处理由程序决定：有的程序忽略，有的允许手掌涂抹。但不认识 <code class="docutils literal notranslate"><span class="pre">conf</span></code> 的程序会把手掌当成手指，因此系统判定为意外的接触仅在模式位 <code class="docutils literal notranslate"><span class="pre">64</span></code> 开启时报告。未开启时，只要系统仍认为是意外，就不向程序显示：</p>
+<ul class="simple">
+<li><p>起初被判为意外的接触不报告。如果在抬起前系统不再认为是意外，则从那时以 <code class="docutils literal notranslate"><span class="pre">down</span></code> 开始报告；若先抬起，则始终不报告。</p></li>
+<li><p>正在报告的接触若被系统改判为意外，则发送 <code class="docutils literal notranslate"><span class="pre">phase=4</span></code>、<code class="docutils literal notranslate"><span class="pre">conf=0</span></code> 取消；程序与其他取消一样撤销该接触造成的效果。即使接触以意外状态抬起，最后一条也是 <code class="docutils literal notranslate"><span class="pre">cancel</span></code> 而非 <code class="docutils literal notranslate"><span class="pre">up</span></code>。取消后不再报告，除非抬起前系统不再视其为意外，此时以新的 <code class="docutils literal notranslate"><span class="pre">down</span></code> 重新开始。</p></li>
+<li><p>只有组内实际报告过内容时，才在该组后发送帧报告。</p></li>
+</ul>
+<p>开启位 <code class="docutils literal notranslate"><span class="pre">64</span></code> 后，所有接触按发生情况报告，并携带系统提供的 <code class="docutils literal notranslate"><span class="pre">conf</span></code>，不会因为意外接触而自动取消。程序应逐条检查 <code class="docutils literal notranslate"><span class="pre">conf</span></code>，若已绘制的接触后来被判为意外，应自行撤销。系统不执行判断时，该位不改变行为。支持报告这些接触的终端会设置 <code class="docutils literal notranslate"><span class="pre">caps</span></code> 位 <code class="docutils literal notranslate"><span class="pre">256</span></code>。</p>
+<p>Windows 通过指针的 confidence 标志提供判断；HID 用途表在接触报告中使用 <em>Touch Valid</em>，直接读取数字化仪的终端可获得。Android 也会判断，但较晚说明：把某个手指判为手掌后取消它，映射为该接触的 <code class="docutils literal notranslate"><span class="pre">cancel</span></code>、<code class="docutils literal notranslate"><span class="pre">conf=0</span></code>。AppKit 能标记触控板上静止搁置的接触，但不说明其他接触，实际观察中尚未见到该标记被设置，见 <a class="reference internal" href="#implementations">实现情况</a>。Wayland 和 X11 不提供此信息。</p>
+</section>
+<section id="tool-actions">
+<h3>工具动作<a class="headerlink" href="#tool-actions" title="链接到此标题。">¶</a></h3>
+<p>有些工具操作不是持续按住按钮：双击笔杆、挤压笔杆，或点击笔尾按钮。模式位 <code class="docutils literal notranslate"><span class="pre">16</span></code> 开启时，以 <code class="docutils literal notranslate"><span class="pre">kind=4</span></code> 报告：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">4</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">action</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">x</span><span class="o">=</span><span class="mi">25600</span> <span class="p">:</span> <span class="n">y</span><span class="o">=</span><span class="mi">51200</span> <span class="p">:</span> <span class="n">mods</span><span class="o">=</span><span class="mi">0</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">device</span></code></p></td>
+<td><p>工具标识，与工具报告相同；系统未说明是哪支工具时为 <code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t</span></code>、<code class="docutils literal notranslate"><span class="pre">tu</span></code></p></td>
+<td><p>动作时刻，与其他报告相同</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">action</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code> 双击笔杆，<code class="docutils literal notranslate"><span class="pre">2</span></code> 挤压，<code class="docutils literal notranslate"><span class="pre">3</span></code> 点击笔尾按钮，<code class="docutils literal notranslate"><span class="pre">4</span></code> 双击笔尾按钮，<code class="docutils literal notranslate"><span class="pre">5</span></code> 按住笔尾按钮，<code class="docutils literal notranslate"><span class="pre">6</span></code> 工具放入收纳槽，<code class="docutils literal notranslate"><span class="pre">7</span></code> 工具取出，<code class="docutils literal notranslate"><span class="pre">8</span></code> 按住按钮在空中移动工具</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">state</span></code></p></td>
+<td><p>持续动作（如挤压）开始时为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，结束时为 <code class="docutils literal notranslate"><span class="pre">0</span></code>；动作 <code class="docutils literal notranslate"><span class="pre">8</span></code> 的中间报告还使用 <code class="docutils literal notranslate"><span class="pre">2</span></code>。其他动作省略</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dx</span></code>、<code class="docutils literal notranslate"><span class="pre">dy</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">state=2</span></code> 时，自该动作上次报告以来工具在空中的移动量，−32767 至 32767，向右和向下为正</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x</span></code>、<code class="docutils literal notranslate"><span class="pre">y</span></code></p></td>
+<td><p>指针位置，与工具报告相同</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mods</span></code></p></td>
+<td><p>与工具报告相同</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>始终含有 <code class="docutils literal notranslate"><span class="pre">device</span></code>、<code class="docutils literal notranslate"><span class="pre">t</span></code>、<code class="docutils literal notranslate"><span class="pre">action</span></code>、<code class="docutils literal notranslate"><span class="pre">x</span></code>、<code class="docutils literal notranslate"><span class="pre">y</span></code> 和 <code class="docutils literal notranslate"><span class="pre">mods</span></code>。动作没有 <code class="docutils literal notranslate"><span class="pre">phase</span></code> 或 <code class="docutils literal notranslate"><span class="pre">contact</span></code>，不属于笔划。若某窗口捕获了该工具的笔划，则发送给该窗口，否则发给指针下的窗口。动作的用途由程序决定；双击通常在笔和橡皮之间切换。程序应忽略未知 <code class="docutils literal notranslate"><span class="pre">action</span></code>。</p>
+<p>如果设备有笔槽或可充电磁吸收纳位，笔会在放入和取出时告知系统，适合用来隐藏或显示调色板。Windows 向应用通知这两种动作。它们都没有持续状态，<code class="docutils literal notranslate"><span class="pre">x,y</span></code> 只是当前指针位置。</p>
+<p>带无线连接和运动传感器的笔，可像魔杖一样挥动：远离屏幕并按住按钮时报告运动，例如部分通过蓝牙配对的 Samsung S Pen。这就是动作 <code class="docutils literal notranslate"><span class="pre">8</span></code>：按钮按下时 <code class="docutils literal notranslate"><span class="pre">state=1</span></code>，随后任意数量 <code class="docutils literal notranslate"><span class="pre">state=2</span></code> 报告携带 <code class="docutils literal notranslate"><span class="pre">dx</span></code>、<code class="docutils literal notranslate"><span class="pre">dy</span></code>，松开时 <code class="docutils literal notranslate"><span class="pre">state=0</span></code>。这些量是笔内传感器对运动的解释，没有单位，只有符号和比例有意义；终端收到小数时应始终用同一系数转换为整数。程序可累加来移动光标，或从序列识别挥动。此时笔不在数位板上方，因此没有工具报告，<code class="docutils literal notranslate"><span class="pre">x,y</span></code> 保持原指针位置。</p>
+</section>
+<section id="pads">
+<h3>控制板<a class="headerlink" href="#pads" title="链接到此标题。">¶</a></h3>
+<p>控制板是数位板本体或独立遥控器上的按键、触控环、触控条和旋钮。模式位 <code class="docutils literal notranslate"><span class="pre">4</span></code> 开启时，以 <code class="docutils literal notranslate"><span class="pre">kind=3</span></code> 报告，每条对应一个控件：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">5</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">mods</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">ring</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">angle</span><span class="o">=</span><span class="mi">9000</span> <span class="p">:</span> <span class="n">src</span><span class="o">=</span><span class="mi">1</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">device</span></code>、<code class="docutils literal notranslate"><span class="pre">t</span></code> 和 <code class="docutils literal notranslate"><span class="pre">mods</span></code> 始终存在，与其他报告含义相同，<code class="docutils literal notranslate"><span class="pre">tu</span></code> 也相同。控制板报告没有 <code class="docutils literal notranslate"><span class="pre">phase</span></code>、<code class="docutils literal notranslate"><span class="pre">contact</span></code> 或位置，其余字段为下列形式之一：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">button</span></code>、<code class="docutils literal notranslate"><span class="pre">state</span></code></p></td>
+<td><p>按键按下 <code class="docutils literal notranslate"><span class="pre">state=1</span></code>，或释放 <code class="docutils literal notranslate"><span class="pre">state=0</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ring</span></code>、<code class="docutils literal notranslate"><span class="pre">angle</span></code></p></td>
+<td><p>手指在触控环上的位置，单位百分之一度，<code class="docutils literal notranslate"><span class="pre">0</span></code> 至 <code class="docutils literal notranslate"><span class="pre">35999</span></code>，按数位板当前方向从环顶部顺时针计数</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">strip</span></code>、<code class="docutils literal notranslate"><span class="pre">pos</span></code></p></td>
+<td><p>手指在触控条上的位置，顶端或左端为 <code class="docutils literal notranslate"><span class="pre">0</span></code>，另一端为 <code class="docutils literal notranslate"><span class="pre">65535</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ring</span></code> 或 <code class="docutils literal notranslate"><span class="pre">strip</span></code>，</p></td>
+<td><p>手指离开触控环或触控条时，用此形式替代位置报告</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop=1</span></code></p></td>
+<td><p>替代 <code class="docutils literal notranslate"><span class="pre">angle</span></code> 或 <code class="docutils literal notranslate"><span class="pre">pos</span></code>。此控件下次报告开始新的移动，因此上次与下次位置间的跳变不算转动</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dial</span></code>、<code class="docutils literal notranslate"><span class="pre">delta</span></code></p></td>
+<td><p>旋钮自上次报告以来的转动量，有符号，每个卡点为 <code class="docutils literal notranslate"><span class="pre">120</span></code>，平滑旋钮可更小。旋钮没有绝对位置</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">group</span></code>、<code class="docutils literal notranslate"><span class="pre">mode</span></code></p></td>
+<td><p>一组控件切换到了另一模式</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">button</span></code>、<code class="docutils literal notranslate"><span class="pre">ring</span></code>、<code class="docutils literal notranslate"><span class="pre">strip</span></code> 和 <code class="docutils literal notranslate"><span class="pre">dial</span></code> 的值是控件编号，各种类型按系统列举顺序在整块控制板上从零编号。系统说明触控环或触控条由手指操作时，报告添加 <code class="docutils literal notranslate"><span class="pre">src=1</span></code>。</p>
+<p>控制板控件划分为组，每组有一个从零开始编号的模式，用户可在控制板上切换，通常用系统保留的按键，并可能由指示灯显示。模式只是一个数字，用于让相同控件在不同模式中执行不同功能，具体功能由程序决定。<code class="docutils literal notranslate"><span class="pre">group</span></code> 报告给出分组编号和当前模式。控制板进入窗口时，终端也会为每个分组发送一次，因此程序不必等用户切换才知道状态。</p>
+<p>控制板报告发送到获得键盘焦点的窗口，而非指针下的窗口。每次控制板进入启用报告的窗口，在首条报告前，终端描述该控制板：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">device</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">5</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">buttons</span><span class="o">=</span><span class="mi">9</span> <span class="p">:</span> <span class="n">rings</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">strips</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">dials</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">groups</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">modes</span><span class="o">=</span><span class="mi">4</span> <span class="p">:</span> <span class="n">name</span><span class="o">=</span><span class="n">V2Fjb20gSW50dW9zNSB0b3VjaCBNIFBlbg</span><span class="o">==</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">buttons</span></code>，</p></td>
+<td><p>控制板上按键、触控环、触控条和旋钮的数量</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rings</span></code>，</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">strips</span></code>，</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dials</span></code></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">groups</span></code></p></td>
+<td><p>控件分组的数量</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">modes</span></code></p></td>
+<td><p>按分组顺序，以逗号分隔的各组模式数量</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mode</span></code></p></td>
+<td><p>各组当前模式，形式相同，终端在当时已知时才提供</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bgroups</span></code>，</p></td>
+<td><p>各按键、触控环、触控条和旋钮所属的分组，见下文</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rgroups</span></code>，</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sgroups</span></code>，</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dgroups</span></code></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tablet</span></code></p></td>
+<td><p>控制板所属数位板的编号，与该板上的工具相同，见 <a class="reference internal" href="#tablets">数位板</a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">name</span></code></p></td>
+<td><p>控制板所属数位板的名称，与工具相同</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vid</span></code>、<code class="docutils literal notranslate"><span class="pre">pid</span></code></p></td>
+<td><p>该数位板的硬件 ID，仅在模式位 <code class="docutils literal notranslate"><span class="pre">8</span></code> 开启时发送</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>模式属于分组，因此显示控件当前功能的程序必须知道控件所属组。<code class="docutils literal notranslate"><span class="pre">bgroups</span></code> 用于按键，<code class="docutils literal notranslate"><span class="pre">rgroups</span></code> 用于触控环，<code class="docutils literal notranslate"><span class="pre">sgroups</span></code> 用于触控条，<code class="docutils literal notranslate"><span class="pre">dgroups</span></code> 用于旋钮：按各类控件编号顺序，以逗号分隔给出所属组号；不属于任何组的控件（如系统保留用于切换模式的按键）用 <code class="docutils literal notranslate"><span class="pre">-</span></code>。<code class="docutils literal notranslate"><span class="pre">bgroups=0,0,0,-,1,1</span></code> 表示三个键属于组 0，一个不属于组，两个属于组 1。列表为该类型每个控件提供一项；没有该类控件或系统未说明时省略，只有一个组的控制板不会有归属疑问。系统可能在使用期间为自身用途将按键移出组或归还，此时重新描述控制板，与工具属性变化时一样。分组来自 libinput，Wayland 合成器通过 <code class="docutils literal notranslate"><span class="pre">tablet-v2</span></code> 转发：各组列出按键并公布触控环、触控条和旋钮。silkie 读取的其他接口均不提供分组。</p>
+<p>控制板只有按键具有持续按住状态。模式改变、终端重置、键盘焦点转到其他窗口或控制板消失时，终端为每个按住的键报告 <code class="docutils literal notranslate"><span class="pre">state=0</span></code>，时间 <code class="docutils literal notranslate"><span class="pre">t</span></code> 使用原按下时刻；控制板稍后实际产生的释放不再报告。开始报告前已经按住的键，之后释放时也不报告。程序必须容忍释放一个自己并未记录为按下的键。</p>
+<p>程序可以声明控件当前的功能，供系统在可用界面（如控制板布局蒙层）中展示给用户：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">tablet</span><span class="o">-</span><span class="n">pointer</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">label</span> <span class="p">:</span> <span class="n">device</span><span class="o">=</span><span class="mi">5</span> <span class="p">:</span> <span class="n">button</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">text</span><span class="o">=</span><span class="n">VW5kbw</span><span class="o">==</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">device</span></code> 指定控制板，并在 <code class="docutils literal notranslate"><span class="pre">button</span></code>、<code class="docutils literal notranslate"><span class="pre">ring</span></code>、<code class="docutils literal notranslate"><span class="pre">strip</span></code>、<code class="docutils literal notranslate"><span class="pre">dial</span></code> 中恰选一个，以 <code class="docutils literal notranslate"><span class="pre">0</span></code> 至 <code class="docutils literal notranslate"><span class="pre">255</span></code> 编号指定控件。<code class="docutils literal notranslate"><span class="pre">text</span></code> 为不含控制字符的 UTF-8，使用带填充的 base64 编码；<code class="docutils literal notranslate"><span class="pre">text</span></code> 为空或省略时表示移除标签。窗口系统可能限制标签长度：Wayland 请求最多容纳 4075 字节，kitty 会在字符边界截断更长标签。标签属于控件所在组的当前模式，因此程序应在收到控制板描述后，以及每次 <code class="docutils literal notranslate"><span class="pre">group</span></code> 报告后重新设置。仅接受来自正在接收该控制板报告的程序的标签，不回复；没有标签显示位置的终端忽略请求。</p>
+</section>
+<section id="totems">
+<h3>图腾工具<a class="headerlink" href="#totems" title="链接到此标题。">¶</a></h3>
+<p>图腾 <code class="docutils literal notranslate"><span class="pre">tool=8</span></code> 是放在屏幕上、由屏幕跟踪的旋钮或游标装置。它按工具报告：<code class="docutils literal notranslate"><span class="pre">x,y</span></code> 是中心，<code class="docutils literal notranslate"><span class="pre">twist</span></code> 为旋转量，<code class="docutils literal notranslate"><span class="pre">valid</span></code> 位 <code class="docutils literal notranslate"><span class="pre">128</span></code> 声明的接触形状为其覆盖的屏幕区域。按下对应按钮 <code class="docutils literal notranslate"><span class="pre">1</span></code>，因此按住并转动图腾是一个 <code class="docutils literal notranslate"><span class="pre">twist</span></code> 变化的笔划。</p>
+</section>
+<section id="estimates-and-predictions">
+<h3>估算与预测<a class="headerlink" href="#estimates-and-predictions" title="链接到此标题。">¶</a></h3>
+<p>某些系统会在全部数据测量完成前交付采样：笔尖位置可能先到，压力随后经无线连接到达，期间系统先填入估算值。有些系统还提供工具即将到达位置的预测采样，程序可先绘制以掩盖显示延迟，再替换。能转发此类信息的终端，仅在模式位 <code class="docutils literal notranslate"><span class="pre">32</span></code> 开启时发送，并在工具和手指报告中增加三个字段：</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seq</span></code></p></td>
+<td><p>设备采样计数，无符号 32 位整数，可回绕；后续报告据此引用先前采样</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">est</span></code></p></td>
+<td><p>本报告中仍为估算的测量项目，使用与 <code class="docutils literal notranslate"><span class="pre">valid</span></code> 相同的位集合</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pred</span></code></p></td>
+<td><p>预测采样为 <code class="docutils literal notranslate"><span class="pre">1</span></code>，否则省略</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>估算值通过修正报告更新：<code class="docutils literal notranslate"><span class="pre">phase=7</span></code>，携带被修正报告的 <code class="docutils literal notranslate"><span class="pre">seq</span></code>，重复该报告并使用实际测量值，不是笔划的新点。修正自身的 <code class="docutils literal notranslate"><span class="pre">est</span></code> 标明哪些项目仍为估算；没有估算项时省略。修正可能在笔划 <code class="docutils literal notranslate"><span class="pre">up</span></code> 后到达，也可能永远不来，此时保留估算值。</p>
+<p>预测采样不属于实际笔划。绘制预测的程序，在收到同一接触点下一条非预测报告时，应移除该接触点的全部预测采样。预测采样不带 <code class="docutils literal notranslate"><span class="pre">seq</span></code>，也不会被修正。</p>
+<p>未启用位 <code class="docutils literal notranslate"><span class="pre">32</span></code> 时，终端把估算值作为普通值发送，不发送修正和预测，因此不认识这些机制的程序直接绘制收到的内容。</p>
+</section>
+</section>
+<section id="lifecycle">
+<h2>生命周期<a class="headerlink" href="#lifecycle" title="链接到此标题。">¶</a></h2>
+<p>笔划以 <code class="docutils literal notranslate"><span class="pre">down</span></code> 开始，以 <code class="docutils literal notranslate"><span class="pre">up</span></code> 或 <code class="docutils literal notranslate"><span class="pre">cancel</span></code> 结束，期间该接触点每条报告都是 <code class="docutils literal notranslate"><span class="pre">move</span></code>。工具或手指离开窗口后，笔划仍由起始窗口捕获，因此坐标可为负或超出字符单元区域，不得钳制到另一个窗口。一次手指序列从首个手指落下到最后一个抬起，全部发送给首指下方的窗口；触控板则使用首指落下时指针所在窗口。被判为意外的接触不会保持序列活动，否则留在触控板上的拇指会让之后所有手指锁定同一窗口：若当前按下的接触全为意外，此时新手指落下或某接触不再被判为意外，将以当时该接触（或指针）下方窗口开始新序列。如果换了窗口，原窗口会取消已有接触，新窗口中每个接触都以 <code class="docutils literal notranslate"><span class="pre">down</span></code> 开始。<code class="docutils literal notranslate"><span class="pre">hover</span></code> 跟随感应范围内未接触的工具，不被捕获。工具离开感应范围时取消其未结束笔划，系统提供离开事件时再发送阶段 <code class="docutils literal notranslate"><span class="pre">5</span></code>。它发给最后获知该工具的窗口，无论工具离开时在哪里；即使笔划曾拖出窗口并在外结束，程序也仍需要知道笔已离开。</p>
+<p>模式改变、终端重置、窗口字符行列数变化、系统为自身手势接管手指，或设备消失时，终端以 <code class="docutils literal notranslate"><span class="pre">buttons=0</span></code>、<code class="docutils literal notranslate"><span class="pre">p=0</span></code> 取消接触。取消后不再报告该笔划的任何后续内容，包括 <code class="docutils literal notranslate"><span class="pre">up</span></code>。因意外接触取消的手指若重新报告（见 <a class="reference internal" href="#fingers">手指</a>），视为以 <code class="docutils literal notranslate"><span class="pre">down</span></code> 开始的新笔划。程序必须容忍丢失的 <code class="docutils literal notranslate"><span class="pre">hover</span></code>、重复取消，以及对仍被记录为活动的接触收到新 <code class="docutils literal notranslate"><span class="pre">down</span></code>，后者替换旧笔划。</p>
+<p>终端或中继无法跟上时，可按 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a> 合并部分报告。本协议仅允许合并 <code class="docutils literal notranslate"><span class="pre">move</span></code> 和 <code class="docutils literal notranslate"><span class="pre">hover</span></code>：同一接触点连续出现，期间没有该接触点的其他报告，且 <code class="docutils literal notranslate"><span class="pre">buttons</span></code> 相同。合并后绝对值取最后一条，<code class="docutils literal notranslate"><span class="pre">wheel</span></code>、<code class="docutils literal notranslate"><span class="pre">wclicks</span></code> 分别求和，并合并它们所在组的帧报告。其他报告（包括控制板、设备、动作和修正）全部原样到达。</p>
+<p>多路复用器按窗格原点（含边框）和滚动偏移转换屏幕接触的 <code class="docutils literal notranslate"><span class="pre">x,y</span></code>，其余字段不变；笔划和手指序列只交给起始窗格，窗格移动或调整大小时取消接触。保存各窗格模式，并向终端请求其并集。为感应范围内每个工具保存最近描述，在窗格收到首条工具报告前先发送描述；除非窗格请求硬件标识，否则去掉这些标识。终端重新描述设备时，保存新描述替换旧描述，并转发给当前接收该设备报告的窗格。<code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code>、<code class="docutils literal notranslate"><span class="pre">grip</span></code> 和 <code class="docutils literal notranslate"><span class="pre">conf</span></code> 不表示屏幕位置，原样转发。不同窗格的模式位 <code class="docutils literal notranslate"><span class="pre">64</span></code> 可不同；任一窗格启用时向终端请求，对未启用的窗格则按终端规则过滤：隐藏意外接触、取消后来被判为意外的接触、不再意外时以 <code class="docutils literal notranslate"><span class="pre">down</span></code> 开始，仅在实际发送过组内内容后发送帧报告。<code class="docutils literal notranslate"><span class="pre">tablet</span></code> 沿用终端编号；汇集多终端数位板的中继应重新编号，确保板间不冲突，且控制板与所属数位板工具编号相同。工具动作发给捕获该工具笔划的窗格，否则发给指针下方窗格，<code class="docutils literal notranslate"><span class="pre">x,y</span></code> 像接触位置一样转换，<code class="docutils literal notranslate"><span class="pre">dx,dy</span></code> 不变。修正跟随原报告进入同一窗格，<code class="docutils literal notranslate"><span class="pre">seq</span></code> 不变。控制板先发送描述，再原样发送给获得焦点的窗格；焦点离开时，向原窗格报告全部按住键已释放。标签仅从接收控制板报告的窗格转发。多路复用器或中继在有活动接触时脱离或断连，必须向程序为各接触发送 <code class="docutils literal notranslate"><span class="pre">cancel</span></code>，避免保留失效接触；重连后不补造没见过的事件，当前已落下的手指只从下次 <code class="docutils literal notranslate"><span class="pre">down</span></code> 开始报告。</p>
+</section>
+<section id="implementations">
+<h2>实现情况<a class="headerlink" href="#implementations" title="链接到此标题。">¶</a></h2>
+<ul class="simple">
+<li><p>silkie（本 kitty 分支）：macOS、Wayland 和 X11 支持工具；macOS 支持触控板手指，Wayland 支持带接触形状的触摸屏手指，X11 支持无形状的触摸屏手指；Wayland 支持控制板及控件分组，X11 支持控制板按键；macOS 支持工具动作；macOS 和 Wayland 提供数位板编号；Wayland 和 X11 提供数位板尺寸及是否为显示器；X11 提供工具在数位板上的位置。<code class="docutils literal notranslate"><span class="pre">kitty</span> <span class="pre">--debug-input</span></code> 记录收到的数位板、控制板和触摸事件。</p></li>
+<li><p>Inkline、Goblin Skiff 和 GoblinView 包含较早草案的编解码器，正在更新至本规范。</p></li>
+</ul>
+</section>
+<section id="implementation-notes-for-silkie">
+<h2>silkie 实现说明<a class="headerlink" href="#implementation-notes-for-silkie" title="链接到此标题。">¶</a></h2>
+<p>silkie 通过窗口系统读取数位板和触摸设备，因此程序得到系统所报告的内容。接受模式位 <code class="docutils literal notranslate"><span class="pre">1</span></code>、<code class="docutils literal notranslate"><span class="pre">2</span></code>、<code class="docutils literal notranslate"><span class="pre">4</span></code>、<code class="docutils literal notranslate"><span class="pre">8</span></code>、<code class="docutils literal notranslate"><span class="pre">16</span></code> 和 <code class="docutils literal notranslate"><span class="pre">64</span></code>，<code class="docutils literal notranslate"><span class="pre">caps</span></code> 说明当前系统实际能提供哪些能力。现有运行平台均不提供估算或预测，因此不接受位 <code class="docutils literal notranslate"><span class="pre">32</span></code>，也不报告图腾或电量。仅 macOS 发送 <code class="docutils literal notranslate"><span class="pre">tu</span></code>；Wayland 和 X11 的数位板／触摸事件使用整毫秒时间戳。</p>
+<p>silkie 转发窗口系统提供的设备信息，具体见下文：macOS 和 Wayland 的 <code class="docutils literal notranslate"><span class="pre">tablet</span></code>，Wayland 的控制板控件分组，Wayland 与 X11 从内核或驱动读取的 <code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">h</span></code>、<code class="docutils literal notranslate"><span class="pre">direct</span></code>，以及 X11 的 <code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code>。实现能生成本页每个字段，测试也覆盖它们，但实际读取接口均不提供 <code class="docutils literal notranslate"><span class="pre">grip</span></code>、<code class="docutils literal notranslate"><span class="pre">pcolor</span></code>、<code class="docutils literal notranslate"><span class="pre">pwidth</span></code>、<code class="docutils literal notranslate"><span class="pre">pstyle</span></code> 或动作 <code class="docutils literal notranslate"><span class="pre">6</span></code> 至 <code class="docutils literal notranslate"><span class="pre">8</span></code>，因此不会发送；<code class="docutils literal notranslate"><span class="pre">conf</span></code> 来自 AppKit 的标记，但尚未观察到任何实际接触携带它，因此任何平台均不声明 <code class="docutils literal notranslate"><span class="pre">caps</span></code> 位 <code class="docutils literal notranslate"><span class="pre">256</span></code>。描述内容变化时重新描述工具或控制板，目前只有 Wayland 控制板会出现此情况。</p>
+<p>本规范将倾斜定义在屏幕坐标轴上。系统为左手使用或旋转数位屏而旋转数位板时，会同时变换位置，却不一定变换设备自身坐标轴上的倾斜。系统说明数位板朝向时，silkie 转换倾斜；未说明时原样转发：</p>
+<ul class="simple">
+<li><p>libinput 仅为左手模式旋转半圈，此时会同时变换位置、倾斜和笔杆旋转。</p></li>
+<li><p>Wayland <code class="docutils literal notranslate"><span class="pre">tablet-v2</span></code> 给出数位板轴上的倾斜；合成器把板映射到旋转显示器或自行校准时，不告知终端，因此原样转发。数位屏旋转四分之一圈时，倾斜仍在面板轴上，而非屏幕轴上。</p></li>
+<li><p>X11 wacom 驱动的 <code class="docutils literal notranslate"><span class="pre">Wacom</span> <span class="pre">Rotation</span></code> 及服务器的 <code class="docutils literal notranslate"><span class="pre">Coordinate</span> <span class="pre">Transformation</span> <span class="pre">Matrix</span></code> 会转换位置，但将倾斜保留在数位板轴上。silkie 读取两者，并在变化后重新读取；矩阵保持轴线正交时（四分之一圈、半圈、镜像或映射到屏幕局部），相应转换倾斜。矩阵旋转其他角度或将其压平时，省略倾斜。笔杆旋转不做变换。</p></li>
+<li><p>AppKit 提供驱动按用户设置的朝向处理后的倾斜值。</p></li>
+</ul>
+<p>上述行为尚未使用旋转的数位板实测。</p>
+<ul class="simple">
+<li><p>macOS 的数位板数据随驱动的鼠标事件到达。倾斜从驱动给出的最大倾斜比例，按 Wacom 报告的 60 度假定换算；<code class="docutils literal notranslate"><span class="pre">z</span></code> 为驱动的绝对 Z。程序接收工具报告期间，禁用 AppKit 的数位板采样合并，以便上报每个采样。AppKit 区分笔、橡皮和游标；Wacom 喷枪和镜头光标通过驱动工具代码识别。设备描述中没有已知名称。<code class="docutils literal notranslate"><span class="pre">tablet</span></code> 为 AppKit 在已连接数位板中的索引加一。AppKit 还提供数位板单位下的工具位置，但不提供范围或板尺寸，因此没有 <code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code>、<code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">h</span></code>。唯一工具动作是与 iPad 配对的 Apple Pencil 双击，前提是 Mac 将 iPad 用作显示器；系统不说明来源工具，因此除非只有一个工具处于感应范围内，否则 <code class="docutils literal notranslate"><span class="pre">device</span></code> 为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。手指来自 AppKit 向内容视图报告的触控板间接触摸；板尺寸取 AppKit 的设备尺寸，按每英寸 72 点解释。触控板手指报告与系统生成的鼠标、滚动事件同时存在。支持力度的触控板首次被按压后提供 <code class="docutils literal notranslate"><span class="pre">p</span></code> 和 <code class="docutils literal notranslate"><span class="pre">stage</span></code>。AppKit 对静止搁置的触摸有一个标记，文档描述为拇指或其他静止接触；silkie 也请求它们：有标记的触摸为 <code class="docutils literal notranslate"><span class="pre">conf=0</span></code>，开始或停止静止时即使没移动也会报告。对无标记触摸，AppKit 不作判断，因此没有 <code class="docutils literal notranslate"><span class="pre">conf</span></code>。在 macOS 26 的 16 英寸 MacBook Pro 触控板上从未观察到该标记：手掌压在板上、拇指停在边缘而另一手指移动时，都作为普通触摸到达。因此 silkie 在 macOS 不声明 <code class="docutils literal notranslate"><span class="pre">caps</span></code> 位 <code class="docutils literal notranslate"><span class="pre">256</span></code>，程序得不到 <code class="docutils literal notranslate"><span class="pre">conf</span></code>，需自行判断手掌，其他 AppKit 接口也不提供分类。相关代码仍保留，以支持实际会设置标记的设备：无论能力位是否声明，程序开启模式位 <code class="docutils literal notranslate"><span class="pre">64</span></code> 就会收到带 <code class="docutils literal notranslate"><span class="pre">conf=0</span></code> 的该类触摸；未开启时将其过滤，类似 AppKit 对未请求视图的过滤，但有一项刻意差异：手指变为静止时以 <code class="docutils literal notranslate"><span class="pre">cancel</span></code> 结束，而非 AppKit 的 <code class="docutils literal notranslate"><span class="pre">up</span></code>，因为停止移动不等于点击。<code class="docutils literal notranslate"><span class="pre">kitty</span> <span class="pre">--debug-input</span></code> 会在带标记的触摸后输出 <code class="docutils literal notranslate"><span class="pre">accidental</span></code>。Wacom 工具类型、双击和力度依据 AppKit 文档实现，尚未经相应硬件实测。没有控制板报告：AppKit 不提供这些控件事件，应用只能通过 Wacom 驱动自己的请求接口读取。</p></li>
+<li><p>Wayland 工具通过 <code class="docutils literal notranslate"><span class="pre">tablet-v2</span></code> 提供，该协议报告上述测量、工具标识和数位板名称；手指通过 <code class="docutils literal notranslate"><span class="pre">wl_touch</span></code> 提供，seat 为版本 6 或以上且合成器发送时，可带 <code class="docutils literal notranslate"><span class="pre">shape</span></code> 和 <code class="docutils literal notranslate"><span class="pre">orientation</span></code>。撰写时 sway 和 GNOME 尚未发送，<code class="docutils literal notranslate"><span class="pre">caps</span></code> 在实际收到带形状接触后才声明形状能力。仅支持 <code class="docutils literal notranslate"><span class="pre">cursor-shape-v1</span></code> 的合成器会让指针光标跟随工具。GNOME 先应用自身笔按钮映射（默认下方按钮为中键），sway 原样转发。对 silkie 而言，工具不移动鼠标指针：合成器可为数位板提供独立光标，所以滚动等按指针位置报告的事件仍位于原鼠标指针处。控制板也通过 <code class="docutils literal notranslate"><span class="pre">tablet-v2</span></code> 提供：第一版有按键、触控环、触控条和模式，第二版新增旋钮，需要合成器公布相应版本；标签作为控件反馈传给合成器。控制板的 <code class="docutils literal notranslate"><span class="pre">name</span></code> 和硬件 ID 取自其所属数位板。合成器支持协议时，<code class="docutils literal notranslate"><span class="pre">caps</span></code> 才声明工具和控制板。<code class="docutils literal notranslate"><span class="pre">tablet</span></code> 按合成器公布 seat 数位板的顺序编号：工具使用进入感应范围的板号，控制板使用获得焦点时关联的板号。按键属于列出它的组，触控环／触控条／旋钮属于公布它们的组；控制板有焦点时，若合成器重新列出某组按键，就重新发送控制板描述。协议不提供数位板尺寸、是否为显示器或工具在板上的位置，尽管合成器知道三者。但它提供设备节点，系统可向查询者公开前两项，而无须访问设备本身。udev 根据设备位置范围和分辨率计算尺寸，在数据库中以向下取整的毫米保存为 <code class="docutils literal notranslate"><span class="pre">ID_INPUT_WIDTH_MM</span></code> 和 <code class="docutils literal notranslate"><span class="pre">ID_INPUT_HEIGHT_MM</span></code>。内核在 sysfs 提供设备属性，<code class="docutils literal notranslate"><span class="pre">INPUT_PROP_DIRECT</span></code> 表示显示器，<code class="docutils literal notranslate"><span class="pre">INPUT_PROP_POINTER</span></code> 表示非显示器数位板。silkie 在数位板给出节点时加载 libudev，读取两者并发送 <code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">h</span></code>、<code class="docutils literal notranslate"><span class="pre">direct</span></code>；没有节点时不使用它。只读取笔对应的节点，不读取控制板或板上手指节点。节点属于合成器所在机器，因此只有内核中的厂商／产品 ID 与合成器提供值匹配，或未提供 ID 时名称匹配，读取结果才有效；终端与合成器位于不同机器时不报告这些信息。内核没提供的属性会省略，例如设备未声明分辨率时不提供尺寸。无法通过此方式获得 <code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code>。已用模拟 libudev 检查两块数位板的内核／udev 应答，并在没有数位板的机器上检查实际设备读取，未有真实数位板可用。控制板也只用按 wlroots 行为发送事件的模拟合成器测试，未使用硬件。</p></li>
+<li><p>X11 工具来自 XInput 2 设备，名称按 libinput 或 wacom 驱动惯例包含工具类型；设备描述的 <code class="docutils literal notranslate"><span class="pre">name</span></code> 使用此名称，数位板硬件 ID 未知。<code class="docutils literal notranslate"><span class="pre">tangent</span></code> 携带设备滚轮轴，<code class="docutils literal notranslate"><span class="pre">twist</span></code> 为旋转 Z 轴。工具位置从其自身设备报告生成，并像服务器一样缩放到屏幕，因为服务器把事件发生前的指针位置放入事件，实际落后工具一条报告。<code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code> 也源于该位置。服务器会应用用户将板映射到屏幕或某显示器的矩阵，因此 silkie 读取矩阵并在变化时重读，再反向变换；矩阵不可逆时省略 <code class="docutils literal notranslate"><span class="pre">rx</span></code>、<code class="docutils literal notranslate"><span class="pre">ry</span></code>。libinput 的区域宽高比也会导致省略，因为它按 silkie 无法精确获知的因子拉伸一轴并截断超出部分。<code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">h</span></code> 是位置范围除以驱动声明的分辨率；没有可用的、声明分辨率的驱动硬件，因此尺寸尚未实测。libinput 不声明分辨率；两个驱动均通过 <code class="docutils literal notranslate"><span class="pre">Device</span> <span class="pre">Node</span></code> 属性提供工具节点，通过 <code class="docutils literal notranslate"><span class="pre">Device</span> <span class="pre">Product</span> <span class="pre">ID</span></code> 提供厂商和产品 ID。驱动未声明分辨率时，silkie 与 Wayland 一样从内核读取节点的尺寸和 <code class="docutils literal notranslate"><span class="pre">direct</span></code>，尺寸按毫米向下取整；仅当连接 X 服务器使用本地套接字，且内核设备 ID 匹配时才信任，因为节点属于服务器所在机器。已通过带这些属性的 X 服务器测试驱动设备和模拟 libudev 检查，未使用数位板硬件。X 没有工具所属数位板的概念，每个工具都是独立设备，因此不提供 <code class="docutils literal notranslate"><span class="pre">tablet</span></code>。X 服务器不报告工具离开感应范围，故仅设备消失时发送阶段 <code class="docutils literal notranslate"><span class="pre">5</span></code>。也识别 Xwayland 数位板设备，但 GNOME 下测试未收到移动事件，那里应使用 Wayland 后端。此类设备不报告数位板信息：位置是桌面位置，分辨率为虚构。触摸屏手指通过 XInput 2.2 触摸事件提供，服务器具备该版本时 <code class="docutils literal notranslate"><span class="pre">caps</span></code> 声明支持。X 将每个手指作为独立事件，因此各手指报告后各跟一个帧报告，同时移动的手指不分组。没有接触形状；系统接管触摸时以普通 <code class="docutils literal notranslate"><span class="pre">up</span></code> 结束，因为服务器不说明接管；触控板手指也不上报。服务器会将鼠标指针移到首指落点，但不会将此变化作为鼠标报告转发。已通过 Xwayland 将合成器触摸转换为事件来测试，未使用触摸屏。控制板来自 libinput 和 wacom 驱动，它们为控制板提供类型 <code class="docutils literal notranslate"><span class="pre">PAD</span></code> 的独立设备，服务器具备这些驱动之一时 <code class="docutils literal notranslate"><span class="pre">caps</span></code> 声明支持。X 只提供控制板按键，作为设备按钮：键 0 至 2 对应按钮 1 至 3，其余从按钮 8 起；按钮 4 至 7 是驱动默认从触控环和触控条生成的滚动，不转发。描述的 <code class="docutils literal notranslate"><span class="pre">buttons</span></code> 为设备按钮数减四，在 libinput 下等于实际按键数；wacom 可能提供比实际按键更多的按钮。触控环、触控条均不报告，描述也不列出：libinput 不论实际硬件都给出两个环和两个条的相同轴，无法得知数量；wacom 则提供未说明方向和单位的原始值。没有分组和模式，libinput 只通过 silkie 未读取的私有属性发布它们；标签也没有显示位置。控制板应向键盘焦点窗口报告，但服务器只把按键交给指针下的窗口，因此指针位于其他应用时按控制板键，不会报告。已通过 X 服务器测试驱动设备，使用 wacom 的 <code class="docutils literal notranslate"><span class="pre">Wacom</span> <span class="pre">Tool</span> <span class="pre">Type</span></code> 属性将其标为控制板来检查，未使用实际控制板。</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="scroll-protocol.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">滚动协议</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="font-protocol.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">字体选择协议</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">数位板指针协议</a><ul>
+<li><a class="reference internal" href="#framing">消息封装</a></li>
+<li><a class="reference internal" href="#discovery">能力探测</a></li>
+<li><a class="reference internal" href="#mode">模式</a></li>
+<li><a class="reference internal" href="#devices">设备</a><ul>
+<li><a class="reference internal" href="#tablets">数位板</a></li>
+<li><a class="reference internal" href="#settings-stored-in-a-pen">笔内存储的设置</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#reports">报告</a><ul>
+<li><a class="reference internal" href="#fingers">手指</a></li>
+<li><a class="reference internal" href="#tool-actions">工具动作</a></li>
+<li><a class="reference internal" href="#pads">控制板</a></li>
+<li><a class="reference internal" href="#totems">图腾工具</a></li>
+<li><a class="reference internal" href="#estimates-and-predictions">估算与预测</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#lifecycle">生命周期</a></li>
+<li><a class="reference internal" href="#implementations">实现情况</a></li>
+<li><a class="reference internal" href="#implementation-notes-for-silkie">silkie 实现说明</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

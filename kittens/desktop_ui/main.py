@@ -41,7 +41,7 @@ opt(
     '+file_chooser_kitty_conf',
     '',
     long_text='Path to config file to use for kitty when drawing the file chooser window. Can be specified multiple times. By default, the'
-    ' normal kitty.conf is used. Relative paths are resolved with respect to the kitty config directory.',
+    ' normal silkie.conf is used. Relative paths are resolved with respect to the Silkie config directory.',
 )
 opt(
     '+file_chooser_kitty_override',

@@ -342,7 +342,7 @@ def debug_config(opts: KittyOpts | None = None, global_shortcuts: dict[str, Sing
             p('\t' + k.ljust(35), styled(v, dim=True))
 
     for k in (
-        'PATH LANG KITTY_CONFIG_DIRECTORY KITTY_CACHE_DIRECTORY VISUAL EDITOR SHELL'
+        'PATH LANG SILKIE_CONFIG_DIRECTORY KITTY_CACHE_DIRECTORY VISUAL EDITOR SHELL'
         ' GLFW_IM_MODULE KITTY_WAYLAND_DETECT_MODIFIERS DISPLAY WAYLAND_DISPLAY USER XCURSOR_SIZE'
     ).split():
         penv(k)

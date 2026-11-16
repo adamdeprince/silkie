@@ -117,7 +117,7 @@ def launch(args: list[str]) -> None:
     kitten = resolved_kitten(kitten)
     del args[:2]
     args = [kitten] + args
-    os.environ['KITTY_CONFIG_DIRECTORY'] = config_dir
+    os.environ['SILKIE_CONFIG_DIRECTORY'] = config_dir
     set_debug(kitten)
     m = import_kitten_main_module(config_dir, original_kitten_name)
     try:

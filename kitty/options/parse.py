@@ -15,11 +15,12 @@ from kitty.options.utils import (
     custom_shaders, deprecated_adjust_line_height, deprecated_hide_window_decorations_aliases,
     deprecated_macos_show_window_title_in_menubar_alias, deprecated_scrollback_indicator_opacity,
     deprecated_send_text, disable_ligatures, edge_width, env, filter_notification, font_features,
-    font_role, hide_window_decorations, macos_option_as_alt, macos_titlebar_color, menu_map,
-    modify_font, mouse_hide_wait, narrow_symbols, notify_on_cmd_finish, optional_edge_width,
+    font_role, hdr_multiplier, hide_window_decorations, macos_option_as_alt, macos_titlebar_color,
+    menu_map, modify_font, mouse_hide_wait, narrow_symbols, notify_on_cmd_finish, optional_edge_width,
     parse_font_spec, parse_map, parse_mouse_map, paste_actions, pointer_shape_when_dragging,
     remap_modifiers, remote_control_password, resize_debounce_time, scrollback_lines,
     scrollback_pager_history_size, scrollbar_color, shell_integration, show_hyperlink_targets,
+    spatial_angle, spatial_divergence, spatial_exponent, spatial_phase_limit, spatial_scale,
     store_multiple, symbol_map, tab_activity_symbol, tab_bar_edge, tab_bar_margin_height,
     tab_bar_min_tabs, tab_fade, tab_font_style, tab_separator, tab_title_template, tab_title_wrap,
     text_fg_override_threshold, titlebar_color, to_cursor_shape, to_cursor_unfocused_shape,
@@ -958,7 +959,7 @@ class Parser:
         ans['cursor_blink_interval'] = cursor_blink_interval(val)
 
     def cursor_brightness(self, val: str, ans: dict[str, typing.Any]) -> None:
-        ans['cursor_brightness'] = positive_float(val)
+        ans['cursor_brightness'] = hdr_multiplier(val)
 
     def cursor_shape(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['cursor_shape'] = to_cursor_shape(val)
@@ -1052,6 +1053,9 @@ class Parser:
         for k, v in store_multiple(val, ans["exe_search_path"]):
             ans["exe_search_path"][k] = v
 
+    def experimental_xreal_1s(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['experimental_xreal_1s'] = to_bool(val)
+
     def file_transfer_confirmation_bypass(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['file_transfer_confirmation_bypass'] = str(val)
 
@@ -1102,7 +1106,7 @@ class Parser:
     choices_for_hdr = frozenset(('no', 'detect', 'auto', 'always'))
 
     def hdr_max_headroom(self, val: str, ans: dict[str, typing.Any]) -> None:
-        ans['hdr_max_headroom'] = positive_float(val)
+        ans['hdr_max_headroom'] = hdr_multiplier(val)
 
     def hide_window_decorations(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['hide_window_decorations'] = hide_window_decorations(val)
@@ -1414,6 +1418,46 @@ class Parser:
 
     def single_window_padding_width(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['single_window_padding_width'] = optional_edge_width(val)
+
+    def spatial_divergence_exponent(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_divergence_exponent'] = spatial_exponent(val)
+
+    def spatial_field_of_view(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_field_of_view'] = spatial_angle(val)
+
+    def spatial_mode(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_spatial_mode:
+            raise ValueError(f"The value {val} is not a valid choice for spatial_mode")
+        ans["spatial_mode"] = val
+
+    choices_for_spatial_mode = frozenset(('off', 'follow', 'anchored'))
+
+    def spatial_negative_divergence(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_negative_divergence'] = spatial_divergence(val)
+
+    def spatial_output(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_spatial_output:
+            raise ValueError(f"The value {val} is not a valid choice for spatial_output")
+        ans["spatial_output"] = val
+
+    choices_for_spatial_output = frozenset(('sbs', 'red-blue'))
+
+    def spatial_positive_divergence(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_positive_divergence'] = spatial_divergence(val)
+
+    def spatial_tracking_address(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_tracking_address'] = str(val)
+
+    def spatial_vertical_phase_limit(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_vertical_phase_limit'] = spatial_phase_limit(val)
+
+    def spatial_wall_scale(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['spatial_wall_scale'] = spatial_scale(val)
+
+    def ssh_agent_forwarding(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['ssh_agent_forwarding'] = to_bool(val)
 
     def startup_session(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['startup_session'] = config_or_absolute_path(val)

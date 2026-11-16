@@ -35,6 +35,8 @@ choices_for_placement_strategy = typing.Literal['top-left', 'top', 'top-right', 
 choices_for_pointer_shape_when_grabbed = choices_for_default_pointer_shape
 choices_for_progress_bar = typing.Literal['left', 'right', 'top', 'bottom', 'hidden']
 choices_for_scrollbar = typing.Literal['scrolled', 'always', 'never', 'hovered', 'scrolled-and-hovered', 'scrolled-or-hovered']
+choices_for_spatial_mode = typing.Literal['off', 'follow', 'anchored']
+choices_for_spatial_output = typing.Literal['sbs', 'red-blue']
 choices_for_strip_trailing_spaces = typing.Literal['always', 'never', 'smart']
 choices_for_tab_bar_align = typing.Literal['start', 'center', 'end', 'left', 'right']
 choices_for_tab_bar_style = typing.Literal['fade', 'hidden', 'powerline', 'separator', 'slant', 'custom']
@@ -378,6 +380,7 @@ option_names = (
     'env',
     'escape_limit',
     'exe_search_path',
+    'experimental_xreal_1s',
     'file_transfer_confirmation_bypass',
     'filter_notification',
     'focus_follows_mouse',
@@ -480,6 +483,16 @@ option_names = (
     'show_hyperlink_targets',
     'single_window_margin_width',
     'single_window_padding_width',
+    'spatial_divergence_exponent',
+    'spatial_field_of_view',
+    'spatial_mode',
+    'spatial_negative_divergence',
+    'spatial_output',
+    'spatial_positive_divergence',
+    'spatial_tracking_address',
+    'spatial_vertical_phase_limit',
+    'spatial_wall_scale',
+    'ssh_agent_forwarding',
     'startup_session',
     'strip_trailing_spaces',
     'symbol_map',
@@ -624,9 +637,10 @@ class Options:
     enable_audio_bell: bool = True
     enabled_layouts: list[str] = ['fat', 'grid', 'horizontal', 'splits', 'stack', 'tall', 'vertical']
     escape_limit: int = 0
+    experimental_xreal_1s: bool = False
     file_transfer_confirmation_bypass: str = ''
     focus_follows_mouse: choices_for_focus_follows_mouse = 'no'
-    font_family: FontSpec = FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka', axes=(), variable_name=None, features=(), created_from_string='Iosevka')
+    font_family: FontSpec = FontSpec(family='Iosevka', style='Extended', postscript_name=None, full_name=None, system=None, axes=(), variable_name=None, features=(), created_from_string='family=Iosevka style=Extended')
     font_size: float = 11.0
     force_ltr: bool = False
     foreground: Color = Color(221, 221, 221)
@@ -716,6 +730,16 @@ class Options:
     show_hyperlink_targets: typing.Literal['never', 'always', 'Ctrl', 'Shift', 'Super', 'Alt'] = 'never'
     single_window_margin_width: FloatEdges = FloatEdges(left=-1.0, top=-1.0, right=-1.0, bottom=-1.0)
     single_window_padding_width: FloatEdges = FloatEdges(left=-1.0, top=-1.0, right=-1.0, bottom=-1.0)
+    spatial_divergence_exponent: float = 0.0
+    spatial_field_of_view: float = 52.0
+    spatial_mode: choices_for_spatial_mode = 'off'
+    spatial_negative_divergence: float = 0.0
+    spatial_output: choices_for_spatial_output = 'sbs'
+    spatial_positive_divergence: float = 0.5
+    spatial_tracking_address: str = '169.254.2.1:52998'
+    spatial_vertical_phase_limit: float = 0.0
+    spatial_wall_scale: float = 2.0
+    ssh_agent_forwarding: bool = False
     startup_session: str | None = None
     strip_trailing_spaces: choices_for_strip_trailing_spaces = 'never'
     sync_to_monitor: bool = True
@@ -922,7 +946,7 @@ defaults.env = {}
 defaults.exe_search_path = {}
 defaults.filter_notification = {}
 defaults.font_features = {}
-defaults.font_role = {'sans': FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka', axes=(), variable_name=None, features=(), created_from_string='Iosevka'), 'serif': FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka Slab', axes=(), variable_name=None, features=(), created_from_string='Iosevka Slab')}
+defaults.font_role = {'sans': FontSpec(family='Iosevka', style='Extended', postscript_name=None, full_name=None, system=None, axes=(), variable_name=None, features=(), created_from_string='family=Iosevka style=Extended'), 'serif': FontSpec(family=None, style=None, postscript_name=None, full_name=None, system='Iosevka Slab', axes=(), variable_name=None, features=(), created_from_string='Iosevka Slab')}
 defaults.kitten_alias = {}
 defaults.menu_map = {}
 defaults.modify_font = {}
@@ -1138,7 +1162,7 @@ if is_macos:
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=96), definition='macos_cycle_through_os_windows'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=96), definition='macos_cycle_through_os_windows_backwards'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=12, key=32), definition='kitten unicode_input'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=44), definition='edit_config_file'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=44), definition='open_settings'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=10, key=114), definition='clear_terminal reset active'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=107), definition='clear_terminal to_cursor active'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=10, key=107), definition='clear_terminal scrollback active'))
@@ -1150,7 +1174,6 @@ if is_macos:
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=104), definition='hide_macos_app'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=10, key=104), definition='hide_macos_other_apps'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=109), definition='minimize_macos_window'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=113), definition='quit'))
 
 defaults.mouse_map = [
     # click_url_or_select

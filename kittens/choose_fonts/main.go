@@ -98,12 +98,12 @@ instead either not reload the config at all or in all running kitty instances.`,
 		Name:    "--config-file-name",
 		Dest:    "Config_file_name",
 		Type:    "str",
-		Default: "kitty.conf",
+		Default: "silkie.conf",
 		Help: `The name or path to the config file to edit. Relative paths are interpreted
-with respect to the kitty config directory. By default the kitty config
-file, kitty.conf is edited. This is most useful if you add include
-fonts.conf to your kitty.conf and then have the kitten operate only on
-fonts.conf, allowing kitty.conf to remain unchanged.`,
+with respect to the Silkie config directory. By default the kitty config
+file, silkie.conf is edited. This is most useful if you add include
+fonts.conf to your silkie.conf and then have the kitten operate only on
+fonts.conf, allowing silkie.conf to remain unchanged.`,
 	})
 
 	clone := root.AddClone(ans.Group, ans)

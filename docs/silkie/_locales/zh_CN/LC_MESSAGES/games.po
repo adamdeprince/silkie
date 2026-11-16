@@ -1,0 +1,301 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:35-0400\n"
+"PO-Revision-Date: 2026-10-29 06:38+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/games.rst:2
+msgid "Games for Silkie and kitty"
+msgstr "Silkie 与 kitty 游戏"
+
+#: docs/silkie/games.rst:10
+msgid ""
+"Play all four games in the website's Linux terminal, or run them in native Silkie and kitty "
+"terminals. Each browser link opens a terminal filling its own window and starts the game "
+"automatically. Use **Fullscreen** to hide the browser controls. Each game keeps its own files and"
+" saves in this browser's local storage; reopening its link returns to the running window."
+msgstr ""
+"在网站的 Linux 终端中试玩全部四款游戏，或在原生 Silkie 和 kitty 终端中运行。每个浏览器链接都会在独立窗口中打开终端，并自动启动游戏。使用 **全屏** "
+"隐藏浏览器控件。各游戏的文件和存档分别保存在浏览器本地存储中；再次打开链接会返回已有窗口。"
+
+#: docs/silkie/games.rst:16
+msgid ""
+"<ul>\n"
+"  <li><a href=\"browser-demo.html?game=presidential\" target=\"silkie-presidential\">Play "
+"Presidential full screen</a></li>\n"
+"  <li><a href=\"browser-demo.html?game=silkie-loophole\" target=\"silkie-silkie-loophole\">Play "
+"Silkie Loophole full screen</a></li>\n"
+"  <li><a href=\"browser-demo.html?game=silkie-sprint\" target=\"silkie-silkie-sprint\">Play "
+"Silkie Sprint full screen</a></li>\n"
+"  <li><a href=\"browser-demo.html?game=silkie-scramble\" target=\"silkie-silkie-scramble\">Play "
+"Silkie Scramble full screen</a></li>\n"
+"</ul>"
+msgstr ""
+"<ul>\n"
+"<li><a href=\"browser-demo.html?game=presidential\" target=\"silkie-presidential\">全屏游玩 "
+"Presidential</a></li>\n"
+"<li><a href=\"browser-demo.html?game=silkie-loophole\" target=\"silkie-silkie-loophole\">全屏游玩 "
+"Silkie Loophole</a></li>\n"
+"<li><a href=\"browser-demo.html?game=silkie-sprint\" target=\"silkie-silkie-sprint\">全屏游玩 Silkie "
+"Sprint</a></li>\n"
+"<li><a href=\"browser-demo.html?game=silkie-scramble\" target=\"silkie-silkie-scramble\">全屏游玩 "
+"Silkie Scramble</a></li>\n"
+"</ul>"
+
+#: docs/silkie/games.rst:26
+msgid "Presidential"
+msgstr "Presidential"
+
+#: docs/silkie/games.rst:28
+msgid ""
+"You are President of the United States. Read the daily briefing, draft orders, and press GO to "
+"advance a day in a simulation of the world economy. Explore trade, finance, government, "
+"diplomacy, and the effects of your policies. Use F1–F9 to switch panels, B for the briefing, and "
+"? for help. Campaigns save after each day and when you quit."
+msgstr ""
+"你是美国总统。在全球经济模拟中阅读每日简报、起草命令，再按 GO 推进一天。探索贸易、金融、政府、外交以及政策的影响。用 F1–F9 切换面板，B 查看简报，? "
+"查看帮助。竞选进度会在每天结束后和退出时保存。"
+
+#: docs/silkie/games.rst:34
+msgid ""
+"Build from the ``presidential`` checkout with ``cargo install --path crates/terminal-ui``, then "
+"run ``presidential``. The economic data and world map are embedded, so the game works offline."
+msgstr ""
+"在 ``presidential`` 检出目录中运行 ``cargo install --path crates/terminal-ui`` 构建，再运行 "
+"``presidential``。经济数据和世界地图已内嵌，游戏可离线运行。"
+
+#: docs/silkie/games.rst:39
+msgid "Silkie Loophole"
+msgstr "Silkie Loophole"
+
+#: docs/silkie/games.rst:41
+msgid ""
+"A raccoon in a bedsheet goes trick-or-treating around Montpelier, Vermont. Collect candy, "
+"discover the neighbours' routines, and keep the disguise together. Walk with arrows or WASD, "
+"press Space or Enter to interact, M for the map, J for the journal, and ? for help. Ctrl+C quits."
+msgstr ""
+"一只披着床单的浣熊，在佛蒙特州蒙彼利埃四处讨糖。收集糖果、发现邻居们的作息，并努力维持伪装。方向键或 WASD 行走，空格或 Enter 交互，M 打开地图，J 查看日记，? "
+"查看帮助，Ctrl+C 退出。"
+
+#: docs/silkie/games.rst:46
+msgid ""
+"Install it from the repositories described under Install Sprint and Scramble below: ``brew "
+"install goblinreactor/tap/silkie-loophole`` on Apple Silicon with macOS 26 Tahoe, or ``sudo apt-"
+"get install silkie-loophole`` on Ubuntu 26.04 amd64 or Kylin V10 SP1 old-world LoongArch64. Then "
+"run ``silkie-loophole``. See the `Loophole source and manual "
+"<https://github.com/adamdeprince/loophole>`_."
+msgstr ""
+"按下文“安装 Sprint 和 Scramble”配置软件仓库后安装：运行 macOS 26 Tahoe 的 Apple Silicon 机器使用 ``brew install "
+"goblinreactor/tap/silkie-loophole``，Ubuntu 26.04 amd64 或麒麟 V10 SP1 旧世界 LoongArch64 使用 ``sudo apt-get install "
+"silkie-loophole``。然后运行 ``silkie-loophole``。参阅 `Loophole 源码与手册 "
+"<https://github.com/adamdeprince/loophole>`_。"
+
+#: docs/silkie/games.rst:51
+msgid "Sprint and Scramble"
+msgstr "Sprint 与 Scramble"
+
+#: docs/silkie/games.rst:53
+msgid ""
+"Silkie Sprint and Silkie Scramble are arcade games set in the same backyard world, with a Silkie "
+"hen at the centre of each adventure. They run inside the terminal and require its graphics "
+"protocol. The videos below show the games being played in Silkie."
+msgstr ""
+"Silkie Sprint 和 Silkie Scramble 是发生在同一后院世界的街机游戏，每段冒险都以一只丝羽乌骨鸡为主角。两款游戏在终端中运行，需要终端支持图形协议。下面的视频展示了在 "
+"Silkie 中游玩的实际画面。"
+
+#: docs/silkie/games.rst:58
+msgid ""
+"Both games support `kitty <https://sw.kovidgoyal.net/kitty/>`_ and are optimized for Silkie. The "
+"rules, scoring, and difficulty are the same in both terminals; Silkie's extensions improve "
+"graphics, input, and timing. See :doc:`install` to get Silkie."
+msgstr ""
+"两款游戏均支持 `kitty <https://sw.kovidgoyal.net/kitty/>`_，并为 Silkie 做了优化。在两个终端中，规则、计分和难度相同；Silkie "
+"的扩展改善图形、输入和时序。安装 Silkie 的方法见 :doc:`install`。"
+
+#: docs/silkie/games.rst:64
+msgid "Install Sprint and Scramble"
+msgstr "安装 Sprint 和 Scramble"
+
+#: docs/silkie/games.rst:66
+msgid ""
+"On Apple Silicon with macOS 26 Tahoe, use the `Homebrew repository "
+"<https://brew.goblinreactor.com/>`_::"
+msgstr "运行 macOS 26 Tahoe 的 Apple Silicon 机器可使用 `Homebrew 仓库 <https://brew.goblinreactor.com/>`_：::"
+
+#: docs/silkie/games.rst:72
+msgid ""
+"On Ubuntu 26.04 amd64 or Kylin V10 SP1 old-world LoongArch64, configure the `signed APT "
+"repository <https://apt.goblinreactor.com/>`_ for your system: ``resolute`` for Ubuntu, or "
+"``kylin`` for Kylin. Then install::"
+msgstr ""
+"在 Ubuntu 26.04 amd64 或麒麟 V10 SP1 旧世界 LoongArch64 上，为系统配置 `已签名 APT 仓库 "
+"<https://apt.goblinreactor.com/>`_：Ubuntu 使用 ``resolute``，麒麟使用 ``kylin``。然后安装：::"
+
+#: docs/silkie/games.rst:79
+msgid ""
+"Open Silkie or kitty and run ``silkie-sprint`` or ``silkie-scramble``. The games are separate "
+"packages from the terminal. Check the repository's package listings for the platforms currently "
+"available. Kylin packages use the old-world ``loongarch64`` ABI, which differs from new-world "
+"``loong64``."
+msgstr ""
+"打开 Silkie 或 kitty，运行 ``silkie-sprint`` 或 ``silkie-"
+"scramble``。游戏和终端是独立的软件包。当前可用平台请查看仓库的软件包列表。麒麟软件包使用旧世界 ``loongarch64`` ABI，与新世界 ``loong64`` 不同。"
+
+#: docs/silkie/games.rst:86
+msgid "Silkie Sprint"
+msgstr "Silkie Sprint"
+
+#: docs/silkie/games.rst:88
+msgid "*Hop the traffic. Ride the river. Fly when you must.*"
+msgstr "*跳过车流，搭乘漂木，必要时展翅飞翔。*"
+
+#: docs/silkie/games.rst:90
+msgid ""
+"Guide a Silkie hen across roads, a railway, and a river to the henhouse. Dodge traffic, ride "
+"floating logs, and hop into empty nest boxes to lay eggs. Fill every nest and the eggs hatch. "
+"Your hen can fly briefly, but her wings need time on the ground to recover, and the sky has "
+"hazards too."
+msgstr "引导一只丝羽乌骨鸡穿过道路、铁路和河流，抵达鸡舍。躲开车流，搭乘漂浮的木头，跳入空巢产蛋。填满所有巢位，蛋便会孵化。母鸡能短暂飞行，但翅膀需要在地面恢复，天空中也有危险。"
+
+#: docs/silkie/games.rst:95
+msgid "Use the arrow keys or WASD to hop and Space to fly or land. Press P to pause."
+msgstr "方向键或 WASD 跳跃，空格起飞或落地，P 暂停。"
+
+#: docs/silkie/games.rst:97
+msgid ""
+"<figure class=\"gameplay\">\n"
+"  <video controls playsinline preload=\"metadata\" poster=\"_static/games/sprint.png\" "
+"width=\"1000\" height=\"680\" aria-label=\"Silkie Sprint gameplay\" aria-describedby=\"sprint-"
+"caption\">\n"
+"    <source src=\"_static/games/sprint.mp4\" type=\"video/mp4\">\n"
+"    <p><a href=\"_static/games/sprint.mp4\">Download the Silkie Sprint gameplay video.</a></p>\n"
+"  </video>\n"
+"  <figcaption id=\"sprint-caption\">Silkie Sprint running in Silkie, with the built-in autopilot "
+"crossing roads and rivers. Approximately 30 seconds; silent.</figcaption>\n"
+"</figure>\n"
+"<p><a href=\"_static/games/sprint.mp4\">Download Sprint gameplay (MP4)</a></p>"
+msgstr ""
+"<figure class=\"gameplay\"><video controls playsinline preload=\"metadata\" "
+"poster=\"../_static/games/sprint.png\" width=\"1000\" height=\"680\" aria-label=\"Silkie Sprint "
+"实机演示\" aria-describedby=\"sprint-caption\"><source src=\"../_static/games/sprint.mp4\" "
+"type=\"video/mp4\"><p><a href=\"../_static/games/sprint.mp4\">下载 Silkie Sprint "
+"实机视频。</a></p></video><figcaption id=\"sprint-caption\">在 Silkie 中运行的 Silkie "
+"Sprint，内置自动驾驶正在穿越道路和河流。约 30 秒，无声。</figcaption></figure><p><a "
+"href=\"../_static/games/sprint.mp4\">下载 Sprint 实机视频（MP4）</a></p>"
+
+#: docs/silkie/games.rst:109
+msgid "Silkie Scramble"
+msgstr "Silkie Scramble"
+
+#: docs/silkie/games.rst:111
+msgid "*Gather the chicks. Mind the fox. Bring them home.*"
+msgstr "*召集小鸡，提防狐狸，带它们回家。*"
+
+#: docs/silkie/games.rst:113
+msgid ""
+"Explore a garden maze, gather wandering chicks, and lead them back to the coop. A fox, a weasel, "
+"and a hawk threaten your brood. Bringing more chicks home together earns more points, but a "
+"longer procession is harder to keep safe. Draw temporary fences to divert predators and use "
+"garden gates to control their routes."
+msgstr "探索花园迷宫，召集四处游荡的小鸡，带它们返回鸡舍。狐狸、黄鼠狼和鹰威胁着鸡群。一次带回更多小鸡能获得更高分数，但队伍越长，保护起来也越困难。绘制临时围栏引开捕食者，并利用花园门控制它们的路线。"
+
+#: docs/silkie/games.rst:119
+msgid ""
+"Use the arrow keys or WASD to move. Draw fences with the mouse, or with a pen or touchscreen in "
+"Silkie. Space places a hurdle or operates a nearby latched gate. Press P to pause."
+msgstr "方向键或 WASD 移动。用鼠标绘制围栏；在 Silkie 中也可使用笔或触摸屏。空格放置障碍，或操作附近已上闩的门。P 暂停。"
+
+#: docs/silkie/games.rst:123
+msgid ""
+"<figure class=\"gameplay\">\n"
+"  <video controls playsinline preload=\"metadata\" poster=\"_static/games/scramble.png\" "
+"width=\"1200\" height=\"792\" aria-label=\"Silkie Scramble gameplay\" aria-describedby"
+"=\"scramble-caption\">\n"
+"    <source src=\"_static/games/scramble.mp4\" type=\"video/mp4\">\n"
+"    <p><a href=\"_static/games/scramble.mp4\">Download the Silkie Scramble gameplay "
+"video.</a></p>\n"
+"  </video>\n"
+"  <figcaption id=\"scramble-caption\">Silkie Scramble running in Silkie, with the built-in "
+"autopilot gathering chicks and bringing them home. Approximately 40 seconds; silent.</figcaption>"
+"\n"
+"</figure>\n"
+"<p><a href=\"_static/games/scramble.mp4\">Download Scramble gameplay (MP4)</a></p>"
+msgstr ""
+"<figure class=\"gameplay\"><video controls playsinline preload=\"metadata\" "
+"poster=\"../_static/games/scramble.png\" width=\"1200\" height=\"792\" aria-label=\"Silkie "
+"Scramble 实机演示\" aria-describedby=\"scramble-caption\"><source "
+"src=\"../_static/games/scramble.mp4\" type=\"video/mp4\"><p><a "
+"href=\"../_static/games/scramble.mp4\">下载 Silkie Scramble 实机视频。</a></p></video><figcaption id"
+"=\"scramble-caption\">在 Silkie 中运行的 Silkie Scramble，内置自动驾驶正在召集小鸡并带它们回家。约 40 "
+"秒，无声。</figcaption></figure><p><a href=\"../_static/games/scramble.mp4\">下载 Scramble "
+"实机视频（MP4）</a></p>"
+
+#: docs/silkie/games.rst:135
+msgid "What Silkie adds"
+msgstr "Silkie 带来的增强"
+
+#: docs/silkie/games.rst:137
+msgid ""
+"Both games discover terminal capabilities at startup and use kitty's `graphics protocol "
+"<https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_ for sprites. Silkie's additional protocols"
+" provide:"
+msgstr ""
+"两款游戏都会在启动时探测终端能力，并使用 kitty 的 `图形协议 <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_ "
+"显示精灵。Silkie 的扩展协议提供："
+
+#: docs/silkie/games.rst:141
+msgid ""
+":doc:`Retained vector scenery <vector-protocol>`, with small scene patches for changes such as "
+"nest contents, gates, and fences."
+msgstr ":doc:`保留式矢量场景 <vector-protocol>`，通过小型场景补丁更新巢位内容、门和围栏等变化。"
+
+#: docs/silkie/games.rst:143
+msgid ""
+":doc:`Frame presentation feedback <frame-protocol>` and :doc:`low-latency mode <latency-"
+"protocol>` while playing."
+msgstr "游玩时使用 :doc:`画面呈现反馈 <frame-protocol>` 与 :doc:`低延迟模式 <latency-protocol>`。"
+
+#: docs/silkie/games.rst:145
+msgid ""
+":doc:`Wide-gamut colour <wide-gamut-protocol>` and :doc:`HDR highlights <hdr-protocol>` on "
+"supported displays, plus :doc:`translucent menus <cell-alpha-protocol>`."
+msgstr ""
+"在支持的显示器上使用 :doc:`广色域 <wide-gamut-protocol>` 和 :doc:`HDR 高光 <hdr-protocol>`，以及 :doc:`半透明菜单 <cell-"
+"alpha-protocol>`。"
+
+#: docs/silkie/games.rst:148
+msgid ""
+":doc:`Pen and touchscreen input <tablet-protocol>`, :doc:`haptic feedback <haptic-protocol>`, and"
+" :doc:`custom pointer images <pointer-image-protocol>` where supported."
+msgstr ""
+"在支持的平台上使用 :doc:`笔与触摸屏输入 <tablet-protocol>`、:doc:`触觉反馈 <haptic-protocol>` 和 :doc:`自定义指针图像 "
+"<pointer-image-protocol>`。"
+
+#: docs/silkie/games.rst:151
+msgid ":doc:`Terminal-side ink <ink-protocol>` for pen-drawn fences in Scramble."
+msgstr "Scramble 中通过 :doc:`终端侧墨迹 <ink-protocol>` 用笔绘制围栏。"
+
+#: docs/silkie/games.rst:153
+msgid ""
+"Run either game with ``--kitty-only`` to compare its baseline presentation with Silkie's "
+"enhancements, or ``--report`` to inspect detected capabilities. Run directly in the terminal; the"
+" games do not configure graphics passthrough for tmux or screen."
+msgstr ""
+"运行游戏时加上 ``--kitty-only``，可比较基础画面与 Silkie 增强效果；加上 ``--report`` 可查看探测到的能力。请直接在终端中运行；游戏不会为 tmux 或 "
+"screen 配置图形透传。"
+
