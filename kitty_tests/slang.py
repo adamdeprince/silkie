@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from unittest.mock import patch
 
@@ -20,6 +21,8 @@ from kitty.shaders.slang import (
     apply_pipeline_specializations,
     build_custom_shader_pipeline_glsl,
     build_import_graph,
+    cell_variant,
+    cell_variations,
     clear_caches,
     custom_shader,
     get_custom_pipeline_src,
@@ -28,9 +31,11 @@ from kitty.shaders.slang import (
     parse_var_directive,
     pipeline_definition,
     slangc_version,
+    text_contrast_is_identity,
     topological_layers,
     topological_sort,
     with_config_vars,
+    variant_name,
 )
 
 from .base import BaseTest
@@ -513,6 +518,25 @@ static const float OTHER = 1.0;
         self.assertRaises(ValueError, parse_var_directive, ['var', 'badtype', 'x', '=', '1'])
         self.assertRaises(ValueError, parse_var_directive, ['var', 'uint', '123bad', '=', '1'])
         self.assertRaises(ValueError, parse_var_directive, ['var', 'uint'])
+
+    def test_cell_contrast_variants(self):
+        self.assertFalse(text_contrast_is_identity('legacy'))
+        self.assertTrue(text_contrast_is_identity('1'))
+        self.assertTrue(text_contrast_is_identity('1.0 0'))
+        self.assertFalse(text_contrast_is_identity('1.7 30'))
+        self.assertFalse(text_contrast_is_identity('2 0'))
+        self.ae(text_contrast_is_identity('platform'), sys.platform != 'darwin')
+        variants = cell_variations()
+        self.ae(len(variants), 27)
+        self.ae(sum(v['TEXT_NEW_GAMMA'] == 'false' for v in variants), 9)
+        self.ae(sum(v['TEXT_CONTRAST_IDENTITY'] == 'true' for v in variants), 9)
+        for v in variants:
+            if v['TEXT_NEW_GAMMA'] == 'false':
+                self.ae(v['TEXT_CONTRAST_IDENTITY'], 'false')
+        default = cell_variant()
+        names = [variant_name(dict(v), default) for v in variants]
+        self.ae(len(names), len(set(names)))
+        self.assertIn('', names)
 
     def test_parse_pipeline_definition_vars(self):
         p = parse_pipeline_definition(

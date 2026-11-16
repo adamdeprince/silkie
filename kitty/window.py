@@ -135,6 +135,7 @@ class ScrollAnimation:
     duration: float = 0.0
     total: float = 0.0
     start_scrolled_by: int = 0
+    last_scrolled_by: int = 0
     frame_interval: float = 1.0 / 60.0  # Target ~60 fps for scroll animation ticks
 
 
@@ -818,6 +819,7 @@ class Window:
         self.screen: Screen = Screen(self, 24, 80, scrollback_lines, cell_width, cell_height, self.id)
         if profile is not None:
             apply_to_window(self, profile)
+        self.screen.track_activity = bool(opts.tab_activity_symbol)
         if copy_colors_from is not None:
             self.screen.copy_colors_from(copy_colors_from.screen)
         self.remote_control_passwords = remote_control_passwords
@@ -907,6 +909,7 @@ class Window:
 
     def apply_options(self, is_active: bool) -> None:
         self.update_effective_padding()
+        self.screen.track_activity = bool(get_options().tab_activity_symbol)
         self.screen.color_profile.reload_from_opts()
         if (tab := self.tabref()) is not None:
             apply_to_window(self, tab.profile)
@@ -2737,6 +2740,15 @@ class Window:
             return None
         return True
 
+    def scroll_animation_to(self, target: float) -> None:
+        a = self.scroll_animation
+        # Follow changes to scrolled_by not made by the animation, such as the
+        # viewport being kept anchored while new output is added to the scrollback
+        drift = self.screen.scrolled_by - a.last_scrolled_by
+        a.start_scrolled_by += drift
+        self.screen.scroll_to_absolute(max(0.0, target + drift))
+        a.last_scrolled_by = self.screen.scrolled_by
+
     def scroll_animation_tick(self, timer_id: int | None) -> None:
         a = self.scroll_animation
         if not a.timer:
@@ -2746,12 +2758,12 @@ class Window:
         progress = min(1.0, elapsed / a.duration) if a.duration > 0 else 1.0
         if progress >= 1.0:
             # Ensure we land exactly on a line boundary with pixel_scroll_offset_y = 0
-            self.screen.scroll_to_absolute(max(0, a.start_scrolled_by - a.total))
+            self.scroll_animation_to(a.start_scrolled_by - a.total)
             remove_timer(a.timer)
             a.timer = 0
         else:
             # Use absolute positioning to avoid pixel rounding errors from incremental fractional scrolls
-            self.screen.scroll_to_absolute(max(0.0, a.start_scrolled_by - a.total * progress))
+            self.scroll_animation_to(a.start_scrolled_by - a.total * progress)
 
     def finish_scroll_animation(self) -> None:
         "Finish any in-progress scroll animation immediately"
@@ -2760,7 +2772,7 @@ class Window:
             remove_timer(a.timer)
             a.timer = 0
             # Scroll to the exact integer target line, ensuring pixel_scroll_offset_y = 0
-            self.screen.scroll_to_absolute(max(0, a.start_scrolled_by - a.total))
+            self.scroll_animation_to(a.start_scrolled_by - a.total)
 
     def start_scroll_animation(self, lines: float) -> None:
         "Start a smooth scroll animation for the given number of lines (negative=up, positive=down)"
@@ -2776,6 +2788,7 @@ class Window:
         a.duration = duration
         a.total = lines
         a.start_scrolled_by = self.screen.scrolled_by
+        a.last_scrolled_by = a.start_scrolled_by
         a.timer = add_timer(self.scroll_animation_tick, min(ScrollAnimation.frame_interval, duration / 2), True)
 
     @ac(

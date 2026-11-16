@@ -592,3 +592,44 @@ class TestTabBar(BaseTest):
             lines(tab_title_max_lines=3, tab_title_wrap=0, tab_title_template='{title}\\nabcdefghijklmnop\\nx'),
             [f' t0        {separator}', f'abcdefghijk{separator}', f'x          {separator}'],
         )
+
+    def horizontal_tab_bar_line(self, titles: list[str], columns: int, **opts: object) -> str:
+        self.set_options({'tab_title_template': '{title}', **opts})
+        central = region(0, 0, columns * 10, 180)
+        tab_bar = region(0, 180, columns * 10, 200)
+        with (
+            patch('kitty.tab_bar.cell_size_for_window', return_value=(10, 20)),
+            patch('kitty.tab_bar.viewport_for_window', return_value=(central, tab_bar, columns * 10, 200, 10, 20)),
+            patch('kitty.tab_bar.set_tab_bar_render_data'),
+            patch('kitty.tab_bar.update_tab_bar_edge_colors', return_value=None),
+            patch('kitty.tab_bar.get_boss', return_value=DummyBoss()),
+        ):
+            tb = TabBar(1)
+            tb.layout()
+            tb.update(tuple(TabBarData(title=t, tab_id=i + 1, is_active=i == 0) for i, t in enumerate(titles)))
+        return str(tb.screen.line(0)).rstrip()
+
+    def test_tab_bar_title_cache(self) -> None:
+        from contextlib import nullcontext
+
+        import kitty.tab_bar as tab_bar
+
+        titles = ['~', 'abcdefghijklmnopqrstuvwx'] * 4
+        evaluate = tab_bar.evaluate_title_template
+        for style in ('fade', 'separator', 'powerline', 'slant'):
+            # titles are evaluated just once per tab in an update, though
+            # laying out the tab bar draws them several times
+            with patch('kitty.tab_bar.evaluate_title_template', wraps=evaluate) as ev:
+                cached = self.horizontal_tab_bar_line(titles, 60, tab_bar_style=style)
+            self.ae(ev.call_count, len(titles), style)
+            self.assertIsNone(tab_bar.title_cache)
+            with patch('kitty.tab_bar.caching_titles', nullcontext):
+                self.ae(self.horizontal_tab_bar_line(titles, 60, tab_bar_style=style), cached, style)
+
+        # unless the title depends on the space available for it
+        for template in ('{title[:max_title_length // 2]}', '{custom}'):
+            with patch('kitty.tab_bar.evaluate_title_template', wraps=evaluate) as ev:
+                cached = self.horizontal_tab_bar_line(titles, 60, tab_bar_style='separator', tab_title_template=template)
+            with patch('kitty.tab_bar.caching_titles', nullcontext):
+                self.ae(self.horizontal_tab_bar_line(titles, 60, tab_bar_style='separator', tab_title_template=template), cached, template)
+            self.assertGreater(ev.call_count, len(titles), template)

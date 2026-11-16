@@ -59,13 +59,7 @@ typedef struct UIRenderData {
 static inline float
 row_offset_for_screen(const Screen *screen) {
     if (!pixel_scroll_enabled(screen) || !screen->cell_size.height) return 0.f;
-    return -1.f + (float)(screen->pixel_scroll_offset_y / (double)screen->cell_size.height);
-}
-
-static inline float
-scroll_offset_lines_for_screen(const Screen *screen) {
-    if (!pixel_scroll_enabled(screen) || !screen->cell_size.height) return 0.f;
-    return (float)(screen->pixel_scroll_offset_y / (double)screen->cell_size.height);
+    return -1.f + (float)(rendered_pixel_scroll_offset_y(screen) / (double)screen->cell_size.height);
 }
 
 // Sprites {{{
@@ -204,19 +198,26 @@ clear_current_framebuffer(void) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+// Must be called as soon as there is a current OpenGL context, see
+// initialize_gpu(). Font groups are created before that happens and size their
+// sprite layout using these limits, so the sooner they are known the better.
+static void
+query_gpu_texture_limits(void) {
+    if (max_texture_size) return;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &(max_texture_size));
+    glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &(max_array_texture_layers));
+#ifdef __APPLE__
+    // Since on Apple we could have multiple GPUs, with different capabilities,
+    // upper bound the values according to the data from https://developer.apple.com/graphicsimaging/opengl/capabilities/
+    max_texture_size = MIN(8192, max_texture_size);
+    max_array_texture_layers = MIN(512, max_array_texture_layers);
+#endif
+    sprite_tracker_set_limits(max_texture_size, max_array_texture_layers);
+}
+
 SPRITE_MAP_HANDLE
 alloc_sprite_map(void) {
-    if (!max_texture_size) {
-        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &(max_texture_size));
-        glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &(max_array_texture_layers));
-#ifdef __APPLE__
-        // Since on Apple we could have multiple GPUs, with different capabilities,
-        // upper bound the values according to the data from https://developer.apple.com/graphicsimaging/opengl/capabilities/
-        max_texture_size = MIN(8192, max_texture_size);
-        max_array_texture_layers = MIN(512, max_array_texture_layers);
-#endif
-        sprite_tracker_set_limits(max_texture_size, max_array_texture_layers);
-    }
+    query_gpu_texture_limits();
     SpriteMap *ans = calloc(1, sizeof(SpriteMap));
     if (!ans) fatal("Out of memory allocating a sprite map");
     *ans = NEW_SPRITE_MAP;
@@ -238,6 +239,43 @@ free_sprite_data(FONTS_DATA_HANDLE fg) {
 
 
 static void
+discard_pending_gl_errors(void) {
+    // glad's error checking callback is installed only with --debug-rendering,
+    // so in normal runs errors queue up silently. Drain the queue so that a
+    // subsequent glGetError() reports only what we are interested in.
+    for (unsigned i = 0; i < 16 && glGetError() != GL_NO_ERROR; i++);
+}
+
+static bool
+copy_texture_via_framebuffer(GLuint old_texture, GLuint new_texture, GLenum texture_type, GLint width, GLint height, GLint layers) {
+    GLint prev_read_fbo;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
+    discard_pending_gl_errors();
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+    bool ok = true;
+    for (GLint z = 0; z < layers && ok; z++) {
+        if (texture_type == GL_TEXTURE_2D_ARRAY) glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, old_texture, 0, z);
+        else glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, old_texture, 0);
+        ok = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        if (!ok) break;
+        glBindTexture(texture_type, new_texture);
+        if (texture_type == GL_TEXTURE_2D_ARRAY) glCopyTexSubImage3D(texture_type, 0, 0, 0, z, 0, 0, width, height);
+        else glCopyTexSubImage2D(texture_type, 0, 0, 0, 0, 0, width, height);
+        // A complete framebuffer does not mean the copy itself was accepted,
+        // for instance if the two internal formats are not copy compatible.
+        // Without this check we would claim success and leave the new texture
+        // blank, losing every already rendered sprite.
+        ok = glGetError() == GL_NO_ERROR;
+    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prev_read_fbo);
+    glDeleteFramebuffers(1, &fbo);
+    if (!ok) glBindTexture(texture_type, old_texture);
+    return ok;
+}
+
+static void
 copy_32bit_texture(GLuint old_texture, GLuint new_texture, GLenum texture_type) {
     // requires new texture to be at least as big as old texture. Assumes textures are 32bits per pixel
     GLint width, height, layers;
@@ -249,12 +287,13 @@ copy_32bit_texture(GLuint old_texture, GLuint new_texture, GLenum texture_type) 
         glCopyImageSubData(old_texture, texture_type, 0, 0, 0, 0, new_texture, texture_type, 0, 0, 0, 0, width, height, layers);
         return;
     }
+    if (copy_texture_via_framebuffer(old_texture, new_texture, texture_type, width, height, layers)) return;
 
     static bool copy_image_warned = false;
-    // ARB_copy_image not available, do a slow roundtrip copy
+    // Neither ARB_copy_image nor a framebuffer copy is usable, do a slow roundtrip copy
     if (!copy_image_warned) {
         copy_image_warned = true;
-        log_error("WARNING: Your system's OpenGL implementation does not have glCopyImageSubData, falling back to a slower implementation");
+        log_error("WARNING: Your system's OpenGL implementation cannot copy between textures on the GPU, falling back to a slower implementation");
     }
 
     GLint internal_format;
@@ -317,19 +356,31 @@ setup_new_sprites_texture(GLenum texture_type) {
     return tex;
 }
 
+static bool
+decorations_map_new_size(size_t count, size_t current_capacity, size_t max_size, GLint *width, GLint *height) {
+    const size_t max_capacity = max_size * max_size;
+    if (count >= max_capacity) return false;
+    size_t capacity = MAX(MAX(count + 256, current_capacity * 2), (size_t)4096);
+    capacity = MIN(capacity, max_capacity);
+    if (capacity <= max_size) {
+        *width = capacity;
+        *height = 1;
+    } else {
+        *width = max_size;
+        *height = (capacity + max_size - 1) / max_size;
+    }
+    return true;
+}
+
 static void
 realloc_sprite_decorations_texture_if_needed(FONTS_DATA_HANDLE fg) {
 #define dm (sm->decorations_map)
     SpriteMap *sm = (SpriteMap *)fg->sprite_map;
     size_t current_capacity = (size_t)dm.width * dm.height;
     if (dm.count < current_capacity && dm.texture_id) return;
-    GLint new_capacity = dm.count + 256;
-    GLint width = new_capacity, height = 1;
-    if (new_capacity > sm->max_texture_size) {
-        width = sm->max_texture_size;
-        height = 1 + new_capacity / width;
-    }
-    if (height > sm->max_texture_size) fatal("Max texture size too small for sprite decorations map, maybe switch to using a GL_TEXTURE_2D_ARRAY");
+    GLint width, height;
+    if (!decorations_map_new_size(dm.count, current_capacity, sm->max_texture_size, &width, &height))
+        fatal("Max texture size too small for sprite decorations map, maybe switch to using a GL_TEXTURE_2D_ARRAY");
     const GLenum texture_type = GL_TEXTURE_2D;
     GLuint tex = setup_new_sprites_texture(texture_type);
     glTexImage2D(texture_type, 0, GL_R32UI, width, height, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
@@ -1205,7 +1256,7 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
     {                                                                                                  \
         const unsigned int render_lines = render_lines_for_screen(screen);                             \
         sz = sizeof(GPUCell) * render_lines * screen->columns;                                         \
-        address = alloc_and_map_vao_buffer(vao_idx, sz, cell_data_buffer, true);                       \
+        address = alloc_and_map_vao_buffer_for_full_rewrite(vao_idx, sz, cell_data_buffer);           \
         screen_update_cell_data(screen, address, fonts_data, disable_ligatures && cursor_pos_changed); \
         unmap_vao_buffer(vao_idx, cell_data_buffer);                                                   \
         address = NULL;                                                                                \
@@ -1221,38 +1272,24 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
     {                                                                            \
         const unsigned int render_lines = render_lines_for_screen(screen);       \
         sz = (size_t)render_lines * screen->columns;                             \
-        address = alloc_and_map_vao_buffer(vao_idx, sz, selection_buffer, true); \
+        address = alloc_and_map_vao_buffer_for_full_rewrite(vao_idx, sz, selection_buffer); \
         screen_apply_selection(screen, address, sz);                             \
         unmap_vao_buffer(vao_idx, selection_buffer);                             \
         address = NULL;                                                          \
         changed = true;                                                          \
     }
 
-#define update_graphics_data(grman)             \
-    grman_update_layers(                        \
-        grman,                                  \
-        screen->scrolled_by,                    \
-        scroll_offset_lines_for_screen(screen), \
-        -1.f,                                   \
-        1.f,                                    \
-        2.f / screen->columns,                  \
-        2.f / screen->lines,                    \
-        screen->columns,                        \
-        screen->lines,                          \
-        screen->cell_size)
-
     if (screen->paused_rendering.expires_at) {
         if (!screen->paused_rendering.cell_data_updated) {
             update_selection_data;
-            update_graphics_data(screen->paused_rendering.grman);
+            screen_update_graphics_layers(screen);
         }
         screen->paused_rendering.cell_data_updated = true;
-        screen->last_rendered.scrolled_by = screen->paused_rendering.scrolled_by;
     } else {
         if (screen->reload_all_gpu_data || screen_resized || screen_is_selection_dirty(screen)) update_selection_data;
-        if (update_graphics_data(screen->grman)) changed = true;
-        screen->last_rendered.scrolled_by = screen->scrolled_by;
+        if (screen_update_graphics_layers(screen)) changed = true;
     }
+    screen->last_rendered.scrolled_by = rendered_scrolled_by(screen);
 #undef update_selection_data
 #undef update_cell_data
     screen->last_rendered.columns = screen->columns;
@@ -1482,16 +1519,7 @@ draw_drag_preview_overlay(const UIRenderData *ui) {
 
 static bool
 has_scrollbar(Window *w, Screen *screen) {
-    if (screen->linebuf != screen->main_linebuf || !screen->historybuf->count) return false;
-    switch (OPT(scrollbar)) {
-        case SCROLLBAR_NEVER: return false;
-        case SCROLLBAR_ALWAYS: return true;
-        case SCROLLBAR_ON_SCROLLED: return screen->scrolled_by > 0;
-        case SCROLLBAR_ON_HOVERED: return w->scrollbar.is_hovering;
-        case SCROLLBAR_ON_SCROLL_AND_HOVER: return screen->scrolled_by > 0 && w->scrollbar.is_hovering;
-        case SCROLLBAR_ON_SCROLL_OR_HOVER: return screen->scrolled_by > 0 || w->scrollbar.is_hovering;
-    }
-    return false;
+    return screen_has_scrollbar(screen, w->scrollbar.is_hovering);
 }
 
 static unsigned
@@ -1680,9 +1708,8 @@ draw_scrollbar(const UIRenderData *ui) {
     if (!window || !screen || !has_scrollbar(window, screen)) return;
 
     color_type bar_color = scrollbar_color(screen, OPT(scrollbar_handle_color)), track_color = scrollbar_color(screen, OPT(scrollbar_track_color));
-    double cell_frac = (double)screen->pixel_scroll_offset_y / screen->cell_size.height;
-    if (!OPT(pixel_scroll)) cell_frac = 0;
-    float bar_frac = (float)(screen->scrolled_by + cell_frac) / MAX(1u, (float)screen->historybuf->count);
+    float bar_frac, visible_fraction;
+    screen_scrollbar_geometry(screen, &bar_frac, &visible_fraction);
     float opacity = OPT(scrollbar_handle_opacity);
     float track_opacity = window->scrollbar.is_hovering ? OPT(scrollbar_track_hover_opacity) : OPT(scrollbar_track_opacity);
     GLsizei scrollbar_width_px = (GLsizei)(OPT(scrollbar_width) * ui->cell_width);
@@ -1701,7 +1728,6 @@ draw_scrollbar(const UIRenderData *ui) {
     GLsizei scrollbar_height = window_height - 2 * scrollbar_gap_px;
 
     // Calculate thumb size and position
-    float visible_fraction = (float)screen->lines / (float)(screen->lines + screen->historybuf->count);
     float min_thumb_height_fraction = (OPT(scrollbar_min_handle_height) * ui->cell_height) / (float)window_height;
     float thumb_height_fraction = MAX(min_thumb_height_fraction, visible_fraction);
 
@@ -2231,11 +2257,11 @@ draw_window_padding(const UIRenderData *ui, unsigned int cl, unsigned int ct, un
         }
         unmap_vao_buffer(vao_idx, selection_buffer);
 
-        void *dst = alloc_and_map_vao_buffer(vao_idx, (GLsizeiptr)(sizeof(GPUCell) * nV * lines), padding_cell_data_buffer, false);
+        void *dst = alloc_and_map_vao_buffer(vao_idx, (GLsizeiptr)(sizeof(GPUCell) * nV * lines), padding_cell_data_buffer);
         memcpy(dst, gathered_cells, sizeof(GPUCell) * nV * lines);
         unmap_vao_buffer(vao_idx, padding_cell_data_buffer);
 
-        dst = alloc_and_map_vao_buffer(vao_idx, (GLsizeiptr)(sizeof(GLubyte) * nV * lines), padding_selection_buffer, false);
+        dst = alloc_and_map_vao_buffer(vao_idx, (GLsizeiptr)(sizeof(GLubyte) * nV * lines), padding_selection_buffer);
         memcpy(dst, gathered_sel, sizeof(GLubyte) * nV * lines);
         unmap_vao_buffer(vao_idx, padding_selection_buffer);
 
@@ -2460,7 +2486,7 @@ draw_borders(
     if (has_background_image) background_opacity = OPT(background_tint) * OPT(background_tint_gaps);
     if (rect_data_is_dirty) {
         const size_t sz = sizeof(BorderRect) * num_border_rects;
-        void *borders_buf_address = alloc_and_map_vao_buffer(vao_idx, sz, 0, false);
+        void *borders_buf_address = alloc_and_map_vao_buffer(vao_idx, sz, 0);
         if (borders_buf_address) memcpy(borders_buf_address, rect_buf, sz);
         unmap_vao_buffer(vao_idx, 0);
     }
@@ -3698,6 +3724,16 @@ pysimulate_hdr_render_ticks(PyObject *self UNUSED, PyObject *states) {
     return Py_NewRef(ans);
 }
 
+// test only wrapper for decorations_map_new_size
+static PyObject *
+pydecorations_map_new_size(PyObject *self UNUSED, PyObject *args) {
+    unsigned long count, current_capacity, max_size;
+    if (!PyArg_ParseTuple(args, "kkk", &count, &current_capacity, &max_size)) return NULL;
+    GLint w, h;
+    if (!decorations_map_new_size(count, current_capacity, max_size, &w, &h)) Py_RETURN_NONE;
+    return Py_BuildValue("ii", (int)w, (int)h);
+}
+
 // Test only. Wraps custom_shader_needs_render() so the redraw decision can be
 // exercised from the Python test suite without a GPU context. Each state is a
 // (has_active_shaders, min_step, next_end_at) tuple.
@@ -3830,6 +3866,7 @@ static PyMethodDef module_methods[] = {
     MW(bind_program, METH_O),
     MW(unbind_program, METH_NOARGS),
     MW(custom_shader_needs_render, METH_VARARGS),
+    MW(decorations_map_new_size, METH_VARARGS),
     MW(simulate_custom_shader_render_ticks, METH_VARARGS),
     MW(simulate_hdr_render_ticks, METH_O),
 
@@ -3839,6 +3876,7 @@ static PyMethodDef module_methods[] = {
 void
 initialize_gpu(void) {
     gl_init();
+    query_gpu_texture_limits();
 }
 
 void

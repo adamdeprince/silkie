@@ -3,7 +3,8 @@
 
 import os
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Generator, Sequence
+from contextlib import contextmanager
 from functools import lru_cache, partial, wraps
 from string import Formatter as StringFormatter
 from typing import (
@@ -317,7 +318,48 @@ safe_builtins = {
 }
 
 
+@lru_cache(maxsize=16)
+def template_uses_max_title_length(template: str) -> bool:
+    # Conservative, as the length can be used anywhere in an expression, or by
+    # a custom draw_title() function
+    return 'max_title_length' in template or 'custom' in template
+
+
+# Laying out the tab bar draws each tab several times, each of which evaluates
+# its title template, so cache the titles for the duration of a single update.
+# Not across updates, as templates can use state not in TabBarData, such as
+# the progress of the windows in the tab.
+title_cache: dict[tuple[DrawData, TabBarData, int, int], str] | None = None
+
+
+@contextmanager
+def caching_titles() -> Generator[None, None, None]:
+    global title_cache
+    title_cache = {}
+    try:
+        yield
+    finally:
+        title_cache = None
+
+
 def apply_title_template(draw_data: DrawData, tab: TabBarData, index: int, max_title_length: int = 0) -> str:
+    if title_cache is None:
+        return evaluate_title_template(draw_data, tab, index, max_title_length)
+    template = draw_data.title_template
+    if tab.is_active and draw_data.active_title_template is not None:
+        template = draw_data.active_title_template
+    key_length = -1  # the title does not depend on the length
+    if template_uses_max_title_length(template):
+        key_length = max_title_length
+        if draw_data.max_tab_title_length > 0:
+            key_length = min(key_length, draw_data.max_tab_title_length)
+    key = draw_data, tab, index, key_length
+    if (title := title_cache.get(key)) is None:
+        title = title_cache[key] = evaluate_title_template(draw_data, tab, index, max_title_length)
+    return title
+
+
+def evaluate_title_template(draw_data: DrawData, tab: TabBarData, index: int, max_title_length: int = 0) -> str:
     if tab.tab_id < 0:
         return tab.title  # synthetic tab — render title literally, skip user template
     ta = TabAccessor(tab.tab_id)
@@ -1002,9 +1044,12 @@ class TabBar:
     def update(self, data: Sequence[TabBarData]) -> bool:
         if not self.laid_out_once:
             return False
-        if self.is_vertical:
-            return self.update_vertical(data)
+        with caching_titles():
+            if self.is_vertical:
+                return self.update_vertical(data)
+            return self.update_horizontal(data)
 
+    def update_horizontal(self, data: Sequence[TabBarData]) -> bool:
         s = self.screen
         last_tab = data[-1] if data else None
         ed = ExtraData()

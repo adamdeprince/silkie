@@ -25,6 +25,7 @@ from kitty.fast_data_types import (
     test_render_line,
     test_shape,
     test_sprite_position_increment,
+    test_sprite_tracker_ynum,
     wcwidth,
 )
 from kitty.fonts import family_name_to_key
@@ -371,6 +372,22 @@ class FontBaseTest(BaseTest):
 
 
 class Rendering(FontBaseTest):
+    def test_decorations_map_growth(self):
+        from kitty.fast_data_types import decorations_map_new_size as size
+        m = 4096
+        self.ae(size(0, 0, m), (4096, 1))
+        self.ae(size(5000, 4096, m), (4096, 2))
+        cap, reallocs = 0, 0
+        for count in range(100000):
+            if count >= cap:
+                w, h = size(count, cap, m)
+                cap, reallocs = w * h, reallocs + 1
+        self.assertLess(reallocs, 10)
+        full = m * m
+        self.ae(size(m * (m - 1), m * (m - 1), m), (m, m))
+        self.ae(size(full - 1, full // 2, m), (m, m))
+        self.assertIsNone(size(full, full, m))
+
     def test_sprite_map(self):
         sprite_map_set_limits(10, 3)
         sprite_map_set_layout(5, 4)  # 4 because of underline_exclusion row
@@ -384,6 +401,19 @@ class Rendering(FontBaseTest):
         self.ae(test_sprite_position_increment(), (1, 1, 1))
         self.ae(test_sprite_position_increment(), (0, 0, 2))
         self.ae(test_sprite_position_increment(), (1, 0, 2))
+
+    def test_sprite_map_ynum_growth(self):
+        sprite_map_set_limits(10, 3)
+        sprite_map_set_layout(1, 1)
+        self.ae(test_sprite_tracker_ynum(), 1)
+        seen = [1]
+        for i in range(10 * 5 * 2 + 3):
+            self.ae(test_sprite_position_increment(), (i % 10, (i // 10) % 5, i // 50))
+            ynum = test_sprite_tracker_ynum()
+            self.assertLessEqual(ynum, 5)
+            if ynum != seen[-1]:
+                seen.append(ynum)
+        self.ae(seen, [1, 2, 4, 5])
 
     def test_box_drawing(self):
         s = self.create_screen(cols=len(box_chars) + 1, lines=1, scrollback=0)

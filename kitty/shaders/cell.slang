@@ -13,6 +13,7 @@ import background;
 
 extern static const uint FG_OVERRIDE_ALGO;
 extern static const bool TEXT_NEW_GAMMA;
+extern static const bool TEXT_CONTRAST_IDENTITY;
 extern static const uint RENDER_MODE;
 
 static const bool ONLY_FOREGROUND = RENDER_MODE == 2;
@@ -27,6 +28,10 @@ uniform Sampler2D<uint4> sprite_decorations_map;
 static const uint SPRITE_INDEX_MASK = 0x7fffffff;
 static const uint SPRITE_COLORED_MASK = 0x80000000;
 static const uint SPRITE_COLORED_SHIFT = 31u;
+// Set in underline_exclusion_pos when the glyph, decorations, and cursor sprite
+// are all 0. The block cursor is sprite 0 and its color is already in the
+// background. Packed into an existing flat varying to not use another slot.
+static const uint SKIP_TEXT_FLAG = 0x80000000u;
 
 struct VertexOutput {
     float4 position : SV_Position;
@@ -38,7 +43,7 @@ struct VertexOutput {
     float3 underline_pos;
     float3 cursor_pos;
     float3 strike_pos;
-    nointerpolation uint underline_exclusion_pos;
+    nointerpolation uint underline_exclusion_pos; // has SKIP_TEXT_FLAG set for blank cells
     float3 cell_foreground;
     float4 cursor_color_premult;
     float3 decoration_fg;
@@ -193,15 +198,17 @@ vertex_main(
         uint2 decs = get_decorations_indices(sprite_idx, uint(in_url), text_attrs);
         vo.strike_pos = to_sprite_pos(cell_data.pos, decs[0]);
         vo.underline_pos = to_sprite_pos(cell_data.pos, decs[1]);
-        vo.underline_exclusion_pos = to_underline_exclusion_pos(sprite_idx);
 
         // Cursor
         vo.cursor_color_premult = float4(cell_data.cursor.bg * crd.cursor_opacity, crd.cursor_opacity);
         float3 final_cursor_text_color = lerp(foreground, cell_data.cursor.fg, crd.cursor_opacity);
         foreground = if_one_then(cell_data.has_block_cursor, final_cursor_text_color, foreground);
         vo.decoration_fg = if_one_then(cell_data.has_block_cursor, final_cursor_text_color, vo.decoration_fg);
-        vo.cursor_pos = to_sprite_pos(cell_data.pos, cell_data.cursor_fg_sprite_idx * uint(cell_data.has_cursor));
-        vo.sprite_indices = uint4(sprite_idx[0] & SPRITE_INDEX_MASK, decs[1], cell_data.cursor_fg_sprite_idx * uint(cell_data.has_cursor), decs[0]);
+        uint cursor_sprite = cell_data.cursor_fg_sprite_idx * uint(cell_data.has_cursor);
+        vo.cursor_pos = to_sprite_pos(cell_data.pos, cursor_sprite);
+        vo.sprite_indices = uint4(sprite_idx[0] & SPRITE_INDEX_MASK, decs[1], cursor_sprite, decs[0]);
+        uint skip_text = uint((sprite_idx[0] & SPRITE_INDEX_MASK) == 0u && decs[0] == 0u && decs[1] == 0u && cursor_sprite == 0u);
+        vo.underline_exclusion_pos = to_underline_exclusion_pos(sprite_idx) | (skip_text * SKIP_TEXT_FLAG);
         if (ONLY_FOREGROUND && vo.spatial_antialias != 0.f) {
             // Leave a one-pixel transparent apron for fractional glyph coverage.
             // Samples outside this atlas tile are zero, never a neighboring glyph.
@@ -259,7 +266,8 @@ spatial_sprite_texel(int2 pixel, uint3 tile) {
 
 float4
 sample_spatial_sprite(float3 pos, uint index, float antialias) {
-    if (antialias == 0.f) return sprites.Sample(pos);
+    // SampleLevel() as the caller is not uniform across a 2x2 pixel quad, see fragment_main()
+    if (antialias == 0.f) return sprites.SampleLevel(pos, 0);
     float2 size = float2(crd.cell_width * crd.sprites_xnum, (crd.cell_height + 1u) * crd.sprites_ynum);
     float2 pixel = pos.xy * size - 0.5f;
     int2 origin = int2(floor(pixel));
@@ -280,6 +288,7 @@ clamp_to_unit_float(float x) {
 
 float4
 foreground_contrast_new(float4 over, float3 under, float text_contrast, float text_gamma_adjustment) {
+    if (TEXT_CONTRAST_IDENTITY) return over;
     float under_luminance = dot(under, Y);
     float over_lumininace = dot(over.rgb, Y);
     // Apply additional gamma-adjustment scaled by the luminance difference, the darker the foreground the more adjustment we apply.
@@ -361,7 +370,10 @@ fragment_main(VertexOutput vo, uniform float text_contrast, uniform float text_g
     float4 ans_premul = 0;
     if (!ONLY_FOREGROUND) ans_premul = vo.effective_background_premul;
 
-    if (!ONLY_BACKGROUND) {
+    // The sprite samples below use SampleLevel() as this branch is not uniform
+    // across a 2x2 pixel quad at cell boundaries, so implicit derivatives would
+    // be undefined. The sprites texture has no mipmaps, so LOD 0 is identical.
+    if (!ONLY_BACKGROUND && (vo.underline_exclusion_pos & SKIP_TEXT_FLAG) == 0u) {
         // blend in the foreground color
         float4 text_fg = load_text_foreground_color(vo.sprite_pos, vo.colored_sprite, vo.cell_foreground, vo.sprite_indices.x, vo.spatial_antialias);
         text_fg = adjust_foreground_contrast_with_background(text_fg, vo.background, text_contrast, text_gamma_adjustment);

@@ -337,6 +337,7 @@ typedef struct Window {
         bool is_dragging;
         double drag_start_y;
         double drag_start_scrolled_by;
+        unsigned int drag_last_scrolled_by;
         bool is_hovering;
     } scrollbar;
     struct {
@@ -577,7 +578,7 @@ typedef struct OSWindow {
     } indirect_output;
     uint32_t persist_texture_id, persist_fbo_id, persist_texture_generation;
     unsigned int active_tab, num_tabs, capacity, last_active_tab, last_num_tabs, last_active_window_id;
-    bool focused_at_last_render, needs_render, needs_layers;
+    bool focused_at_last_render, needs_render, needs_layers, input_held;
     // On Wayland, the wide gamut the compositor has been told the window is
     // in, zero while it is the sRGB it always was, and the gamut that was
     // asked for and not to be had, see update_os_window_colorspace()

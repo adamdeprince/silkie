@@ -158,10 +158,10 @@ new_screen_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwds) {
         self->scroll_changed = false;
         self->margin_top = 0;
         self->margin_bottom = self->lines - 1;
-        self->history_line_added_count = 0;
         reset_vt_parser(self->vt_parser);
         self->callbacks = callbacks;
         Py_INCREF(callbacks);
+        self->track_activity = true;
         self->test_child = test_child;
         Py_INCREF(test_child);
         self->cursor = alloc_cursor();
@@ -208,6 +208,15 @@ new_screen_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwds) {
 static Line *range_line_(Screen *self, int y);
 
 static void
+clamp_scroll_position(Screen *self) {
+    // Ensure the scroll position is valid after the scrollback has shrunk
+    if (self->scrolled_by >= self->historybuf->count) {
+        self->scrolled_by = self->historybuf->count;
+        self->pixel_scroll_offset_y = 0;
+    }
+}
+
+static void
 do_screen_reset(Screen *self, bool is_hard_reset) {
     screen_pause_rendering(self, false, 0);
     self->dnd_chunking.active = false;
@@ -243,6 +252,9 @@ do_screen_reset(Screen *self, bool is_hard_reset) {
     if (is_hard_reset) {
         linebuf_clear(self->linebuf, BLANK_CHAR);
         historybuf_clear(self->historybuf);
+        self->scrolled_by = 0;
+        self->pixel_scroll_offset_y = 0;
+        self->scroll_changed = true;
         clear_hyperlink_pool(self->hyperlink_pool);
         grman_clear(self->main_grman, false, self->cell_size); // dont delete images in scrollback
         grman_clear(self->alt_grman, true, self->cell_size);
@@ -307,6 +319,8 @@ typedef struct CursorTrack {
     } temp;
 } CursorTrack;
 
+static bool history_reuse_disabled_for_tests = false;
+
 static bool
 rewrap(
     Screen *screen,
@@ -320,21 +334,8 @@ rewrap(
     bool main_is_active) {
     TrackCursor cursors[3];
     cursors[2].is_sentinel = true;
-    cursors[0] = (TrackCursor){.x = main_saved_cursor->before.x, .y = main_saved_cursor->before.y};
-    if (main_is_active) cursors[1] = (TrackCursor){.x = cursor->before.x, .y = cursor->before.y};
-    else cursors[1].is_sentinel = true;
-    ResizeResult mr = resize_screen_buffers(screen->main_linebuf, screen->historybuf, lines, columns, &screen->as_ansi_buf, cursors);
-    if (!mr.ok) {
-        PyErr_NoMemory();
-        return false;
-    }
-    main_saved_cursor->temp.x = cursors[0].dest_x;
-    main_saved_cursor->temp.y = cursors[0].dest_y;
-    if (main_is_active) {
-        cursor->temp.x = cursors[1].dest_x;
-        cursor->temp.y = cursors[1].dest_y;
-    }
-
+    // alt first as resizing main consumes the history buffer, so it must be
+    // the last step that can fail
     cursors[0] = (TrackCursor){.x = alt_saved_cursor->before.x, .y = alt_saved_cursor->before.y};
     if (!main_is_active) cursors[1] = (TrackCursor){.x = cursor->before.x, .y = cursor->before.y};
     else cursors[1].is_sentinel = true;
@@ -347,6 +348,29 @@ rewrap(
     alt_saved_cursor->temp.x = cursors[0].dest_x;
     alt_saved_cursor->temp.y = cursors[0].dest_y;
     if (!main_is_active) {
+        cursor->temp.x = cursors[1].dest_x;
+        cursor->temp.y = cursors[1].dest_y;
+    }
+
+    cursors[0] = (TrackCursor){.x = main_saved_cursor->before.x, .y = main_saved_cursor->before.y};
+    if (main_is_active) cursors[1] = (TrackCursor){.x = cursor->before.x, .y = cursor->before.y};
+    else cursors[1].is_sentinel = true;
+    ResizeResult mr = resize_screen_buffers(
+        screen->main_linebuf,
+        screen->historybuf,
+        history_reuse_disabled_for_tests ? HISTORY_CONSUME_NO_REUSE : HISTORY_CONSUME,
+        lines,
+        columns,
+        &screen->as_ansi_buf,
+        cursors);
+    if (!mr.ok) {
+        Py_DecRef((PyObject *)ar.lb);
+        PyErr_NoMemory();
+        return false;
+    }
+    main_saved_cursor->temp.x = cursors[0].dest_x;
+    main_saved_cursor->temp.y = cursors[0].dest_y;
+    if (main_is_active) {
         cursor->temp.x = cursors[1].dest_x;
         cursor->temp.y = cursors[1].dest_y;
     }
@@ -746,6 +770,7 @@ screen_resize(Screen *self, unsigned int lines, unsigned int columns) {
             sp->cursor.y = MIN(sp->cursor.y + 1, self->lines - 1);
         }
     }
+    clamp_scroll_position(self);
     if (main_has_blank_line) remove_blank_output_line_reservation_marker(is_main ? self->cursor : &self->main_savepoint.cursor, self->main_linebuf);
     if (alt_has_blank_line) remove_blank_output_line_reservation_marker(is_main ? &self->alt_savepoint.cursor : self->cursor, self->alt_linebuf);
     if (num_of_prompt_lines) {
@@ -1260,7 +1285,7 @@ draw_combining_char(Screen *self, text_loop_state *s, char_type ch) {
 
 static void
 screen_on_input(Screen *self) {
-    if (!self->has_activity_since_last_focus && !self->has_focus && self->callbacks != Py_None) {
+    if (self->track_activity && !self->has_activity_since_last_focus && !self->has_focus && self->callbacks != Py_None) {
         PyObject *ret = PyObject_CallMethod(self->callbacks, "on_activity_since_last_focus", NULL);
         if (ret == NULL) PyErr_Print();
         else {
@@ -2747,7 +2772,14 @@ screen_cursor_to_column(Screen *self, unsigned int column) {
         /* Only add to history when no top margin has been set */                                                         \
         linebuf_init_line(self->linebuf, bottom);                                                                         \
         historybuf_add_line(self->historybuf, self->linebuf->line, &self->as_ansi_buf);                                   \
-        self->history_line_added_count++;                                                                                 \
+        /* Keep a scrolled back viewport anchored on the same content */                                                  \
+        if (self->scrolled_by) {                                                                                          \
+            if (self->scrolled_by < self->historybuf->count) self->scrolled_by++;                                         \
+            if (self->scrolled_by >= self->historybuf->count && self->pixel_scroll_offset_y) {                            \
+                reset_pixel_scroll(self, 0);                                                                              \
+                self->scroll_changed = true;                                                                              \
+            }                                                                                                             \
+        }                                                                                                                 \
         if (self->last_visited_prompt.is_set) {                                                                           \
             if (self->last_visited_prompt.scrolled_by < self->historybuf->count) self->last_visited_prompt.scrolled_by++; \
             else self->last_visited_prompt.is_set = false;                                                                \
@@ -2814,7 +2846,11 @@ _reverse_scroll(Screen *self, unsigned int count, bool fill_from_scrollback) {
     } else count = MIN(self->lines, count);
     while (count-- > 0) {
         bool copied = false;
-        if (fill_from_scrollback) copied = historybuf_pop_line(self->historybuf, self->alt_linebuf->line);
+        if (fill_from_scrollback) {
+            copied = historybuf_pop_line(self->historybuf, self->alt_linebuf->line);
+            // Keep a scrolled back viewport anchored on the same content
+            if (copied && self->scrolled_by) self->scrolled_by--;
+        }
         INDEX_DOWN(copied);
         if (copied) linebuf_copy_line_to(self->main_linebuf, self->alt_linebuf->line, 0);
     }
@@ -4072,6 +4108,8 @@ copy_selections(Selections *dest, const Selections *src) {
     return true;
 }
 
+static Line* render_line_for_virtual_y(Screen *self, int y, Line *line, index_type *lnum, bool *is_history);
+
 bool
 screen_pause_rendering(Screen *self, bool pause, int for_in_ms) {
     if (!pause) {
@@ -4097,24 +4135,34 @@ screen_pause_rendering(Screen *self, bool pause, int for_in_ms) {
     self->paused_rendering.expires_at = monotonic() + ms_to_monotonic_t(for_in_ms);
     self->paused_rendering.inverted = self->modes.mDECSCNM;
     self->paused_rendering.scrolled_by = self->scrolled_by;
+    self->paused_rendering.history_count = self->historybuf->count;
+    self->paused_rendering.on_main_screen = self->linebuf == self->main_linebuf;
     self->paused_rendering.cell_data_updated = false;
     self->paused_rendering.cursor_visible = self->modes.mDECTCEM;
+    // Preserve the pixel scroll geometry so that pausing does not cause the rendered content to jump, see #10794
+    self->paused_rendering.pixel_scroll = live_pixel_scroll_enabled(self);
+    self->paused_rendering.pixel_scroll_offset_y = self->paused_rendering.pixel_scroll ? self->pixel_scroll_offset_y : 0;
     memcpy(&self->paused_rendering.cursor, self->cursor, sizeof(self->paused_rendering.cursor));
     memcpy(&self->paused_rendering.color_profile, self->color_profile, sizeof(self->paused_rendering.color_profile));
-    if (!self->paused_rendering.linebuf || self->paused_rendering.linebuf->xnum != self->columns || self->paused_rendering.linebuf->ynum != self->lines) {
+    const index_type row_offset = self->paused_rendering.pixel_scroll, num_rows = self->lines + row_offset;
+    if (!self->paused_rendering.linebuf || self->paused_rendering.linebuf->xnum != self->columns || self->paused_rendering.linebuf->ynum != num_rows) {
         if (self->paused_rendering.linebuf) Py_CLEAR(self->paused_rendering.linebuf);
-        self->paused_rendering.linebuf = alloc_linebuf(self->lines, self->columns, self->text_cache);
+        self->paused_rendering.linebuf = alloc_linebuf(num_rows, self->columns, self->text_cache);
         if (!self->paused_rendering.linebuf) {
             PyErr_Clear();
             self->paused_rendering.expires_at = 0;
             return false;
         }
     }
-    for (index_type y = 0; y < self->lines; y++) {
-        Line *src = visual_line_(self, y);
-        linebuf_init_line(self->paused_rendering.linebuf, y);
-        copy_line(src, self->paused_rendering.linebuf->line);
-        self->paused_rendering.linebuf->line_attrs[y] = src->attrs;
+    Line line = {.text_cache = self->text_cache};
+    for (index_type y = 0; y < num_rows; y++) {
+        index_type lnum; bool is_history;
+        Line *src = render_line_for_virtual_y(self, (int)y - (int)row_offset, &line, &lnum, &is_history);
+        if (src) {
+            linebuf_init_line(self->paused_rendering.linebuf, y);
+            copy_line(src, self->paused_rendering.linebuf->line);
+            self->paused_rendering.linebuf->line_attrs[y] = src->attrs;
+        } else linebuf_clear_line(self->paused_rendering.linebuf, y, true);
     }
     copy_selections(&self->paused_rendering.selections, &self->selections);
     copy_selections(&self->paused_rendering.url_ranges, &self->url_ranges);
@@ -4234,7 +4282,6 @@ render_line_for_virtual_y(Screen *self, int y, Line *line, index_type *lnum, boo
 static void
 screen_reset_dirty(Screen *self) {
     self->is_dirty = false;
-    self->history_line_added_count = 0;
 }
 
 static bool
@@ -4341,9 +4388,8 @@ screen_render_line_graphics(Screen *self, Line *line, int32_t row) {
 // exclusively for testing unicode placeholders.
 static void
 screen_update_only_line_graphics_data(Screen *self) {
-    unsigned int history_line_added_count = self->history_line_added_count;
     index_type lnum = 0;
-    if (self->scrolled_by) self->scrolled_by = MIN(self->scrolled_by + history_line_added_count, self->historybuf->count);
+    clamp_scroll_position(self);
     screen_reset_dirty(self);
     self->scroll_changed = false;
     const unsigned int render_lines = render_lines_for_screen(self);
@@ -4386,10 +4432,15 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
     if (self->paused_rendering.expires_at) {
         if (!self->paused_rendering.cell_data_updated) {
             LineBuf *linebuf = self->paused_rendering.linebuf;
-            for (index_type y = 0; y < self->lines; y++) {
+            // The GPU buffer was invalidated so every row must be written. The
+            // paused linebuf has exactly render_lines_for_screen() rows.
+            const index_type row_offset = self->paused_rendering.pixel_scroll;
+            for (index_type y = 0; y < linebuf->ynum; y++) {
                 linebuf_init_line(linebuf, y);
                 if (linebuf->line->attrs.has_dirty_text) {
-                    render_line(fonts_data, linebuf->line, y, &self->paused_rendering.cursor, self->disable_ligatures, self->lc);
+                    // The extra leading row is never the cursor row
+                    const index_type lnum = y < row_offset ? self->lines : y - row_offset;
+                    render_line(fonts_data, linebuf->line, lnum, &self->paused_rendering.cursor, self->disable_ligatures, self->lc);
                     // Cell images are not rendered here: this would modify the live grman using snapshot row numbers
                     if (linebuf->line->attrs.has_dirty_text && screen_has_marker(self)) mark_text_in_line(self->marker, linebuf->line, &self->as_ansi_buf);
                     linebuf_mark_line_clean(linebuf, y);
@@ -4400,11 +4451,10 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
         return;
     }
     const bool is_overlay_active = screen_is_overlay_active(self);
-    unsigned int history_line_added_count = self->history_line_added_count;
+    clamp_scroll_position(self);
     screen_reset_dirty(self);
     update_overlay_position(self);
     const bool force_history_render = pixel_scroll_enabled(self) && self->scroll_changed;
-    if (self->scrolled_by) self->scrolled_by = MIN(self->scrolled_by + history_line_added_count, self->historybuf->count);
     self->scroll_changed = false;
     const unsigned int render_lines = render_lines_for_screen(self);
     const int render_row_offset = pixel_scroll_enabled(self);
@@ -4616,15 +4666,21 @@ iteration_data_is_empty(const Screen *self, const IterationData *idata) {
 }
 
 static void
+render_iteration_data(const Screen *self, const Selection *s, IterationData *ans) {
+    // Must be used for both rendering and the dirty check so that they compare equal when nothing has changed
+    iteration_data(s, ans, self->columns, -self->historybuf->count, 0);
+}
+
+static void
 apply_selection(Screen *self, uint8_t *data, Selection *s, uint8_t set_mask, int extra_leading_rows, int scrolled_by) {
-    iteration_data(s, &s->last_rendered, self->columns, -self->historybuf->count, 0);
+    render_iteration_data(self, s, &s->last_rendered);
     Line *line;
     const int y_min = MAX(-extra_leading_rows - scrolled_by, s->last_rendered.y), y_limit = MIN(s->last_rendered.y_limit, (int)self->lines - scrolled_by);
     for (int y = y_min; y < y_limit; y++) {
         if (self->paused_rendering.expires_at) {
-            // paused_rendering.linebuf stores only the visible rows captured at pause time
-            const int paused_y = y + scrolled_by;
-            if (paused_y < 0 || paused_y >= (int)self->lines) continue;
+            // paused_rendering.linebuf stores only the rendered rows captured at pause time
+            const int paused_y = y + scrolled_by + extra_leading_rows;
+            if (paused_y < 0 || paused_y >= (int)self->paused_rendering.linebuf->ynum) continue;
             linebuf_init_line(self->paused_rendering.linebuf, paused_y);
             line = self->paused_rendering.linebuf->line;
         } else {
@@ -4644,7 +4700,6 @@ apply_selection(Screen *self, uint8_t *data, Selection *s, uint8_t set_mask, int
             }
         }
     }
-    s->last_rendered.y = MAX(0, s->last_rendered.y);
 }
 
 bool
@@ -4670,7 +4725,7 @@ screen_is_cell_selected(Screen *self, index_type x, index_type y) {
     // Every cell of a multi-cell character has the same selection highlight.
     const int first_row = cell.is_multicell ? row - cell.y : row;
     const int last_row = cell.is_multicell ? first_row + cell.scale : row + 1;
-    const int visible_start = -(int)self->scrolled_by - pixel_scroll_enabled(self);
+    const int visible_start = -(int)self->scrolled_by - live_pixel_scroll_enabled(self);
     const int visible_end = (int)self->lines - self->scrolled_by;
     for (size_t i = 0; i < self->selections.count; i++) {
         IterationData idata;
@@ -4687,12 +4742,53 @@ screen_is_cell_selected(Screen *self, index_type x, index_type y) {
     return false;
 }
 
+bool
+screen_update_graphics_layers(Screen *self) {
+    // While rendering is paused, the frozen image placements must be positioned using the
+    // scroll position captured with the frozen text, not the live one, which new output may have changed
+    GraphicsManager *grman = self->paused_rendering.expires_at ? self->paused_rendering.grman : self->grman;
+    return grman_update_layers(
+        grman,
+        rendered_scrolled_by(self),
+        scroll_offset_lines_for_screen(self),
+        -1.f,
+        1.f,
+        2.f / self->columns,
+        2.f / self->lines,
+        self->columns,
+        self->lines,
+        self->cell_size);
+}
+
+bool
+screen_has_scrollbar(const Screen *self, bool is_hovering) {
+    if (!rendered_on_main_screen(self) || !rendered_history_count(self)) return false;
+    const bool scrolled = rendered_scrolled_by(self) > 0;
+    switch (OPT(scrollbar)) {
+        case SCROLLBAR_NEVER: return false;
+        case SCROLLBAR_ALWAYS: return true;
+        case SCROLLBAR_ON_SCROLLED: return scrolled;
+        case SCROLLBAR_ON_HOVERED: return is_hovering;
+        case SCROLLBAR_ON_SCROLL_AND_HOVER: return scrolled && is_hovering;
+        case SCROLLBAR_ON_SCROLL_OR_HOVER: return scrolled || is_hovering;
+    }
+    return false;
+}
+
+void
+screen_scrollbar_geometry(const Screen *self, float *handle_position, float *visible_fraction) {
+    // handle_position is 0 at the bottom of the scrollback and 1 at the top
+    const unsigned history_count = rendered_history_count(self);
+    *handle_position = (float)((rendered_scrolled_by(self) + (double)scroll_offset_lines_for_screen(self)) / MAX(1u, history_count));
+    *visible_fraction = (float)self->lines / (float)(self->lines + history_count);
+}
+
 void
 screen_apply_selection(Screen *self, void *address_, size_t size) {
     uint8_t *address = address_;
     memset(address, 0, size);
     const unsigned offset = pixel_scroll_enabled(self);
-    const unsigned scrolled_by = self->paused_rendering.expires_at ? self->paused_rendering.scrolled_by : self->scrolled_by;
+    const unsigned scrolled_by = rendered_scrolled_by(self);
     Selections *sel = self->paused_rendering.expires_at ? &self->paused_rendering.selections : &self->selections;
     for (size_t i = 0; i < sel->count; i++) apply_selection(self, address, sel->items + i, 1, offset, scrolled_by);
     sel->last_rendered_count = sel->count;
@@ -5686,7 +5782,8 @@ erase_last_command(Screen *self, PyObject *args UNUSED) {
     // ...) emit no OSC 133;C, so a search anchored on OUTPUT_START would skip
     // them and erase an older command instead. Selecting by prompt marks makes
     // every submitted command one unit, removed newest-first.
-    int y = self->cursor->y + self->scrolled_by;
+    // Range line numbers are relative to the live screen, independent of scrolled_by
+    int y = self->cursor->y;
     bool found = false;
     for (; (line = checked_range_line(self, y)); y--) {
         if (line->attrs.prompt_kind == PROMPT_START) {
@@ -5708,6 +5805,23 @@ erase_last_command(Screen *self, PyObject *args UNUSED) {
     const index_type num_lines = (index_type)(live_prompt_start - start);
     index_type num_lines_to_erase_in_screen = start >= 0 ? num_lines : num_lines + start;
     num_lines_to_erase_in_screen = MIN(self->cursor->y, num_lines_to_erase_in_screen);
+    const index_type num_deleted_from_history = num_lines - num_lines_to_erase_in_screen;
+    if (self->last_visited_prompt.is_set) {
+        // Move the last visited prompt with the lines that remain: lines above
+        // the erased region move down by the number of lines removed from the
+        // scrollback, lines below it move up by the number removed from the screen.
+        int r = (int)self->last_visited_prompt.y - (int)self->last_visited_prompt.scrolled_by;
+        if (start <= r && r < live_prompt_start) self->last_visited_prompt.is_set = false;
+        else {
+            r += r < start ? (int)num_deleted_from_history : -(int)num_lines_to_erase_in_screen;
+            const int new_scrolled_by = (int)self->last_visited_prompt.y - r;
+            if (new_scrolled_by >= 0) self->last_visited_prompt.scrolled_by = new_scrolled_by;
+            else {
+                self->last_visited_prompt.scrolled_by = 0;
+                self->last_visited_prompt.y = r;
+            }
+        }
+    }
     if (num_lines_to_erase_in_screen) {
         // Anchor the on-screen deletion at the top of the region, not at
         // cursor->y - count: a multi-line prompt or rows skipped above would
@@ -5716,12 +5830,20 @@ erase_last_command(Screen *self, PyObject *args UNUSED) {
         screen_delete_lines_impl(self, screen_erase_start, num_lines_to_erase_in_screen, 0, self->lines - 1);
         self->cursor->y -= num_lines_to_erase_in_screen;
     }
-    if (num_lines > num_lines_to_erase_in_screen) {
-        historybuf_delete_newest_lines(self->historybuf, num_lines - num_lines_to_erase_in_screen);
-        // The scrollback shrank: clamp the scroll position and signal a redraw,
-        // otherwise the deletion of off-screen lines is not reflected until the
-        // next scroll event forces the history viewport to be recomputed.
-        self->scrolled_by = MIN(self->scrolled_by, self->historybuf->count);
+    if (num_deleted_from_history) {
+        historybuf_delete_newest_lines(self->historybuf, num_deleted_from_history);
+        // The newest lines were removed from the scrollback, so keep a scrolled
+        // back viewport anchored on the same content. If the top of the viewport
+        // was among the removed lines, there is nothing to anchor to, so go to
+        // the bottom. Signal a redraw, otherwise the deletion of off-screen lines
+        // is not reflected until the next scroll event forces the history
+        // viewport to be recomputed.
+        if (self->scrolled_by > num_deleted_from_history) self->scrolled_by -= num_deleted_from_history;
+        else if (self->scrolled_by) {
+            self->scrolled_by = 0;
+            reset_pixel_scroll(self, 0);
+        }
+        clamp_scroll_position(self);
         self->is_dirty = true;
         dirty_scroll(self);
     }
@@ -6336,7 +6458,7 @@ scroll_by_pixels(Screen *self, double delta_pixels) {
 
 bool
 screen_apply_pixel_scroll(Screen *self, double delta_pixels) {
-    if (!pixel_scroll_enabled(self)) return false;
+    if (self->paused_rendering.expires_at || !live_pixel_scroll_enabled(self)) return false;
     if (!self->historybuf->count) return false;
     return scroll_by_pixels(self, delta_pixels);
 }
@@ -6433,11 +6555,11 @@ screen_is_selection_dirty(Screen *self) {
         self->extra_cursors.dirty)
         return true;
     for (size_t i = 0; i < self->selections.count; i++) {
-        iteration_data(self->selections.items + i, &q, self->columns, 0, self->scrolled_by);
+        render_iteration_data(self, self->selections.items + i, &q);
         if (memcmp(&q, &self->selections.items[i].last_rendered, sizeof(IterationData)) != 0) return true;
     }
     for (size_t i = 0; i < self->url_ranges.count; i++) {
-        iteration_data(self->url_ranges.items + i, &q, self->columns, 0, self->scrolled_by);
+        render_iteration_data(self, self->url_ranges.items + i, &q);
         if (memcmp(&q, &self->url_ranges.items[i].last_rendered, sizeof(IterationData)) != 0) return true;
     }
     return false;
@@ -7319,7 +7441,39 @@ current_selections(Screen *self, PyObject *a UNUSED) {
     PyObject *ans = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)render_lines_for_screen(self) * self->columns);
     if (!ans) return NULL;
     screen_apply_selection(self, PyBytes_AS_STRING(ans), PyBytes_GET_SIZE(ans));
+    self->last_rendered.scrolled_by = rendered_scrolled_by(self); // mimic what the renderer does
     return ans;
+}
+
+static PyObject *
+update_graphics_layers(Screen *self, PyObject *a UNUSED) {
+    screen_update_graphics_layers(self);
+    return grman_render_data_as_python(self->paused_rendering.expires_at ? self->paused_rendering.grman : self->grman);
+}
+
+static PyObject *
+rendered_scroll_state(Screen *self, PyObject *a UNUSED) {
+    return Py_BuildValue("III", rendered_scrolled_by(self), rendered_pixel_scroll_offset_y(self), rendered_history_count(self));
+}
+
+static PyObject *
+has_scrollbar(Screen *self, PyObject *is_hovering) {
+    const int hovering = PyObject_IsTrue(is_hovering);
+    if (hovering < 0) return NULL;
+    return Py_NewRef(screen_has_scrollbar(self, hovering) ? Py_True : Py_False);
+}
+
+static PyObject *
+scrollbar_geometry(Screen *self, PyObject *a UNUSED) {
+    float handle_position, visible_fraction;
+    screen_scrollbar_geometry(self, &handle_position, &visible_fraction);
+    return Py_BuildValue("ff", handle_position, visible_fraction);
+}
+
+static PyObject *
+is_selection_dirty(Screen *self, PyObject *a UNUSED) {
+    if (screen_is_selection_dirty(self)) Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
 }
 
 WRAP0(update_only_line_graphics_data)
@@ -7376,6 +7530,15 @@ test_frame_presented(Screen *screen, PyObject *args) {
     screen->frame_feedback.pending = screen->frame_feedback.on;
     screen_frame_presented(screen, period_us, (monotonic_t)t * MONOTONIC_T_1e6 + (monotonic_t)tu * MONOTONIC_T_1e3);
     Py_RETURN_NONE;
+}
+
+// How the I/O thread would wake the main loop for the input written so far,
+// as small, ready or held, see vt_parser_input_wake()
+static PyObject *
+test_input_wake(Screen *screen, PyObject *args UNUSED) {
+    ParserInputWake w = vt_parser_input_wake(screen->vt_parser, monotonic(), screen->low_latency);
+    return Py_BuildValue("{sO sO sO}", "small", w.small_pending ? Py_True : Py_False, "ready", w.large_ready ? Py_True : Py_False,
+        "held", w.large_held_until ? Py_True : Py_False);
 }
 
 static PyObject *
@@ -7516,6 +7679,7 @@ static PyMethodDef methods[] = {
     METHODB(test_create_write_buffer, METH_NOARGS),
     METHODB(test_commit_write_buffer, METH_VARARGS),
     METHODB(test_parse_written_data, METH_VARARGS),
+    METHODB(test_input_wake, METH_NOARGS),
     METHODB(test_frame_presented, METH_VARARGS),
     METHODB(test_draw_overlay_line, METH_VARARGS),
     METHODB(restore_scrollback, METH_O),
@@ -7548,8 +7712,10 @@ static PyMethodDef methods[] = {
                             MND(paste, METH_O) MND(paste_bytes, METH_O) MND(focus_changed, METH_O) MND(has_focus, METH_NOARGS)
                                 MND(has_activity_since_last_focus, METH_NOARGS) MND(copy_colors_from, METH_O) MND(set_marker, METH_VARARGS)
                                     MND(marked_cells, METH_NOARGS) MND(scroll_to_next_mark, METH_VARARGS) MND(update_only_line_graphics_data, METH_NOARGS)
-                                        MND(bell, METH_NOARGS) MND(current_selections, METH_NOARGS){
-                                            "select_graphic_rendition", (PyCFunction)_select_graphic_rendition, METH_VARARGS, ""},
+                                        MND(bell, METH_NOARGS) MND(current_selections, METH_NOARGS) MND(update_graphics_layers, METH_NOARGS)
+                                            MND(rendered_scroll_state, METH_NOARGS) MND(scrollbar_geometry, METH_NOARGS) MND(has_scrollbar, METH_O)
+                                                MND(is_selection_dirty,
+                                                    METH_NOARGS){"select_graphic_rendition", (PyCFunction)_select_graphic_rendition, METH_VARARGS, ""},
 
     {NULL} /* Sentinel */
 };
@@ -7570,6 +7736,7 @@ static PyGetSetDef getsetters[] = {
 
 static PyMemberDef members[] = {
     {"callbacks", T_OBJECT_EX, offsetof(Screen, callbacks), 0, "callbacks"},
+    {"track_activity", T_BOOL, offsetof(Screen, track_activity), 0, "track_activity"},
     {"cursor", T_OBJECT_EX, offsetof(Screen, cursor), READONLY, "cursor"},
     {"vt_parser", T_OBJECT_EX, offsetof(Screen, vt_parser), READONLY, "vt_parser"},
     {"last_reported_cwd", T_OBJECT, offsetof(Screen, last_reported_cwd), READONLY, "last_reported_cwd"},
@@ -7589,7 +7756,6 @@ static PyMemberDef members[] = {
     {"columns", T_UINT, offsetof(Screen, columns), READONLY, "columns"},
     {"margin_top", T_UINT, offsetof(Screen, margin_top), READONLY, "margin_top"},
     {"margin_bottom", T_UINT, offsetof(Screen, margin_bottom), READONLY, "margin_bottom"},
-    {"history_line_added_count", T_UINT, offsetof(Screen, history_line_added_count), 0, "history_line_added_count"},
     {NULL}};
 
 PyTypeObject Screen_Type = {
@@ -7604,10 +7770,17 @@ PyTypeObject Screen_Type = {
     .tp_getset = getsetters,
 };
 
+static PyObject *
+test_set_history_reuse(PyObject *self UNUSED, PyObject *val) {
+    history_reuse_disabled_for_tests = !PyObject_IsTrue(val);
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_methods[] = {
     {"is_emoji_presentation_base", (PyCFunction)screen_is_emoji_presentation_base, METH_O, ""},
     {"truncate_point_for_length", (PyCFunction)screen_truncate_point_for_length, METH_VARARGS, ""},
     {"test_ch_and_idx", test_ch_and_idx, METH_O, ""},
+    {"test_set_history_reuse", test_set_history_reuse, METH_O, ""},
     {NULL} /* Sentinel */
 };
 

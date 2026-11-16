@@ -820,6 +820,14 @@ class TestDataTypes(BaseTest):
             self.assertEqual(p.wait(timeout=30), 0)
             p.stdout.close()
 
+    def test_historybuf_continued_after_wraparound(self):
+        s = self.create_screen(cols=5, lines=2, scrollback=4)
+        for i in range(7):
+            s.draw(str(i) * 7)
+            s.carriage_return(), s.linefeed()
+        hb = s.historybuf
+        self.ae([hb.is_continued(y) for y in range(hb.count)], [True, False, True, False])
+
     def test_historybuf(self):
         lb = filled_line_buf()
         hb = HistoryBuf(5, 5)
@@ -859,6 +867,7 @@ class TestDataTypes(BaseTest):
 
         hb = filled_history_buf(5, 5)
         hb2 = hb.rewrap(hb.xnum)
+        self.ae((hb.count, hb2.count), (hb.ynum, hb.ynum))
         for i in range(hb.ynum):
             self.ae(hb2.line(i), hb.line(i))
         hb = filled_history_buf(5, 5)

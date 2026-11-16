@@ -548,6 +548,7 @@ def compile_program(
     pass
 
 def custom_shader_needs_render(before: Tuple[bool, int, int], after: Tuple[bool, int, int], event_mask: int, now: int) -> bool: ...
+def decorations_map_new_size(count: int, current_capacity: int, max_size: int) -> Optional[Tuple[int, int]]: ...
 def simulate_custom_shader_render_ticks(num_ticks: int, event_mask: int = 0, initialize: bool = False) -> list[bool]: ...
 def set_os_window_chrome(os_window_id: int) -> bool:
     pass
@@ -1140,6 +1141,22 @@ class Cursor:
     text_blink: bool
     shape: int
 
+class ImageLayerRect(TypedDict):
+    left: float
+    top: float
+    right: float
+    bottom: float
+
+class ImageLayer(TypedDict):
+    src_rect: ImageLayerRect
+    dest_rect: ImageLayerRect
+    group_count: int
+    z_index: int
+    image_id: int
+    ref_id: int
+    indexed_px_sz: int
+    is_unscaled: bool
+
 class Screen:
     color_profile: ColorProfile
     columns: int
@@ -1164,6 +1181,7 @@ class Screen:
     cursor_key_mode: bool
     auto_repeat_enabled: bool
     render_unfocused_cursor: bool
+    track_activity: bool
     last_reported_cwd: Optional[bytes]
 
     def __init__(
@@ -1183,6 +1201,7 @@ class Screen:
     def test_commit_write_buffer(self, inp: memoryview, output: memoryview) -> int: ...
     def test_parse_written_data(self, dump_callback: None = None) -> None: ...
     def test_frame_presented(self, period_us: int, t: int, tu: int) -> None: ...
+    def test_input_wake(self) -> dict[str, bool]: ...
     def hyperlink_for_id(self, hyperlink_id: int) -> str: ...
     def erase_last_command(self) -> bool: ...
     def set_progress(self, state: int, percent: int) -> None: ...
@@ -1341,6 +1360,10 @@ class Screen:
     def change_pointer_shape(self, op: str, name: str) -> None: ...
     def bell(self) -> None: ...
     def pause_rendering(self, pause: bool = True, for_how_long_in_ms: int = 100) -> bool: ...
+    def rendered_scroll_state(self) -> Tuple[int, int, int]: ...
+    def scrollbar_geometry(self) -> Tuple[float, float]: ...
+    def has_scrollbar(self, is_hovering: bool) -> bool: ...
+    def update_graphics_layers(self) -> Tuple[ImageLayer, ...]: ...
 
 def set_tab_bar_render_data(os_window_id: int, screen: Screen, left: int, top: int, right: int, bottom: int) -> None:
     pass

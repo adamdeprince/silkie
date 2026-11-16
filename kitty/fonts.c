@@ -338,10 +338,23 @@ font_group_for(double font_sz_in_pts, double logical_dpi_x, double logical_dpi_y
 
 // Sprites {{{
 
+static void sprite_tracker_set_layout(GPUSpriteTracker *sprite_tracker, unsigned int cell_width, unsigned int cell_height);
+
 void
 sprite_tracker_set_limits(size_t max_texture_size_, size_t max_array_len_) {
     max_texture_size = max_texture_size_;
     max_array_len = MIN(0xfffu, max_array_len_);
+    // Font groups are created before there is an OpenGL context, so they size
+    // their sprite layout using the conservative defaults above. Redo the
+    // layout now that the real limits are known. Only safe while no sprite has
+    // been allocated yet, since changing xnum/ynum changes what texture
+    // position an already handed out sprite index maps to.
+    for (size_t i = 0; i < num_font_groups; i++) {
+        FontGroup *fg = font_groups + i;
+        GPUSpriteTracker *st = &fg->sprite_tracker;
+        if (!st->x && !st->y && !st->z && st->ynum <= 1 && fg->fcm.cell_width && fg->fcm.cell_height)
+            sprite_tracker_set_layout(st, fg->fcm.cell_width, fg->fcm.cell_height);
+    }
 }
 
 static bool
@@ -350,7 +363,10 @@ do_increment(FontGroup *fg) {
     if (fg->sprite_tracker.x >= fg->sprite_tracker.xnum) {
         fg->sprite_tracker.x = 0;
         fg->sprite_tracker.y++;
-        fg->sprite_tracker.ynum = MIN(MAX(fg->sprite_tracker.ynum, fg->sprite_tracker.y + 1), fg->sprite_tracker.max_y);
+        if (fg->sprite_tracker.y + 1 > fg->sprite_tracker.ynum) {
+            // texture reallocation copies all sprites
+            fg->sprite_tracker.ynum = MIN(fg->sprite_tracker.max_y, MAX(fg->sprite_tracker.y + 1, fg->sprite_tracker.ynum * 2));
+        }
         if (fg->sprite_tracker.y >= fg->sprite_tracker.max_y) {
             fg->sprite_tracker.y = 0;
             fg->sprite_tracker.z++;
@@ -394,7 +410,7 @@ sprite_tracker_current_layout(FONTS_DATA_HANDLE data, unsigned int *x, unsigned 
 static void
 sprite_tracker_set_layout(GPUSpriteTracker *sprite_tracker, unsigned int cell_width, unsigned int cell_height) {
     sprite_tracker->xnum = MIN(MAX(1u, max_texture_size / cell_width), (size_t)UINT16_MAX);
-    sprite_tracker->max_y = MIN(MAX(1u, max_texture_size / cell_height), (size_t)UINT16_MAX);
+    sprite_tracker->max_y = MIN(MAX(1u, max_texture_size / (cell_height + 1)), (size_t)UINT16_MAX);
     sprite_tracker->ynum = 1;
     sprite_tracker->x = 0;
     sprite_tracker->y = 0;
@@ -2610,6 +2626,15 @@ test_sprite_position_increment(PyObject UNUSED *self, PyObject *args UNUSED) {
 }
 
 static PyObject *
+test_sprite_tracker_ynum(PyObject UNUSED *self, PyObject *args UNUSED) {
+    if (!num_font_groups) {
+        PyErr_SetString(PyExc_RuntimeError, "must create font group first");
+        return NULL;
+    }
+    return PyLong_FromUnsignedLong(font_groups->sprite_tracker.ynum);
+}
+
+static PyObject *
 set_send_sprite_to_gpu(PyObject UNUSED *self, PyObject *func) {
     Py_CLEAR(python_send_to_gpu_impl);
     if (func != Py_None) {
@@ -2961,6 +2986,7 @@ static PyMethodDef module_methods[] = {
     METHODB(create_test_font_group, METH_VARARGS),
     METHODB(sprite_map_set_layout, METH_VARARGS),
     METHODB(test_sprite_position_increment, METH_NOARGS),
+    METHODB(test_sprite_tracker_ynum, METH_NOARGS),
     METHODB(concat_cells, METH_VARARGS),
     METHODB(render_decoration, METH_VARARGS),
     METHODB(set_send_sprite_to_gpu, METH_O),

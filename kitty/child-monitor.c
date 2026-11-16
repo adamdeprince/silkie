@@ -69,7 +69,7 @@ typedef struct {
 
 typedef struct {
     Screen *screen;
-    bool needs_removal, child_died;
+    bool needs_removal, child_died, close_requested;
     int fd;
     unsigned long id;
     pid_t pid;
@@ -85,6 +85,17 @@ static const Child EMPTY_CHILD = {0};
 static Child children[MAX_CHILDREN] = {{0}};
 static Child scratch[MAX_CHILDREN] = {{0}};
 static Child add_queue[MAX_CHILDREN] = {{0}}, remove_queue[MAX_CHILDREN] = {{0}}, remove_notify[MAX_CHILDREN] = {{0}};
+// Pending input of each child, as the I/O thread last saw it. Parallel to children and
+// only used by the I/O thread, so it needs no lock.
+typedef struct {
+    ParserInputWake pending;
+    // The chunk the main loop was last woken for. Its next parse accepts that chunk, so
+    // more reads of it must not wake it again.
+    uint64_t woken_chunk;
+    // Bytes were committed since pending was queried
+    bool stale;
+} ChildInputWake;
+static ChildInputWake child_input_wake[MAX_CHILDREN] = {{{0}}};
 static size_t add_queue_count = 0, remove_queue_count = 0;
 static struct pollfd children_fds[MAX_CHILDREN + EXTRA_FDS] = {{0}};
 static pthread_mutex_t children_lock, talk_lock;
@@ -346,6 +357,24 @@ add_child(ChildMonitor *self, PyObject *args) {
 
 static const unsigned write_buf_limit = 100 * 1024 * 1024;
 
+static bool
+ensure_write_buf_space(Screen *screen, size_t sz, size_t limit) {
+    if (screen->write_buf_sz - screen->write_buf_used >= sz) return true;
+    const size_t pending = screen->write_buf_used - screen->write_buf_start;
+    if (pending + sz > limit) return false;
+    if (screen->write_buf_start) {
+        memmove(screen->write_buf, screen->write_buf + screen->write_buf_start, pending);
+        screen->write_buf_start = 0;
+        screen->write_buf_used = pending;
+    }
+    if (screen->write_buf_sz - pending < sz) {
+        screen->write_buf_sz = pending + sz;
+        screen->write_buf = PyMem_RawRealloc(screen->write_buf, screen->write_buf_sz);
+        if (screen->write_buf == NULL) { fatal("Out of memory."); }
+    }
+    return true;
+}
+
 #define schedule_write_to_child_generic(id, num, va_start, get_next_arg, va_end, found, too_much_data) \
     ChildMonitor *self = the_monitor;                                                                  \
     const char *data;                                                                                  \
@@ -361,16 +390,10 @@ static const unsigned write_buf_limit = 100 * 1024 * 1024;
         if (children[i].id == id) {                                                                    \
             Screen *screen = children[i].screen;                                                       \
             screen_mutex(lock, write);                                                                 \
-            size_t space_left = screen->write_buf_sz - screen->write_buf_used;                         \
-            if (space_left < sz) {                                                                     \
-                if (screen->write_buf_used + sz > write_buf_limit) {                                   \
-                    too_much_data = true;                                                              \
-                    screen_mutex(unlock, write);                                                       \
-                    break;                                                                             \
-                }                                                                                      \
-                screen->write_buf_sz = screen->write_buf_used + sz;                                    \
-                screen->write_buf = PyMem_RawRealloc(screen->write_buf, screen->write_buf_sz);         \
-                if (screen->write_buf == NULL) { fatal("Out of memory."); }                            \
+            if (!ensure_write_buf_space(screen, sz, write_buf_limit)) {                                \
+                too_much_data = true;                                                                  \
+                screen_mutex(unlock, write);                                                           \
+                break;                                                                                 \
             }                                                                                          \
             found = true;                                                                              \
             va_start(ap, num);                                                                         \
@@ -403,16 +426,10 @@ schedule_write_to_child_if_possible(id_type id, const char *data, size_t sz, boo
         if (children[i].id == id) {
             Screen *screen = children[i].screen;
             screen_mutex(lock, write);
-            size_t space_left = screen->write_buf_sz - screen->write_buf_used;
-            if (space_left < sz) {
-                if (screen->write_buf_used + sz > limit) {
-                    *too_much_data = true;
-                    screen_mutex(unlock, write);
-                    break;
-                }
-                screen->write_buf_sz = screen->write_buf_used + sz;
-                screen->write_buf = PyMem_RawRealloc(screen->write_buf, screen->write_buf_sz);
-                if (screen->write_buf == NULL) { fatal("Out of memory."); }
+            if (!ensure_write_buf_space(screen, sz, limit)) {
+                *too_much_data = true;
+                screen_mutex(unlock, write);
+                break;
             }
             *found = true;
             memcpy(screen->write_buf + screen->write_buf_used, data, sz);
@@ -537,15 +554,39 @@ do_parse(ChildMonitor *self, Screen *screen, monotonic_t now, bool flush) {
     if (pd.input_read) {
         if (pd.write_space_created) wakeup_io_loop(self, false);
         if (screen->paused_rendering.expires_at) set_maximum_wait(MAX(0, screen->paused_rendering.expires_at - now));
-    } else if (pd.has_pending_input) set_maximum_wait(OPT(input_delay) - pd.time_since_new_input);
+    }
+    // Bytes held until input_delay has passed. The I/O thread wakes the main loop when they are ready.
+    screen->input_held = !pd.input_read && pd.has_pending_input;
+    screen->input_parsed = pd.input_read;
     return pd.input_read;
+}
+
+static void
+mark_os_windows_with_held_input(void) {
+    // Painting an OS window whose only new output is held draws the old frame, and the
+    // turn that parses the held bytes paints again because it ignores repaint_delay.
+    // A window that parsed new output this turn is painted anyway.
+    for (size_t i = 0; i < global_state.num_os_windows; i++) {
+        OSWindow *w = global_state.os_windows + i;
+        bool held = false, parsed = false;
+        for (size_t t = 0; t < w->num_tabs; t++) {
+            Tab *tab = w->tabs + t;
+            for (size_t c = 0; c < tab->num_windows; c++) {
+                Screen *screen = tab->windows[c].render_data.screen;
+                if (!screen) continue;
+                held |= screen->input_held;
+                parsed |= screen->input_parsed;
+            }
+        }
+        w->input_held = held && !parsed;
+    }
 }
 
 static bool
 parse_input(ChildMonitor *self) {
     // Parse all available input that was read in the I/O thread.
     size_t count = 0, remove_count = 0;
-    bool input_read = false, reload_config_called = false;
+    bool input_read = false, reload_config_called = false, input_held = false;
     monotonic_t now = monotonic();
     children_mutex(lock);
     while (remove_queue_count) {
@@ -566,12 +607,13 @@ parse_input(ChildMonitor *self) {
             reload_config_signal_received = false;
             reload_config_called = true;
         }
-    } else {
-        count = self->count;
-        for (size_t i = 0; i < count; i++) {
-            scratch[i] = children[i];
-            INCREF_CHILD(scratch[i]);
-        }
+    }
+    // Parse on signal turns too. The I/O thread does not wake the main loop again
+    // for input it already woke it for, so skipping it here would stall it.
+    count = self->count;
+    for (size_t i = 0; i < count; i++) {
+        scratch[i] = children[i];
+        INCREF_CHILD(scratch[i]);
     }
     children_mutex(unlock);
 
@@ -620,7 +662,7 @@ parse_input(ChildMonitor *self) {
         // must be done while no locks are held, since the locks are non-recursive and
         // the python function could call into other functions in this module
         remove_count--;
-        if (remove_notify[remove_count].screen) do_parse(self, remove_notify[remove_count].screen, now, true);
+        if (remove_notify[remove_count].screen && do_parse(self, remove_notify[remove_count].screen, now, true)) input_read = true;
         PyObject *t = PyObject_CallFunction(
             self->death_notify,
             "kOi",
@@ -635,9 +677,13 @@ parse_input(ChildMonitor *self) {
     for (size_t i = 0; i < count; i++) {
         if (!scratch[i].needs_removal) {
             if (do_parse(self, scratch[i].screen, now, false)) input_read = true;
-        }
+            else if (scratch[i].screen->input_held) input_held = true;
+        } else scratch[i].screen->input_held = scratch[i].screen->input_parsed = false;
         DECREF_CHILD(scratch[i]);
     }
+    if (input_held) mark_os_windows_with_held_input();
+    else
+        for (size_t i = 0; i < global_state.num_os_windows; i++) global_state.os_windows[i].input_held = false;
     if (reload_config_called) { call_boss(load_config_file, NULL); }
     return input_read;
 }
@@ -665,6 +711,7 @@ mark_child_for_close(ChildMonitor *self, id_type window_id) {
     for (size_t i = 0; i < self->count; i++) {
         if (children[i].id == window_id) {
             children[i].needs_removal = true;
+            children[i].close_requested = true;
             found = true;
             break;
         }
@@ -673,6 +720,7 @@ mark_child_for_close(ChildMonitor *self, id_type window_id) {
         for (size_t i = 0; i < add_queue_count; i++) {
             if (add_queue[i].id == window_id) {
                 add_queue[i].needs_removal = true;
+                add_queue[i].close_requested = true;
                 found = true;
                 break;
             }
@@ -794,7 +842,8 @@ collect_cursor_info(CursorRenderInfo *ans, Window *w, monotonic_t now, OSWindow 
     ans->multicursor_count = 0;
     ans->cursor_opacity = 1;
     ans->text_blink_opacity = 1;
-    if (!rd->screen->scrolled_by) {
+    // Use the scroll position of the rendered frame so the cursor matches the frozen text while rendering is paused
+    if (!rendered_scrolled_by(rd->screen)) {
         ans->multicursor_count = screen_multi_cursor_count(rd->screen);
         ans->is_visible = screen_is_cursor_visible(rd->screen);
     }
@@ -880,8 +929,6 @@ prepare_to_render_os_window(
         Window *w = tab->windows + i;
 #define WD w->render_data
         if (w->visible && WD.screen) {
-            os_window->needs_layers = os_window->needs_layers || screen_needs_rendering_in_layers(os_window, w, WD.screen);
-            if (OPT(hdr) == HDR_AUTO && !os_window->hdr_content) os_window->hdr_content = screen_has_hdr_content(WD.screen);
             screen_check_pause_rendering(WD.screen, now);
             *num_visible_windows += 1;
             color_type window_bg =
@@ -971,6 +1018,12 @@ prepare_to_render_os_window(
                 }
             }
             if (send_cell_data_to_gpu(WD.vao_idx, WD.screen, os_window)) needs_render = true;
+            // Must be after send_cell_data_to_gpu() as that updates the graphics layers, which
+            // determine whether there are images that need rendering in layers. Otherwise, a newly
+            // placed image is not drawn until something else causes a re-render, see #10875
+            os_window->needs_layers = os_window->needs_layers || screen_needs_rendering_in_layers(os_window, w, WD.screen);
+            // Also after send_cell_data_to_gpu(), as HDR images count as HDR content
+            if (OPT(hdr) == HDR_AUTO && !os_window->hdr_content) os_window->hdr_content = screen_has_hdr_content(WD.screen);
             if (WD.screen->start_visual_bell_at | WD.screen->start_drag_overlay_at) needs_render = true;
             if (OPT(progress_bar) != PROGRESS_BAR_HIDDEN && WD.screen->progress_state == PROGRESS_STATE_INDETERMINATE) needs_render = true;
             // Prepare window title bar screen data for GPU
@@ -1242,6 +1295,7 @@ render(monotonic_t now, bool input_read) {
     const bool scan_for_animated_images = global_state.check_for_active_animated_images;
     global_state.check_for_active_animated_images = false;
     call_boss(cache_process_data, "O", Py_True);
+    bool waiting_for_frame = false;
 
     for (size_t i = 0; i < global_state.num_os_windows; i++) {
         OSWindow *w = global_state.os_windows + i;
@@ -1249,6 +1303,16 @@ render(monotonic_t now, bool input_read) {
         // rendering is done in cocoa_os_window_resized()
         if (w->live_resize.in_progress) continue;
 #endif
+        // Held bytes are not on this window yet. Painting it draws the old frame, and the
+        // turn that parses them paints again because it ignores repaint_delay.
+        if (w->input_held && w->id != global_state.thumbnail_callback.os_window) {
+            if (scan_for_animated_images) global_state.check_for_active_animated_images = true;
+            continue;
+        }
+        // A window waiting for a render frame cannot paint now, so it must not delay the
+        // paint when the frame arrives, otherwise the next output paints it mid-burst
+        if (!w->keep_rendering_till_swap && USE_RENDER_FRAMES && w->render_state != RENDER_FRAME_READY && should_os_window_be_rendered(w))
+            waiting_for_frame = true;
         if (!render_os_window(w, now, scan_for_animated_images)) {
             // since we didn't scan the window for animations, force a rescan on next wakeup/render frame
             if (scan_for_animated_images) global_state.check_for_active_animated_images = true;
@@ -1261,7 +1325,7 @@ render(monotonic_t now, bool input_read) {
             w->keep_rendering_till_swap--;
         }
     }
-    last_render_at = now;
+    if (!waiting_for_frame) last_render_at = now;
     call_boss(cache_process_data, "O", Py_False);
 #undef TD
 }
@@ -1715,6 +1779,7 @@ add_children(ChildMonitor *self) {
     for (; add_queue_count > 0 && self->count < MAX_CHILDREN;) {
         add_queue_count--;
         children[self->count] = add_queue[add_queue_count];
+        child_input_wake[self->count] = (ChildInputWake){0};
         add_queue[add_queue_count] = EMPTY_CHILD;
         children_fds[EXTRA_FDS + self->count].fd = children[self->count].fd;
         children_fds[EXTRA_FDS + self->count].events = POLLIN;
@@ -1745,13 +1810,16 @@ cleanup_child(ssize_t i) {
 }
 
 
-static void
+static size_t
 remove_children(ChildMonitor *self) {
+    // Returns the number of removed children whose close the main thread did not request
+    size_t unrequested = 0;
     if (self->count > 0) {
         size_t count = 0;
         for (ssize_t i = self->count - 1; i >= 0; i--) {
             if (children[i].needs_removal) {
                 count++;
+                if (!children[i].close_requested) unrequested++;
                 cleanup_child(i);
                 remove_queue[remove_queue_count] = children[i];
                 remove_queue_count++;
@@ -1761,11 +1829,13 @@ remove_children(ChildMonitor *self) {
                 if (num_to_right > 0) {
                     memmove(children + i, children + i + 1, num_to_right * sizeof(Child));
                     memmove(children_fds + EXTRA_FDS + i, children_fds + EXTRA_FDS + i + 1, num_to_right * sizeof(struct pollfd));
+                    memmove(child_input_wake + i, child_input_wake + i + 1, num_to_right * sizeof(ChildInputWake));
                 }
             }
         }
         self->count -= count;
     }
+    return unrequested;
 }
 
 
@@ -1788,7 +1858,7 @@ remove_children(ChildMonitor *self) {
 #endif
 
 static bool
-read_bytes(int fd, Screen *screen, bool *pending_input_is_small) {
+read_bytes(int fd, Screen *screen) {
     size_t total = 0;
     bool child_alive = true, read_more = true;
 
@@ -1814,7 +1884,7 @@ read_bytes(int fd, Screen *screen, bool *pending_input_is_small) {
             len = 0;                           // the write buffer must be committed even when nothing was read
             read_more = false;
         }
-        *pending_input_is_small = vt_parser_commit_write(screen->vt_parser, len);
+        vt_parser_commit_write(screen->vt_parser, len);
     }
     return child_alive;
 }
@@ -1900,19 +1970,18 @@ print_text(const unsigned char *text, ssize_t sz) {
 
 static void
 write_to_child(int fd, Screen *screen) {
-    size_t written = 0;
     ssize_t ret = 0;
     screen_mutex(lock, write);
-    while (written < screen->write_buf_used) {
-        ret = write(fd, screen->write_buf + written, screen->write_buf_used - written);
+    while (screen->write_buf_start < screen->write_buf_used) {
+        ret = write(fd, screen->write_buf + screen->write_buf_start, screen->write_buf_used - screen->write_buf_start);
 #ifdef KITTY_PRINT_BYTES_SENT_TO_CHILD
         fprintf(stderr, "Wrote: %zd bytes: ", ret);
 #endif
         if (ret > 0) {
 #ifdef KITTY_PRINT_BYTES_SENT_TO_CHILD
-            print_text(screen->write_buf + written, ret);
+            print_text(screen->write_buf + screen->write_buf_start, ret);
 #endif
-            written += ret;
+            screen->write_buf_start += ret;
         } else if (ret == 0) {
             // could mean anything, ignore
             break;
@@ -1920,17 +1989,60 @@ write_to_child(int fd, Screen *screen) {
             if (errno == EINTR) continue;
             if (errno == EWOULDBLOCK || errno == EAGAIN) break;
             perror("Call to write() to child fd failed, discarding data.");
-            written = screen->write_buf_used;
+            screen->write_buf_start = screen->write_buf_used;
         }
 #ifdef KITTY_PRINT_BYTES_SENT_TO_CHILD
         fprintf(stderr, "\n");
 #endif
     }
-    if (written) {
-        screen->write_buf_used -= written;
-        if (screen->write_buf_used) { memmove(screen->write_buf, screen->write_buf + written, screen->write_buf_used); }
+    const size_t pending = screen->write_buf_used - screen->write_buf_start;
+    if (!pending) screen->write_buf_start = screen->write_buf_used = 0;
+    else if (screen->write_buf_start > pending) {
+        // compact lazily to keep large pastes linear
+        memmove(screen->write_buf, screen->write_buf + screen->write_buf_start, pending);
+        screen->write_buf_start = 0;
+        screen->write_buf_used = pending;
     }
     screen_mutex(unlock, write);
+}
+
+static bool
+input_needs_wake(const ChildInputWake *c) {
+    return c->pending.chunk && c->pending.chunk != c->woken_chunk && (c->pending.small_pending || c->pending.large_ready);
+}
+
+static ParserInputWake
+pending_input_wake_info(ChildMonitor *self, monotonic_t now) {
+    ParserInputWake info = {0};
+    for (size_t i = 0; i < self->count; i++) {
+        ChildInputWake *c = child_input_wake + i;
+        // Only this thread commits bytes, so a child with nothing pending at its last
+        // query and no reads since still has nothing pending.
+        if (c->stale || c->pending.chunk) {
+            c->pending = vt_parser_input_wake(children[i].screen->vt_parser, now, children[i].screen->low_latency);
+            c->stale = false;
+        }
+        if (input_needs_wake(c)) {
+            if (c->pending.small_pending) info.small_pending = true;
+            if (c->pending.large_ready) info.large_ready = true;
+        }
+        monotonic_t held_until = c->pending.large_held_until;
+        if (held_until && (!info.large_held_until || held_until < info.large_held_until)) info.large_held_until = held_until;
+    }
+    return info;
+}
+
+static void
+remember_woken_input(ChildMonitor *self) {
+    // Uses the state the wake was decided on, so a chunk that arrives after the
+    // main thread has parsed is not marked as woken. Must run before the main loop
+    // is woken, so that a small chunk which grows in the meantime is still accepted.
+    for (size_t i = 0; i < self->count; i++) {
+        ChildInputWake *c = child_input_wake + i;
+        if (!input_needs_wake(c)) continue;
+        if (c->pending.small_pending) vt_parser_accept_input(children[i].screen->vt_parser, c->pending.chunk);
+        c->woken_chunk = c->pending.chunk;
+    }
 }
 
 static void *
@@ -1938,24 +2050,42 @@ io_loop(void *data) {
     // The I/O thread loop
     size_t i;
     int ret;
-    bool has_more, data_received, pending_input_is_small, low_latency, has_pending_wakeups = false, last_wakeup_was_early = false;
-    monotonic_t last_main_loop_wakeup_at = -1, now = -1, input_delay;
+    bool has_more, child_data_received, has_pending_wakeups = false, last_wakeup_was_early = false;
+    // A signal or a removed child that needs the main loop. Latched until WAKEUP, since
+    // signalfd is drained on receipt and a removed child is no longer polled.
+    bool wake_latched = false;
+    monotonic_t last_main_loop_wakeup_at = -1, now = -1, pending_wake_at = 0;
     Screen *screen;
     ChildMonitor *self = (ChildMonitor *)data;
     set_thread_name("KittyChildMon");
+#define WAKEUP                                                                               \
+    {                                                                                        \
+        remember_woken_input(self);                                                          \
+        if (self->benchmark_wakeup_fd >= 0) {                                                \
+            static const char _wakeup_byte = 1;                                              \
+            ssize_t _wakeup_ret UNUSED = write(self->benchmark_wakeup_fd, &_wakeup_byte, 1); \
+        } else wakeup_main_loop();                                                           \
+        last_main_loop_wakeup_at = now;                                                      \
+        last_wakeup_was_early = false;                                                       \
+        wake_latched = false;                                                                \
+    }
 
     while (LIKELY(!self->shutting_down)) {
         children_mutex(lock);
-        remove_children(self);
+        // A child that exited is no longer polled, so its held output has no deadline here.
+        // The main thread flush-parses the remove queue. It does not need a wake for a
+        // child it closed itself, the SIGCHLD from the hangup wakes it.
+        if (remove_children(self)) {
+            wake_latched = true;
+            has_pending_wakeups = true;
+            pending_wake_at = 0;
+        }
         add_children(self);
         children_mutex(unlock);
-        data_received = false;
-        pending_input_is_small = false;
-        low_latency = false;
+        child_data_received = false;
         for (i = 0; i < self->count + EXTRA_FDS; i++) children_fds[i].revents = 0;
         for (i = 0; i < self->count; i++) {
             screen = children[i].screen;
-            if (screen->low_latency) low_latency = true;
             /* printf("i:%lu id:%lu fd: %d read_buf_sz: %lu write_buf_used: %lu\n", i, children[i].id, children[i].fd, screen->read_buf_sz,
              * screen->write_buf_used); */
             children_fds[EXTRA_FDS + i].events = vt_parser_has_space_for_input(screen->vt_parser) ? POLLIN : 0;
@@ -1963,13 +2093,10 @@ io_loop(void *data) {
             children_fds[EXTRA_FDS + i].events |= (screen->write_buf_used ? POLLOUT : 0);
             screen_mutex(unlock, write);
         }
-        // A window in low latency mode (see docs/latency-protocol.rst) wants
-        // its output parsed as soon as it arrives, so wake without the delay
-        input_delay = low_latency ? 0 : OPT(input_delay);
         if (has_pending_wakeups) {
             now = monotonic();
-            monotonic_t time_delta = input_delay - (now - last_main_loop_wakeup_at);
-            if (time_delta >= 0) ret = poll(children_fds, self->count + EXTRA_FDS, monotonic_t_to_ms_ceil(time_delta));
+            monotonic_t time_delta = pending_wake_at - now;
+            if (time_delta > 0) ret = poll(children_fds, self->count + EXTRA_FDS, monotonic_t_to_ms_ceil(time_delta));
             else ret = 0;
         } else {
             ret = poll(children_fds, self->count + EXTRA_FDS, -1);
@@ -1978,7 +2105,7 @@ io_loop(void *data) {
             if (children_fds[0].revents & POLLIN) drain_fd(children_fds[0].fd); // wakeup
             if (children_fds[1].revents & POLLIN) {
                 SignalSet ss = {0};
-                data_received = true;
+                wake_latched = true;
                 read_signals(children_fds[1].fd, handle_signal, &ss);
                 if (ss.kill_signal || ss.reload_config) {
                     children_mutex(lock);
@@ -1990,12 +2117,11 @@ io_loop(void *data) {
             }
             for (i = 0; i < self->count; i++) {
                 if (children_fds[EXTRA_FDS + i].revents & (POLLIN | POLLHUP)) {
-                    data_received = true;
-                    bool is_small = false;
-                    has_more = read_bytes(children_fds[EXTRA_FDS + i].fd, children[i].screen, &is_small);
-                    if (is_small) pending_input_is_small = true;
+                    child_data_received = true;
+                    child_input_wake[i].stale = true;
+                    has_more = read_bytes(children_fds[EXTRA_FDS + i].fd, children[i].screen);
                     if (!has_more) {
-                        // child is dead
+                        // child is dead. The next iteration queues it and wakes the main thread.
                         children_mutex(lock);
                         children[i].needs_removal = true;
                         children_mutex(unlock);
@@ -2026,28 +2152,46 @@ io_loop(void *data) {
         } else if (ret < 0) {
             if (errno != EAGAIN && errno != EINTR) { perror("Call to poll() failed"); }
         }
-#define WAKEUP                                                                               \
-    {                                                                                        \
-        if (self->benchmark_wakeup_fd >= 0) {                                                \
-            static const char _wakeup_byte = 1;                                              \
-            ssize_t _wakeup_ret UNUSED = write(self->benchmark_wakeup_fd, &_wakeup_byte, 1); \
-        } else wakeup_main_loop();                                                           \
-        last_main_loop_wakeup_at = now;                                                      \
-        has_pending_wakeups = false;                                                         \
-        last_wakeup_was_early = false;                                                       \
-    }
         // we only wakeup the main loop after input_delay as wakeup is an expensive operation
         // on some platforms, such as cocoa. Small pending input, typically the echo of typed
         // characters, wakes immediately, but at most once per input_delay so that continuous
         // streams of small writes are still coalesced.
-        if (data_received) {
-            if ((now = monotonic()) - last_main_loop_wakeup_at >= input_delay) WAKEUP
-            else if (pending_input_is_small && !last_wakeup_was_early) {
+        if (child_data_received || wake_latched || has_pending_wakeups) {
+            now = monotonic();
+            ParserInputWake pending = pending_input_wake_info(self, now);
+            // rate_open is the gap since the previous wakeup. A large chunk the
+            // parser will accept now (large_ready) wakes inside that gap, once per chunk.
+            // A large chunk still inside input_delay waits until new_input_at + input_delay,
+            // stored in wait_until, rather than until the next rate-limit slot.
+            bool rate_open = now - last_main_loop_wakeup_at > OPT(input_delay);
+            bool wake_now = pending.large_ready;
+            bool early_small = false;
+            bool need_rate_slot = false;
+            // The main thread does not arm a timer for a held chunk, this deadline is the only one
+            monotonic_t wait_until = pending.large_held_until;
+            if (pending.small_pending) {
+                if (rate_open) wake_now = true;
+                else if (!last_wakeup_was_early) {
+                    wake_now = true;
+                    // This wake is the one early small wake unless a large chunk
+                    // was ready anyway. Marking that would swallow the next echo.
+                    early_small = !pending.large_ready;
+                } else need_rate_slot = true;
+            }
+            // A latched wake uses the same rate limit as a small write that already woke early.
+            if (wake_latched) {
+                if (rate_open) wake_now = true;
+                else need_rate_slot = true;
+            }
+            if (wake_now) {
                 WAKEUP;
-                last_wakeup_was_early = true;
-            } else has_pending_wakeups = true;
-        } else {
-            if (has_pending_wakeups && (now = monotonic()) - last_main_loop_wakeup_at >= input_delay) WAKEUP
+                if (early_small) last_wakeup_was_early = true;
+            } else if (need_rate_slot) {
+                monotonic_t rate_at = last_main_loop_wakeup_at + OPT(input_delay);
+                if (!wait_until || rate_at < wait_until) wait_until = rate_at;
+            }
+            has_pending_wakeups = wait_until != 0;
+            pending_wake_at = wait_until;
         }
     }
 #undef WAKEUP
