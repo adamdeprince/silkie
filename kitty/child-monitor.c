@@ -20,6 +20,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <signal.h>
+#include <stdatomic.h>
+#include <limits.h>
 extern PyTypeObject Screen_Type;
 
 #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -2256,6 +2258,9 @@ add_peer(int peer, bool is_remote_control_peer) {
         Peer *p = talk_data.peers + talk_data.num_peers++;
         memset(p, 0, sizeof(Peer));
         p->fd = peer;
+        // MSG_DONTWAIT still blocks on macOS
+        int flags = fcntl(peer, F_GETFL);
+        if (flags != -1) fcntl(peer, F_SETFL, flags | O_NONBLOCK);
         p->id = ++peer_id_counter;
         if (!p->id) p->id = ++peer_id_counter;
         ans = p->id;
@@ -2267,14 +2272,42 @@ add_peer(int peer, bool is_remote_control_peer) {
     return ans;
 }
 
+static atomic_int injected_accept_failures = 0; // testing only
+static bool accept_error_logged = false;
+
+static PyObject *
+fail_next_accepts(PyObject *s UNUSED, PyObject *a) {
+#define fail_next_accepts_doc "fail_next_accepts(n) -> make the next n talk thread accepts fail for testing"
+    long n = PyLong_AsLong(a);
+    if (n == -1 && PyErr_Occurred()) return NULL;
+    if (n > INT_MAX) n = INT_MAX;
+    const int prev = n >= 0 ? atomic_exchange(&injected_accept_failures, (int)n) : atomic_load(&injected_accept_failures);
+    return PyLong_FromLong(prev);
+}
+
 static bool
 accept_peer(int listen_fd, bool shutting_down, bool is_remote_control_peer, bool verify_peer_uid) {
-    int peer = accept(listen_fd, NULL, NULL);
-    if (UNLIKELY(peer == -1)) {
-        if (errno == EINTR) return true;
-        if (!shutting_down) perror("accept() on talk socket failed!");
-        return false;
+    int peer = -1, err = 0;
+    int injected = atomic_load_explicit(&injected_accept_failures, memory_order_relaxed);
+    while (UNLIKELY(injected > 0) && !atomic_compare_exchange_weak(&injected_accept_failures, &injected, injected - 1));
+    if (UNLIKELY(injected > 0)) err = EMFILE;
+    if (!err) {
+        peer = accept(listen_fd, NULL, NULL);
+        if (peer == -1) err = errno;
     }
+    if (UNLIKELY(peer == -1)) {
+        if (err == EINTR) return true;
+        if (shutting_down || err == EBADF || err == EINVAL || err == ENOTSOCK) return false;
+        if (!accept_error_logged) log_error("accept() on talk socket failed with error: %s", strerror(err));
+        accept_error_logged = true;
+        if (err != ECONNABORTED && err != EAGAIN && err != EWOULDBLOCK) {
+            // the pending connection was not consumed, avoid spinning on a readable listener
+            struct timespec ts = {.tv_nsec = 50 * 1000000};
+            nanosleep(&ts, NULL);
+        }
+        return true;
+    }
+    accept_error_logged = false;
     if (verify_peer_uid) {
         uid_t peer_uid;
         gid_t peer_gid;
@@ -2398,7 +2431,7 @@ read_from_peer(ChildMonitor *self, Peer *peer) {
         peer->read.used = 0;
         peer->read.capacity = 0;
     } else if (n < 0) {
-        if (errno != EINTR) failed(strerror(errno));
+        if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) failed(strerror(errno));
     } else {
         peer->read.used += n;
         while (has_complete_peer_command(peer)) dispatch_peer_command(self, peer);
@@ -2415,7 +2448,7 @@ write_to_peer(Peer *peer) {
         peer->write.used = 0;
         peer->write.failed = true;
     } else if (n < 0) {
-        if (errno != EINTR) {
+        if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
             log_error("write() to peer socket failed with error: %s", strerror(errno));
             peer->write.used = 0;
             peer->write.failed = true;
@@ -2564,8 +2597,12 @@ talk_loop(void *data) {
     }
 end:
     free_loop_data(&talk_data.loop_data);
+    talk_mutex(lock);
     for (size_t i = 0; i < talk_data.num_peers; i++) free_peer(talk_data.peers + i);
     free(talk_data.peers);
+    talk_data.peers = NULL;
+    talk_data.num_peers = talk_data.peers_capacity = 0;
+    talk_mutex(unlock);
     return 0;
 }
 
@@ -2603,9 +2640,9 @@ send_response_to_peer(id_type peer_id, const char *msg, size_t msg_sz, bool is_a
 
 // Boilerplate {{{
 static PyMethodDef methods[] = {
-    METHOD(add_child, METH_VARARGS) METHOD(inject_peer, METH_O) METHOD(needs_write, METH_VARARGS) METHOD(start, METH_NOARGS) METHOD(wakeup, METH_NOARGS)
-        METHOD(shutdown_monitor, METH_NOARGS) METHOD(main_loop, METH_NOARGS) METHOD(mark_for_close, METH_VARARGS) METHOD(resize_pty, METH_VARARGS)
-            METHODB(handled_signals, METH_NOARGS),
+    METHOD(add_child, METH_VARARGS) METHOD(inject_peer, METH_O) METHOD(fail_next_accepts, METH_O) METHOD(needs_write, METH_VARARGS) METHOD(start, METH_NOARGS)
+        METHOD(wakeup, METH_NOARGS) METHOD(shutdown_monitor, METH_NOARGS) METHOD(main_loop, METH_NOARGS) METHOD(mark_for_close, METH_VARARGS)
+            METHOD(resize_pty, METH_VARARGS) METHODB(handled_signals, METH_NOARGS),
     METHOD(set_wakeup_fd, METH_VARARGS) METHOD(parse_input_once, METH_NOARGS){"set_iutf8_winid", (PyCFunction)pyset_iutf8, METH_VARARGS, ""},
     {NULL} /* Sentinel */
 };

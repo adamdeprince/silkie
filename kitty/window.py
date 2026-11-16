@@ -2173,10 +2173,13 @@ class Window:
                 traceback.print_exc()
 
     def destroy(self) -> None:
+        from .remote_control import abort_active_streams_from
+
         if hasattr(self, '_ssh_agent_provider'):
             self._ssh_agent_provider.close()
         self.call_watchers(self.watchers.on_close, {})
         self.destroyed = True
+        abort_active_streams_from(window_id=self.id)
         self.clipboard_request_manager.close()
         del self.kitten_result_processors
         if hasattr(self, 'screen'):

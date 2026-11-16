@@ -451,6 +451,98 @@ class TestGraphics(BaseTest):
         # The untouched entry must be unaffected throughout
         self.assertEqual(dc.get(b'k1'), b'b' * 200)
 
+    def test_disk_cache_entries_changed_during_defrag(self):
+        # Stale copies become holes
+        s = self.create_screen()
+        dc = s.grman.disk_cache
+        dc.small_hole_threshold = 0
+        dc.defrag_factor = 1000
+        data = {}
+        for i in range(20):
+            key = f'k{i}'.encode()
+            data[key] = bytes([65 + i]) * 100
+            dc.add(key, data[key])
+        self.assertTrue(dc.wait_for_write())
+        for i in range(12):
+            dc.remove(f'k{i}'.encode())
+            del data[f'k{i}'.encode()]
+        self.assertEqual(dc.end_of_data_offset(), 2000)
+        dc.pause_writes()
+        dc.defrag_factor = 2
+        data[b'trigger'] = b'T' * 10
+        dc.add(b'trigger', data[b'trigger'])
+        self.assertTrue(dc.wait_until_writes_paused())
+        dc.defrag_factor = 1000
+        for i in range(12, 16):
+            dc.remove(f'k{i}'.encode())
+            del data[f'k{i}'.encode()]
+        data[b'k16'] = b'r' * 60
+        dc.add(b'k16', data[b'k16'])
+        data[b'k17'] = b'm' * 70
+        dc.add(b'k17', data[b'k17'], True)
+        self.assertTrue(dc.resume_writes())
+        self.assertTrue(dc.wait_for_write())
+        for k, v in data.items():
+            self.assertEqual(dc.get(k), v)
+        holes = sorted(dc.holes())
+        for (p1, s1), (p2, s2) in zip(holes, holes[1:]):
+            self.assertLessEqual(p1 + s1, p2)
+        on_disk = sum(len(v) for k, v in data.items() if k != b'k17')
+        self.assertEqual(sum(x[1] for x in holes) + on_disk, dc.end_of_data_offset())
+        # Memory only entries own no disk space
+        dc.remove(b'k17')
+        del data[b'k17']
+        self.assertEqual(sorted(dc.holes()), holes)
+        for k, v in data.items():
+            self.assertEqual(dc.get(k), v)
+
+    def test_disk_cache_empty_entry_replaced(self):
+        dc = self.create_screen().grman.disk_cache
+        dc.small_hole_threshold = 0
+        dc.defrag_factor = 1000
+        dc.add(b'a', b'A' * 1000)
+        self.assertTrue(dc.wait_for_write())
+        dc.add(b'z', b'')
+        self.assertTrue(dc.wait_for_write())
+        dc.remove(b'a')
+        dc.add(b'c', b'C' * 100)
+        self.assertTrue(dc.wait_for_write())
+        dc.pause_writes()
+        dc.defrag_factor = 2
+        dc.add(b'z', b'Z' * 50)
+        self.assertTrue(dc.wait_until_writes_paused())
+        dc.defrag_factor = 1000
+        self.assertTrue(dc.resume_writes())
+        self.assertTrue(dc.wait_for_write())
+        self.assertEqual(dc.end_of_data_offset(), 150)
+        self.assertEqual(dc.get(b'z'), b'Z' * 50)
+        self.assertEqual(dc.get(b'c'), b'C' * 100)
+
+    def test_disk_cache_encryption_while_being_written(self):
+        s = self.create_screen()
+        dc = s.grman.disk_cache
+        dc.set_needs_encryption(True)
+        data = bytes(range(256)) * 1000 + b'xyz'
+
+        # Reads while writing return plaintext
+        dc.pause_writes()
+        dc.add(b'k1', data)
+        self.assertTrue(dc.wait_until_writes_paused())
+        self.assertEqual(dc.get(b'k1'), data)
+        self.assertTrue(dc.resume_writes())
+        self.assertTrue(dc.wait_for_write())
+        self.assertEqual(dc.num_cached_in_ram(), 0)
+        self.assertEqual(dc.get(b'k1'), data)
+
+        dc.pause_writes()
+        dc.add(b'k2', data)
+        self.assertTrue(dc.wait_until_writes_paused())
+        dc.add(b'k2', data[::-1])
+        self.assertTrue(dc.resume_writes())
+        self.assertTrue(dc.wait_for_write())
+        self.assertEqual(dc.get(b'k2'), data[::-1])
+        self.assertEqual(dc.get(b'k1'), data)
+
     def test_suppressing_gr_command_responses(self):
         s, g, pl, sl = load_helpers(self)
         self.ae(pl('abcd', s=10, v=10, q=1), 'ENODATA:Insufficient image data: 4 < 400')
@@ -3092,3 +3184,15 @@ class TestGraphics(BaseTest):
                 self.ae((width, height), (w, h))
                 f.seek(8)
                 self.ae(rgba_data, f.read())
+
+            # non-regular files must be rejected rather than streamed into the converter
+            num = irc.num_of_renders
+            fifo = os.path.join(cache_path, 'fifo')
+            os.mkfifo(fifo)
+            for bad in (os.devnull, fifo, cache_path):
+                with self.assertRaises(ValueError, msg=bad):
+                    irc.render(bad)
+                with self.assertRaises(ValueError, msg=bad):
+                    irc.render_image(bad, os.path.join(cache_path, 'out'))
+                self.assertFalse(os.path.exists(os.path.join(cache_path, 'out')))
+            self.ae(irc.num_of_renders, num)

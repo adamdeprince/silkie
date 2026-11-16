@@ -3086,6 +3086,10 @@ typedef void* (*glfwGetX11Display_func)(void);
 GFW_EXTERN glfwGetX11Display_func glfwGetX11Display_impl;
 #define glfwGetX11Display glfwGetX11Display_impl
 
+typedef void (*glfwX11ReinstallErrorHandler_func)(void);
+GFW_EXTERN glfwX11ReinstallErrorHandler_func glfwX11ReinstallErrorHandler_impl;
+#define glfwX11ReinstallErrorHandler glfwX11ReinstallErrorHandler_impl
+
 typedef unsigned long (*glfwGetX11Window_func)(GLFWwindow*);
 GFW_EXTERN glfwGetX11Window_func glfwGetX11Window_impl;
 #define glfwGetX11Window glfwGetX11Window_impl

@@ -14,6 +14,43 @@ from .extension_frames import assert_extension_frames
 
 
 class TestScreen(BaseTest):
+    def test_wide_character_after_scaled_text_collision(self) -> None:
+        for lines in (2, 4):
+            with self.subTest(lines=lines):
+                s = self.create_screen(cols=4, lines=lines)
+                s.cursor_position(1, 2)
+                draw_multicell(s, 'X', scale=2)
+                lower_row = str(s.line(1))
+                s.cursor_position(2, 1)
+                s.draw('界')
+                row = min(2, lines - 1)
+                self.ae((s.cursor.x, s.cursor.y), (2, row))
+                self.ae(str(s.line(row)), '界')
+                if lines == 4:
+                    self.ae(str(s.line(1)), lower_row)
+
+    def test_wide_collision_at_scroll_margin(self) -> None:
+        for alternate in (False, True):
+            with self.subTest(alternate=alternate):
+                s = self.create_screen(cols=4, lines=6)
+                if alternate:
+                    s.toggle_alt_screen()
+                s.draw('top')
+                s.cursor_position(6, 1)
+                s.draw('last')
+                parse_bytes(s, b'\x1b[2;4r')
+                s.cursor_position(3, 2)
+                draw_multicell(s, 'X', scale=2)
+                s.cursor_position(4, 1)
+                s.select_graphic_rendition(31)
+                s.draw('界\u0301a')
+                self.ae((s.cursor.x, s.cursor.y), (3, 3))
+                self.ae(str(s.line(3)), '界\u0301a')
+                self.ae(str(s.line(0)), 'top')
+                self.ae(str(s.line(5)), 'last')
+                for x in (0, 1, 2):
+                    self.ae(s.line(3).cursor_from(x).fg, (1 << 8) | 1)
+
     def test_draw_fast(self):
         s = self.create_screen()
 
@@ -343,6 +380,26 @@ class TestScreen(BaseTest):
         self.ae(s.current_selections(), before)
         self.assertTrue(s.pause_rendering(False))
         self.ae(s.current_selections(), before)
+
+    def test_fractional_scroll_not_finite(self):
+        s = self.create_screen(cols=5, lines=5, scrollback=10)
+        for i in range(15):
+            s.draw(str(i))
+            parse_bytes(s, b'\r\n')
+        s.scroll_to_absolute(5.0)
+        before = s.scrolled_by
+        for amt in (float('nan'), float('inf'), float('-inf')):
+            self.assertFalse(s.fractional_scroll(amt))
+            self.ae(s.scrolled_by, before)
+        s.scroll_to_absolute(float('nan'))
+        self.ae(s.scrolled_by, before)
+        self.assertRaises(OverflowError, s.fractional_scroll, 10**400)
+        self.assertRaises(OverflowError, s.scroll_to_absolute, 10**400)
+        self.ae(s.scrolled_by, before)
+        s.scroll_to_absolute(-3.5)
+        self.ae(s.scrolled_by, 0)
+        s.scroll_to_absolute(float('inf'))
+        self.ae(s.scrolled_by, s.historybuf.count)
 
     def test_emoji_skin_tone_modifiers(self):
         s = self.create_screen()
@@ -1869,6 +1926,43 @@ class TestScreen(BaseTest):
         t('\u25b6', 1, '\ufe0f', 2, '\ufe0e', 2)
         # wide + VS15 + VS16
         t('\U0001f610', 2, '\ufe0e', 1, '\ufe0f', 1)
+        # VS15 attaching to a wide char on the previous, soft wrapped line
+        s = self.create_screen(cols=5, lines=5)
+        parse_bytes(s, 'abc\U0001f610f\r'.encode())
+        self.ae((s.cursor.x, s.cursor.y), (0, 1))
+        parse_bytes(s, '\ufe0e'.encode())
+        self.ae((s.cursor.x, s.cursor.y), (0, 1))
+        self.ae(s.cpu_cells(0, 3)['mcd']['width'], 1)
+        self.assertTrue(s.cpu_cells(0, 4)['next_char_was_wrapped'])
+        parse_bytes(s, b'gh')
+        self.ae((s.cursor.x, s.cursor.y), (2, 1))
+        self.ae(str(s.line(0)), 'abc\U0001f610\ufe0e')
+        self.ae(str(s.line(1)), 'gh')
+        # scaled natural width char narrowed by VS15, on the same line and soft wrapped
+        s = self.create_screen(cols=8, lines=5)
+        parse_bytes(s, b'ab')
+        draw_multicell(s, '\U0001f610', scale=2)
+        self.ae(s.cursor.x, 6)
+        parse_bytes(s, '\ufe0e'.encode())
+        self.ae(s.cursor.x, 4)
+        for y in (0, 1):
+            self.ae(s.cpu_cells(y, 2)['mcd']['width'], 1)
+        s = self.create_screen(cols=6, lines=5)
+        parse_bytes(s, b'ab')
+        draw_multicell(s, '\U0001f610', scale=2)
+        parse_bytes(s, b'f\r')
+        self.ae((s.cursor.x, s.cursor.y), (0, 1))
+        parse_bytes(s, '\ufe0e'.encode())
+        self.ae((s.cursor.x, s.cursor.y), (0, 1))
+        self.ae(s.cpu_cells(0, 2)['mcd']['width'], 1)
+        self.assertTrue(s.cpu_cells(0, 5)['next_char_was_wrapped'])
+        # cursor inside the char is clamped to the end of the narrowed char
+        s = self.create_screen(cols=8, lines=5)
+        parse_bytes(s, b'ab')
+        draw_multicell(s, '\U0001f610', scale=2)
+        parse_bytes(s, b'\x1b[1;6H\xef\xb8\x8e')
+        self.ae(s.cursor.x, 4)
+        s = self.create_screen()
         # large numbers of combining chars
         s.reset()
         s.draw('\N{HEAVY EXCLAMATION MARK SYMBOL}' + 4500 * '\N{VARIATION SELECTOR-16}')

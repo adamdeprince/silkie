@@ -362,6 +362,15 @@ historybuf_pop_line(HistoryBuf *self, Line *line) {
     return true;
 }
 
+static void
+clear_multicell_cell(HistoryBuf *self, index_type lnum, index_type x) {
+    init_line(self, index_of(self, lnum), self->line);
+    CPUCell *c = self->line->cpu_cells + x;
+    cell_set_char(c, 0);
+    cell_clear_multicell(c);
+    clear_sprite_position(self->line->gpu_cells[x]);
+}
+
 void
 historybuf_delete_newest_lines(HistoryBuf *self, index_type count) {
     if (!count) return;
@@ -373,15 +382,12 @@ historybuf_delete_newest_lines(HistoryBuf *self, index_type count) {
     CPUCell *cells = self->line->cpu_cells;
     self->count--;
     for (index_type x = 0; x < self->line->xnum; x++) {
-        CPUCell *c = cells + x;
-        if (c->is_multicell && c->y) {
-            for (index_type i = 0, pos = self->count; i < c->y && pos; i++, pos--) {
-                index_type idx = (self->start_of_data + pos - 1) % self->ynum;
-                init_line(self, idx, self->line);
-                CPUCell *m = self->line->cpu_cells + x;
-                cell_set_char(m, 0);
-                m->is_multicell = false;
-                clear_sprite_position(self->line->gpu_cells[x]);
+        const CPUCell c = cells[x];
+        if (c.is_multicell && c.y) {
+            // the rows above, stopping at the first that does not continue the char, as it may be partial or torn
+            for (index_type lnum = 0; lnum < c.y && lnum < self->count; lnum++) {
+                if (!continues_multicell_char(cpu_lineptr(self, index_of(self, lnum)) + x, &c, c.y - 1 - lnum)) break;
+                clear_multicell_cell(self, lnum, x);
             }
         }
     }

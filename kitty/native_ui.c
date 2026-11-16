@@ -93,7 +93,12 @@ load_linux_backend(void) {
         .wayland_set_mapped = host_wayland_set_mapped,
         .wayland_activate = host_wayland_activate,
     };
-    return create(&host);
+    const NativeUIBackend *ans = create(&host);
+    // GTK has installed its own process wide X error handler, which would hide
+    // the X errors GLFW traps, see glfwX11ReinstallErrorHandler(). Only the X11
+    // build of GLFW has the function.
+    if (ans && !native_ui_on_wayland && glfwX11ReinstallErrorHandler_impl) glfwX11ReinstallErrorHandler();
+    return ans;
 }
 #endif
 

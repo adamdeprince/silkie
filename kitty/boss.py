@@ -910,7 +910,9 @@ class Boss:
                 if swid > 0:
                     self_window = self.window_id_map.get(swid)
 
-        extra_data: dict[str, Any] = {}
+        # self_window is the window the command will act on as "self", for
+        # commands received over sockets it is specified by the client
+        extra_data: dict[str, Any] = {'self_window': self_window}
         try:
             allowed_unconditionally = (
                 self.allow_remote_control == 'y'
@@ -922,7 +924,7 @@ class Boss:
             return {'ok': False, 'error': 'Remote control disallowed by window specific password'}
         if allowed_unconditionally:
             return self._execute_remote_command(pcmd, window, peer_id, self_window)
-        q = is_cmd_allowed(pcmd, window, from_socket, extra_data)
+        q = is_cmd_allowed(pcmd, window, from_socket, extra_data, peer_id)
         if q is True:
             return self._execute_remote_command(pcmd, window, peer_id, self_window)
         if q is None:
@@ -1089,6 +1091,9 @@ class Boss:
     def peer_message_received(self, msg_bytes: bytes, peer_id: int, is_remote_control: bool) -> bytes | bool | None:
         if peer_id > 0 and msg_bytes == b'peer_death':
             self.peer_data_map.pop(peer_id, None)
+            from .remote_control import abort_active_streams_from
+
+            abort_active_streams_from(peer_id=peer_id)
             return False
         if is_remote_control:
             cmd_prefix = b'\x1bP@kitty-cmd'
@@ -2834,7 +2839,9 @@ class Boss:
                     from secrets import token_hex
 
                     p = token_hex(16)
-                    remote_control_passwords = {p: end_kitten.remote_control_password if isinstance(end_kitten.remote_control_password, str) else ''}
+                    from .remote_control import kitten_password_restrictions
+
+                    remote_control_passwords = {p: kitten_password_restrictions(end_kitten.remote_control_password)}
                     initial_data = p.encode() + b'\n'
                 remote = self.add_fd_based_remote_control(remote_control_passwords, initial_data)
                 remote_control_fd = remote.fileno()

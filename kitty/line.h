@@ -23,7 +23,8 @@ typedef union CellAttrs {
         uint32_t hdr_bg : 6;
         uint32_t gamut_fg : 2;
         uint32_t gamut_bg : 2;
-        uint32_t : 5;
+        // named so that initializers zero it, see CPUCell
+        uint32_t padding : 5;
     };
     uint32_t val;
 } CellAttrs;
@@ -68,20 +69,25 @@ typedef union CPUCell {
 #else
 #error "Unsupported endianness"
 #endif
+        // the fields below are ordered so that none of them straddles a 32
+        // bit boundary, leaving all padding at the end
         char_type hyperlink_id : sizeof(hyperlink_id_type) * 8;
-        char_type next_char_was_wrapped : 1;
-        char_type is_multicell : 1;
-        char_type natural_width : 1;
         char_type scale : SCALE_BITS;
         char_type subscale_n : SUBSCALE_BITS;
         char_type subscale_d : SUBSCALE_BITS;
+        char_type valign : VALIGN_BITS;
+        char_type halign : HALIGN_BITS;
+        char_type next_char_was_wrapped : 1;
+        char_type is_multicell : 1;
+        char_type natural_width : 1;
         char_type x : WIDTH_BITS + SCALE_BITS;
         char_type y : SCALE_BITS;
         char_type width : WIDTH_BITS;
-        char_type valign : VALIGN_BITS;
-        char_type halign : HALIGN_BITS;
         char_type temp_flag : 1;
-        char_type : 15;
+        // The padding is named because unnamed bit-fields are left
+        // indeterminate by initializers, and clang on arm64 fills them with
+        // stack garbage, making cells with identical contents compare unequal.
+        char_type padding : 17;
     };
     struct {
         char_type ch_and_idx : sizeof(char_type) * 8;
@@ -96,7 +102,8 @@ typedef union LineAttrs {
         uint8_t has_dirty_text : 1;
         uint8_t has_image_placeholders : 1;
         uint8_t prompt_kind : 2;
-        uint8_t : 4;
+        // named so that initializers zero it, see CPUCell
+        uint8_t padding : 4;
     };
     uint8_t val;
 } LineAttrs;
@@ -165,6 +172,32 @@ num_codepoints_in_cell(const CPUCell *c, const TextCache *tc) {
 static inline unsigned
 mcd_x_limit(const CPUCell *mcd) {
     return mcd->scale * mcd->width;
+}
+
+static inline void
+cell_clear_multicell(CPUCell *c) {
+    // Make c an ordinary cell, clearing all the multicell fields, so that they
+    // are not mistaken for those of a multicell char by code that does not
+    // check is_multicell
+    c->is_multicell = false;
+    c->natural_width = false;
+    c->scale = 0;
+    c->subscale_n = 0;
+    c->subscale_d = 0;
+    c->valign = 0;
+    c->halign = 0;
+    c->x = 0;
+    c->y = 0;
+    c->width = 0;
+}
+
+static inline bool
+continues_multicell_char(const CPUCell *c, const CPUCell *ref, index_type y) {
+    // Whether c is the cell in row y of the same multicell char as ref in the same column.
+    // Use this rather than trusting the y and scale of a cell when walking the rows of a
+    // multiline char, as the char may be partial or torn.
+    return c->is_multicell && c->y == y && c->x == ref->x && c->scale == ref->scale && c->width == ref->width && c->subscale_n == ref->subscale_n &&
+           c->subscale_d == ref->subscale_d && c->ch_and_idx == ref->ch_and_idx;
 }
 
 static inline void

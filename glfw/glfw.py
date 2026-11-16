@@ -96,6 +96,7 @@ def generate_wrappers(glfw_header: str) -> None:
     void glfwWaylandEmbedSetMapped(GLFWwindow *window, bool mapped)
     void glfwWaylandEmbedActivate(GLFWwindow *window)
     void* glfwGetX11Display(void)
+    void glfwX11ReinstallErrorHandler(void)
     unsigned long glfwGetX11Window(GLFWwindow* window)
     void glfwSetPrimarySelectionString(GLFWwindow* window, const char* string)
     void glfwCocoaCycleThroughOSWindows(bool backwards)

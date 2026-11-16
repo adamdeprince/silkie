@@ -566,6 +566,9 @@ load_glfw(const char* path) {
     *(void **) (&glfwGetX11Display_impl) = dlsym(handle, "glfwGetX11Display");
     if (glfwGetX11Display_impl == NULL) dlerror(); // clear error indicator
 
+    *(void **) (&glfwX11ReinstallErrorHandler_impl) = dlsym(handle, "glfwX11ReinstallErrorHandler");
+    if (glfwX11ReinstallErrorHandler_impl == NULL) dlerror(); // clear error indicator
+
     *(void **) (&glfwGetX11Window_impl) = dlsym(handle, "glfwGetX11Window");
     if (glfwGetX11Window_impl == NULL) dlerror(); // clear error indicator
 
