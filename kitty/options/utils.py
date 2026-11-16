@@ -1055,6 +1055,26 @@ def custom_shaders(x: str) -> tuple[str, ...]:
     return tuple(shlex_split(x)) if x else ()
 
 
+# The value is pasted into the shader source as the initializer of a static
+# const, so allow only what literals and constructors such as float2(1, 2)
+# need. In particular ; and / could end the declaration or comment out the rest
+# of it.
+custom_shader_var_pat = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*|\s+)([-+*.,()A-Za-z0-9_\s]+)$')
+
+
+def custom_shader_var(val: str, current_val: dict[str, str]) -> Iterable[tuple[str, str]]:
+    val = val.strip()
+    if not val:
+        return
+    m = custom_shader_var_pat.match(val)
+    if m is None:
+        raise ValueError(
+            f'{val!r} is not a valid custom_shader_var, it must be a name, such as SHAKE_AMPLITUDE, followed by a value,'
+            ' such as 4, 0.5, true or float2(1, 2)'
+        )
+    yield m.group(1), ' '.join(m.group(2).split())
+
+
 def allow_hyperlinks(x: str) -> int:
     if x == 'ask':
         return 0b11

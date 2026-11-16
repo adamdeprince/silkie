@@ -12,7 +12,7 @@ from kitty.options.utils import (
     box_drawing_scale, clear_all_mouse_actions, clear_all_shortcuts, clipboard_control,
     clone_source_strategies, config_or_absolute_path, confirm_close, copy_on_select,
     cursor_blink_interval, cursor_text_color, cursor_trail_decay, cursor_trail_start_threshold,
-    custom_shaders, deprecated_adjust_line_height, deprecated_hide_window_decorations_aliases,
+    custom_shader_var, custom_shaders, deprecated_adjust_line_height, deprecated_hide_window_decorations_aliases,
     deprecated_macos_show_window_title_in_menubar_alias, deprecated_scrollback_indicator_opacity,
     deprecated_send_text, disable_ligatures, edge_width, env, filter_notification, font_features,
     font_role, hdr_multiplier, hide_window_decorations, macos_option_as_alt, macos_titlebar_color,
@@ -988,6 +988,10 @@ class Parser:
     def cursor_underline_thickness(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['cursor_underline_thickness'] = positive_float(val)
 
+    def custom_shader_var(self, val: str, ans: dict[str, typing.Any]) -> None:
+        for k, v in custom_shader_var(val, ans["custom_shader_var"]):
+            ans["custom_shader_var"][k] = v
+
     def custom_shaders(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['custom_shaders'] = custom_shaders(val)
 
@@ -1775,6 +1779,7 @@ class Parser:
 def create_result_dict() -> dict[str, typing.Any]:
     return {
         'action_alias': {},
+        'custom_shader_var': {},
         'detect_url_regex': {},
         'env': {},
         'exe_search_path': {},

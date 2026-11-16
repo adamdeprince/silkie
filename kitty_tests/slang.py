@@ -16,6 +16,8 @@ from kitty.shaders.slang import (
     LoadShaderPrograms,
     SlangFile,
     Stage,
+    apply_config_specializations,
+    apply_pipeline_specializations,
     build_custom_shader_pipeline_glsl,
     build_import_graph,
     clear_caches,
@@ -28,6 +30,7 @@ from kitty.shaders.slang import (
     slangc_version,
     topological_layers,
     topological_sort,
+    with_config_vars,
 )
 
 from .base import BaseTest
@@ -90,6 +93,15 @@ class TestSlang(BaseTest):
         # Even a steady stream of shader events must not produce frames when
         # there are no shaders to draw.
         self.ae(simulate_custom_shader_render_ticks(8, 0xFF, True), [False] * 8)
+
+    def test_custom_shader_command_and_alternate_screen_events(self):
+        def group(spec: str):
+            return parse_pipeline_definition(['startgroup', *spec.splitlines(), 'shaders sample', 'endgroup'], 'test')['groups'][0]
+
+        g = group('animation_start command-start|alternate-screen-exit\nanimation_stop command-finish|alternate-screen-enter')
+        self.ae(g['animation_start'], ('command-start', 'alternate-screen-exit'))
+        self.ae(g['animation_end_events'], ('command-finish', 'alternate-screen-enter'))
+        self.assertRaises(ValueError, group, 'animation_start command-begin')
 
     def test_custom_shader_reenable(self):
         from kitty.fast_data_types import CUSTOM_END_PROGRAM
@@ -379,6 +391,116 @@ fsMain(VertexOutput vo) : SV_Target { return float4(0); }
 
         # Empty graph
         self.assertEqual(topological_layers({}), [])
+
+    def test_custom_shader_var_option(self):
+        from kitty.config import load_config
+
+        bad_lines: list = []
+        opts = load_config(
+            overrides=(
+                'custom_shader_var SHAKE_AMPLITUDE 4',
+                'custom_shader_var SHAKES=3',
+                'custom_shader_var TINT = float2(1,   0.5)',
+                'custom_shader_var REPEAT_EDGE true',
+                'custom_shader_var SHAKES 5',  # later values win
+                'custom_shader_var 1BAD 1',
+                'custom_shader_var NOVALUE',
+                'custom_shader_var X 1; discard',
+                'custom_shader_var Y 1 // comment',
+            ),
+            accumulate_bad_lines=bad_lines,
+        )
+        self.ae(opts.custom_shader_var, {'SHAKE_AMPLITUDE': '4', 'SHAKES': '5', 'TINT': 'float2(1, 0.5)', 'REPEAT_EDGE': 'true'})
+        self.ae(len(bad_lines), 4)
+        self.ae(load_config(overrides=()).custom_shader_var, {})
+
+    def test_custom_shader_var_specialization(self):
+        src = b"""
+static const float SHAKE_AMPLITUDE = 9.0;
+    static const int SHAKE_MODE = 0;
+static const float OTHER = 1.0;
+// static const float NOT_A_DECLARATION_IN_A_COMMENT_ONLY = 1;
+"""
+        # kitty.conf values keep the declared type and override pipeline vars
+        out = apply_pipeline_specializations(src, {'SHAKE_AMPLITUDE': ('float', '7.5'), 'SHAKE_MODE': ('int', '1')})
+        out = apply_config_specializations(out, {'SHAKE_AMPLITUDE': '0', 'SHAKE_MODE': '1', 'MISSING': '3'})
+        self.assertIn(b'\nstatic const float SHAKE_AMPLITUDE = 0;\n', out)
+        self.assertIn(b'\n    static const int SHAKE_MODE = 1;\n', out)
+        self.assertIn(b'\nstatic const float OTHER = 1.0;\n', out)
+        self.assertNotIn(b'MISSING', out)
+        # With the real shader and pipeline
+        src = custom_shader('screen-shake')[2]
+        p = parse_pipeline_definition(get_custom_pipeline_src('screen-shake-random').decode().splitlines(), 'screen-shake-random')
+        merged = p['vars'] | p['groups'][0]['vars']
+        self.ae(merged['SHAKE_AMPLITUDE'], ('float', '7.5'))
+        out = apply_config_specializations(apply_pipeline_specializations(src, merged), {'SHAKE_AMPLITUDE': '2.5'})
+        self.assertIn(b'static const float SHAKE_AMPLITUDE = 2.5;', out)
+        self.assertIn(b'static const int SHAKE_MODE = 1;', out)
+        self.assertNotIn(b'AMPLITUDE_PIXELS', out)
+
+    def test_custom_shader_var_loader(self):
+        from kitty.fast_data_types import CUSTOM_END_PROGRAM
+        from kitty.options.types import defaults
+
+        loader = LoadShaderPrograms()
+        built: list = []
+
+        def build(pipeline):
+            built.append(pipeline)
+            return f'vertex {len(built)}', 'fragment', {}
+
+        with (
+            patch('kitty.shaders.slang.build_custom_shader_pipeline_glsl', side_effect=build),
+            patch('kitty.shaders.slang.compile_program') as compile_program,
+            patch('kitty.shaders.slang.log_error'),
+        ):
+            loader.opts = defaults._replace(custom_shaders=('screen-shake',), custom_shader_var={'SHAKE_AMPLITUDE': '4'})
+            loader.compile_custom_shaders(allow_recompile=True)
+            self.ae(loader.custom_shader_errors, [])
+            self.ae(built[-1]['config_vars'], {'SHAKE_AMPLITUDE': '4'})
+            # Nothing changed, nothing is rebuilt
+            loader.recompile_if_needed()
+            self.ae(len(built), 1)
+            # Reloading the config with a different value rebuilds
+            loader.opts = defaults._replace(custom_shaders=('screen-shake',), custom_shader_var={'SHAKE_AMPLITUDE': '0'})
+            loader.recompile_if_needed()
+            self.ae(len(built), 2)
+            self.ae(built[-1]['config_vars'], {'SHAKE_AMPLITUDE': '0'})
+            # The value is not stored in the cached pipeline definition
+            self.ae(parse_pipeline_definition(get_custom_pipeline_src('screen-shake').decode().splitlines(), 'x')['config_vars'], {})
+            # Misspelled names are reported, but the shader is still built
+            loader.opts = defaults._replace(custom_shaders=('screen-shake',), custom_shader_var={'SHAKE_AMPLITUD': '4'})
+            loader.recompile_if_needed()
+            self.ae(len(built), 3)
+            self.ae(len(loader.custom_shader_errors), 1)
+            self.assertIn('SHAKE_AMPLITUD', loader.custom_shader_errors[0])
+            operations = [c.args[1] for c in compile_program.call_args_list if c.args[0] == CUSTOM_END_PROGRAM]
+            self.ae(operations, [('vertex 1',), ('vertex 2',), ('vertex 3',)])
+            # No shaders loaded, nothing to report
+            loader.opts = defaults._replace(custom_shaders=(), custom_shader_var={'SHAKE_AMPLITUD': '4'})
+            loader.recompile_if_needed()
+            self.ae(loader.custom_shader_errors, [])
+
+    def test_screen_shake_amplitude_reaches_shader(self):
+        if not shutil.which(slangc()[0]):
+            self.skipTest(f'slangc ({slangc()[0]}) not found in PATH')
+        frags = {}
+        with tempfile.TemporaryDirectory() as cache_dir:
+            clear_caches()
+            try:
+                p = parse_pipeline_definition(get_custom_pipeline_src('screen-shake').decode().splitlines(), 'screen-shake')
+                for amp in ('4', '0'):
+                    frags[amp] = build_custom_shader_pipeline_glsl(with_config_vars(p, {'SHAKE_AMPLITUDE': amp}), cache_dir=cache_dir)[1]
+            finally:
+                clear_caches()
+        # The amplitude in pts is converted to pixels with the pixels_per_pt uniform
+        self.assertRegex(frags['4'], r'4\.0 \* pixels_per_pt\w*\)')
+        # and a zero amplitude removes the shake altogether
+        self.assertNotRegex(frags['0'], r'\* pixels_per_pt')
+        # pixels_per_pt is the last member of KittyCustomShaderData, as in the C mirror of it in shaders.c
+        block = frags['4'].partition('struct KittyCustomShaderData')[2].partition('};')[0]
+        members = [line.split()[-1].rstrip(';') for line in block.splitlines() if line.strip().endswith(';')]
+        self.ae(members[-2:], ['active_window_command_state_age_0', 'pixels_per_pt_0'])
 
     def test_parse_var_directive(self):
         self.assertEqual(parse_var_directive(['var', 'uint', 'algo', '=', '1']), ('uint', 'algo', '1'))

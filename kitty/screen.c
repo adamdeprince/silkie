@@ -2165,7 +2165,9 @@ screen_toggle_screen_buffer(Screen *self, bool save_cursor, bool clear_alt_scree
         self->grman = self->alt_grman;
         screen_cursor_position(self, 1, 1);
         cursor_reset(self->cursor);
+        self->alternate_screen.entered_at = monotonic();
     } else {
+        self->alternate_screen.exited_at = monotonic();
         self->linebuf = self->main_linebuf;
         self->tabstops = self->main_tabstops;
         self->key_encoding_flags = self->main_key_encoding_flags;
@@ -3401,6 +3403,28 @@ screen_invert_colors(Screen *self) {
     return self->paused_rendering.expires_at ? self->paused_rendering.inverted : (self->modes.mDECSCNM ? true : false);
 }
 
+// Fire the custom shader bell event, independently of the visual bell, but
+// only if the window is visible, i.e. in the active tab and not hidden by an
+// overlay or the layout, as otherwise the shader has nothing to draw over.
+static void
+fire_bell_shader_event(id_type window_id) {
+    for (size_t o = 0; o < global_state.num_os_windows; o++) {
+        OSWindow *osw = global_state.os_windows + o;
+        if (osw->active_tab >= osw->num_tabs) continue;
+        Tab *tab = osw->tabs + osw->active_tab;
+        for (size_t i = 0; i < tab->num_windows; i++) {
+            if (tab->windows[i].id == window_id) {
+                if (tab->windows[i].visible) {
+                    osw->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_BELL_IN_WINDOW);
+                    osw->last_bell_window_id = window_id;
+                    wakeup_main_loop();
+                }
+                return;
+            }
+        }
+    }
+}
+
 void
 screen_bell(Screen *self) {
     if (self->ignore_bells.start) {
@@ -3413,6 +3437,7 @@ screen_bell(Screen *self) {
     }
     request_window_attention(self->window_id, OPT(enable_audio_bell));
     if (OPT(visual_bell_duration) > 0.0f) self->start_visual_bell_at = monotonic();
+    if (self->window_id) fire_bell_shader_event(self->window_id);
     CALLBACK("on_bell", NULL);
 }
 
@@ -3835,6 +3860,14 @@ parse_prompt_mark(Screen *self, char *buf, PromptKind *pk) {
     }
 }
 
+static void
+mark_command_finished(Screen *self) {
+    if (self->command_state.running) {
+        self->command_state.running = false;
+        self->command_state.finished_at = monotonic();
+    }
+}
+
 void
 shell_prompt_marking(Screen *self, char *buf) {
     if (self->cursor->y < self->lines) {
@@ -3848,10 +3881,15 @@ shell_prompt_marking(Screen *self, char *buf) {
                 self->prompt_settings.redraws_prompts_at_all = 1;
                 parse_prompt_mark(self, buf + 1, &pk);
                 self->linebuf->line_attrs[self->cursor->y].prompt_kind = pk;
-                if (pk == PROMPT_START) CALLBACK("cmd_output_marking", "O", Py_False);
+                if (pk == PROMPT_START) {
+                    mark_command_finished(self);
+                    CALLBACK("cmd_output_marking", "O", Py_False);
+                }
             } break;
             case 'C': {
                 self->linebuf->line_attrs[self->cursor->y].prompt_kind = OUTPUT_START;
+                self->command_state.running = true;
+                self->command_state.started_at = monotonic();
                 const char *cmdline = "";
                 if (strstr(buf + 1, ";cmdline") == buf + 1) { cmdline = buf + 2; }
                 RAII_PyObject(c, PyUnicode_DecodeUTF8(cmdline, strlen(cmdline), "replace"));
@@ -3861,6 +3899,7 @@ shell_prompt_marking(Screen *self, char *buf) {
             } break;
             case 'D': {
                 const char *exit_status = buf[1] == ';' ? buf + 2 : "";
+                mark_command_finished(self);
                 CALLBACK("cmd_output_marking", "Os", Py_None, exit_status);
             } break;
         }
@@ -7539,6 +7578,11 @@ static PyMemberDef members[] = {
     {"linebuf", T_OBJECT_EX, offsetof(Screen, linebuf), READONLY, "linebuf"},
     {"main_linebuf", T_OBJECT_EX, offsetof(Screen, main_linebuf), READONLY, "main_linebuf"},
     {"historybuf", T_OBJECT_EX, offsetof(Screen, historybuf), READONLY, "historybuf"},
+    {"command_running", T_BOOL, offsetof(Screen, command_state.running), READONLY, "command_running"},
+    {"command_started_at", T_LONGLONG, offsetof(Screen, command_state.started_at), READONLY, "command_started_at"},
+    {"command_finished_at", T_LONGLONG, offsetof(Screen, command_state.finished_at), READONLY, "command_finished_at"},
+    {"alternate_screen_entered_at", T_LONGLONG, offsetof(Screen, alternate_screen.entered_at), READONLY, "alternate_screen_entered_at"},
+    {"alternate_screen_exited_at", T_LONGLONG, offsetof(Screen, alternate_screen.exited_at), READONLY, "alternate_screen_exited_at"},
     {"scrolled_by", T_UINT, offsetof(Screen, scrolled_by), READONLY, "scrolled_by"},
     {"pixel_scroll_offset_y", T_UINT, offsetof(Screen, pixel_scroll_offset_y), READONLY, "pixel_scroll_offset_y"},
     {"lines", T_UINT, offsetof(Screen, lines), READONLY, "lines"},

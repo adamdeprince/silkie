@@ -204,6 +204,8 @@ class LoadShaderPrograms:
         # custom_shaders option. A failure here disables the shader silently as
         # far as rendering is concerned, so the Boss displays these to the user.
         self.custom_shader_errors: list[str] = []
+        # The custom_shader_var option the custom shaders were last built with
+        self.custom_shader_vars: dict[str, str] = {}
 
     def get_options(self) -> Options:
         try:
@@ -225,7 +227,11 @@ class LoadShaderPrograms:
             self(allow_recompile=True)
         else:
             opts = self.get_options()
-            if tuple(opts.custom_shaders) != self.custom_shaders or self.force_recompile_of_custom_shaders:
+            if (
+                tuple(opts.custom_shaders) != self.custom_shaders
+                or opts.custom_shader_var != self.custom_shader_vars
+                or self.force_recompile_of_custom_shaders
+            ):
                 self.compile_custom_shaders(allow_recompile=True)
 
     def __call__(self, allow_recompile: bool = False) -> None:
@@ -267,6 +273,7 @@ class LoadShaderPrograms:
         self.force_recompile_of_custom_shaders = False
         opts = self.get_options()
         self.custom_shaders = tuple(opts.custom_shaders)
+        self.custom_shader_vars = dict(opts.custom_shader_var)
         self.custom_shader_errors = []
 
         def err(msg: str) -> None:
@@ -296,6 +303,22 @@ class LoadShaderPrograms:
                 continue
             pmap.setdefault(d['slot'], []).append(d)
 
+        if self.custom_shader_vars and pmap:
+            # A misspelled name would otherwise silently do nothing
+            sources: list[bytes] = []
+            for pipelines in pmap.values():
+                for p in pipelines:
+                    for group in p['groups']:
+                        for name in group['shaders']:
+                            with suppress(Exception):  # failures to read the shader are reported when building it
+                                sources.append(custom_shader(name, group['pipeline_dir'])[2])
+            for var_name in self.custom_shader_vars:
+                if not any(declares_static_const(src, var_name) for src in sources):
+                    err(
+                        f'The custom_shader_var {var_name} does not match a static const in any of the custom shaders:'
+                        f' {" ".join(self.custom_shaders)}'
+                    )
+
         def disable(prog: int) -> None:
             # Forget the cached sources as well, otherwise re-enabling the same
             # shader later is a no-op because the sources compare equal while the
@@ -309,7 +332,7 @@ class LoadShaderPrograms:
                 disable(prog)
             else:
                 try:
-                    pipeline = merge_pipelines(slot_pipelines)
+                    pipeline = with_config_vars(merge_pipelines(slot_pipelines), self.custom_shader_vars)
                     vert, frag, metadata = build_custom_shader_pipeline_glsl(pipeline)
                     # print(vert, file=open('/tmp/sample.vert', 'w'))
                     # print(frag, file=open('/tmp/sample.frag', 'w'))
@@ -1189,6 +1212,10 @@ SHADER_ANIMATION_EVENTS: frozenset[str] = frozenset(
         'user-idle',
         'cursor-trail-move',
         'cursor-trail-stop',
+        'command-start',
+        'command-finish',
+        'alternate-screen-enter',
+        'alternate-screen-exit',
     }
 )
 
@@ -1266,6 +1293,29 @@ def apply_pipeline_specializations(src: bytes, merged_vars: dict[str, tuple[str,
     return src
 
 
+def static_const_pattern(name: str) -> re.Pattern[bytes]:
+    return re.compile(rf'(?m)^(\s*)static\s+const\s+([A-Za-z_][A-Za-z0-9_]*)\s+{re.escape(name)}\s*=.+'.encode())
+
+
+def apply_config_specializations(src: bytes, config_vars: dict[str, str]) -> bytes:
+    # Values from the custom_shader_var option, which have no type, so keep
+    # the type of the declaration. Applied last, they override pipeline vars.
+    for var_name, value in config_vars.items():
+        repl = f' {var_name} = {value};'.encode()
+        src = static_const_pattern(var_name).sub(lambda m: m.group(1) + b'static const ' + m.group(2) + repl, src)
+    return src
+
+
+def declares_static_const(src: bytes, name: str) -> bool:
+    return static_const_pattern(name).search(src) is not None
+
+
+def with_config_vars(pipeline: 'Pipeline', config_vars: dict[str, str]) -> 'Pipeline':
+    ans = pipeline.copy()
+    ans['config_vars'] = dict(config_vars)
+    return ans
+
+
 class Group(TypedDict):
     pipeline_dir: str  # directory used to resolve shader names for this group
     viewport_pos: tuple[float, float]
@@ -1287,6 +1337,7 @@ class Pipeline(TypedDict):
     groups: tuple[Group, ...]
     vars: dict[str, tuple[str, str]]
     pipeline_dir: str
+    config_vars: dict[str, str]  # from the custom_shader_var option, override vars
 
 
 def parse_pipeline_definition(lines: Iterable[str], pipeline_name: str, pipeline_dir: str = '') -> Pipeline:
@@ -1404,7 +1455,7 @@ def parse_pipeline_definition(lines: Iterable[str], pipeline_name: str, pipeline
     if groups[-1]['viewport_pos'] != (0, 0) or groups[-1]['viewport_size'] != (1, 1):
         raise ValueError('The final group must not specify a viewport')
 
-    return {'slot': slot, 'textures': textures, 'groups': tuple(groups), 'vars': pipeline_vars, 'pipeline_dir': pipeline_dir}
+    return {'slot': slot, 'textures': textures, 'groups': tuple(groups), 'vars': pipeline_vars, 'pipeline_dir': pipeline_dir, 'config_vars': {}}
 
 
 @lru_cache(maxsize=32)
@@ -1437,14 +1488,17 @@ def merge_pipelines(pipelines: list[Pipeline]) -> Pipeline:
     if all_groups[-1]['viewport_pos'] != (0, 0) or all_groups[-1]['viewport_size'] != (1, 1):
         raise ValueError('The final group of the last pipeline must not specify a viewport')
     merged_vars: dict[str, tuple[str, str]] = {}
+    merged_config_vars: dict[str, str] = {}
     for p in pipelines:
         merged_vars.update(p['vars'])
+        merged_config_vars.update(p['config_vars'])
     return {
         'slot': slot,
         'textures': tuple(merged_textures),
         'groups': tuple(all_groups),
         'vars': merged_vars,
         'pipeline_dir': pipelines[0]['pipeline_dir'],
+        'config_vars': merged_config_vars,
     }
 
 
@@ -1509,6 +1563,7 @@ def build_custom_shader_pipeline_ir(pipeline: Pipeline, cache_dir: str, invocati
             if import_dir and import_dir not in import_dirs:
                 import_dirs.append(import_dir)
             src = apply_pipeline_specializations(src, merged_vars)
+            src = apply_config_specializations(src, pipeline['config_vars'])
             modname = f'm_{g_idx}_{s_idx}'
             imports.append(modname)
             module_file = j(f'{modname}.slang-module')

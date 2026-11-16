@@ -60,6 +60,90 @@ Navigation
 
 .. include:: generated/custom-shaders-navigation.rst
 
+Bell effects
+---------------
+
+These shaders run when a bell (the BEL character) is received in a window.
+The ``screen-shake`` shader shakes only the window in which the bell occurred,
+other windows in the tab are left alone. Use ``screen-shake-random`` for a
+jittery shake in random directions instead of side to side. Change how much
+the window shakes with :opt:`custom_shader_var` in :file:`kitty.conf`, for
+example::
+
+    custom_shaders screen-shake
+    custom_shader_var SHAKE_AMPLITUDE 4
+
+The settings of the shake are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Setting
+     - Meaning
+   * - ``SHAKE_AMPLITUDE``
+     - How far the window contents move at the start of the shake, in pts
+       (1/72 of an inch), like :opt:`font_size`, so the shake is the same size
+       relative to the text on Retina and other high DPI screens as on low DPI
+       ones. ``0`` turns the shake off. The default is ``9``, and ``7.5`` for
+       ``screen-shake-random``.
+   * - ``SHAKES``
+     - The number of back and forth movements, default ``4``, and ``6`` for
+       ``screen-shake-random``.
+   * - ``DECAY_POWER``
+     - How quickly the shake dies down, higher values die down faster and
+       ``1`` is linear. The default is ``2``.
+   * - ``SHAKE_MODE``
+     - ``0`` to shake from side to side and ``1`` to shake in random
+       directions, as ``screen-shake-random`` does.
+   * - ``REPEAT_EDGE``
+     - What to show in the strip uncovered at the edge of the window as its
+       contents move: ``false``, the default, for the window background and
+       ``true`` to repeat the pixels at the edge of the window.
+   * - ``SHAKE_ENTIRE_TAB``
+     - ``true`` to shake the whole tab rather than only the window that rang
+       the bell. The default is ``false``.
+
+How long the shake lasts is set in the pipeline, as ``animation_stop 300`` in
+milliseconds, see :repo_file:`screen-shake.pipeline
+<kitty/shaders/custom/screen-shake.pipeline>`. To change it, copy that file to
+the :file:`shaders` folder in your kitty config directory and edit it.
+
+To shake the window whenever a shell command fails, have your shell print a
+bell character when the last command exits with an error.
+
+.. highlight:: sh
+
+.. tab-set::
+
+   .. tab-item:: zsh
+
+        Add the following to :file:`~/.zshrc`::
+
+            autoload -Uz add-zsh-hook
+            bell_on_error() { local s=$?; (( s )) && printf '\a'; return $s }
+            add-zsh-hook precmd bell_on_error
+
+   .. tab-item:: bash
+
+        Add the following to :file:`~/.bashrc`::
+
+            bell_on_error() { local s=$?; (( s )) && printf '\a'; return $s; }
+            PROMPT_COMMAND="bell_on_error${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+
+   .. tab-item:: fish
+
+        Add the following to :file:`~/.config/fish/config.fish`::
+
+            function bell_on_error --on-event fish_postexec
+                test $status -ne 0; and printf '\a'
+            end
+
+
+.. highlight:: hlsl
+
+.. include:: generated/custom-shaders-bell.rst
+
 Retro Terminals
 -----------------
 
@@ -117,6 +201,31 @@ window's title bar, margin, border and padding in its unchanged area. Explicit c
 and images are blended together with text, while transparency and colors reported to
 terminal applications are preserved. ``animation_step 0`` makes this static
 effect redraw only when content or shader events change.
+
+.. _custom_shader_settings:
+
+Changing settings from kitty.conf
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``static const`` settings of the shaders can also be changed directly in
+:file:`kitty.conf` with :opt:`custom_shader_var`, without writing a pipeline
+file. Give the name of the setting and its value::
+
+    custom_shaders screen-shake
+    custom_shader_var SHAKE_AMPLITUDE 4
+    custom_shader_var SHAKES 3
+
+The settings each shader has are described at the top of its :repo_folder:`source
+file <kitty/shaders/custom>`. A setting from :file:`kitty.conf` applies to every
+loaded shader that declares a ``static const`` with that name and keeps the type it
+is declared with, so no type is given. It takes precedence over the value in the
+shader and over any ``var`` for it in a pipeline file. Changing it and reloading
+the config recompiles the shaders. A name that none of the loaded shaders declares
+is reported as an error, to catch misspellings.
+
+Sizes in shaders are best given in pts, like kitty's own options, and converted to
+pixels with ``d.pixels_per_pt``, so that the effect is the same size relative to the
+text whatever the DPI of the screen.
 
 
 Anatomy of a custom shader
@@ -438,12 +547,17 @@ be combined with ``|`` — any one of them will trigger the action.
      - The active tab changes.
 
    * - ``bell-in-window``
-     - A bell (BEL character) is received in any kitty window.
+     - A bell (BEL character) is received in a visible kitty window. Bells
+       in windows in inactive tabs or hidden by overlays or the layout do not
+       trigger this event. This fires regardless of
+       :opt:`visual_bell_duration`, so a shader can be used as a replacement
+       for the builtin visual bell flash, by setting that option to zero.
        The geometry of the window in which the most recent bell occurred is
        available in ``d.bell_window_geometry`` (UV co-ordinates, origin
        bottom-left; ``.xy`` = lower-left corner, ``.zw`` = width and height).
-       If that window is not currently visible in the active tab or layout,
-       ``d.bell_window_geometry`` equals ``d.central_area``.
+       If that window is no longer visible, for example because it was closed
+       or the active tab changed, ``d.bell_window_geometry`` equals
+       ``d.central_area``.
 
    * - ``user-activity``
      - Any keyboard or mouse input is received.
@@ -463,6 +577,42 @@ be combined with ``|`` — any one of them will trigger the action.
    * - ``cursor-trail-stop``
      - The cursor trail stops moving. Typically used as an ``animation_stop``
        event paired with ``cursor-trail-move`` as the start event.
+
+   * - ``command-start``
+     - A command starts running in the active window. Requires
+       :ref:`shell integration <shell_integration>`. Whether a command is
+       running is available in ``d.active_window_command_running`` and the
+       time since it started in ``d.active_window_command_state_age``.
+
+   * - ``command-finish``
+     - A command finishes running in the active window. Requires
+       :ref:`shell integration <shell_integration>`.
+
+   * - ``alternate-screen-enter``
+     - The active window switches to the alternate screen, which is used by
+       full screen programs such as editors and pagers. Whether the
+       alternate screen is in use is available in
+       ``d.active_window_alternate_screen``.
+
+   * - ``alternate-screen-exit``
+     - The active window switches back to the main screen.
+
+The command and alternate screen events only fire for changes in the active
+window. Switching to another window fires ``window-focus-in`` instead, after
+which ``d.active_window_command_running`` and
+``d.active_window_alternate_screen`` describe the new window. For example, to
+show an effect while a command runs and remove it when the command
+finishes::
+
+    startgroup
+        animation_start command-start
+        animation_stop command-finish
+        shaders my-command-running-effect
+    endgroup
+
+The shader can multiply its effect by ``1 - d.active_window_alternate_screen``
+to hide it while a full screen program such as an editor or a pager, even one
+started by another program as with ``git log``, is running.
 
 Note that if both a start event and a focus-out event fire in the same frame
 (for example, a mouse click that simultaneously moves focus away), the

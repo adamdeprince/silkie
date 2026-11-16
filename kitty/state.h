@@ -534,8 +534,14 @@ typedef enum {
     SHADER_ANIM_EVENT_USER_IDLE,
     SHADER_ANIM_EVENT_CURSOR_TRAIL_MOVE,
     SHADER_ANIM_EVENT_CURSOR_TRAIL_STOP,
+    SHADER_ANIM_EVENT_COMMAND_START,
+    SHADER_ANIM_EVENT_COMMAND_FINISH,
+    SHADER_ANIM_EVENT_ALTERNATE_SCREEN_ENTER,
+    SHADER_ANIM_EVENT_ALTERNATE_SCREEN_EXIT,
     NUM_SHADER_ANIM_EVENTS
 } ShaderAnimationEvent;
+// The registry of fired events is a bitmask in an unsigned int
+_Static_assert(NUM_SHADER_ANIM_EVENTS <= sizeof(unsigned) * 8, "Too many shader animation events for the event bitmask");
 
 typedef struct OSWindow {
     void *handle;
@@ -626,6 +632,8 @@ typedef struct OSWindow {
     } scroll;
     unsigned shader_anim_event_registry;
     id_type last_bell_window_id; // ID of the most recent window that received a bell event
+    // Time up to which command and alternate screen changes in the active window have been turned into shader events
+    monotonic_t screen_state_checked_at;
     struct {
         bool active;
         monotonic_t started_at;
@@ -769,6 +777,7 @@ OSWindow *os_window_for_id(id_type);
 void spatial_map_pointer(OSWindow *, double *, double *);
 OSWindow *add_os_window(void);
 OSWindow *current_os_window(void);
+double dpi_for_os_window(const OSWindow *os_window);
 void os_window_regions(const OSWindow *, Region *main, Region *tab_bar);
 bool drag_scroll(Window *, OSWindow *);
 void draw_borders(ssize_t vao_idx, unsigned int num_border_rects, BorderRect *rect_buf, bool rect_data_is_dirty, color_type, unsigned int, bool, OSWindow *w);
