@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Vector images" href="vector-protocol.html"><link rel="prev" title="Terminal-side ink" href="ink-protocol.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="SSH agent transport" href="ssh-agent-protocol.html"><link rel="prev" title="Terminal-side ink" href="ink-protocol.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/notification-routing.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -275,6 +275,7 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">Trackpad gesture protocol</a></li>
@@ -282,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">Image pointer extension</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Desktop notification routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU surfaces (zero-copy)</a></li>
@@ -335,6 +337,30 @@
 <p>Silkie inherits kitty’s <a class="reference external" href="https://sw.kovidgoyal.net/kitty/desktop-notifications/">OSC 99 desktop notification protocol</a>. Applications can
 request a notification, ask to focus their terminal when it is activated,
 and receive the notification ID and selected button. The <a class="reference external" href="https://sw.kovidgoyal.net/kitty/kittens/notify/">notify kitten</a> provides a command-line sender.</p>
+<section id="osc-9-and-ai-completion-alerts">
+<h2>OSC 9 and AI completion alerts<a class="headerlink" href="#osc-9-and-ai-completion-alerts" title="Link to this heading">¶</a></h2>
+<p>Silkie also accepts the iTerm2-style <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">message</span> <span class="pre">ST</span></code> notification,
+terminated by either BEL or <code class="docutils literal notranslate"><span class="pre">ESC</span> <span class="pre">\\</span></code>. The entire message, including any
+semicolons, becomes the notification title. Clicking it focuses the originating
+terminal without sending input to the application. See the <a class="reference external" href="https://iterm2.com/documentation-escape-codes.html">iTerm2 escape-code
+manual</a> for the wire format.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">4</span> <span class="pre">;</span> <span class="pre">state</span> <span class="pre">;</span> <span class="pre">percent</span> <span class="pre">ST</span></code> form reports progress instead. Clearing
+or completing a progress bar does not request a desktop notification. The
+abbreviated <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">4</span> <span class="pre">ST</span></code> form clears progress as well.</p>
+<p>To test desktop notification delivery, run this in a Silkie shell:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">printf</span> <span class="s1">'</span><span class="se">\033</span><span class="s1">]9;Silkie notification test</span><span class="se">\007</span><span class="s1">'</span>
+</pre></div>
+</div>
+<p>On macOS, allow Silkie notifications when prompted. If no banner appears,
+check System Settings → Notifications → Silkie, banner settings, and Focus.
+Notification permission failures are logged to Silkie’s standard error.
+Configured notification filters also apply to OSC 9.</p>
+<p>Claude Code must emit a notification sequence for Silkie to display one.
+If automatic terminal detection does not select a compatible protocol, set
+<code class="docutils literal notranslate"><span class="pre">&quot;preferredNotifChannel&quot;:</span> <span class="pre">&quot;iterm2&quot;</span></code> for OSC 9 or <code class="docutils literal notranslate"><span class="pre">&quot;kitty&quot;</span></code> for OSC 99 in
+<code class="docutils literal notranslate"><span class="pre">~/.claude/settings.json</span></code>. See <a class="reference external" href="https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification">Claude Code’s terminal notification setup</a>
+for notification timing and multiplexer configuration.</p>
+</section>
 <section id="return-paths-through-multiplexers">
 <h2>Return paths through multiplexers<a class="headerlink" href="#return-paths-through-multiplexers" title="Link to this heading">¶</a></h2>
 <p>Silkie adds optional <code class="docutils literal notranslate"><span class="pre">r</span></code> metadata to OSC 99. It identifies the windows a
@@ -410,12 +436,12 @@ that state, including through nested Odin Seat sessions.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="vector-protocol.html">
+          <a class="next-page" href="ssh-agent-protocol.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Vector images</div>
+                <div class="title">SSH agent transport</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -460,6 +486,7 @@ that state, including through nested Odin Seat sessions.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Desktop notification routing</a><ul>
+<li><a class="reference internal" href="#osc-9-and-ai-completion-alerts">OSC 9 and AI completion alerts</a></li>
 <li><a class="reference internal" href="#return-paths-through-multiplexers">Return paths through multiplexers</a></li>
 <li><a class="reference internal" href="#odin-seat-convention">Odin Seat convention</a></li>
 <li><a class="reference internal" href="#codex-configuration">Codex configuration</a></li>
