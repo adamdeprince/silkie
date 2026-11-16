@@ -48,7 +48,8 @@ usage_hints='N',
 offset_from_parent_x='H',
 offset_from_parent_y='V',
 tone_map='T',
-gamut='G'
+gamut='G',
+report_supported='e'
     };
 
     enum KEYS key = 'a';
@@ -92,6 +93,7 @@ case offset_from_parent_x: value_state = INT; break;
 case offset_from_parent_y: value_state = INT; break;
 case tone_map: value_state = UINT; break;
 case gamut: value_state = UINT; break;
+case report_supported: value_state = FLAG; break;
                     default:
                         REPORT_ERROR("Malformed GraphicsCommand control block, invalid key character: 0x%x", key);
                         return;
@@ -111,7 +113,7 @@ case gamut: value_state = UINT; break;
 
             case action: {
                 g.action = parser_buf[pos++];
-                if (g.action != 'T' && g.action != 'a' && g.action != 'c' && g.action != 'd' && g.action != 'e' && g.action != 'f' && g.action != 'p' && g.action != 'q' && g.action != 'r' && g.action != 't' && g.action != 'v') {
+                if (g.action != 'T' && g.action != 'a' && (g.action < 'c' || g.action > 'f') && (g.action < 'p' || g.action > 'r') && g.action != 't' && g.action != 'v') {
                     REPORT_ERROR("Malformed GraphicsCommand control block, unknown flag value for action: 0x%x", g.action);
                     return;
                 };
@@ -121,7 +123,7 @@ case gamut: value_state = UINT; break;
 
             case delete_action: {
                 g.delete_action = parser_buf[pos++];
-                if (g.delete_action != 'A' && g.delete_action != 'C' && g.delete_action != 'F' && g.delete_action != 'I' && g.delete_action != 'N' && g.delete_action != 'P' && g.delete_action != 'Q' && g.delete_action != 'R' && g.delete_action != 'X' && g.delete_action != 'Y' && g.delete_action != 'Z' && g.delete_action != 'a' && g.delete_action != 'c' && g.delete_action != 'f' && g.delete_action != 'i' && g.delete_action != 'n' && g.delete_action != 'p' && g.delete_action != 'q' && g.delete_action != 'r' && g.delete_action != 'x' && g.delete_action != 'y' && g.delete_action != 'z') {
+                if (g.delete_action != 'A' && g.delete_action != 'C' && g.delete_action != 'F' && g.delete_action != 'I' && g.delete_action != 'N' && (g.delete_action < 'P' || g.delete_action > 'R') && (g.delete_action < 'X' || g.delete_action > 'Z') && g.delete_action != 'a' && g.delete_action != 'c' && g.delete_action != 'f' && g.delete_action != 'i' && g.delete_action != 'n' && (g.delete_action < 'p' || g.delete_action > 'r') && (g.delete_action < 'x' || g.delete_action > 'z')) {
                     REPORT_ERROR("Malformed GraphicsCommand control block, unknown flag value for delete_action: 0x%x", g.delete_action);
                     return;
                 };
@@ -143,6 +145,16 @@ case gamut: value_state = UINT; break;
                 g.compressed = parser_buf[pos++];
                 if (g.compressed != 'z') {
                     REPORT_ERROR("Malformed GraphicsCommand control block, unknown flag value for compressed: 0x%x", g.compressed);
+                    return;
+                };
+            }
+            break;
+
+
+            case report_supported: {
+                g.report_supported = parser_buf[pos++];
+                if ((g.report_supported < 'A' || g.report_supported > 'Z') && (g.report_supported < 'a' || g.report_supported > 'z')) {
+                    REPORT_ERROR("Malformed GraphicsCommand control block, unknown flag value for report_supported: 0x%x", g.report_supported);
                     return;
                 };
             }
@@ -227,9 +239,9 @@ case gamut: value_state = UINT; break;
             break;
     }
 
-    REPORT_VA_COMMAND("K s {sc sc sc sc sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI si si si ss#}", self->window_id, "graphics_command",
+    REPORT_VA_COMMAND("K s {sc sc sc sc sc sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI si si si ss#}", self->window_id, "graphics_command",
 
-"action", g.action, "delete_action", g.delete_action, "transmission_type", g.transmission_type, "compressed", g.compressed,
+"action", g.action, "delete_action", g.delete_action, "transmission_type", g.transmission_type, "compressed", g.compressed, "report_supported", g.report_supported,
 
 "format", (unsigned int)g.format, "more", (unsigned int)g.more, "id", (unsigned int)g.id, "image_number", (unsigned int)g.image_number, "placement_id", (unsigned int)g.placement_id, "quiet", (unsigned int)g.quiet, "width", (unsigned int)g.width, "height", (unsigned int)g.height, "x_offset", (unsigned int)g.x_offset, "y_offset", (unsigned int)g.y_offset, "data_height", (unsigned int)g.data_height, "data_width", (unsigned int)g.data_width, "data_sz", (unsigned int)g.data_sz, "data_offset", (unsigned int)g.data_offset, "num_cells", (unsigned int)g.num_cells, "num_lines", (unsigned int)g.num_lines, "cell_x_offset", (unsigned int)g.cell_x_offset, "cell_y_offset", (unsigned int)g.cell_y_offset, "cursor_movement", (unsigned int)g.cursor_movement, "unicode_placement", (unsigned int)g.unicode_placement, "parent_id", (unsigned int)g.parent_id, "parent_placement_id", (unsigned int)g.parent_placement_id, "usage_hints", (unsigned int)g.usage_hints, "tone_map", (unsigned int)g.tone_map, "gamut", (unsigned int)g.gamut,
 

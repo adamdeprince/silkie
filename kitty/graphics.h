@@ -13,7 +13,7 @@
 #define GRAPHICS_USAGE_HINT_TRANSIENT 1u
 
 typedef struct {
-    unsigned char action, transmission_type, compressed, delete_action;
+    unsigned char action, transmission_type, compressed, delete_action, report_supported;
     uint32_t format, more, id, image_number, data_sz, data_offset, placement_id, quiet, parent_id, parent_placement_id, usage_hints, tone_map, gamut;
     uint32_t width, height, x_offset, y_offset;
     union {
@@ -41,7 +41,7 @@ typedef struct {
         int32_t z_index, gap;
     };
     size_t payload_sz;
-    bool unicode_placement;
+    uint32_t unicode_placement;
     int32_t offset_from_parent_x, offset_from_parent_y;
 } GraphicsCommand;
 

@@ -1438,8 +1438,141 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
 }
 
 static const char *
-finish_command_response(const GraphicsCommand *g, bool data_loaded) {
-    static char rbuf[sizeof(command_response) / sizeof(command_response[0]) + 128];
+supported_keys_for_query(const GraphicsCommand *g) {
+    // A query with e=<action> is a feature query. Echo back every key from it
+    // that has a non-default value which is supported when used with that
+    // action, so that clients can detect support for protocol features. A
+    // leading e=<action> tells the client that the action itself is supported.
+    // The reply is bounded by the protocol, not by the input: each key is
+    // echoed at most once and the longest action (T) echoes 26 keys and e, each at
+    // most 14 bytes (",k=" and a 32 bit integer with its sign), so 512 bytes
+    // always fits. Grow it if keys are added.
+    static char buf[512];
+    size_t pos = 0;
+    buf[0] = 0;
+    const unsigned char action = g->report_supported;
+    // Besides kitty's actions, Silkie has e (edit a vector image), r (refresh
+    // an image backed by a GPU surface) and v (the vector font service).
+    if (!action || !strchr("tTqpdfacerv", action)) return buf;
+#define print(fmt, ...) \
+    if (sizeof(buf) - 1 > pos) pos += snprintf(buf + pos, sizeof(buf) - pos, fmt, __VA_ARGS__)
+#define ECHO_FLAG(key, attr) \
+    if (g->attr) print(",%c=%c", key, g->attr)
+#define ECHO_UINT(key, attr) \
+    if (g->attr) print(",%c=%u", key, g->attr)
+#define ECHO_INT(key, attr) \
+    if (g->attr) print(",%c=%d", key, g->attr)
+#define ECHO_ONE(key, attr) \
+    if (g->attr == 1) print(",%c=%u", key, 1u)
+    print(",e=%c", action);
+    switch (action) {
+        case 't':
+        case 'T':
+        case 'q':
+        case 'f': {
+            // GPU surfaces (t=g) exist only where they are implemented, cannot
+            // be chunked or compressed and cannot be animation frames
+#if defined(__APPLE__) || defined(__linux__)
+            const bool surfaces = true;
+#else
+            const bool surfaces = false;
+#endif
+            const bool surface = g->transmission_type == 'g';
+            if (!surface || (surfaces && action != 'f' && !g->compressed && !g->more)) ECHO_FLAG('t', transmission_type);
+            if (!surface) ECHO_FLAG('o', compressed);
+            const uint32_t fmt = g->format;
+            // Silkie adds the packed formats (packed-image-protocol), half
+            // float RGBA (hdr-protocol) and vector images, which cannot have
+            // animation frames (vector-protocol)
+            if (fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt) || (fmt == VECTOR && action != 'f'))
+                print(",f=%u", fmt);
+            if (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020) print(",G=%u", g->gamut);
+            if (action != 'f') ECHO_ONE('T', tone_map);
+            if (g->data_width <= MAX_IMAGE_DIMENSION) ECHO_UINT('s', data_width);
+            if (g->data_height <= MAX_IMAGE_DIMENSION) ECHO_UINT('v', data_height);
+            ECHO_UINT('S', data_sz);
+            ECHO_UINT('O', data_offset);
+            if (g->usage_hints && !(g->usage_hints & ~GRAPHICS_USAGE_HINT_TRANSIENT)) print(",N=%u", g->usage_hints);
+            if (action == 'f') {
+                ECHO_UINT('x', x_offset);
+                ECHO_UINT('y', y_offset);
+                ECHO_UINT('c', other_frame_number);
+                ECHO_UINT('r', frame_number);
+                ECHO_INT('z', gap);
+                ECHO_ONE('X', blend_mode);
+                ECHO_UINT('Y', bgcolor);
+            }
+            if (action != 'T') break;
+        } /* fallthrough */
+        case 'p':
+            ECHO_UINT('p', placement_id);
+            ECHO_UINT('x', x_offset);
+            ECHO_UINT('y', y_offset);
+            ECHO_UINT('w', width);
+            ECHO_UINT('h', height);
+            ECHO_UINT('X', cell_x_offset);
+            ECHO_UINT('Y', cell_y_offset);
+            ECHO_UINT('c', num_cells);
+            ECHO_UINT('r', num_lines);
+            ECHO_ONE('C', cursor_movement);
+            ECHO_ONE('U', unicode_placement);
+            ECHO_INT('z', z_index);
+            ECHO_UINT('P', parent_id);
+            ECHO_UINT('Q', parent_placement_id);
+            ECHO_INT('H', offset_from_parent_x);
+            ECHO_INT('V', offset_from_parent_y);
+            break;
+        case 'd':
+            ECHO_FLAG('d', delete_action);
+            ECHO_UINT('p', placement_id);
+            ECHO_UINT('x', x_offset);
+            ECHO_UINT('y', y_offset);
+            ECHO_INT('z', z_index);
+            break;
+        case 'a':
+            if (g->animation_state <= 3) ECHO_UINT('s', animation_state);
+            ECHO_UINT('v', loop_count);
+            ECHO_UINT('r', frame_number);
+            ECHO_UINT('c', other_frame_number);
+            ECHO_INT('z', gap);
+            break;
+        case 'v':
+            // the vector font service takes f=200 data sent directly or from a file
+            if (g->format == VECTOR) print(",f=%u", g->format);
+            if (g->transmission_type != 'g') ECHO_FLAG('t', transmission_type);
+            ECHO_FLAG('o', compressed);
+            break;
+        case 'e':
+            // a vector edit carries a patch, sent directly or from a file
+            if (g->transmission_type != 'g') ECHO_FLAG('t', transmission_type);
+            ECHO_FLAG('o', compressed);
+            break;
+        case 'r':
+            // a refresh has no keys besides the image it refers to
+            break;
+        case 'c':
+            ECHO_UINT('r', frame_number);
+            ECHO_UINT('c', other_frame_number);
+            ECHO_UINT('x', x_offset);
+            ECHO_UINT('y', y_offset);
+            ECHO_UINT('w', width);
+            ECHO_UINT('h', height);
+            ECHO_UINT('X', cell_x_offset);
+            ECHO_UINT('Y', cell_y_offset);
+            ECHO_ONE('C', compose_mode);
+            break;
+    }
+#undef ECHO_ONE
+#undef ECHO_INT
+#undef ECHO_UINT
+#undef ECHO_FLAG
+#undef print
+    return buf;
+}
+
+static const char *
+finish_command_response_with_keys(const GraphicsCommand *g, bool data_loaded, const char *extra_keys) {
+    static char rbuf[sizeof(command_response) / sizeof(command_response[0]) + 1024];
     bool is_ok_response = !command_response[0];
     if (g->quiet) {
         if (is_ok_response || g->quiet > 1) return NULL;
@@ -1457,11 +1590,17 @@ finish_command_response(const GraphicsCommand *g, bool data_loaded) {
         if (g->image_number) print(",I=%u", g->image_number);
         if (g->placement_id) print(",p=%u", g->placement_id);
         if (g->num_lines && (g->action == 'f' || g->action == 'a')) print(",r=%u", g->num_lines);
+        if (is_ok_response && extra_keys) print("%s", extra_keys);
         print(";%s", command_response);
         return rbuf;
 #undef print
     }
     return NULL;
+}
+
+static const char *
+finish_command_response(const GraphicsCommand *g, bool data_loaded) {
+    return finish_command_response_with_keys(g, data_loaded, NULL);
 }
 
 // }}}
@@ -3479,6 +3618,12 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                     REPORT_ERROR("Query graphics command without image id");
                     break;
                 }
+            }
+            if (is_query && g->report_supported) {
+                // A feature query transmits no image data, so it must not
+                // interfere with any chunked load that is in progress
+                ret = finish_command_response_with_keys(&(const GraphicsCommand){.id = q_iid, .quiet = g->quiet}, true, supported_keys_for_query(g));
+                break;
             }
             Image *image = handle_add_command(self, g, payload, is_dirty, iid, is_query);
             if (!is_query && image && !image->vector && invalidate_vector_users(self, image->client_id)) *is_dirty = true;
