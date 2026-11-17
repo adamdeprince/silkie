@@ -895,7 +895,8 @@ class TestParser(BaseTest):
         pb('x\033[2;7@y', 'x', ('CSI code @ has 2 > 1 parameters',), 'y')
         pb('x\033[2;-7@y', 'x', ('CSI code @ has 2 > 1 parameters',), 'y')
         pb('x\033[-0001234567890@y', 'x', ('CSI code @ is not allowed to have negative parameter (-1234567890)',), 'y')
-        pb('x\033[2-3@y', 'x', ('Invalid character in CSI: 3 (0x33), ignoring the sequence',), '@y')
+        # an invalid CSI is skipped up to its final byte
+        pb('x\033[2-3@y', 'x', ('Invalid character in CSI: 3 (0x33), ignoring the sequence',), 'y')
         pb('x\033[@y', 'x', ('screen_insert_characters', 1), 'y')
         pb('x\033[345@y', 'x', ('screen_insert_characters', 345), 'y')
         pb('x\033[345;@y', 'x', ('screen_insert_characters', 345), 'y')
@@ -1029,6 +1030,31 @@ class TestParser(BaseTest):
         too_many = ('CSI escape code has too many parameters, ignoring it',)
         pb('\033[' + '1;' * 255 + '1:2m\033[31m', too_many, ('select_graphic_rendition', '31'))
         pb('\033[' + '1;' * 256 + 'm\033[31m', ('select_graphic_rendition', ';'.join('1' * 256)), ('select_graphic_rendition', '31'))
+
+    def test_abandoned_csi_is_not_drawn(self):
+        s = self.create_screen()
+        pb = partial(self.parse_bytes_dump, s)
+        too_many = ('CSI escape code has too many parameters, ignoring it',)
+        pb('\033[' + '1;' * 300 + 'mx', too_many, 'x')
+        pb('\033[' + '1;' * 300 + '1:2:3mx', too_many, 'x')
+        # C0 controls inside are still acted on
+        pb('\033[' + '1;' * 300 + '\r1mx', too_many, ('screen_carriage_return',), 'x')
+        pb('\033[1;2 :3;4mx', ('Invalid character in CSI: : (0x3a), ignoring the sequence',), 'x')
+        pb('\033[ \rqx', ('screen_carriage_return',), ('screen_set_cursor', 1, 32), 'x')
+        # ESC starts a new escape code, CAN and SUB cancel the CSI
+        pb('\033[1;\033[31mx', ('Invalid character in CSI: 0x1b (0x1b), ignoring the sequence',), ('select_graphic_rendition', '31'), 'x')
+        pb('\033[1 :\033[32mx', ('Invalid character in CSI: : (0x3a), ignoring the sequence',), ('select_graphic_rendition', '32'), 'x')
+        pb('\033[1 :\x18x', ('Invalid character in CSI: : (0x3a), ignoring the sequence',), 'x')
+        pb('\033[1;\x1ax', ('Invalid character in CSI: 0x1a (0x1a), ignoring the sequence',), 'x')
+        # a CSI of any length, in pieces or not
+        for chunk in (1024, 65536, 0):
+            data = b'\033[' + b'0' * (3 * VT_PARSER_BUFFER_SIZE) + b'mx'
+            cd = CmdDump()
+            if chunk:
+                s.test_parse_in_chunks(data, chunk, cd)
+            else:
+                parse_bytes(s, data, cd)
+            self.ae(cd.get_result(), (('select_graphic_rendition', '0'), ('draw', 'x')))
 
     def test_st_terminated_codes_of_any_length(self):
         s = self.create_screen()

@@ -24,7 +24,6 @@
 // costs nothing, before it is moved out to a growable buffer. Moving it out at a quarter of the buffer
 // leaves room for more input, see hold_st_terminated_esc_code()
 #define HOLD_THRESHOLD (BUF_SZ / 4u)
-#define MAX_ESCAPE_CODE_LENGTH (BUF_SZ / 4u)
 #define MAX_CSI_PARAMS 256u
 // Pending input smaller than this, typically the echo of typed characters, is
 // parsed without waiting for input_delay
@@ -219,7 +218,7 @@ vte_state_name(VTEState s) {
     return buf;
 }
 
-typedef enum { CSI_START, CSI_BODY, CSI_POST_SECONDARY } CSIState;
+typedef enum { CSI_START, CSI_BODY, CSI_POST_SECONDARY, CSI_IGNORE } CSIState;
 
 typedef struct ParsedCSI {
     char primary, secondary, trailer;
@@ -946,6 +945,22 @@ commit_csi_param(PS *self UNUSED, ParsedCSI *csi) {
 
 #define MAX_CSI_DIGITS 16u
 
+// An invalid CSI is skipped up to its final byte, as a VT500 parser does, so that the rest of it is
+// not drawn as text. An ESC ends it and starts a new escape code, CAN and SUB cancel it. Returns true
+// when the CSI has ended.
+static bool
+abandon_csi(ParsedCSI *csi, uint8_t ch, size_t *pos) {
+    csi->is_valid = false;
+    switch (ch) {
+        case ESC: *pos -= 1; return true;
+        case CAN:
+        case SUB: return true;
+    }
+    if (0x40 <= ch && ch <= 0x7e) return true;
+    csi->state = CSI_IGNORE;
+    return false;
+}
+
 static void
 csi_add_digit(ParsedCSI *csi, uint8_t ch) {
     if (UNLIKELY(csi->num_digits >= MAX_CSI_DIGITS)) return;
@@ -962,7 +977,7 @@ consume_csi_digit_run(ParsedCSI *csi, const uint8_t *buf, size_t *pos, const siz
 }
 
 static bool
-csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const size_t sz, const size_t start) {
+csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const size_t sz) {
     while (*pos < sz) {
         const uint8_t ch = buf[*pos];
         *pos += 1;
@@ -1000,7 +1015,10 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                         csi->is_valid = true;
                         csi->trailer = ch;
                         return true;
-                    default: REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch); return true;
+                    default:
+                        REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch);
+                        if (abandon_csi(csi, ch, pos)) return true;
+                        break;
                 }
                 break;
             case CSI_POST_SECONDARY:
@@ -1009,10 +1027,21 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                     case CSI_TRAILER:
                         csi->is_valid = true;
                         csi->trailer = ch;
+                        return true;
+                    default:
+                        REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch);
+                        if (abandon_csi(csi, ch, pos)) return true;
                         break;
-                    default: REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch); break;
                 }
-                return true;
+                break;
+            case CSI_IGNORE:
+                switch (ch) {
+                    case CSI_NORMAL_MODE_EMBEDDINGS: dispatch_single_byte_control(self, ch); break;
+                    default:
+                        if (abandon_csi(csi, ch, pos)) return true;
+                        break;
+                }
+                break;
             case CSI_BODY:
                 switch (ch) {
                     case CSI_NORMAL_MODE_EMBEDDINGS: dispatch_single_byte_control(self, ch); break;
@@ -1021,7 +1050,10 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                             csi->mult = -1;
                             csi->num_digits = 1;
                         } else {
-                            if (!commit_csi_param(self, csi)) return true;
+                            if (!commit_csi_param(self, csi)) {
+                                if (abandon_csi(csi, ch, pos)) return true;
+                                break;
+                            }
                             csi->secondary = ch;
                             csi->state = CSI_POST_SECONDARY;
                         }
@@ -1036,26 +1068,31 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                         csi->trailer = ch;
                         return true;
                     case ':':
-                        if (!commit_csi_param(self, csi)) return true;
+                        if (!commit_csi_param(self, csi)) {
+                            if (abandon_csi(csi, ch, pos)) return true;
+                            break;
+                        }
                         if (csi->num_params < MAX_CSI_PARAMS) csi->is_sub_param[csi->num_params] = true;
                         break;
                     case ';':
                         if (!csi->num_digits) csi->num_digits++; // Empty means zero
-                        if (!commit_csi_param(self, csi)) return true;
+                        if (!commit_csi_param(self, csi)) {
+                            if (abandon_csi(csi, ch, pos)) return true;
+                            break;
+                        }
                         if (csi->num_params < MAX_CSI_PARAMS) csi->is_sub_param[csi->num_params] = false;
                         break;
                     case DIGIT:
                         csi_add_digit(csi, ch);
                         consume_csi_digit_run(csi, buf, pos, sz);
                         break;
-                    default: REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch); return true;
+                    default:
+                        REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch);
+                        if (abandon_csi(csi, ch, pos)) return true;
+                        break;
                 }
                 break;
         }
-    }
-    if (UNLIKELY(*pos - start > MAX_ESCAPE_CODE_LENGTH)) {
-        REPORT_ERROR("CSI escape too long ignoring and truncating");
-        return true;
     }
     return false;
 #undef COMMIT_PARAM
@@ -1063,7 +1100,11 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
 
 static bool
 consume_csi(PS *self) {
-    return csi_parse_loop(self, &self->csi, self->buf, &self->read.pos, self->read.sz, self->read.consumed);
+    const bool done = csi_parse_loop(self, &self->csi, self->buf, &self->read.pos, self->read.sz);
+    // An unfinished CSI is fully described by self->csi, so its bytes need not stay in the read
+    // buffer and the CSI can be of any length
+    if (!done) self->read.consumed = self->read.pos;
+    return done;
 }
 
 static void
@@ -1229,7 +1270,7 @@ parse_sgr(Screen *screen, const uint8_t *buf, unsigned int num, const char *repo
     _buf[num] = 0;
     PS *state = (PS *)screen->vt_parser->state;
     state->screen = screen;
-    if (!csi_parse_loop(state, &csi, _buf, &pos, num, 0)) return false;
+    if (!csi_parse_loop(state, &csi, _buf, &pos, num)) return false;
     return _parse_sgr(state, &csi);
 }
 #endif
