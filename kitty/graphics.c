@@ -2453,13 +2453,14 @@ grman_update_layers(
             rd->is_gray = img->root_frame.deep == DEEP_GRAY16;
             rd->indexed_px_sz = img->indexed_px_sz;
             rd->palette_texture_id = img->palette ? img->palette->texture : 0;
-            if (img->indexed_px_sz) {
-                self->num_of_indexed_refs++;
+            if (img->indexed_px_sz) self->num_of_indexed_refs++;
+            if (img->indexed_px_sz || rd->decode != IMAGE_DECODE_NONE) {
                 // The rect is in normalized device co-ordinates, so allow for rounding errors
                 const float width_px = (r.right - r.left) / screen_width * screen_width_px;
                 const float height_px = (r.top - r.bottom) / screen_height * screen_height_px;
                 rd->is_unscaled = fabsf(width_px - ref->src_width) < 0.01f && fabsf(height_px - ref->src_height) < 0.01f;
             }
+            rd->filter_decoded = rd->decode != IMAGE_DECODE_NONE && !rd->is_unscaled;
             img->is_drawn = true;
             refitr = vt_next(refitr);
         }
@@ -2791,6 +2792,26 @@ emit_srgb8_row(void *ctx, uint32_t y, const float *rgba) {
         if (i % 4 != 3) v = v <= 0.0031308f ? v * 12.92f : 1.055f * powf(v, 1.f / 2.4f) - 0.055f;
         dest[i] = (uint8_t)lrintf(v * 255.f);
     }
+}
+
+// Hands each row of a half float frame (f=64) to emit as floats, like decode_frame_rows(): its values are already
+// linear, in the sRGB primaries, with straight alpha
+static bool
+half_frame_rows(const Image *img, const CoalescedFrameData *cfd, void (*emit)(void *ctx, uint32_t y, const float *rgba), void *ctx) {
+    const size_t num = (size_t)img->width * 4;
+    float *row = malloc(num * sizeof(float));
+    if (!row) return false;
+    for (uint32_t y = 0; y < img->height; y++) {
+        const uint8_t *src = cfd->buf + (size_t)y * num * sizeof(uint16_t);
+        for (size_t i = 0; i < num; i++) {
+            uint16_t h;  // memcpy as the rows need not be aligned
+            memcpy(&h, src + i * sizeof(h), sizeof(h));
+            row[i] = half_to_float(h);
+        }
+        emit(ctx, y, row);
+    }
+    free(row);
+    return true;
 }
 
 // The pixels of a frame that needs_decoding() as half float RGBA, the f=64 representation, or NULL when out of memory
@@ -3684,12 +3705,14 @@ grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uin
     *width = img->width;
     *height = img->height;
     uint8_t *ans = cfd.buf;
-    if (needs_decoding(img, &cfd)) {
-        // A pointer image is SDR: what is brighter than SDR white is shown at SDR white
+    const bool decode = needs_decoding(img, &cfd);
+    if (decode || cfd.is_float) {
+        // A pointer image is eight bit sRGB: what is brighter than SDR white is shown at SDR white. Half float pixels
+        // are eight bytes each, not RGBA bytes, and linear, so they are encoded as the decoded pixels are.
         if ((size_t)img->width * img->height > SIZE_MAX / 4) return NULL;
         Srgb8Rows rows = {.out = malloc((size_t)img->width * img->height * 4), .width = img->width};
         if (!rows.out) return NULL;
-        if (!decode_frame_rows(img, &cfd, emit_srgb8_row, &rows)) {
+        if (!(decode ? decode_frame_rows : half_frame_rows)(img, &cfd, emit_srgb8_row, &rows)) {
             free(rows.out);
             return NULL;
         }
@@ -4564,7 +4587,7 @@ grman_render_data_as_python(GraphicsManager *self) {
             ans,
             i,
             Py_BuildValue(
-                "{sN sN sI si sK sK sI sO}",
+                "{sN sN sI si sK sK sI sO sO}",
                 "src_rect",
                 R(src_rect),
                 "dest_rect",
@@ -4580,7 +4603,9 @@ grman_render_data_as_python(GraphicsManager *self) {
                 "indexed_px_sz",
                 (unsigned int)r->indexed_px_sz,
                 "is_unscaled",
-                r->is_unscaled ? Py_True : Py_False));
+                r->is_unscaled ? Py_True : Py_False,
+                "filter_decoded",
+                r->filter_decoded ? Py_True : Py_False));
 #undef R
     }
     return ans;
