@@ -45,8 +45,8 @@ struct Lookup {
 };
 
 float4
-premult_color_at(int2 pos, Lookup l) {
-    uint4 px = image[pos];
+premult_color_at(int2 pos, int level, Lookup l) {
+    uint4 px = image.Load(int3(pos, level));
     if (own_palette) {
         // a palette has every slot an index of its width can name, so the index is always in it
         const float4 c = palette[int2(int(px.r), 0)];
@@ -56,26 +56,50 @@ premult_color_at(int2 pos, Lookup l) {
     return float4(indexed_image_color(px.r) * alpha, alpha);
 }
 
+// Bilinear filtering of a level of the image, after the palette lookup
+float4
+bilinear_at(float2 texcoord, int level, Lookup l) {
+    // the size of a level, as the GPU has it: GLSL 1.50 cannot ask how many levels there are
+    int width, height;
+    image.GetDimensions(width, height);
+    width = max(1, width >> level), height = max(1, height >> level);
+    const int2 limit = int2(width - 1, height - 1);
+    const float2 pos = texcoord * float2(width, height) - 0.5;
+    const float2 base = floor(pos);
+    const float2 frac = pos - base;
+    const int2 p0 = clamp(int2(base), int2(0, 0), limit);
+    const int2 p1 = clamp(int2(base) + int2(1, 1), int2(0, 0), limit);
+    const float4 top = lerp(premult_color_at(p0, level, l), premult_color_at(int2(p1.x, p0.y), level, l), frac.x);
+    const float4 bottom = lerp(premult_color_at(int2(p0.x, p1.y), level, l), premult_color_at(p1, level, l), frac.x);
+    return lerp(top, bottom, frac.y);
+}
+
 [shader("fragment")]
 float4
-fragment_main(float2 texcoord: TEXCOORD, uniform uint has_alpha, uniform float extra_alpha, uniform uint image_gamut, uniform uint output_gamut)
+fragment_main(float2 texcoord: TEXCOORD, uniform uint has_alpha, uniform float extra_alpha, uniform uint image_gamut, uniform uint output_gamut, uniform uint max_lod)
     : SV_Target {
     const Lookup l = { has_alpha, image_gamut, output_gamut };
     // Integer textures cannot be filtered and anyway the palette lookup must
     // happen before interpolation, so do bilinear filtering here.
     int width, height;
     image.GetDimensions(width, height);
-    const int2 limit = int2(width - 1, height - 1);
     // When the image is drawn at its natural size every fragment is at the
     // center of a pixel, so just read that pixel. is_scaled is a compile time
     // constant so this is not a branch in the shader.
-    if (!is_scaled) return premult_color_at(clamp(int2(texcoord * float2(width, height)), int2(0, 0), limit), l) * extra_alpha;
-    const float2 pos = texcoord * float2(width, height) - 0.5;
-    const float2 base = floor(pos);
-    const float2 frac = pos - base;
-    const int2 p0 = clamp(int2(base), int2(0, 0), limit);
-    const int2 p1 = clamp(int2(base) + int2(1, 1), int2(0, 0), limit);
-    const float4 top = lerp(premult_color_at(p0, l), premult_color_at(int2(p1.x, p0.y), l), frac.x);
-    const float4 bottom = lerp(premult_color_at(int2(p0.x, p1.y), l), premult_color_at(p1, l), frac.x);
-    return lerp(top, bottom, frac.y) * extra_alpha;
+    if (!is_scaled) return premult_color_at(clamp(int2(texcoord * float2(width, height)), int2(0, 0), int2(width - 1, height - 1)), 0, l) * extra_alpha;
+    // An image drawn smaller than it is has mipmaps of its indices, made on
+    // the CPU: the level of detail is picked here, as the GPU would for a
+    // texture it can filter, and the two levels round it blended, trilinear
+    // filtering done by hand
+    if (max_lod > 0) {
+        const float2 px = texcoord * float2(width, height);
+        const float rho = max(length(ddx(px)), length(ddy(px)));
+        const float lod = clamp(log2(max(rho, 1e-6)), 0.0, float(max_lod));
+        const int level = min(int(floor(lod)), int(max_lod));
+        const float t = lod - float(level);
+        float4 c = bilinear_at(texcoord, level, l);
+        if (t > 0.0 && level < int(max_lod)) c = lerp(c, bilinear_at(texcoord, level + 1, l), t);
+        return c * extra_alpha;
+    }
+    return bilinear_at(texcoord, 0, l) * extra_alpha;
 }

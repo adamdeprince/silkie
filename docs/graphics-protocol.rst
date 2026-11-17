@@ -1085,6 +1085,12 @@ deleted, if the capital letter form above is specified. Also, when the terminal
 is running out of quota space for new images, existing images without
 placements will be preferentially deleted.
 
+.. note::
+   Silkie has no storage quota, images stay until they are deleted or leave the
+   scrollback. When memory runs out it evicts images that are not on screen,
+   transient ones first, then the least recently used, see
+   :doc:`image-tiling`.
+
 If an image is being loaded in chunks and the upload is not complete when any
 delete command is received, the partial upload must be aborted.
 
@@ -1332,7 +1338,8 @@ the same and the rectangles overlap, the terminal must respond with `EINVAL`.
    In kitty, doing a composition will cause a frame to be *fully rendered*
    potentially increasing its storage requirements, when the frame was previously
    stored as a set of operations on other frames. If this happens and there
-   is not enough storage space, kitty will respond with ENOSPC.
+   is not enough storage space, kitty will respond with ENOSPC. Silkie has no
+   such limit and responds with ENOMEM only when memory runs out.
 
 
 Image persistence and storage quotas
@@ -1345,6 +1352,14 @@ a new image, if the total size exceeds the quota, the terminal emulator should
 delete older images to make space for the new one. In kitty, for animations,
 the additional frame data is stored on disk and has a separate, larger quota of
 five times the base quota.
+
+.. note::
+   Silkie has neither quota, nor a largest image size: kitty refuses images
+   wider or taller than 10000 pixels and payloads of more than 400 MB. Images
+   stay until the program deletes them or they leave the scrollback, and when
+   memory runs out Silkie evicts images that are not on screen and fails the
+   command with ``ENOMEM`` if that does not help. Images larger than a GPU
+   texture are drawn from tiles. See :doc:`image-tiling`.
 
 
 Control data reference

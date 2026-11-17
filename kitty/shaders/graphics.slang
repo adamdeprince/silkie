@@ -66,7 +66,10 @@ decode_image(float3 v, uint decode, uint gamut) {
 // is right only when they are linear. An sRGB texture is decoded by the GPU before
 // it filters, so eight bit sRGB images, and linear and half float ones, take the
 // hardware path. The others (PQ, HLG and high precision sRGB) are filtered here,
-// in linear light, when they are scaled: each texel is decoded, then interpolated.
+// in linear light, when they are drawn larger than they are: each texel is
+// decoded, then interpolated. Drawn smaller, they are drawn from their decoded
+// pixels, linear, with mipmaps, which the GPU filters (linear_texture), see
+// "Mipmaps for decoded images" in graphics.c.
 // An image drawn at its natural size has every fragment at the center of a texel,
 // where filtering changes nothing, so it takes the hardware path as well.
 
@@ -92,31 +95,18 @@ bilinear_decoded(float2 pos, int2 size, uint decode, uint gamut, uint is_gray) {
     return lerp(top, bottom, f.y);
 }
 
-// When an image is shrunk a fragment covers more than one texel, and four texels
-// alone would alias: the footprint of the fragment is averaged over a grid of
-// bilinear taps, a tap per texel up to this many in each direction. The bound is
-// the time a fragment may take: a GPU resets itself when a draw runs too long, and
-// an image shrunk to a few pixels would otherwise read every texel in each. Past
-// it the taps are spread over the footprint, as the hardware path aliases already.
-// Mipmaps built in linear light are the complete answer, see image-tiling.
-static const int MAX_TAPS_PER_AXIS = 4;
-
-// The color at texcoord, filtered in linear light over footprint, the size of the
-// fragment in texture coordinates. Straight alpha, as the hardware path gives.
+// The color at texcoord, filtered in linear light: an image drawn larger than
+// it is, as one drawn smaller is drawn from its decoded pixels, with mipmaps,
+// which the GPU filters, see "Mipmaps for decoded images" in graphics.c.
+// Straight alpha, as the hardware path gives.
 float4
-sample_decoded(float2 texcoord, float2 footprint, uint decode, uint gamut, uint is_gray) {
+sample_decoded(float2 texcoord, uint decode, uint gamut, uint is_gray) {
     int width, height;
     image.GetDimensions(width, height);
     const int2 size = int2(width, height);
-    const float2 pos = texcoord * float2(size), texels = footprint * float2(size);
-    const int2 n = clamp(int2(ceil(texels)), int2(1), int2(MAX_TAPS_PER_AXIS));
-    float4 sum = float4(0.f);
-    for (int y = 0; y < n.y; y++) {
-        for (int x = 0; x < n.x; x++) sum += bilinear_decoded(pos + ((float2(x, y) + 0.5f) / float2(n) - 0.5f) * texels, size, decode, gamut, is_gray);
-    }
-    sum /= float(n.x * n.y);
-    if (!texture_is_not_premultiplied) return sum;
-    return sum.a > 0.f ? float4(sum.rgb / sum.a, sum.a) : float4(0.f);
+    const float4 c = bilinear_decoded(texcoord * float2(size), size, decode, gamut, is_gray);
+    if (!texture_is_not_premultiplied) return c;
+    return c.a > 0.f ? float4(c.rgb / c.a, c.a) : float4(0.f);
 }
 
 [shader("fragment")]
@@ -132,18 +122,19 @@ fragment_main(
     uniform uint output_gamut,
     uniform uint image_decode,
     uniform uint image_is_gray,
-    uniform uint filter_decoded)
+    uniform uint filter_decoded,
+    uniform uint linear_texture)
     : SV_Target {
-    // the derivatives before any branch, a branch on a uniform is the same for every fragment anyway
-    const float2 footprint = fwidth(texcoord);
-    const bool decoded = filter_decoded != 0u && !is_alpha_mask;
-    float4 color = decoded ? sample_decoded(texcoord, footprint, image_decode, image_gamut, image_is_gray) : image.Sample(texcoord);
+    // A texture of decoded pixels, linear, needs no decoding: the shader only
+    // does what follows it, image_decode still says what the image was
+    const bool decoded = filter_decoded != 0u && linear_texture == 0u && !is_alpha_mask;
+    float4 color = decoded ? sample_decoded(texcoord, image_decode, image_gamut, image_is_gray) : image.Sample(texcoord);
     if (is_alpha_mask) {
         color = float4(amask_fg, color.r);
         color = vec4_premul(color);
         color = alpha_blend_premul(color, amask_bg_premult);
     } else {
-        if (!decoded) {
+        if (!decoded && linear_texture == 0u) {
             // Sixteen bit gray is in the red channel alone
             if (image_is_gray != 0u) color.rgb = color.rrr;
             if (image_decode != IMAGE_DECODE_NONE) color.rgb = decode_image(color.rgb, image_decode, image_gamut);

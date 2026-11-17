@@ -122,8 +122,7 @@ Errors
 =============  =========================================================
 Code           Cause
 =============  =========================================================
-``EINVAL``     zero or missing ``s`` or ``v``; ``s`` or ``v`` above the
-               largest image dimension the terminal accepts; a format
+``EINVAL``     zero or missing ``s`` or ``v``; a format
                number between the palette formats, such as ``f=403``; an
                animation frame or composition, see above; compressed
                data that does not inflate to the expected size; a palette

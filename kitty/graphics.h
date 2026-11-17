@@ -51,6 +51,18 @@ typedef struct {
     float left, top, right, bottom;
 } ImageRect;
 
+// The texture formats of the tiles of an image larger than the GPU's largest texture, see graphics.c
+typedef enum {
+    TILE_SRGB8,  // eight bit sRGB RGBA, also for RGB
+    TILE_HALF,  // half float RGBA, f=64
+    TILE_LINEAR8,  // eight bit RGBA the shader decodes, with a transfer function other than sRGB
+    TILE_GRAY16,
+    TILE_RGB10A2,
+    TILE_RGBA16,
+    TILE_INDEX8,  // the indices of an indexed color or palette image
+    TILE_INDEX_ALPHA8,  // an index and an alpha
+} ImageTileFormat;
+
 typedef struct {
     ImageRect src_rect, dest_rect;
     uint32_t texture_id, group_count;
@@ -74,9 +86,18 @@ typedef struct {
     // whether the texture holds gray in its red channel alone
     uint8_t decode;
     bool is_gray;
+    // Zero for an image in one texture, otherwise one more than the index of
+    // the tile of the image, a row after another, this part of a placement is drawn from
+    uint32_t tile;
+    // The mipmap levels below the first of the integer texture of an indexed color or palette image, which the
+    // shader picks itself, the GPU cannot filter integers
+    uint8_t mip_levels;
     // Whether the shader filters the image itself, in linear light: a scaled
     // image it decodes, see graphics.slang
     bool filter_decoded;
+    // Whether the texture holds the decoded values of such an image, linear in its gamut with straight alpha, which
+    // the GPU filters and mipmaps itself, see graphics.c
+    bool linear_texture;
 } ImageRenderData;
 
 typedef struct {
@@ -126,7 +147,12 @@ typedef enum { ANIMATION_STOPPED = 0, ANIMATION_LOADING = 1, ANIMATION_RUNNING =
 
 typedef struct TextureRef {
     uint32_t id, refcnt;
+    // whether the texture has mipmaps of what it holds now, and how many levels below the first an integer texture has
+    bool mipmapped;
+    uint8_t mip_levels;
 } TextureRef;
+
+struct ImageTiles;
 
 // The palette of a palette image (f=401 to f=408, see
 // docs/silkie/palette-image-protocol.rst). It is shared with the copies of the
@@ -145,6 +171,8 @@ typedef struct {
     uint32_t client_id, client_number, width, height;
     TextureRef *texture;
     TextureRef *vector_right_texture;
+    // The decoded pixels of an image the shader decodes, linear, with mipmaps, for when it is drawn smaller than it is
+    TextureRef *decoded_texture;
     VectorStereo vector_stereo;
     id_type internal_id;
     // A GPU surface shared by a local client, see t=g in the graphics protocol
@@ -178,6 +206,9 @@ typedef struct {
     VectorView vector_view;  // the part of the image, at the size it is shown at, that its texture holds
     uint8_t gamut;  // the gamut the pixels of every frame are in, see docs/wide-gamut-protocol.rst
     uint8_t transfer;  // the TransferFunction the pixels are encoded with, see docs/silkie/precision-image-protocol.rst
+    // The tiles of an image larger than the GPU's largest texture, NULL for one that fits a texture, see graphics.c
+    struct ImageTiles *tiles;
+    bool drawn_minified;  // a placement shows it smaller than it is, so its textures need mipmaps
 } Image;
 
 typedef struct {
@@ -210,7 +241,6 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
 
-        size_t storage_limit;
     LoadData currently_loading;
     PyObject *vector_font_session, *vector_response;
     id_type image_id_counter;
@@ -226,7 +256,10 @@ typedef struct {
     size_t num_of_indexed_refs;
     unsigned int last_scrolled_by;
     float last_scroll_offset_lines;
-    size_t used_storage;
+    size_t used_storage;  // the bytes of image data held, which tells how much evicting images frees, see image_alloc()
+    // For the tests: the number of allocations of image data still to fail, as if memory had run out
+    unsigned int simulated_alloc_failures;
+    id_type busy_image;  // the image a command is working on, which running out of memory does not evict
     PyObject *disk_cache;
     bool has_images_needing_animation, context_made_current_for_this_command;
     id_type window_id;

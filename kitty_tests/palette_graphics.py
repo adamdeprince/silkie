@@ -76,10 +76,11 @@ class TestPaletteGraphics(BaseTest):
         # formats between the palette formats are not formats
         for fmt in (400, 403, 405, 409, 416):
             self.ae(self.transmit(screen, bytes(64), f=fmt, s=1, v=1).code, 'EINVAL')
-        # the size computation is checked against the largest dimensions: the
-        # data is far too short, not an overflow, and larger is refused
+        # there is no largest image: the data is far too short, not an overflow
         self.ae(self.transmit(screen, bytes(8), f=401, s=10000, v=10000).code, 'ENODATA')
-        self.ae(self.transmit(screen, bytes(8), f=401, s=10001, v=1).code, 'EINVAL')
+        self.ae(self.transmit(screen, bytes(8), f=401, s=10001, v=1).code, 'ENODATA')
+        # nor at the largest dimensions there are, whose indices just fit in 64 bits
+        self.ae(self.transmit(screen, bytes(8), f=408, s=4294967295, v=4294967295).code, 'ENODATA')
 
     def test_transports_compression_and_chunks(self):
         screen = self.create_screen()

@@ -32,11 +32,13 @@
 #include "png-reader.h"
 PyTypeObject GraphicsManager_Type;
 
-#define MAX_IMAGE_DIMENSION 10000u
-#define DEFAULT_STORAGE_LIMIT 320u * (1024u * 1024u)
+// Images have no largest size and the terminal no quota for their data: the
+// only bounds are the arithmetic, which is overflow checked, and the memory
+// there is. An image larger than a texture is drawn from tiles, see "Images
+// larger than a texture" below, and when memory runs out the images least
+// recently used that are not on screen are evicted, see image_alloc().
 #define REPORT_ERROR(...) \
     { log_error(__VA_ARGS__); }
-#define MAX_DATA_SZ (4u * 100000000u)
 #define RAII_CoalescedFrameData(name, initializer) __attribute__((cleanup(cfd_free))) CoalescedFrameData name = initializer
 
 // caching {{{
@@ -73,10 +75,6 @@ read_from_cache(const GraphicsManager *self, const ImageAndFrame x, void **data,
     return read_from_disk_cache_simple(self->disk_cache, CK(x), data, sz, false);
 }
 
-static size_t
-cache_size(const GraphicsManager *self) {
-    return disk_cache_total_size(self->disk_cache);
-}
 #undef CK
 // }}}
 
@@ -94,7 +92,6 @@ grman_alloc(bool for_paused_rendering) {
     GraphicsManager *self = (GraphicsManager *)GraphicsManager_Type.tp_alloc(&GraphicsManager_Type, 0);
     self->render_data.capacity = 64;
     self->render_data.item = calloc(self->render_data.capacity, sizeof(self->render_data.item[0]));
-    self->storage_limit = DEFAULT_STORAGE_LIMIT;
     self->vector_font_session = PyDict_New();
     if (!self->vector_font_session) { Py_CLEAR(self); return NULL; }
     if (self->render_data.item == NULL) {
@@ -211,9 +208,9 @@ incref_texture_ref(TextureRef *ref) {
 
 static TextureRef *
 new_texture_ref(void) {
+    // NULL when out of memory, an image without a texture is not drawn
     TextureRef *ans = calloc(1, sizeof(TextureRef));
-    if (!ans) fatal("Out of memory allocating a TextureRef");
-    ans->refcnt = 1;
+    if (ans) ans->refcnt = 1;
     return ans;
 }
 
@@ -222,11 +219,102 @@ texture_id_for_img(Image *img) {
     return img->texture ? img->texture->id : 0;
 }
 
+// Images larger than a texture {{{
+//
+// A GPU has a largest texture, often 8192 or 16384 pixels wide and tall, and
+// an image is drawn from textures. An image wider or taller than that is split
+// into tiles, each in a texture of its own, and a placement of it is drawn as
+// the parts of the tiles it shows, each a quad of its own. An image that fits
+// a texture is drawn from one, as before.
+//
+// Every tile has an apron of one pixel all round: the pixels of the tiles next
+// to it, or at the edge of the image transparent black, which is what the
+// border of an image in one texture is. The quad of a tile covers only its
+// own pixels, its interior, so filtering at its edge reads the pixels of its
+// neighbors, the same as in one texture, and no seam shows between tiles.
+// Neighboring quads share the coordinates of their common edge, computed the
+// same way from the same numbers, so they meet without a gap or overlap. An
+// integer texture of indices has its apron copied from its edge pixels
+// instead, as the shader clamps its reads to the edge of a texture.
+//
+// Tiles are uploaded when a placement shows them, read from the disk cache a
+// band of rows at a time, so an image larger than the memory of the GPU can be
+// shown, a part at a time. A tile not shown for TILE_RETENTION is freed. A
+// tile is at most TILE_TEXTURE_GRANULE pixels square, or the largest texture
+// when that is smaller: it is the unit that is uploaded when any of it shows,
+// so smaller tiles upload less of a large image of which a little shows, while
+// a window of a few thousand pixels still needs only a few. That is the reason
+// for the number, it is not a limit of anything.
+#define TILE_TEXTURE_GRANULE 4096u
+#define TILE_RETENTION s_to_monotonic_t(5)
+// The key of a copy in the disk cache of the frame shown of a tiled image,
+// when it is composed of others, which are in the cache only as their parts.
+// Frame ids start at 1.
+#define DISPLAYED_FRAME_ID 0
+
+typedef struct ImageTile {
+    uint32_t texture;
+    bool loaded;  // the texture holds the pixels of the frame shown
+    bool mipmapped;  // and their mipmaps, which mip_levels counts for an integer texture
+    uint8_t mip_levels;
+    bool visible, wants_mipmaps;  // in the render data being built
+    monotonic_t last_visible;
+} ImageTile;
+
+typedef struct ImageTiles {
+    // shared with the copies of the image paused rendering makes, see grman_pause_rendering()
+    uint32_t refcnt;
+    uint32_t pitch;  // the width and height of the interior of every tile but the last of a row or column
+    uint32_t cols, rows, width, height;
+    // Where the pixels of the frame shown are: an entry of the disk cache,
+    // which every copy of the image can read
+    PyObject *cache;
+    ImageAndFrame source;
+    bool has_source;
+    uint8_t source_px_sz, format;  // the bytes per pixel of the entry, and the ImageTileFormat of the textures
+    // Pixels the shader decodes are decoded as they are uploaded, into half floats, see "Mipmaps for decoded images"
+    bool decode, source_opaque;
+    uint8_t deep, transfer, gamut;
+    ImageTile tiles[];
+} ImageTiles;
+
+// Overridden by the tests, which have no GPU
+static unsigned tile_limit_for_tests = 0;
+
+static unsigned
+image_tile_limit(void) {
+    return tile_limit_for_tests ? tile_limit_for_tests : gpu_image_texture_limit();
+}
+
+static void
+release_tiles(ImageTiles **t) {
+    if (!*t) return;
+    if ((*t)->refcnt < 2) {
+        for (size_t i = 0; i < (size_t)(*t)->cols * (*t)->rows; i++)
+            if ((*t)->tiles[i].texture) free_texture(&(*t)->tiles[i].texture);
+        Py_CLEAR((*t)->cache);
+        free(*t);
+    } else (*t)->refcnt--;
+    *t = NULL;
+}
+
+static ImageTiles *
+incref_tiles(ImageTiles *t) {
+    if (t) t->refcnt++;
+    return t;
+}
+// }}}
+
 static void
 free_image_resources(GraphicsManager *self, Image *img) {
     clear_texture_ref(&img->texture);
     clear_texture_ref(&img->vector_right_texture);
+    clear_texture_ref(&img->decoded_texture);
     release_palette(&img->palette);
+    if (img->tiles && self->disk_cache) {
+        if (!remove_from_cache(self, (const ImageAndFrame){.image_id = img->internal_id, .frame_id = DISPLAYED_FRAME_ID}) && PyErr_Occurred()) PyErr_Print();
+    }
+    release_tiles(&img->tiles);
     vector_doc_free(img->vector);
     img->vector = NULL;
 #if defined(__APPLE__) || defined(__linux__)
@@ -398,11 +486,15 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
             ImageRef *cr = malloc(sizeof(ImageRef));
             if (cr) {
                 memcpy(cr, i.data->val, sizeof(*cr));
-                if (vt_is_end(vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr))) fatal("Out of memory");
-                if (cr->client_id && vt_is_end(vt_insert(&clone->refs_by_client_id, cr->client_id, cr))) fatal("Out of memory");
+                // out of memory a placement is not shown while rendering is paused
+                if (vt_is_end(vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr))) free(cr);
+                else if (cr->client_id) vt_insert(&clone->refs_by_client_id, cr->client_id, cr);
             }
         }
+        clone->tiles = incref_tiles(img->tiles);
         clone->texture = incref_texture_ref(img->texture);
+        clone->decoded_texture = incref_texture_ref(img->decoded_texture);
+
         clone->vector_right_texture = incref_texture_ref(img->vector_right_texture);
         clone->palette = incref_palette(img->palette);
         vt_insert(&dest->images_by_internal_id, clone->internal_id, clone);
@@ -411,29 +503,76 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
 
 // Loading image data {{{
 
+// Images stay until the program deletes them or they leave the scrollback,
+// there is no quota. When memory runs out, the images that can be evicted are
+// those not on screen and not being worked on: transient ones first, then the
+// least recently used. They are evicted until what they held covers the
+// allocation that failed, and not at all when all of them together would not,
+// as then evicting them cannot help. Data the disk cache has written to disk
+// holds no memory, so this frees memory only of data still in RAM, but it is
+// all the terminal can give back.
 static bool
-trim_predicate(Image *img) {
-    return !img->root_frame_data_loaded || !vt_size(&img->refs_by_internal_id);
+can_evict(const GraphicsManager *self, const Image *img) {
+    return !img->is_drawn && img->root_frame_data_loaded && img->internal_id != self->busy_image &&
+           img->internal_id != self->currently_loading.loading_for.image_id;
 }
 
-static void
-apply_storage_quota(GraphicsManager *self, size_t storage_limit, id_type currently_added_image_internal_id) {
-    // First remove unreferenced images, even if they have an id
-    remove_images(self, trim_predicate, currently_added_image_internal_id);
-    if (self->used_storage < storage_limit) return;
-    size_t num_images = vt_size(&self->images_by_internal_id);
-    RAII_ALLOC(Image *, sorted, malloc(num_images * sizeof(Image *)));
-    if (!sorted) fatal("Out of memory");
+static bool
+evict_images_for(GraphicsManager *self, size_t needed) {
+    size_t num = 0, evictable = 0;
+    iter_images(self) if (can_evict(self, i.data->val)) {
+        num++;
+        evictable += i.data->val->used_storage;
+    }
+    if (!num || evictable < needed) return false;
+    RAII_ALLOC(Image *, sorted, malloc(num * sizeof(Image *)));
+    if (!sorted) return false;
     Image **p = sorted;
-    iter_images(self) { *p++ = i.data->val; }
+    iter_images(self) if (can_evict(self, i.data->val)) *p++ = i.data->val;
 #define transient_or_older_first(a, b) \
     ((*a)->root_frame.transient != (*b)->root_frame.transient ? (*a)->root_frame.transient > (*b)->root_frame.transient : (*a)->atime < (*b)->atime)
-    QSORT(Image *, sorted, num_images, transient_or_older_first);
+    QSORT(Image *, sorted, num, transient_or_older_first);
 #undef transient_or_older_first
-
-    for (p = sorted; self->used_storage > storage_limit && num_images; p++, num_images--) remove_image(self, *p);
-    if (!num_images || !vt_size(&self->images_by_internal_id)) self->used_storage = 0; // sanity check
+    size_t freed = 0;
+    for (size_t k = 0; k < num && freed < needed; k++) {
+        freed += sorted[k]->used_storage;
+        remove_image(self, sorted[k]);
+    }
+    return true;
 }
+
+// Allocates image data: when memory runs out images are evicted, see
+// evict_images_for(), and the allocation tried once more. NULL when that fails
+// too, which fails the command with ENOMEM.
+static void *
+image_realloc(GraphicsManager *self, void *p, size_t sz) {
+    if (!sz) sz = 1;
+    void *ans = NULL;
+    if (self->simulated_alloc_failures) self->simulated_alloc_failures--;
+    else ans = realloc(p, sz);
+    if (ans) return ans;
+    if (!evict_images_for(self, sz)) return NULL;
+    if (self->simulated_alloc_failures) {
+        self->simulated_alloc_failures--;
+        return NULL;
+    }
+    return realloc(p, sz);
+}
+
+static void *
+image_alloc(GraphicsManager *self, size_t sz) {
+    return image_realloc(self, NULL, sz);
+}
+
+static void *
+image_calloc(GraphicsManager *self, size_t count, size_t sz) {
+    size_t total;
+    if (__builtin_mul_overflow(count, sz, &total)) return NULL;
+    void *ans = image_alloc(self, total);
+    if (ans) memset(ans, 0, total);
+    return ans;
+}
+
 
 static char command_response[512] = {0};
 
@@ -518,7 +657,8 @@ read_img_file(GraphicsManager *self, int fd, size_t sz, off_t offset, size_t max
     // SIGBUS when reading from a mapping of it. With read() a truncated file
     // simply results in a short read, which is reported as insufficient data
     // by the caller.
-    ld->buf = malloc(sz ? sz : 1);
+    ld->buf = image_alloc(self, sz ? sz : 1);
+
     if (!ld->buf) FABRT("Out of memory allocating %zu bytes to read image file", sz);
     ld->buf_capacity = sz;
     ld->buf_used = 0;
@@ -571,23 +711,50 @@ zlib_strerror(int ret) {
 #undef Z
 }
 
+static void *image_alloc(GraphicsManager *self, size_t sz);
+static void *image_realloc(GraphicsManager *self, void *p, size_t sz);
+
+// Inflates data of a known size. zlib counts in unsigned ints, which an image
+// of more than 4 GiB, or its compressed data, does not fit, so both are fed to
+// it in parts.
 static bool
-inflate_zlib(LoadData *load_data, uint8_t *buf, size_t bufsz) {
+inflate_zlib(GraphicsManager *self, uint8_t *buf, size_t bufsz) {
+    LoadData *load_data = &self->currently_loading;
     bool ok = false;
-    z_stream z;
-    uint8_t *decompressed = malloc(load_data->data_sz);
-    if (decompressed == NULL) fatal("Out of memory allocating decompression buffer");
-    z.zalloc = Z_NULL;
-    z.zfree = Z_NULL;
-    z.opaque = Z_NULL;
-    z.avail_in = bufsz;
-    z.next_in = (Bytef *)buf;
-    z.avail_out = load_data->data_sz;
-    z.next_out = decompressed;
+    z_stream z = {0};
+    uint8_t *decompressed = image_alloc(self, load_data->data_sz);
+    if (decompressed == NULL) {
+        set_command_failed_response("ENOMEM", "Out of memory allocating decompression buffer of %zu bytes", load_data->data_sz);
+        return false;
+    }
+    size_t consumed = 0, produced = 0;
     int ret;
     if ((ret = inflateInit(&z)) != Z_OK) ABRT(ENOMEM, "Failed to initialize inflate with error: %s", zlib_strerror(ret));
-    if ((ret = inflate(&z, Z_FINISH)) != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
-    if (z.avail_out) ABRT(EINVAL, "Image data size post inflation does not match expected size");
+    do {
+        if (!z.avail_in && consumed < bufsz) {
+            const size_t part = MIN(bufsz - consumed, (size_t)UINT_MAX);
+            z.next_in = (Bytef *)buf + consumed;
+            z.avail_in = (uInt)part;
+            consumed += part;
+        }
+        if (produced >= load_data->data_sz) {
+            // all that was expected came out: anything more is too much data
+            uint8_t extra;
+            z.next_out = &extra;
+            z.avail_out = 1;
+            ret = inflate(&z, Z_NO_FLUSH);
+            if (ret != Z_STREAM_END || z.avail_out == 0) ABRT(EINVAL, "Image data size post inflation does not match expected size");
+            break;
+        }
+        const uInt available = (uInt)MIN(load_data->data_sz - produced, (size_t)UINT_MAX);
+        z.next_out = decompressed + produced;
+        z.avail_out = available;
+        ret = inflate(&z, Z_NO_FLUSH);
+        produced += available - z.avail_out;
+        if (ret == Z_BUF_ERROR && !z.avail_in && consumed >= bufsz) break;  // the input ran out
+    } while (ret == Z_OK);
+    if (ret != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
+    if (produced != load_data->data_sz) ABRT(EINVAL, "Image data size post inflation does not match expected size");
     free_load_data(load_data);
     load_data->buf_capacity = load_data->data_sz;
     load_data->buf = decompressed;
@@ -603,11 +770,12 @@ err:
 // data comes out, rather than being sized from the compressed data, and
 // running out of memory fails the command, not the terminal.
 static bool
-inflate_zlib_unbounded(LoadData *load_data, uint8_t *buf, size_t bufsz) {
+inflate_zlib_unbounded(GraphicsManager *self, uint8_t *buf, size_t bufsz) {
+    LoadData *load_data = &self->currently_loading;
     bool ok = false;
     z_stream z = {0};
     size_t cap = 4096, used = 0, consumed = 0;
-    uint8_t *decompressed = malloc(cap);
+    uint8_t *decompressed = image_alloc(self, cap);
     if (decompressed == NULL) { set_command_failed_response("ENOMEM", "Out of memory allocating decompression buffer"); return false; }
     int ret;
     if ((ret = inflateInit(&z)) != Z_OK) ABRT(ENOMEM, "Failed to initialize inflate with error: %s", zlib_strerror(ret));
@@ -622,7 +790,7 @@ inflate_zlib_unbounded(LoadData *load_data, uint8_t *buf, size_t bufsz) {
         if (used == cap) {
             if (cap >= PTRDIFF_MAX) ABRT(EOVERFLOW, "Decompressed vector exceeds address space");
             cap = cap > PTRDIFF_MAX / 2 ? PTRDIFF_MAX : cap * 2;
-            uint8_t *n = realloc(decompressed, cap);
+            uint8_t *n = image_realloc(self, decompressed, cap);
             if (n == NULL) ABRT(ENOMEM, "Out of memory allocating decompression buffer");
             decompressed = n;
         }
@@ -652,9 +820,19 @@ png_error_handler(png_read_data *d UNUSED, const char *code, const char *msg) {
 // The gamut of a PNG is what the file says it is, unless it is a frame of an
 // image, in which case it is converted to the gamut of that image
 static bool
-inflate_png(LoadData *load_data, uint8_t *buf, size_t bufsz, const Image *frame_of) {
+inflate_png(GraphicsManager *self, uint8_t *buf, size_t bufsz, const Image *frame_of) {
+    LoadData *load_data = &self->currently_loading;
     png_read_data d = {.err_handler = png_error_handler, .keep_wide_gamut = frame_of == NULL, .convert_to_gamut = frame_of ? frame_of->gamut : 0};
-    inflate_png_inner(&d, buf, bufsz, MAX_IMAGE_DIMENSION);
+    inflate_png_inner(&d, buf, bufsz);
+    if (!d.ok && d.out_of_memory) {
+        // decoding allocates memory in proportion to the size of the image, see image_alloc()
+        free(d.decompressed);
+        free(d.row_pointers);
+        const size_t needed = d.sz;
+        d = (png_read_data){.err_handler = png_error_handler, .keep_wide_gamut = frame_of == NULL, .convert_to_gamut = frame_of ? frame_of->gamut : 0};
+        if (evict_images_for(self, needed)) inflate_png_inner(&d, buf, bufsz);
+        else d.ok = false;
+    }
     if (d.ok) {
         free_load_data(load_data);
         load_data->buf = d.decompressed;
@@ -690,7 +868,7 @@ print_png_read_error(png_read_data *d, const char *code, const char *msg) {
 bool
 png_from_data(void *png_data, size_t png_data_sz, const char *path_for_error_messages, uint8_t **data, unsigned int *width, unsigned int *height, size_t *sz) {
     png_read_data d = {.err_handler = print_png_read_error};
-    inflate_png_inner(&d, png_data, png_data_sz, MAX_IMAGE_DIMENSION);
+    inflate_png_inner(&d, png_data, png_data_sz);
     if (!d.ok) {
         log_error("Failed to decode PNG image at: %s with error: %s", path_for_error_messages, d.error.used > 0 ? d.error.buf : "");
         free(d.decompressed);
@@ -798,13 +976,18 @@ find_or_create_image(GraphicsManager *self, uint32_t id, bool *existing) {
         }
     }
     *existing = false;
+    // NULL when out of memory
     Image *ans = calloc(1, sizeof(Image));
-    if (!ans) fatal("Out of memory allocating Image object");
+    if (!ans) return NULL;
     ans->internal_id = next_id(&self->image_id_counter);
     ans->texture = new_texture_ref();
     vt_init(&ans->refs_by_internal_id);
     vt_init(&ans->refs_by_client_id);
-    if (vt_is_end(vt_insert(&self->images_by_internal_id, ans->internal_id, ans))) fatal("Out of memory");
+    if (!ans->texture || vt_is_end(vt_insert(&self->images_by_internal_id, ans->internal_id, ans))) {
+        clear_texture_ref(&ans->texture);
+        free(ans);
+        return NULL;
+    }
     return ans;
 }
 
@@ -813,7 +996,12 @@ get_free_client_id(const GraphicsManager *self) {
     size_t num_images = vt_size(&((GraphicsManager *)self)->images_by_internal_id);
     if (!num_images) return 1;
     RAII_ALLOC(uint32_t, client_ids, malloc(num_images * sizeof(uint32_t)));
-    if (!client_ids) fatal("Out of memory");
+    if (!client_ids) {
+        // out of memory, an id after the largest in use, which is free unless that is the largest id there is
+        uint32_t largest = 0;
+        iter_images((GraphicsManager *)self) largest = MAX(largest, i.data->val->client_id);
+        return largest < UINT32_MAX ? largest + 1 : 0;
+    }
     size_t count = 0;
     iter_images((GraphicsManager *)self) {
         Image *img = i.data->val;
@@ -841,7 +1029,6 @@ get_free_client_id(const GraphicsManager *self) {
         return NULL;                                                    \
     }
 
-#define MAX_DATA_SZ (4u * 100000000u)
 // Silkie's raw formats (docs/silkie/packed-image-protocol.rst,
 // docs/silkie/palette-image-protocol.rst and
 // docs/silkie/precision-image-protocol.rst) are the base of their family plus
@@ -1068,19 +1255,29 @@ load_image_data_from_file(
     return ok;
 }
 
+// Direct transmission: the bytes of uncompressed pixels tolerated past their size, as kitty always has, and where the
+// buffer for the data starts, see initialize_load_data()
+#define DIRECT_SLACK ((size_t)10)
+#define DIRECT_INITIAL ((size_t)1 << 20)
+
 static Image *
 load_image_data(
     GraphicsManager *self, Image *img, const GraphicsCommand *g, const unsigned char transmission_type, const uint32_t data_fmt, const uint8_t *payload) {
     LoadData *load_data = &self->currently_loading;
-    const size_t limit = data_fmt == VECTOR ? (size_t)PTRDIFF_MAX : MAX_DATA_SZ;
+    // data of any size, the only bounds the address space and the memory there is
+    const size_t limit = (size_t)PTRDIFF_MAX;
 
     switch (transmission_type) {
         case 'd': // direct
             if (load_data->buf_capacity - load_data->buf_used < g->payload_sz) {
-                if (load_data->buf_used > limit || g->payload_sz > limit-load_data->buf_used ||
-                    (!g->compressed && data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
-                const size_t capacity = MAX(load_data->buf_capacity > limit/2 ? limit : 2*load_data->buf_capacity, load_data->buf_used+g->payload_sz);
-                void *next = realloc(load_data->buf, capacity);
+                // Uncompressed pixels have a known size, the slack of DIRECT_SLACK past it is
+                // tolerated as before, more is too much. The buffer grows as the data arrives, so
+                // that the size a command claims is not allocated before its data comes.
+                const bool known_size = !g->compressed && data_fmt != PNG && data_fmt != VECTOR;
+                const size_t most = known_size ? load_data->data_sz + DIRECT_SLACK : limit;
+                if (load_data->buf_used > most || g->payload_sz > most - load_data->buf_used) ABRT("EFBIG", "Too much data");
+                const size_t capacity = MIN(most, MAX(load_data->buf_capacity > limit/2 ? limit : 2*load_data->buf_capacity, load_data->buf_used+g->payload_sz));
+                void *next = image_realloc(self, load_data->buf, capacity);
                 if (!next) {
                     // what was loaded so far is of no use without the rest, and is a lot of memory to hold on to
                     free_load_data(load_data);
@@ -1182,7 +1379,7 @@ unpack_image_data(GraphicsManager *self, Image *img, uint32_t format) {
     LoadData *ld = &self->currently_loading;
     size_t size;
     if (!raw_image_data_size(RGB, ld->width, ld->height, &size)) ABRT("EOVERFLOW", "Expanded image dimensions overflow address space");
-    uint8_t *rgb = malloc(size);
+    uint8_t *rgb = image_alloc(self, size);
     if (!rgb) ABRT("ENOMEM", "Out of memory expanding packed image");
     const size_t row_size = ld->data_sz / ld->height;
     uint8_t *dst = rgb;
@@ -1231,7 +1428,7 @@ unpack_palette_image(GraphicsManager *self, Image *img, uint32_t format) {
         ABRT("EOVERFLOW", "Expanded image dimensions overflow address space");
     ImagePalette *palette = alloc_palette(1u << bits);
     if (!palette) ABRT("ENOMEM", "Out of memory allocating palette");
-    uint8_t *indices = malloc(size);
+    uint8_t *indices = image_alloc(self, size);
     if (!indices) {
         free(palette);
         ABRT("ENOMEM", "Out of memory expanding palette image");
@@ -1259,7 +1456,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         LoadData *ld = &self->currently_loading;
         switch (g->compressed) {
             case 'z':
-                if (!inflate_zlib_unbounded(ld, ld->buf, ld->buf_used)) {
+                if (!inflate_zlib_unbounded(self, ld->buf, ld->buf_used)) {
                     ld->loading_completed_successfully = false;
                     return NULL;
                 }
@@ -1289,7 +1486,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         switch (g->compressed) {
             case 'z':
                 IB;
-                if (!inflate_zlib(&self->currently_loading, buf, bufsz)) {
+                if (!inflate_zlib(self, buf, bufsz)) {
                     self->currently_loading.loading_completed_successfully = false;
                     return NULL;
                 }
@@ -1300,7 +1497,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         switch (data_fmt) {
             case PNG:
                 IB;
-                if (!inflate_png(&self->currently_loading, buf, bufsz, is_frame ? img : NULL)) {
+                if (!inflate_png(self, buf, bufsz, is_frame ? img : NULL)) {
                     self->currently_loading.loading_completed_successfully = false;
                     return NULL;
                 }
@@ -1333,7 +1530,6 @@ initialize_load_data(
     switch (data_fmt) {
         case PNG:
         case VECTOR:
-            if (data_fmt != VECTOR && g->data_sz > MAX_DATA_SZ) ABRT("EINVAL", "PNG data size too large");
             self->currently_loading.is_4byte_aligned = true;
             self->currently_loading.is_opaque = false;
             self->currently_loading.data_sz = g->data_sz ? g->data_sz : 1024 * 100;
@@ -1389,10 +1585,13 @@ initialize_load_data(
     self->currently_loading.loading_for.image_id = img->internal_id;
     self->currently_loading.loading_for.frame_id = frame_id;
     if (transmission_type == 'd') {
-        const size_t extra = g->compressed ? 1024 : 10; // initial slack; compressed data can grow as it arrives
-        if (self->currently_loading.data_sz > SIZE_MAX - extra) ABRT("EOVERFLOW", "Image buffer size overflows address space");
-        self->currently_loading.buf_capacity = self->currently_loading.data_sz + extra;
-        self->currently_loading.buf = malloc(self->currently_loading.buf_capacity);
+        // The buffer starts at what the data is expected to be, at most DIRECT_INITIAL, and grows as the data arrives,
+        // see load_image_data(), so that a command claiming a size much larger than the data it sends allocates
+        // no more than it sends. The number is where a buffer starts, not a limit.
+        if (self->currently_loading.data_sz > SIZE_MAX - DIRECT_SLACK) ABRT("EOVERFLOW", "Image buffer size overflows address space");
+        self->currently_loading.buf_capacity = MIN(self->currently_loading.data_sz + DIRECT_SLACK, DIRECT_INITIAL);
+
+        self->currently_loading.buf = image_alloc(self, self->currently_loading.buf_capacity);
         self->currently_loading.buf_used = 0;
         if (self->currently_loading.buf == NULL) {
             self->currently_loading.buf_capacity = 0;
@@ -1418,8 +1617,227 @@ typedef struct {
     uint8_t deep;
 } CoalescedFrameData;
 
+// Tiles and mipmaps of images, see "Images larger than a texture" above {{{
+
+// Whether the image is drawn from tiles, which it is given here when it is too large for a texture
+static bool
+use_tiles(GraphicsManager *self, Image *img) {
+    if (img->tiles) return true;
+    if (img->vector || img->surface || !self->disk_cache) return false;
+    const unsigned limit = image_tile_limit();
+    // a tile is its interior and an apron of a pixel either side
+    if (limit < 3 || (img->width <= limit && img->height <= limit)) return false;
+    const uint32_t pitch = MIN(limit, TILE_TEXTURE_GRANULE) - 2;
+    const uint32_t cols = img->width / pitch + (img->width % pitch != 0), rows = img->height / pitch + (img->height % pitch != 0);
+    size_t count, sz;
+    if (__builtin_mul_overflow((size_t)cols, (size_t)rows, &count) || __builtin_mul_overflow(count, sizeof(ImageTile), &sz) ||
+        __builtin_add_overflow(sz, sizeof(ImageTiles), &sz))
+        return false;
+    ImageTiles *t = calloc(1, sz);
+    if (!t) {
+        log_error("Out of memory for the tiles of a %ux%u image, it is not drawn", img->width, img->height);
+        return false;
+    }
+    *t = (ImageTiles){.refcnt = 1, .pitch = pitch, .cols = cols, .rows = rows, .width = img->width, .height = img->height, .cache = Py_NewRef(self->disk_cache)};
+    img->tiles = t;
+    return true;
+}
+
+static uint8_t
+tile_format_for(const Image *img, bool is_float, uint8_t deep) {
+    if (img->indexed_px_sz) return img->indexed_px_sz == 2 ? TILE_INDEX_ALPHA8 : TILE_INDEX8;
+    switch (deep) {
+        case DEEP_GRAY16: return TILE_GRAY16;
+        case DEEP_RGB10A2: return TILE_RGB10A2;
+        case DEEP_RGBA16: return TILE_RGBA16;
+        default: break;
+    }
+    if (is_float) return TILE_HALF;
+    return img->transfer != TRANSFER_SRGB ? TILE_LINEAR8 : TILE_SRGB8;
+}
+
+static unsigned
+tile_texture_px_size(uint8_t format) {
+    switch ((ImageTileFormat)format) {
+        case TILE_INDEX8: return 1;
+        case TILE_INDEX_ALPHA8: case TILE_GRAY16: return 2;
+        case TILE_HALF: case TILE_RGBA16: return 8;
+        case TILE_SRGB8: case TILE_LINEAR8: case TILE_RGB10A2: break;
+    }
+    return 4;
+}
+
+// The pixels of the frame shown of a tiled image have changed: they are in
+// the cache as the frame cached_frame_id, or when that is zero only in data,
+// a frame composed of others, which is copied to the cache. Every tile is
+// uploaded again when next shown.
 static void
-upload_to_gpu(GraphicsManager *self, Image *img, const CoalescedFrameData *data) {
+set_tile_source(GraphicsManager *self, Image *img, bool is_opaque, bool is_float, uint8_t deep, const uint8_t *data, uint32_t cached_frame_id) {
+    ImageTiles *t = img->tiles;
+    t->has_source = false;
+    const unsigned px_sz = img->indexed_px_sz ? img->indexed_px_sz : stored_pixel_size(is_opaque, is_float, deep);
+    ImageAndFrame key = {.image_id = img->internal_id, .frame_id = cached_frame_id};
+    bool ok = true;
+    if (!cached_frame_id) {
+        key.frame_id = DISPLAYED_FRAME_ID;
+        char k[CACHE_KEY_BUFFER_SIZE];
+        // the frame was composed in memory, so its size fits there
+        const size_t sz = (size_t)px_sz * img->width * img->height;
+        if (!data || !add_to_disk_cache(self->disk_cache, k, cache_key(key, k), data, sz, false)) {
+            if (PyErr_Occurred()) PyErr_Print();
+            log_error("Failed to store the frame shown of a %ux%u image, it is not drawn", img->width, img->height);
+            ok = false;
+        }
+    }
+    if (ok) {
+        t->source = key;
+        t->source_px_sz = px_sz;
+        t->decode = !img->indexed_px_sz && !is_float && image_decode_for(deep, img->transfer) != IMAGE_DECODE_NONE;
+        t->source_opaque = is_opaque;
+        t->deep = deep, t->transfer = img->transfer, t->gamut = img->gamut;
+        t->format = t->decode ? TILE_HALF : tile_format_for(img, is_float, deep);
+        t->has_source = true;
+    }
+    for (size_t i = 0; i < (size_t)t->cols * t->rows; i++) t->tiles[i].loaded = t->tiles[i].mipmapped = false;
+    set_layers_dirty(self);
+}
+
+// Uploads the mipmap levels of an integer texture of indices, made from its
+// pixels: each pixel of a level is the most common index of the four pixels
+// it covers in the level above, the first of them on a tie, with the mean of
+// their alphas. Mixing the colors of indices would need the palette, which
+// can change, so the shader blends the colors of the indices it reads at two
+// levels instead. Returns the number of levels below the first that were
+// made, fewer than all when memory runs out.
+static uint8_t
+upload_index_mipmaps(uint32_t tex, const uint8_t *pixels, uint32_t width, uint32_t height, unsigned bpp) {
+    uint8_t levels = 0;
+    const uint8_t *src = pixels;
+    uint8_t *owned = NULL;
+    while (width > 1 || height > 1) {
+        const uint32_t w = MAX(1u, width / 2), h = MAX(1u, height / 2);
+        uint8_t *dest = malloc((size_t)w * h * bpp);
+        if (!dest) break;
+        for (uint32_t y = 0; y < h; y++) for (uint32_t x = 0; x < w; x++) {
+            const uint8_t *px[4];
+            const uint32_t x0 = MIN(2 * x, width - 1), x1 = MIN(2 * x + 1, width - 1), y0 = MIN(2 * y, height - 1), y1 = MIN(2 * y + 1, height - 1);
+            px[0] = src + ((size_t)y0 * width + x0) * bpp;
+            px[1] = src + ((size_t)y0 * width + x1) * bpp;
+            px[2] = src + ((size_t)y1 * width + x0) * bpp;
+            px[3] = src + ((size_t)y1 * width + x1) * bpp;
+            unsigned best = 0, best_count = 0, alpha = 0;
+            for (unsigned a = 0; a < 4; a++) {
+                unsigned count = 0;
+                for (unsigned b = 0; b < 4; b++) count += px[a][0] == px[b][0];
+                if (count > best_count) best = a, best_count = count;
+                if (bpp == 2) alpha += px[a][1];
+            }
+            uint8_t *out = dest + ((size_t)y * w + x) * bpp;
+            out[0] = px[best][0];
+            if (bpp == 2) out[1] = (uint8_t)((alpha + 2) / 4);
+        }
+        upload_index_texture_level(tex, ++levels, w, h, bpp, dest);
+        free(owned);
+        src = owned = dest;
+        width = w, height = h;
+        if (levels == UINT8_MAX) break;  // a level 255 would be 2^255 pixels wide, so this is never reached
+    }
+    free(owned);
+    finish_index_texture_mipmaps(tex, levels);
+    return levels;
+}
+
+// Mipmaps for an image in one texture drawn smaller than it is, pixels those
+// of the texture or NULL to read them from the cache. A vector image is drawn
+// at the size it is shown at and a GPU surface is copied again on every
+// refresh, so neither has any.
+static void
+make_texture_mipmaps(GraphicsManager *self, Image *img, const uint8_t *pixels) {
+    TextureRef *tex = img->texture;
+    if (!tex || !tex->id || tex->mipmapped || img->vector || img->surface) return;
+    if (img->indexed_px_sz) {
+        void *data = NULL;
+        size_t sz = 0;
+        if (!pixels) {
+            const ImageAndFrame key = {.image_id = img->internal_id, .frame_id = img->root_frame.id};
+            char k[CACHE_KEY_BUFFER_SIZE];
+            if (!self->disk_cache || !read_from_disk_cache_simple(self->disk_cache, k, cache_key(key, k), &data, &sz, false)) return;
+            if (sz < (size_t)img->width * img->height * img->indexed_px_sz) {
+                free(data);
+                return;
+            }
+            pixels = data;
+        }
+        tex->mip_levels = upload_index_mipmaps(tex->id, pixels, img->width, img->height, img->indexed_px_sz);
+        free(data);
+    } else generate_image_texture_mipmaps(tex->id);
+    tex->mipmapped = true;
+}
+
+static Frame *current_frame(Image *img);
+static CoalescedFrameData get_coalesced_frame_data(GraphicsManager *self, Image *img, const Frame *f);
+static void cfd_free(CoalescedFrameData *p);
+
+// Mipmaps for decoded images {{{
+//
+// The GPU filters the values of a texture before the shader decodes them,
+// which is right only when they are linear. So the shader filters an image it
+// decodes itself, in linear light, when the image is drawn larger than it is.
+// Drawn smaller, a fragment covers many pixels and needs mipmaps, which have to
+// be made in linear light too: the pixels are decoded on the CPU, as for
+// vector images, into half floats in the gamut of the image, which the GPU
+// mipmaps and filters as it does any linear texture. The shader then only
+// does what follows decoding: tone mapping and the change of gamut. A tile of
+// such an image always holds its decoded pixels, as half floats, as it is
+// uploaded from the CPU anyway. Half floats have eleven significant bits in
+// linear light, finer than the steps of a 10 bit PQ or HLG signal.
+
+static bool
+image_is_decoded(const Image *img) {
+    return !img->vector && !img->surface && !img->indexed_px_sz && !img->root_frame.is_float &&
+           image_decode_for(img->root_frame.deep, img->transfer) != IMAGE_DECODE_NONE;
+}
+
+// Decodes num pixels into half float RGBA, linear, in the gamut of the image
+static void
+decode_to_half(const PixelDecoder *d, const uint8_t *src, size_t num, float *scratch, uint16_t *out) {
+    pixel_decoder_decode(d, src, num, false, scratch);
+    for (size_t i = 0; i < num * 4; i++) out[i] = float_to_half(fminf(65504.f, fmaxf(-65504.f, scratch[i])));
+}
+
+static void
+make_decoded_texture(GraphicsManager *self, Image *img) {
+    if (img->decoded_texture && img->decoded_texture->id) return;
+    Frame *f = current_frame(img);
+    if (!f || !self->disk_cache) return;
+    RAII_CoalescedFrameData(cfd, get_coalesced_frame_data(self, img, f));
+    if (!cfd.buf) return;
+    const size_t num = (size_t)img->width * img->height;
+    PixelDecoder d;
+    if (num > SIZE_MAX / 8 || !pixel_decoder_init(&d, cfd.deep, cfd.is_opaque, img->transfer, img->gamut)) return;
+    RAII_ALLOC(uint16_t, half, malloc(num * 8));
+    RAII_ALLOC(float, row, malloc((size_t)img->width * 4 * sizeof(float)));
+    if (half && row) {
+        const size_t stride = (size_t)img->width * stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep);
+        for (uint32_t y = 0; y < img->height; y++) decode_to_half(&d, cfd.buf + y * stride, img->width, row, half + (size_t)y * img->width * 4);
+        if (!img->decoded_texture) img->decoded_texture = new_texture_ref();
+        if (img->decoded_texture) {
+            send_image_to_gpu(&img->decoded_texture->id, half, img->width, img->height, false, true, true, true, REPEAT_CLAMP);
+            generate_image_texture_mipmaps(img->decoded_texture->id);
+            img->decoded_texture->mipmapped = true;
+        }
+    } else log_error("Out of memory decoding a %ux%u image for its mipmaps, it is drawn without them", img->width, img->height);
+    pixel_decoder_free(&d);
+}
+// }}}
+
+static void
+upload_to_gpu(GraphicsManager *self, Image *img, const CoalescedFrameData *data, uint32_t cached_frame_id) {
+    // a tiled image is uploaded a tile at a time as it is shown, see grman_update_layers()
+    if (use_tiles(self, img)) {
+        set_tile_source(self, img, data->is_opaque, data->is_float, data->deep, data->buf, cached_frame_id);
+        return;
+    }
     if (!self->context_made_current_for_this_command) {
         if (!self->window_id) return;
         if (!make_window_context_current(self->window_id)) return;
@@ -1431,7 +1849,18 @@ upload_to_gpu(GraphicsManager *self, Image *img, const CoalescedFrameData *data)
     else if (data->deep || (img->transfer != TRANSFER_SRGB && !data->is_float))
         send_encoded_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, data->deep, data->is_opaque, data->is_4byte_aligned);
     else send_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, data->is_opaque, data->is_float, data->is_4byte_aligned, true, REPEAT_CLAMP);
+    // the mipmaps are of the pixels before, an image shown smaller than it is gets them again now
+    img->texture->mipmapped = false;
+    img->texture->mip_levels = 0;
+    clear_texture_ref(&img->decoded_texture);
+    if (img->drawn_minified) {
+        // the decoded pixels are made from the cache, which has these only once the caller has stored them
+        if (image_is_decoded(img)) set_layers_dirty(self);
+        else make_texture_mipmaps(self, img, data->buf);
+    }
+
 }
+// }}}
 
 // Sends count slots of the palette of a palette image from first on to the
 // GPU, or all of them when it has no texture yet. The indices are not sent again.
@@ -1524,18 +1953,24 @@ load_surface_image(GraphicsManager *self, const GraphicsCommand *g, Image *img, 
 #if defined(__APPLE__) || defined(__linux__)
     if (g->more || g->compressed) ABRT("EINVAL", "Chunking and compression are not supported for GPU surfaces");
     if (g->transfer) ABRT("EINVAL", "Transfer functions are not supported for GPU surfaces");
-    char spec[256], err[256];
-    if (g->payload_sz >= sizeof(spec)) ABRT("EINVAL", "GPU surface specification too long");
-    snprintf(spec, sizeof(spec), "%.*s", (int)g->payload_sz, payload);
+    // the specification is sized from the payload, err holds a message, which is cut short if it is long
+    char err[256];
+    if (g->payload_sz >= PTRDIFF_MAX || memchr(payload, 0, g->payload_sz)) ABRT("EINVAL", "Invalid GPU surface specification");
+    RAII_ALLOC(char, spec, malloc(g->payload_sz + 1));
+    if (!spec) ABRT("ENOMEM", "Out of memory for the GPU surface specification");
+    memcpy(spec, payload, g->payload_sz);
+    spec[g->payload_sz] = 0;
     uint32_t width = 0, height = 0;
 #ifdef __APPLE__
     if (strncmp(spec, "iosurface:", 10) != 0) ABRT("EINVAL", "Unknown GPU surface type: %s", spec);
     bool is_bgra;
     void *surface = iosurface_lookup((uint32_t)strtoul(spec + 10, NULL, 10), &width, &height, &is_bgra, err, sizeof(err));
     if (!surface) ABRT("EINVAL", "%s", err);
-    if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+    // A surface is drawn by binding it to a texture, which cannot be larger than the GPU allows
+    const unsigned limit = gpu_image_texture_limit();
+    if (limit && (width > limit || height > limit)) {
         iosurface_release(surface);
-        ABRT("EINVAL", "Image too large, width or height greater than %u", MAX_IMAGE_DIMENSION);
+        ABRT("EINVAL", "GPU surface larger than the largest texture of the GPU: %u pixels", limit);
     }
     img->surface_is_bgra = is_bgra;
 #else
@@ -1569,10 +2004,9 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
     if (tt == 'd' && self->currently_loading.loading_for.image_id) init_img = false;
     if (init_img) {
         self->currently_loading.loading_for = (const ImageAndFrame){0};
-        if (g->data_width > MAX_IMAGE_DIMENSION || g->data_height > MAX_IMAGE_DIMENSION)
-            ABRT("EINVAL", "Image too large, width or height greater than %u", MAX_IMAGE_DIMENSION);
         remove_images(self, add_trim_predicate, 0);
         img = find_or_create_image(self, iid, &existing);
+        if (!img) ABRT("ENOMEM", "Out of memory allocating an image");
         if (existing) {
             free_image_resources(self, img);
             img->texture = new_texture_ref();
@@ -1656,8 +2090,12 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
     const size_t px_sz = self->currently_loading.indexed_px_sz
                              ? self->currently_loading.indexed_px_sz
                              : stored_pixel_size(self->currently_loading.is_opaque, self->currently_loading.is_float, self->currently_loading.deep);
-    size_t required_sz = px_sz * self->currently_loading.width * self->currently_loading.height;
+    size_t required_sz;
+    if (__builtin_mul_overflow(px_sz, (size_t)self->currently_loading.width, &required_sz) ||
+        __builtin_mul_overflow(required_sz, (size_t)self->currently_loading.height, &required_sz))
+        ABRT("EOVERFLOW", "Image dimensions overflow address space");
     if (self->currently_loading.data_sz != required_sz)
+
         ABRT(
             "EINVAL",
             "Image dimensions: %ux%u do not match data size: %zu, expected size: %zu",
@@ -1697,7 +2135,7 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             // Upload before caching, the cache takes ownership of the data
             upload_to_gpu(self, img, &(const CoalescedFrameData){
                 .buf = self->currently_loading.data, .is_opaque = img->root_frame.is_opaque, .is_float = img->root_frame.is_float,
-                .is_4byte_aligned = img->root_frame.is_4byte_aligned, .deep = img->root_frame.deep});
+                .is_4byte_aligned = img->root_frame.is_4byte_aligned, .deep = img->root_frame.deep}, img->root_frame.id);
             if (img->palette) upload_palette_to_gpu(self, img, 0, img->palette->slots);
             if (!add_load_data_to_cache(self, (const ImageAndFrame){.image_id = img->internal_id, .frame_id = img->root_frame.id}, img->root_frame.transient)) {
                 if (PyErr_Occurred()) PyErr_Print();
@@ -1710,7 +2148,6 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->root_frame_data_loaded = true;
     }
     return img;
-#undef MAX_DATA_SZ
 }
 
 static const char *
@@ -1774,8 +2211,8 @@ supported_keys_for_query(const GraphicsCommand *g) {
             uint8_t transfer;
             if (g->transfer && !surface && transfer_of_command(g, fmt ? fmt : RGBA, &transfer) && (action != 'f' || transfer == TRANSFER_SRGB)) print(",E=%u", g->transfer);
             if (action != 'f' && !is_indexed && !is_palette) ECHO_ONE('T', tone_map);
-            if (g->data_width <= MAX_IMAGE_DIMENSION) ECHO_UINT('s', data_width);
-            if (g->data_height <= MAX_IMAGE_DIMENSION) ECHO_UINT('v', data_height);
+            ECHO_UINT('s', data_width);
+            ECHO_UINT('v', data_height);
             ECHO_UINT('S', data_sz);
             ECHO_UINT('O', data_offset);
             if (g->usage_hints && !(g->usage_hints & ~GRAPHICS_USAGE_HINT_TRANSIENT)) print(",N=%u", g->usage_hints);
@@ -1943,11 +2380,15 @@ static void update_vector_texture(GraphicsManager *self, Image *img, double widt
 
 static ImageRef *
 create_ref(Image *img, ImageRef *clone_from) {
+    // NULL when out of memory
     ImageRef *ans = calloc(1, sizeof(ImageRef));
-    if (!ans) fatal("Out of memory creating ImageRef");
+    if (!ans) return NULL;
     if (clone_from) *ans = *clone_from;
     ans->internal_id = next_id(&img->ref_id_counter);
-    if (vt_is_end(vt_insert(&img->refs_by_internal_id, ans->internal_id, ans))) fatal("Out of memory");
+    if (vt_is_end(vt_insert(&img->refs_by_internal_id, ans->internal_id, ans))) {
+        free(ans);
+        return NULL;
+    }
     return ans;
 }
 
@@ -2038,7 +2479,7 @@ grman_put_cell_image(
     float x_offset, y_offset, x_scale, y_scale;
 
     // Fit the image to the box while preserving aspect ratio
-    if (img->width * img_rows * cell.height > img->height * img_columns * cell.width) {
+    if ((uint64_t)img->width * img_rows * cell.height > (uint64_t)img->height * img_columns * cell.width) {
         // Fit to width and center vertically.
         x_offset = 0;
         x_scale = (float)(img_columns * cell.width) / MAX(1u, img->width);
@@ -2117,6 +2558,7 @@ grman_put_cell_image(
 
     // Create a real ref.
     ImageRef *real_ref = create_ref(img, &ref);
+    if (!real_ref) return;  // out of memory, the cells show nothing
 
     img->atime = monotonic();
     set_layers_dirty(self);
@@ -2220,7 +2662,10 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
             }
         }
     }
-    if (ref == NULL) ref = create_ref(img, NULL);
+    if (ref == NULL && !(ref = create_ref(img, NULL))) {
+        set_command_failed_response("ENOMEM", "Out of memory creating a placement");
+        return img->client_id;
+    }
 
     *is_dirty = true;
     set_layers_dirty(self);
@@ -2242,7 +2687,11 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
     ref->num_cols = g->num_cells;
     ref->num_rows = g->num_lines;
     if (img->client_id) {
-        if (!ref->client_id && g->placement_id && vt_is_end(vt_insert(&img->refs_by_client_id, g->placement_id, ref))) fatal("Out of memory");
+        if (!ref->client_id && g->placement_id && vt_is_end(vt_insert(&img->refs_by_client_id, g->placement_id, ref))) {
+            set_command_failed_response("ENOMEM", "Out of memory creating a placement");
+            remove_ref(img, ref);
+            return img->client_id;
+        }
         ref->client_id = g->placement_id;
     }
     update_src_rect(ref, img);
@@ -2325,8 +2774,271 @@ resolve_parent_offset(const GraphicsManager *self, const ImageRef *ref, int32_t 
 }
 
 
+// Drawing tiled images, see "Images larger than a texture" {{{
+
+// Frees the textures of tiles that are not shown: those not shown for
+// TILE_RETENTION, or all of them when the GPU has run out of memory. Tiles
+// shared with a copy of the image made for paused rendering are kept, as the
+// render data of the copy can refer to them.
+static void
+free_hidden_tiles(GraphicsManager *self, bool all, monotonic_t now) {
+    iter_images(self) {
+        ImageTiles *t = i.data->val->tiles;
+        if (!t || t->refcnt > 1) continue;
+        for (size_t k = 0; k < (size_t)t->cols * t->rows; k++) {
+            ImageTile *tile = t->tiles + k;
+            if (tile->visible || !tile->texture || (!all && now - tile->last_visible <= TILE_RETENTION)) continue;
+            free_texture(&tile->texture);
+            tile->loaded = tile->mipmapped = false;
+            tile->mip_levels = 0;
+        }
+    }
+}
+
+static void
+convert_tile_row(const ImageTiles *t, uint8_t *dest, const uint8_t *src, unsigned in_px, uint32_t x0, uint32_t tw, uint32_t sx0, bool is_index) {
+    const unsigned out_px = tile_texture_px_size(t->format);
+    for (uint32_t u = 0; u < tw; u++) {
+        int64_t ix = (int64_t)x0 - 1 + u;
+        uint8_t *o = dest + (size_t)u * out_px;
+        bool outside = false;
+        if (ix < 0 || ix >= t->width) {
+            if (!is_index) {
+                memset(o, 0, out_px);  // transparent, as the border of an image in one texture
+                continue;
+            }
+            ix = ix < 0 ? 0 : t->width - 1;  // the edge pixel, as the shader clamps reads to it
+            outside = true;
+        }
+        const uint8_t *p = src + (size_t)(ix - sx0) * in_px;
+        if (outside) memcpy(o, p, out_px);
+        else if (in_px == out_px) {
+            // the pixels of the interior are contiguous in both, copy them at once
+            const uint32_t run = MIN((uint32_t)(t->width - ix), tw - u);
+            memcpy(o, p, (size_t)run * out_px);
+            u += run - 1;
+        } else {
+            // eight bit RGB is sent as RGBA, see tile_format_info()
+            o[0] = p[0], o[1] = p[1], o[2] = p[2], o[3] = 255;
+        }
+    }
+}
+
+static bool load_tile_pixels(GraphicsManager *self, ImageTiles *t, ImageTile *tile, size_t idx, uint8_t *in, uint8_t *out, uint8_t *decoded,
+                             float *scratch, const PixelDecoder *decoder, uint32_t band, monotonic_t now, uint8_t *capture);
+
+// Uploads the pixels of a tile, with mipmaps when it is shown smaller than it
+// is, a band of rows at a time read from the cache. False when it cannot be
+// drawn: its pixels cannot be read or there is no memory for them.
+static bool
+load_tile(GraphicsManager *self, ImageTiles *t, size_t idx, bool with_mipmaps, monotonic_t now, uint8_t *capture) {
+    ImageTile *tile = t->tiles + idx;
+    if (!t->has_source) return false;
+    const uint32_t c = idx % t->cols, r = idx / t->cols;
+    const uint32_t x0 = c * t->pitch, x1 = MIN(x0 + t->pitch, t->width), y0 = r * t->pitch, y1 = MIN(y0 + t->pitch, t->height);
+    const uint32_t tw = x1 - x0 + 2, th = y1 - y0 + 2;
+    const unsigned out_px = tile_texture_px_size(t->format), in_px = t->source_px_sz;
+    const bool is_index = t->format == TILE_INDEX8 || t->format == TILE_INDEX_ALPHA8;
+    // the columns read: the interior and as much of the apron as is in the image
+    const uint32_t sx0 = x0 ? x0 - 1 : 0, sx1 = MIN(t->width, x1 + 1);
+    const size_t in_row = (size_t)(sx1 - sx0) * in_px, out_row = (size_t)tw * out_px;
+    // a band of about 4 MiB at a time, all of an integer texture, which its mipmaps are made from
+    const uint32_t band = is_index ? th : (uint32_t)MAX((size_t)1, MIN((size_t)th, ((size_t)4 << 20) / out_row));
+    RAII_ALLOC(uint8_t, in, malloc(in_row * band));
+    RAII_ALLOC(uint8_t, out, malloc(out_row * band));
+    // pixels the shader would decode are decoded a row at a time into half floats, see "Mipmaps for decoded images"
+    const uint32_t read_cols = sx1 - sx0;
+    RAII_ALLOC(uint8_t, decoded, t->decode ? malloc((size_t)read_cols * 8) : NULL);
+    RAII_ALLOC(float, scratch, t->decode ? malloc((size_t)read_cols * 4 * sizeof(float)) : NULL);
+    PixelDecoder decoder = {0};
+    if (!in || !out || (t->decode && (!decoded || !scratch || !pixel_decoder_init(&decoder, t->deep, t->source_opaque, t->transfer, t->gamut)))) {
+        log_error("Out of memory loading a %ux%u tile of an image, it is not drawn", tw, th);
+        return false;
+    }
+    bool ok = load_tile_pixels(self, t, tile, idx, in, out, decoded, scratch, t->decode ? &decoder : NULL, band, now, capture);
+    pixel_decoder_free(&decoder);
+    if (!ok || capture) return ok;
+    if (is_index) {
+        if (with_mipmaps) tile->mip_levels = upload_index_mipmaps(tile->texture, out, tw, th, out_px);
+        else if (tile->mip_levels) {
+            finish_index_texture_mipmaps(tile->texture, 0);
+            tile->mip_levels = 0;
+        }
+        tile->mipmapped = with_mipmaps;
+    } else if (with_mipmaps || tile->mipmapped) {
+        // a texture that had mipmaps keeps them, the filter it has needs them
+        generate_image_texture_mipmaps(tile->texture);
+        tile->mipmapped = true;
+    }
+    tile->loaded = true;
+    return true;
+}
+
+static bool
+load_tile_pixels(GraphicsManager *self, ImageTiles *t, ImageTile *tile, size_t idx, uint8_t *in, uint8_t *out, uint8_t *decoded, float *scratch,
+                 const PixelDecoder *decoder, uint32_t band, monotonic_t now, uint8_t *capture) {
+    const uint32_t c = idx % t->cols, r = idx / t->cols;
+    const uint32_t x0 = c * t->pitch, x1 = MIN(x0 + t->pitch, t->width), y0 = r * t->pitch, y1 = MIN(y0 + t->pitch, t->height);
+    const uint32_t tw = x1 - x0 + 2, th = y1 - y0 + 2;
+    const unsigned out_px = tile_texture_px_size(t->format), in_px = t->source_px_sz;
+    const bool is_index = t->format == TILE_INDEX8 || t->format == TILE_INDEX_ALPHA8;
+    const uint32_t sx0 = x0 ? x0 - 1 : 0, sx1 = MIN(t->width, x1 + 1);
+    const size_t in_row = (size_t)(sx1 - sx0) * in_px, out_row = (size_t)tw * out_px, stride = (size_t)t->width * in_px;
+    // capture, for the tests, receives the pixels instead of the GPU
+    if (!capture && !tile->texture && !alloc_image_tile_texture(&tile->texture, tw, th, t->format)) {
+        // out of GPU memory: free what is not shown and try once more
+        free_hidden_tiles(self, true, now);
+        if (!alloc_image_tile_texture(&tile->texture, tw, th, t->format)) {
+            log_error("The GPU has no memory for a %ux%u tile of an image, it is not drawn", tw, th);
+            return false;
+        }
+        tile->mip_levels = 0;
+    }
+    char key[CACHE_KEY_BUFFER_SIZE];
+    const size_t key_sz = cache_key(t->source, key);
+    for (uint32_t b = 0; b < th; b += band) {
+        const uint32_t n = MIN(band, th - b);
+        // the rows of the image of texture rows b to b + n - 1, the first of which is the row above the interior
+        const int64_t first = (int64_t)y0 - 1 + b, last = first + n - 1;
+        int64_t ry0 = MAX(first, (int64_t)0), ry1 = MIN(last, (int64_t)t->height - 1);
+        if (is_index) ry0 = MIN(ry0, (int64_t)t->height - 1), ry1 = MAX(ry1, (int64_t)0);
+        if (ry0 <= ry1 &&
+            !read_rows_from_disk_cache(t->cache, key, key_sz, ((size_t)ry0 * t->width + sx0) * in_px, in_row, stride, (size_t)(ry1 - ry0 + 1), in)) {
+            if (PyErr_Occurred()) PyErr_Print();
+            log_error("Failed to read the pixels of a tile of a %ux%u image, it is not drawn", t->width, t->height);
+            t->has_source = false;  // not again on every frame
+            return false;
+        }
+        for (uint32_t j = 0; j < n; j++) {
+            int64_t iy = first + j;
+            uint8_t *dest = out + (size_t)j * out_row;
+            if (iy < 0 || iy >= t->height) {
+                if (!is_index) {
+                    memset(dest, 0, out_row);
+                    continue;
+                }
+                iy = iy < 0 ? 0 : t->height - 1;
+            }
+            const uint8_t *src = in + (size_t)(iy - ry0) * in_row;
+            if (decoder) {
+                decode_to_half(decoder, src, sx1 - sx0, scratch, (uint16_t *)decoded);
+                convert_tile_row(t, dest, decoded, 8, x0, tw, sx0, is_index);
+            } else convert_tile_row(t, dest, src, in_px, x0, tw, sx0, is_index);
+        }
+        if (capture) memcpy(capture + (size_t)b * out_row, out, (size_t)n * out_row);
+        else upload_image_tile_rows(tile->texture, b, tw, n, t->format, out);
+    }
+    return true;
+}
+
+
+// Adds the parts of the tiles a placement of a tiled image shows, those on
+// screen, to the render data. rd is the render data of the placement as a
+// whole, which each part is a copy of with its own rectangles.
+static void add_render_item(GraphicsManager *self, const ImageRenderData *rd);
+
+static void
+add_tiled_render_items(
+    GraphicsManager *self, ImageTiles *t, const ImageRef *ref, const ImageRenderData *whole, ImageRect screen, bool minified, monotonic_t now) {
+    const double sx = ref->src_x, sy = ref->src_y, sw = ref->src_width, sh = ref->src_height;
+    if (!(sw > 0) || !(sh > 0)) return;
+    const ImageRect r = whole->dest_rect;
+    const double dw = (double)r.right - r.left, dh = (double)r.top - r.bottom;
+    const uint32_t c0 = (uint32_t)MIN((double)(t->cols - 1), MAX(0., floor(sx / t->pitch)));
+    const uint32_t r0 = (uint32_t)MIN((double)(t->rows - 1), MAX(0., floor(sy / t->pitch)));
+    for (uint32_t c = c0; c < t->cols; c++) {
+        const double tx0 = (double)c * t->pitch, tx1 = MIN(tx0 + t->pitch, (double)t->width);
+        if (tx0 >= sx + sw) break;
+        const double a = MAX(sx, tx0), b = MIN(sx + sw, tx1);
+        if (!(a < b)) continue;
+        // an edge shared with the next tile is computed from the same numbers in both, so the quads meet exactly
+        const float left = a == sx ? r.left : (float)(r.left + (a - sx) / sw * dw);
+        const float right = b == sx + sw ? r.right : (float)(r.left + (b - sx) / sw * dw);
+        if (right <= screen.left || left >= screen.right) continue;
+        const double tw = tx1 - tx0 + 2;
+        for (uint32_t row = r0; row < t->rows; row++) {
+            const double ty0 = (double)row * t->pitch, ty1 = MIN(ty0 + t->pitch, (double)t->height);
+            if (ty0 >= sy + sh) break;
+            const double ya = MAX(sy, ty0), yb = MIN(sy + sh, ty1);
+            if (!(ya < yb)) continue;
+            const float top = ya == sy ? r.top : (float)(r.top - (ya - sy) / sh * dh);
+            const float bottom = yb == sy + sh ? r.bottom : (float)(r.top - (yb - sy) / sh * dh);
+            if (bottom >= screen.top || top <= screen.bottom) continue;
+            const double th = ty1 - ty0 + 2;
+            const size_t idx = (size_t)row * t->cols + c;
+            ImageRenderData rd = *whole;
+            rd.dest_rect = (ImageRect){.left = left, .top = top, .right = right, .bottom = bottom};
+            // in the texture of the tile, whose first pixel is the apron before the interior
+            rd.src_rect = (ImageRect){.left = (float)((a - tx0 + 1) / tw), .right = (float)((b - tx0 + 1) / tw),
+                                      .top = (float)((ya - ty0 + 1) / th), .bottom = (float)((yb - ty0 + 1) / th)};
+            rd.tile = (uint32_t)idx + 1;
+            if (t->decode) {
+                // the texture holds the decoded pixels, which the GPU filters itself
+                rd.linear_texture = true;
+                rd.is_gray = rd.filter_decoded = false;
+            }
+            add_render_item(self, &rd);
+            ImageTile *tile = t->tiles + idx;
+            tile->visible = true;
+            tile->last_visible = now;
+            tile->wants_mipmaps |= minified;
+        }
+    }
+}
+
+// Uploads the tiles of an image its placements show, sets the textures of the
+// render items of them from first_item on, and frees the tiles that have not
+// been shown for a while
+static void
+prepare_tiles(GraphicsManager *self, ImageTiles *t, size_t first_item, monotonic_t now) {
+    if (self->window_id) {
+        for (size_t k = 0; k < (size_t)t->cols * t->rows; k++) {
+            ImageTile *tile = t->tiles + k;
+            if (!tile->visible) continue;
+            if (!tile->loaded || (tile->wants_mipmaps && !tile->mipmapped)) {
+                // the GPU makes the mipmaps of a texture of colors from what it holds, those of indices are made from the pixels
+                const bool is_index = t->format == TILE_INDEX8 || t->format == TILE_INDEX_ALPHA8;
+                if (tile->loaded && !is_index) {
+                    generate_image_texture_mipmaps(tile->texture);
+                    tile->mipmapped = true;
+                } else if (!load_tile(self, t, k, tile->wants_mipmaps, now, NULL)) tile->loaded = false;
+            }
+        }
+    }
+    for (size_t k = first_item; k < self->render_data.count; k++) {
+        ImageRenderData *rd = self->render_data.item + k;
+        if (!rd->tile) continue;
+        const ImageTile *tile = t->tiles + rd->tile - 1;
+        rd->texture_id = tile->loaded ? tile->texture : 0;
+        rd->mip_levels = tile->mipmapped ? tile->mip_levels : 0;
+    }
+    if (self->window_id && t->refcnt < 2) {
+        for (size_t k = 0; k < (size_t)t->cols * t->rows; k++) {
+            ImageTile *tile = t->tiles + k;
+            if (!tile->visible && tile->texture && now - tile->last_visible > TILE_RETENTION) {
+                free_texture(&tile->texture);
+                tile->loaded = tile->mipmapped = false;
+                tile->mip_levels = 0;
+            }
+        }
+    }
+}
+// }}}
+
+static void
+add_render_item(GraphicsManager *self, const ImageRenderData *rd) {
+    // the layers are ranges of the render data, so they count its items, a placement of a tiled image can have several
+    if (rd->z_index < ((int32_t)INT32_MIN / 2)) self->num_of_below_refs++;
+    else if (rd->z_index < 0) self->num_of_negative_refs++;
+    else self->num_of_positive_refs++;
+    if (rd->indexed_px_sz) self->num_of_indexed_refs++;
+    ensure_space_for(&(self->render_data), item, ImageRenderData, self->render_data.count + 1, capacity, 64, true);
+    self->render_data.item[self->render_data.count++] = *rd;
+}
+
 bool
 grman_update_layers(
+
     GraphicsManager *self,
     unsigned int scrolled_by,
     float scroll_offset_lines,
@@ -2357,11 +3069,17 @@ grman_update_layers(
     // Iterate over all visible refs and create render data
     self->render_data.count = 0;
     self->render_data.has_hdr = false;
+    const monotonic_t now = monotonic();
+    // what of the window is on screen, in normalized device coordinates, outside which no tile is drawn
+    const ImageRect screen = {.left = screen_left, .top = screen_top, .right = screen_left + screen_width, .bottom = screen_bottom};
+
 
     for (image_map_itr imgitr = vt_first(&self->images_by_internal_id); !vt_is_end(imgitr);) {
         Image *img = imgitr.data->val;
         bool was_drawn = img->is_drawn, ref_removed = false;
         img->is_drawn = false;
+        img->drawn_minified = false;
+        if (img->tiles) for (size_t k = 0; k < (size_t)img->tiles->cols * img->tiles->rows; k++) img->tiles->tiles[k].visible = img->tiles->tiles[k].wants_mipmaps = false;
         double vector_width = 0, vector_height = 0;  // the largest size the image is shown at
         ImageFraction vector_shown = {.left = 1, .top = 1, .right = 0, .bottom = 0};  // the parts of it on screen
         const size_t first_render_item = self->render_data.count;
@@ -2429,16 +3147,10 @@ grman_update_layers(
                 }
             }
 
-            if (ref->z_index < ((int32_t)INT32_MIN / 2)) self->num_of_below_refs++;
-            else if (ref->z_index < 0) self->num_of_negative_refs++;
-            else self->num_of_positive_refs++;
-            ensure_space_for(&(self->render_data), item, ImageRenderData, self->render_data.count + 1, capacity, 64, true);
-            ImageRenderData *rd = self->render_data.item + self->render_data.count;
-            zero_at_ptr(rd);
+            ImageRenderData item = {0}, *rd = &item;
             rd->dest_rect = r;
             rd->src_rect = ref->src_rect;
             self->render_data.has_hdr |= img->root_frame.is_float || transfer_is_hdr(img->transfer);
-            self->render_data.count++;
             rd->z_index = ref->z_index;
             rd->depth = ref->depth;
             rd->depth_pixels = ref->depth_pixels;
@@ -2453,20 +3165,47 @@ grman_update_layers(
             rd->is_gray = img->root_frame.deep == DEEP_GRAY16;
             rd->indexed_px_sz = img->indexed_px_sz;
             rd->palette_texture_id = img->palette ? img->palette->texture : 0;
-            if (img->indexed_px_sz) self->num_of_indexed_refs++;
-            if (img->indexed_px_sz || rd->decode != IMAGE_DECODE_NONE) {
-                // The rect is in normalized device co-ordinates, so allow for rounding errors
-                const float width_px = (r.right - r.left) / screen_width * screen_width_px;
-                const float height_px = (r.top - r.bottom) / screen_height * screen_height_px;
+            // The rect is in normalized device co-ordinates, so allow for rounding errors
+            const float width_px = (r.right - r.left) / screen_width * screen_width_px;
+            const float height_px = (r.top - r.bottom) / screen_height * screen_height_px;
+            if (img->indexed_px_sz || rd->decode != IMAGE_DECODE_NONE)
                 rd->is_unscaled = fabsf(width_px - ref->src_width) < 0.01f && fabsf(height_px - ref->src_height) < 0.01f;
-            }
             rd->filter_decoded = rd->decode != IMAGE_DECODE_NONE && !rd->is_unscaled;
+            // shown smaller than it is, by more than rounding, so it needs mipmaps
+            const bool minified = ref->src_width > width_px * 1.001f || ref->src_height > height_px * 1.001f;
+            img->drawn_minified |= minified;
+            if (img->tiles) add_tiled_render_items(self, img->tiles, ref, rd, screen, minified, now);
+            else {
+                if (img->texture && img->texture->mipmapped) rd->mip_levels = img->texture->mip_levels;
+                // minified is in the render data until the textures are known, see use_decoded_texture()
+                rd->linear_texture = minified;
+                add_render_item(self, rd);
+            }
             img->is_drawn = true;
             refitr = vt_next(refitr);
         }
         if (ref_removed && !vt_size(&img->refs_by_internal_id)) {
             imgitr = remove_image_itr(self, imgitr);
             continue;
+        }
+        if (img->tiles) prepare_tiles(self, img->tiles, first_render_item, now);
+        else if (image_is_decoded(img)) {
+            // drawn smaller than it is from its decoded pixels, which have mipmaps in linear light
+            if (img->drawn_minified && self->window_id) make_decoded_texture(self, img);
+            const uint32_t decoded = img->decoded_texture ? img->decoded_texture->id : 0;
+            for (size_t k = first_render_item; k < self->render_data.count; k++) {
+                ImageRenderData *rd = self->render_data.item + k;
+                if (rd->linear_texture && decoded) {
+                    rd->texture_id = decoded;
+                    rd->is_gray = rd->filter_decoded = false;
+                } else rd->linear_texture = false;
+            }
+        } else {
+            if (img->drawn_minified && self->window_id && img->texture && img->texture->id && !img->texture->mipmapped) make_texture_mipmaps(self, img, NULL);
+            for (size_t k = first_render_item; k < self->render_data.count; k++) {
+                self->render_data.item[k].mip_levels = img->texture && img->texture->mipmapped ? img->texture->mip_levels : 0;
+                self->render_data.item[k].linear_texture = false;
+            }
         }
         if (img->vector && img->is_drawn) {
             update_vector_texture(self, img, vector_width, vector_height, vector_shown, screen_width_px, screen_height_px);
@@ -2494,19 +3233,27 @@ grman_update_layers(
     }
     if (!self->render_data.count) return false;
     // Sort visible refs in draw order (z-index, img, ref)
-#define lt(a, b)                    \
-    ((a)->z_index < (b)->z_index || \
-     ((a)->z_index == (b)->z_index && ((a)->image_id < (b)->image_id || ((a)->image_id == (b)->image_id && a->ref_id < b->ref_id))))
+#define lt(a, b)                                                                                                                        \
+    ((a)->z_index < (b)->z_index ||                                                                                                     \
+     ((a)->z_index == (b)->z_index &&                                                                                                   \
+      ((a)->image_id < (b)->image_id ||                                                                                                 \
+       ((a)->image_id == (b)->image_id && (a->ref_id < b->ref_id || (a->ref_id == b->ref_id && a->tile < b->tile))))))
     QSORT(ImageRenderData, self->render_data.item, self->render_data.count, lt);
 #undef lt
     // Calculate the group counts. Refs drawn with different programs must not
-    // be in the same group as programs are switched only between groups.
+    // be in the same group as programs are switched only between groups, nor
+    // the parts of different tiles, which are different textures.
     i = 0;
     while (i < self->render_data.count) {
         id_type num_identical = 1, image_id = self->render_data.item[i].image_id, start = i;
         const bool is_unscaled = self->render_data.item[i].is_unscaled;
+        const uint32_t tile = self->render_data.item[i].tile;
+        const bool linear_texture = self->render_data.item[i].linear_texture, filter_decoded = self->render_data.item[i].filter_decoded;
         while (++i < self->render_data.count) {
-            if (self->render_data.item[i].image_id != image_id || self->render_data.item[i].is_unscaled != is_unscaled) break;
+            if (self->render_data.item[i].image_id != image_id || self->render_data.item[i].is_unscaled != is_unscaled || self->render_data.item[i].tile != tile ||
+                self->render_data.item[i].linear_texture != linear_texture || self->render_data.item[i].filter_decoded != filter_decoded)
+                break;
+
             num_identical++;
         }
         while (num_identical > 0) { self->render_data.item[start++].group_count = num_identical--; }
@@ -2634,7 +3381,7 @@ compose(const ComposeData d, uint8_t *under_data, const size_t under_data_sz, co
 }
 
 static CoalescedFrameData
-get_coalesced_frame_data_standalone(const Image *img, const Frame *f, uint8_t *frame_data, const size_t frame_data_sz) {
+get_coalesced_frame_data_standalone(GraphicsManager *self, const Image *img, const Frame *f, uint8_t *frame_data, const size_t frame_data_sz) {
     CoalescedFrameData ans = {0};
     ans.transient = f->transient;
     bool is_full_frame = f->width == img->width && f->height == img->height && !f->x && !f->y;
@@ -2647,31 +3394,33 @@ get_coalesced_frame_data_standalone(const Image *img, const Frame *f, uint8_t *f
         return ans;
     }
     const unsigned bytes_per_pixel = pixel_size(f->is_opaque, f->is_float);
+    // in size_t: an image can have more than 2^32 pixels
+    const size_t num_pixels = (size_t)img->width * img->height;
     uint8_t *base;
     if (f->bgcolor) {
-        base = malloc((size_t)img->width * img->height * bytes_per_pixel);
+        base = num_pixels <= SIZE_MAX / bytes_per_pixel ? image_alloc(self, num_pixels * bytes_per_pixel) : NULL;
         if (base) {
             uint8_t *p = base;
             const uint8_t r = (f->bgcolor >> 24) & 0xff, g = (f->bgcolor >> 16) & 0xff, b = (f->bgcolor >> 8) & 0xff, a = f->bgcolor & 0xff;
             if (bytes_per_pixel == 8) {
                 const uint16_t px[4] = {float_to_half(r / 255.f), float_to_half(g / 255.f), float_to_half(b / 255.f), float_to_half(a / 255.f)};
-                for (uint32_t i = 0; i < img->width * img->height; i++, p += sizeof(px)) memcpy(p, px, sizeof(px));
+                for (size_t i = 0; i < num_pixels; i++, p += sizeof(px)) memcpy(p, px, sizeof(px));
             } else if (bytes_per_pixel == 4) {
-                for (uint32_t i = 0; i < img->width * img->height; i++) {
+                for (size_t i = 0; i < num_pixels; i++) {
                     *(p++) = r;
                     *(p++) = g;
                     *(p++) = b;
                     *(p++) = a;
                 }
             } else {
-                for (uint32_t i = 0; i < img->width * img->height; i++) {
+                for (size_t i = 0; i < num_pixels; i++) {
                     *(p++) = r;
                     *(p++) = g;
                     *(p++) = b;
                 }
             }
         }
-    } else base = calloc((size_t)img->width * img->height, bytes_per_pixel);
+    } else base = image_calloc(self, num_pixels, bytes_per_pixel);
     if (!base) {
         free(frame_data);
         return ans;
@@ -2704,7 +3453,7 @@ get_coalesced_frame_data_impl(GraphicsManager *self, Image *img, const Frame *f,
     void *frame_data;
     ImageAndFrame key = {.image_id = img->internal_id, .frame_id = f->id};
     if (!read_from_cache(self, key, &frame_data, &frame_data_sz)) return ans;
-    if (!f->base_frame_id) return get_coalesced_frame_data_standalone(img, f, frame_data, frame_data_sz);
+    if (!f->base_frame_id) return get_coalesced_frame_data_standalone(self, img, f, frame_data, frame_data_sz);
     Frame *base = frame_for_id(img, f->base_frame_id);
     if (!base) {
         free(frame_data);
@@ -2920,27 +3669,35 @@ unsigned long kitty_vector_curve_limit(void) { return OPT(vector_curve_limit); }
 // count pixels exactly up to 2^53, and an image shown larger than that is
 // reduced to it.
 static VectorView
-choose_vector_view(double width, double height, ImageFraction shown, double view_width, double view_height, const VectorView *current) {
+choose_vector_view(double width, double height, ImageFraction shown, double view_width, double view_height, const VectorView *current, double max_texture) {
     const double exact = 9007199254740992.0;
     view_width = MAX(1., view_width), view_height = MAX(1., view_height);
+    // the raster is one texture, which cannot be larger than the GPU allows, when that is known
+    const double texture_limit = max_texture >= 1 ? max_texture : exact;
     if (width > exact || height > exact) {
         const double s = exact / MAX(width, height);
         width *= s, height *= s;
     }
     double W = MAX(1., round(width)), H = MAX(1., round(height)), nx0, ny0, nx1, ny1;
-    for (int pass = 0; pass < 2; pass++) {
+    for (int pass = 0; pass < 3; pass++) {
         // what is on screen in pixels of the raster, with two more for the filtering at its edges
         nx0 = MAX(0., floor(shown.left * W) - 2), nx1 = MIN(W, ceil(shown.right * W) + 2);
         ny0 = MAX(0., floor(shown.top * H) - 2), ny1 = MIN(H, ceil(shown.bottom * H) + 2);
         if (!(nx0 < nx1)) nx0 = 0, nx1 = MIN(W, 1.);
         if (!(ny0 < ny1)) ny0 = 0, ny1 = MIN(H, 1.);
         const double budget = 4 * view_width * view_height, area = (nx1 - nx0) * (ny1 - ny0);
-        if (area <= budget || pass) break;
-        const double s = sqrt(budget / area);
-        W = MAX(1., round(W * s)), H = MAX(1., round(H * s));
+        const double s = area > budget && !pass ? sqrt(budget / area) : 1;
+        // what is on screen does not fit a texture only when the window is larger than one, it is drawn at less than its size then
+        const double fit = MIN(texture_limit / (nx1 - nx0), texture_limit / (ny1 - ny0));
+        if ((s >= 1 && fit >= 1) || pass == 2) break;
+        if (fit < s) W = MAX(1., floor(W * fit)), H = MAX(1., floor(H * fit));
+        else W = MAX(1., round(W * s)), H = MAX(1., round(H * s));
     }
-    const double mx = ceil(view_width / 4), my = ceil(view_height / 4);
-    if (W * H <= (nx1 - nx0 + 2 * mx) * (ny1 - ny0 + 2 * my) && W <= INT32_MAX && H <= INT32_MAX) return (VectorView){W, H, 0, 0, (unsigned)W, (unsigned)H};
+    double mx = ceil(view_width / 4), my = ceil(view_height / 4);
+    if (W * H <= (nx1 - nx0 + 2 * mx) * (ny1 - ny0 + 2 * my) && W <= INT32_MAX && H <= INT32_MAX && W <= texture_limit && H <= texture_limit)
+        return (VectorView){W, H, 0, 0, (unsigned)W, (unsigned)H};
+    mx = MAX(0., MIN(mx, floor((texture_limit - (nx1 - nx0)) / 2))), my = MAX(0., MIN(my, floor((texture_limit - (ny1 - ny0)) / 2)));
+
     if (current && current->width == W && current->height == H && current->x <= nx0 && current->y <= ny0 && current->x + current->cols >= nx1 &&
         current->y + current->rows >= ny1)
         return *current;
@@ -3020,7 +3777,7 @@ update_vector_texture(GraphicsManager *self, Image *img, double width, double he
         double scale = sqrt((double)cap / (width * height));
         if (scale < 1) width *= scale, height *= scale;
     }
-    const VectorView view = choose_vector_view(width, height, shown, view_width, view_height, &img->vector_view);
+    const VectorView view = choose_vector_view(width, height, shown, view_width, view_height, &img->vector_view, image_tile_limit());
     const bool same_view = same_vector_view(&img->vector_view, &view);
     OSWindow *w = os_window_for_kitty_window(self->window_id);
     VectorStereo stereo = {.multiplier = 1.};
@@ -3174,9 +3931,20 @@ static void
 update_current_frame(GraphicsManager *self, Image *img, const CoalescedFrameData *data) {
     bool needs_load = data == NULL;
     CoalescedFrameData cfd;
+    Frame *f = current_frame(img);
+    // data, when given, is what the caller then stores as the current frame
+    uint32_t cached_frame_id = f ? f->id : 0;
     if (needs_load) {
-        Frame *f = current_frame(img);
         if (f == NULL) return;
+        const bool standalone = !f->base_frame_id && !f->x && !f->y && f->width == img->width && f->height == img->height;
+        if (standalone && use_tiles(self, img)) {
+            // the tiles read the frame from the cache as they are shown, there is no need to read all of it now
+            set_tile_source(self, img, f->is_opaque, f->is_float, f->deep, NULL, f->id);
+            img->displayed_frame_id = f->id;
+            img->current_frame_shown_at = monotonic();
+            return;
+        }
+        if (!standalone) cached_frame_id = 0;
         cfd = get_coalesced_frame_data(self, img, f);
         if (!cfd.buf) {
             if (PyErr_Occurred()) PyErr_Print();
@@ -3184,20 +3952,21 @@ update_current_frame(GraphicsManager *self, Image *img, const CoalescedFrameData
         }
         data = &cfd;
     }
-    upload_to_gpu(self, img, data);
-    img->displayed_frame_id = current_frame(img)->id;
+    upload_to_gpu(self, img, data, cached_frame_id);
+    img->displayed_frame_id = f->id;
     if (needs_load) free(data->buf);
     img->current_frame_shown_at = monotonic();
 }
 
 static bool
 reference_chain_too_large(Image *img, const Frame *frame) {
-    uint32_t limit = img->width * img->height * 2;
-    uint32_t drawn_area = frame->width * frame->height;
+    // in 64 bits, the area of a large image does not fit in 32
+    const uint64_t limit = (uint64_t)img->width * img->height * 2;
+    uint64_t drawn_area = (uint64_t)frame->width * frame->height;
     unsigned num = 1;
     while (drawn_area < limit && num < 5) {
         if (!frame->base_frame_id || !(frame = frame_for_id(img, frame->base_frame_id))) break;
-        drawn_area += frame->width * frame->height;
+        drawn_area += (uint64_t)frame->width * frame->height;
         num++;
     }
     return num >= 5 || drawn_area >= limit;
@@ -3234,8 +4003,6 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     g->frame_number = frame_number;
     if (!is_chunked_continuation) {
         self->currently_loading.loading_for = (const ImageAndFrame){0};
-        if (g->data_width > MAX_IMAGE_DIMENSION || g->data_height > MAX_IMAGE_DIMENSION)
-            ABRT("EINVAL", "Image too large, width or height greater than %u", MAX_IMAGE_DIMENSION);
         if (img->root_frame.is_float != (fmt == RGBA16F)) ABRT("EINVAL", "Animation frame format must match the image format");
         if (img->surface) ABRT("EINVAL", "Animation frames are not supported for GPU surface images");
         if (!initialize_load_data(self, g, img, tt, fmt, frame_number - 1)) return NULL;
@@ -3259,10 +4026,6 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     if (load_data->width > img->width) ABRT("EINVAL", "Frame width %u larger than image width: %u", load_data->width, img->width);
     if (load_data->is_float) img->peak = MAX(img->peak, peak_of_half_data(load_data->data, load_data->data_sz));
     if (load_data->height > img->height) ABRT("EINVAL", "Frame height %u larger than image height: %u", load_data->height, img->height);
-    if (is_new_frame && cache_size(self) + load_data->data_sz > self->storage_limit * 5) {
-        remove_images(self, trim_predicate, img->internal_id);
-        if (cache_size(self) + load_data->data_sz > self->storage_limit * 5) ABRT("ENOSPC", "Cache size exceeded cannot add new frames");
-    }
 
     Frame transmitted_frame = {
         .width = load_data->width,
@@ -3282,7 +4045,7 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     Frame *frame;
     if (is_new_frame) {
         transmitted_frame.id = ++img->frame_id_counter;
-        Frame *frames = realloc(img->extra_frames, sizeof(img->extra_frames[0]) * (img->extra_framecnt + 1));
+        Frame *frames = image_realloc(self, img->extra_frames, sizeof(img->extra_frames[0]) * (img->extra_framecnt + 1));
         if (!frames) ABRT("ENOMEM", "Out of memory");
         img->extra_frames = frames;
         img->extra_framecnt++;
@@ -3487,7 +4250,8 @@ promote_dependents_to_keyframes(GraphicsManager *self, Image *img, const uint32_
         const ImageAndFrame key = {.image_id = img->internal_id, .frame_id = f->id};
         void *frame_data = cfd.buf;
         const bool transient = f->transient || cfd.transient;
-        bool added = add_to_cache(self, key, &frame_data, (size_t)(cfd.is_opaque ? 3 : 4) * img->width * img->height, transient);
+        // half float frames are eight bytes a pixel
+        bool added = add_to_cache(self, key, &frame_data, (size_t)pixel_size(cfd.is_opaque, cfd.is_float) * img->width * img->height, transient);
         free(frame_data); // NULL if ownership was transferred to the cache
         if (!added) return false;
         f->transient = transient;
@@ -3495,6 +4259,7 @@ promote_dependents_to_keyframes(GraphicsManager *self, Image *img, const uint32_
         f->base_frame_id = 0;
         f->bgcolor = 0;
         f->is_opaque = cfd.is_opaque;
+        f->is_float = cfd.is_float;
         f->is_4byte_aligned = cfd.is_4byte_aligned;
         f->x = 0;
         f->y = 0;
@@ -3502,24 +4267,6 @@ promote_dependents_to_keyframes(GraphicsManager *self, Image *img, const uint32_
         f->height = img->height;
     }
     return true;
-}
-
-static bool
-dependents_fit_in_cache(GraphicsManager *self, Image *img, const uint32_t base_id, const size_t victim_sz) {
-    const size_t full = (size_t)4 * img->width * img->height;
-    size_t growth = 0;
-    for (unsigned i = 0; i < img->extra_framecnt; i++) {
-        const Frame *f = img->extra_frames + i;
-        if (f->base_frame_id != base_id) continue;
-        const size_t cur = (size_t)(f->is_opaque ? 3 : 4) * f->width * f->height;
-        if (full > cur) growth += full - cur;
-    }
-    if (growth <= victim_sz) return true;
-    growth -= victim_sz;
-    const size_t limit = self->storage_limit * 5;
-    if (cache_size(self) + growth <= limit) return true;
-    remove_images(self, trim_predicate, img->internal_id);
-    return cache_size(self) + growth <= limit;
 }
 
 static Image *
@@ -3541,9 +4288,8 @@ handle_delete_frame_command(GraphicsManager *self, const GraphicsCommand *g, boo
     bool remove_root = frame_number == 1;
     uint32_t removed_gap = 0;
     const uint32_t victim_id = remove_root ? img->root_frame.id : img->extra_frames[frame_number - 2].id;
-    const Frame *victim = remove_root ? &img->root_frame : img->extra_frames + frame_number - 2;
-    const size_t victim_sz = (size_t)(victim->is_opaque ? 3 : 4) * victim->width * victim->height;
-    if (!dependents_fit_in_cache(self, img, victim_id, victim_sz) || !promote_dependents_to_keyframes(self, img, victim_id)) {
+    // there is no quota for frames, only the memory there is, see image_alloc()
+    if (!promote_dependents_to_keyframes(self, img, victim_id)) {
         if (PyErr_Occurred()) PyErr_Print();
         REPORT_ERROR("Failed to preserve frames that depend on deleted frame: %u", frame_number);
         return NULL;
@@ -3720,7 +4466,7 @@ grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uin
     }
     if (cfd.is_opaque) {
         const size_t num = (size_t)img->width * img->height;
-        if (!(ans = malloc(num * 4))) return NULL;
+        if (num > SIZE_MAX / 4 || !(ans = malloc(num * 4))) return NULL;
         for (size_t i = 0; i < num; i++) {
             memcpy(ans + 4 * i, cfd.buf + 3 * i, 3);
             ans[4 * i + 3] = 255;
@@ -4231,6 +4977,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
     command_response[0] = 0;
     Py_CLEAR(self->vector_response);
     self->context_made_current_for_this_command = false;
+    self->busy_image = 0;
 
     if (g->id && g->image_number) {
         set_command_failed_response("EINVAL", "Must not specify both image id and image number");
@@ -4291,9 +5038,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
             if (is_query) ret = finish_command_response(&(const GraphicsCommand){.id = q_iid, .quiet = g->quiet}, image != NULL);
             else ret = finish_command_response(lg, image != NULL);
             if (lg->action == 'T' && image && image->root_frame_data_loaded) handle_put_command(self, lg, c, is_dirty, image, cell);
-            id_type added_image_id = image ? image->internal_id : 0;
             if (g->action == 'q') remove_images(self, add_trim_predicate, 0);
-            if (self->used_storage > self->storage_limit) apply_storage_quota(self, self->storage_limit, added_image_id);
             break;
         }
         case 'a':
@@ -4309,6 +5054,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                 set_command_failed_response("ENOENT", "Animation command refers to non-existent image with id: %u and number: %u", g->id, g->image_number);
                 ret = finish_command_response(g, false);
             } else {
+                self->busy_image = img->internal_id;
                 GraphicsCommand ag = *g;
                 if (action == 'f') {
                     ag.action = action;
@@ -4344,6 +5090,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                 set_command_failed_response("ENOENT", "Edit command refers to non-existent image with id: %u and number: %u", g->id, g->image_number);
                 ret = finish_command_response(g, false);
             } else {
+                self->busy_image = img->internal_id;
                 GraphicsCommand eg = *g;
                 eg.action = 'e';
                 if (!eg.id && !eg.image_number) {  // continuation chunk, the response must identify the image from the start command
@@ -4394,6 +5141,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                 set_command_failed_response("ENOENT", "Animation command refers to non-existent image with id: %u and number: %u", g->id, g->image_number);
                 ret = finish_command_response(g, false);
             } else {
+                self->busy_image = img->internal_id;
                 handle_compose_command(self, is_dirty, g, img);
                 if (invalidate_vector_users(self, img->client_id)) *is_dirty = true;
                 ret = finish_command_response(g, true);
@@ -4401,6 +5149,7 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
             break;
         default: REPORT_ERROR("Unknown graphics command action: %c", g->action); break;
     }
+    self->busy_image = 0;
     return ret;
 }
 
@@ -4430,7 +5179,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
             i,
             Py_BuildValue(
                 "{sI sI sy#}", "gap", f->gap, "id", f->id, "data", cfd.buf,
-                (Py_ssize_t)(stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep) * img->width * img->height)));
+                (Py_ssize_t)((size_t)stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep) * img->width * img->height)));
         free(cfd.buf);
         if (PyErr_Occurred()) {
             Py_CLEAR(frames);
@@ -4448,7 +5197,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         "{sI sI sI sI sI sI sI "
         "sO sI sO "
         "sI sI sI "
-        "sI sI sI sy# sN sO sf sI sI sN sI sI}",
+        "sI sI sI sy# sN sO sf sI sI sN sI sI sN}",
         "texture_id",
         texture_id_for_img(img),
         U(client_id),
@@ -4474,7 +5223,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         U(displayed_frame_id),
         "data",
         cfd.buf,
-        (Py_ssize_t)(cfd.buf ? (img->indexed_px_sz ? img->indexed_px_sz : stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep)) * img->width * img->height : 0),
+        (Py_ssize_t)(cfd.buf ? (size_t)(img->indexed_px_sz ? img->indexed_px_sz : stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep)) * img->width * img->height : 0),
         "extra_frames",
         frames,
         B(tone_map),
@@ -4487,7 +5236,10 @@ image_as_dict(GraphicsManager *self, Image *img) {
         img->palette ? PyBytes_FromStringAndSize((const char *)img->palette->rgba, (Py_ssize_t)img->palette->slots * 4) : Py_NewRef(Py_None),
         U(transfer),
         "deep",
-        (unsigned int)img->root_frame.deep);
+        (unsigned int)img->root_frame.deep,
+        // the tiles of an image larger than a texture: their columns, rows and the size of their interiors
+        "tiles",
+        img->tiles ? Py_BuildValue("{sI sI sI}", "cols", img->tiles->cols, "rows", img->tiles->rows, "pitch", img->tiles->pitch) : Py_NewRef(Py_None));
     free(cfd.buf);
     return ans;
 #undef B
@@ -4500,9 +5252,9 @@ image_as_dict(GraphicsManager *self, Image *img) {
 
 W(image_for_client_id) {
     unsigned long id = PyLong_AsUnsignedLong(args);
-    bool existing = false;
-    Image *img = find_or_create_image(self, id, &existing);
-    if (!existing) { Py_RETURN_NONE; }
+    Image *img = id ? img_by_client_id(self, id) : NULL;
+    if (!img) { Py_RETURN_NONE; }
+
     return image_as_dict(self, img);
 }
 
@@ -4577,6 +5329,13 @@ W(shm_unlink) {
     Py_RETURN_NONE;
 }
 
+static PyObject *
+tile_of_render_item(GraphicsManager *self, const ImageRenderData *r) {
+    const Image *img = img_by_internal_id(self, r->image_id);
+    if (!img || !img->tiles) return Py_NewRef(Py_None);
+    return Py_BuildValue("II", (r->tile - 1) % img->tiles->cols, (r->tile - 1) / img->tiles->cols);
+}
+
 PyObject *
 grman_render_data_as_python(GraphicsManager *self) {
     PyObject *ans = PyTuple_New(self->render_data.count);
@@ -4587,7 +5346,7 @@ grman_render_data_as_python(GraphicsManager *self) {
             ans,
             i,
             Py_BuildValue(
-                "{sN sN sI si sK sK sI sO sO}",
+                "{sN sN sI si sK sK sI sO sN sI sO sO}",
                 "src_rect",
                 R(src_rect),
                 "dest_rect",
@@ -4604,8 +5363,16 @@ grman_render_data_as_python(GraphicsManager *self) {
                 (unsigned int)r->indexed_px_sz,
                 "is_unscaled",
                 r->is_unscaled ? Py_True : Py_False,
+                // the column and row of the tile of a tiled image this part is drawn from, see "Images larger than a texture"
+                "tile",
+                r->tile ? tile_of_render_item(self, r) : Py_NewRef(Py_None),
+                "mip_levels",
+                (unsigned int)r->mip_levels,
                 "filter_decoded",
-                r->filter_decoded ? Py_True : Py_False));
+                r->filter_decoded ? Py_True : Py_False,
+                // the texture holds the decoded values, linear, see "Mipmaps for decoded images"
+                "linear_texture",
+                r->linear_texture ? Py_True : Py_False));
 #undef R
     }
     return ans;
@@ -4747,10 +5514,33 @@ W(choose_vector_view) {
     double width, height, view_width, view_height;
     ImageFraction shown;
     VectorView current = {0};
-    PA("dd(dddd)dd|(ddddII)", &width, &height, &shown.left, &shown.top, &shown.right, &shown.bottom, &view_width, &view_height, &current.width,
-        &current.height, &current.x, &current.y, &current.cols, &current.rows);
-    const VectorView v = choose_vector_view(width, height, shown, view_width, view_height, &current);
+    double max_texture = 0;
+    PA("dd(dddd)dd|(ddddII)d", &width, &height, &shown.left, &shown.top, &shown.right, &shown.bottom, &view_width, &view_height, &current.width,
+        &current.height, &current.x, &current.y, &current.cols, &current.rows, &max_texture);
+    const VectorView v = choose_vector_view(width, height, shown, view_width, view_height, &current, max_texture);
     return Py_BuildValue("ddddII", v.width, v.height, v.x, v.y, v.cols, v.rows);
+}
+
+// For the tests: the pixels of the texture of a tile of an image, as they would be uploaded, with the apron
+W(tile_pixels) {
+    unsigned long id;
+    unsigned int col, row;
+    PA("kII", &id, &col, &row);
+    Image *img = img_by_client_id(self, id);
+    if (!img || !img->tiles || col >= img->tiles->cols || row >= img->tiles->rows) {
+        PyErr_SetString(PyExc_KeyError, "No such tile");
+        return NULL;
+    }
+    ImageTiles *t = img->tiles;
+    const uint32_t x0 = col * t->pitch, y0 = row * t->pitch;
+    const size_t tw = MIN(x0 + t->pitch, t->width) - x0 + 2, th = MIN(y0 + t->pitch, t->height) - y0 + 2;
+    RAII_PyObject(ans, PyBytes_FromStringAndSize(NULL, (Py_ssize_t)(tw * th * tile_texture_px_size(t->format))));
+    if (!ans) return NULL;
+    if (!load_tile(self, t, (size_t)row * t->cols + col, false, monotonic(), (uint8_t *)PyBytes_AS_STRING(ans))) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to read the pixels of the tile");
+        return NULL;
+    }
+    return Py_BuildValue("{sO sk sk sI}", "data", ans, "width", (unsigned long)tw, "height", (unsigned long)th, "format", (unsigned int)t->format);
 }
 
 #define M(x, va) {#x, (PyCFunction)py##x, va, ""}
@@ -4767,6 +5557,7 @@ static PyMethodDef methods[] = {
     M(update_vector_pixels, METH_VARARGS),
     M(render_vector_view, METH_VARARGS),
     M(choose_vector_view, METH_VARARGS),
+    M(tile_pixels, METH_VARARGS),
     {NULL} /* Sentinel */
 };
 
@@ -4781,7 +5572,9 @@ static PyGetSetDef getsets[] = {
 };
 
 static PyMemberDef members[] = {
-    {"storage_limit", T_PYSSIZET, offsetof(GraphicsManager, storage_limit), 0, "storage_limit"},
+    {"simulated_alloc_failures", T_UINT, offsetof(GraphicsManager, simulated_alloc_failures), 0, "For the tests: allocations of image data to fail"},
+    {"used_storage", T_PYSSIZET, offsetof(GraphicsManager, used_storage), READONLY, "The bytes of image data held"},
+
     {"disk_cache", T_OBJECT_EX, offsetof(GraphicsManager, disk_cache), READONLY, "disk_cache"},
     {NULL},
 };
@@ -4882,8 +5675,22 @@ py_dmabuf_take_fds(PyObject *self UNUSED, PyObject *args) {
 }
 #endif
 
+// For the tests, which have no GPU: the largest texture images are tiled for, 0 for that of the GPU
+static PyObject *
+pyset_image_tile_limit(PyObject *self UNUSED, PyObject *args) {
+    unsigned int limit;
+    if (!PyArg_ParseTuple(args, "I", &limit)) return NULL;
+    if (limit && limit < 3) {
+        PyErr_SetString(PyExc_ValueError, "A tile needs at least three pixels, its interior and an apron either side");
+        return NULL;
+    }
+    tile_limit_for_tests = limit;
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_methods[] = {
-    M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS),
+    M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS), M(set_image_tile_limit, METH_VARARGS),
+
 #ifdef __linux__
     {"dmabuf_parse_spec", py_dmabuf_parse_spec, METH_VARARGS, ""}, {"dmabuf_take_fds", py_dmabuf_take_fds, METH_VARARGS, ""},
 #endif

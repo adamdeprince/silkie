@@ -625,7 +625,8 @@ class TestGraphics(BaseTest):
         self.ae(q('d', d='F', p=2, s=1), r(',e=d,d=F,p=2'))
         # unsupported values are not reported
         self.ae(q('T', s=1, v=1, f=24, C=7, N=6, U=2), r(',e=T,f=24,s=1,v=1'))
-        self.ae(q('t', f=42, s=100000), r(',e=t'))
+        # Silkie has no largest image size, see docs/silkie/image-tiling.rst
+        self.ae(q('t', f=42, s=100000), r(',e=t,s=100000'))
         self.ae(q('a', s=4), r(',e=a'))
         # Silkie's formats, gamuts, tone mapping, GPU surfaces and actions
         self.ae(q('T', s=1, v=1, f=64, G=1, T=1), r(',e=T,f=64,G=1,T=1,s=1,v=1'))
@@ -2219,18 +2220,16 @@ class TestGraphics(BaseTest):
         s.reset()
         self.assertEqual(g.disk_cache.total_size, 0)
 
-        # Respect the cache quota
-        g.storage_limit = 36 * 2
+        # Silkie has no quota for frames: every dependent becomes a key frame, however many
         t(a='t')
         for i in range(10):
             t(payload='4' * 12, c=1, s=2, v=2)
         before = g.image_for_client_id(1)
-        size = g.disk_cache.total_size
         self.assertIsNone(li(a='d', d='f', i=1, r=1))
         after = g.image_for_client_id(1)
-        self.assertEqual(g.disk_cache.total_size, size)
-        self.assertEqual(after['data'], before['data'])
-        self.assertEqual([f['data'] for f in after['extra_frames']], [f['data'] for f in before['extra_frames']])
+        self.assertEqual(g.disk_cache.total_size, 10 * 36)
+        self.assertEqual(after['data'], before['extra_frames'][0]['data'])
+        self.assertEqual([f['data'] for f in after['extra_frames']], [f['data'] for f in before['extra_frames'][1:]])
         s.reset()
         self.assertEqual(g.disk_cache.total_size, 0)
 
@@ -3504,48 +3503,72 @@ class TestGraphics(BaseTest):
                 send_command(s, f'a=e,i={i}', rec + '\n')
             update(f'step {step}: {rec}')
 
-    def test_graphics_quota_enforcement(self):
+    def test_no_storage_quota(self):
+        # Silkie keeps images until the program deletes them or they leave the
+        # scrollback, there is no quota to evict them by, see docs/silkie/image-tiling.rst
         s = self.create_screen()
         g = s.grman
-        g.storage_limit = 36 * 2
         li = make_send_command(s)
-        # test quota for simple images
-        self.assertEqual(li(a='T').code, 'OK')
-        self.assertEqual(li(a='T', i=2).code, 'OK')
-        self.assertEqual(g.disk_cache.total_size, g.storage_limit)
-        self.assertEqual(g.image_count, 2)
-        self.assertEqual(li(a='T', i=3).code, 'OK')
-        self.assertEqual(g.disk_cache.total_size, g.storage_limit)
-        self.assertEqual(g.image_count, 2)
-        # test quota for frames
-        for i in range(8):
-            self.assertEqual(li(payload=f'{i}' * 36, i=2).code, 'OK')
-        self.assertEqual(li(payload='x' * 36, i=2).code, 'ENOSPC')
-        # test editing should not trigger quota
+        for i in range(1, 201):
+            self.assertEqual(li(a='t', i=i, N=i % 2).code, 'OK')
+        self.ae(g.image_count, 200)
+        self.ae(g.disk_cache.total_size, 200 * 36)
+        self.ae(g.used_storage, 200 * 36)
+        # nor a quota for animation frames
+        for i in range(40):
+            self.assertEqual(li(payload=f'{i % 10}' * 36, i=2).code, 'OK')
+        self.ae(len(g.image_for_client_id(2)['extra_frames']), 40)
+        self.ae(g.image_count, 200)
+        # editing a frame
         self.assertEqual(li(payload='4' * 12, r=2, s=2, v=2, i=2).code, 'OK')
-
         s.reset()
         self.ae(g.image_count, 0)
         self.assertEqual(g.disk_cache.total_size, 0)
 
-    def test_transient_image_preferential_eviction(self):
-        # Transient images should be evicted before non-transient ones when
-        # the storage quota is exceeded, regardless of insertion order.
+    def test_out_of_memory_evicts_images_not_shown(self):
+        # When memory runs out the images not on screen are evicted, transient
+        # ones first, then the least recently used, and the allocation is tried
+        # once more. The command fails with ENOMEM if that fails too.
         s = self.create_screen()
         g = s.grman
-        g.storage_limit = 36 * 2
         li = make_send_command(s)
-        # Load a non-transient image first (older atime) and a transient image second.
-        self.assertEqual(li(a='T', i=1).code, 'OK')
-        self.assertEqual(li(a='T', i=2, N=1).code, 'OK')
-        self.assertEqual(g.image_count, 2)
-        # Adding a third image triggers the quota; the transient image (i=2) must be
-        # evicted first even though the non-transient image (i=1) is older.
-        self.assertEqual(li(a='T', i=3).code, 'OK')
-        self.assertEqual(g.image_count, 2)
-        self.assertIsNone(g.image_for_client_id(2), 'transient image should have been evicted')
-        self.assertIsNotNone(g.image_for_client_id(1), 'non-transient image should survive')
-        self.assertIsNotNone(g.image_for_client_id(3), 'newly added image should survive')
+        big = dict(s=4, v=6, payload='x' * 72)
+        self.assertEqual(li(a='t', i=1, **big).code, 'OK')
+        self.assertEqual(li(a='t', i=2, N=1, **big).code, 'OK')
+        self.assertEqual(li(a='t', i=3, **big).code, 'OK')
+        g.simulated_alloc_failures = 1
+        self.assertEqual(li(a='t', i=4).code, 'OK')
+        self.ae(g.simulated_alloc_failures, 0)
+        # evicting the transient image freed as much as was needed
+        self.assertIsNone(g.image_for_client_id(2), 'the transient image should have been evicted')
+        for i in (1, 3, 4):
+            self.assertIsNotNone(g.image_for_client_id(i))
+        # then the least recently used
+        g.simulated_alloc_failures = 1
+        self.assertEqual(li(a='t', i=5, s=4, v=6, payload='x' * 72).code, 'OK')
+        self.assertIsNone(g.image_for_client_id(1))
+        self.assertIsNone(g.image_for_client_id(3))
+        self.assertIsNotNone(g.image_for_client_id(4))
+        # images on screen are not evicted
+        g.simulated_alloc_failures = 0
+        self.assertEqual(li(a='T', i=7).code, 'OK')
+        s.grman.update_layers(0, -1, 1, 2 / s.columns, 2 / s.lines, s.columns, s.lines, 10, 20)
+        # 118 bytes would be freed by evicting images 4, 5 and 7, but not by 4 and 5 alone
+        g.simulated_alloc_failures = 1
+        self.ae(li(a='t', i=8, s=4, v=9, payload='x' * 108).code, 'ENOMEM')
+        for i in (4, 5, 7):
+            self.assertIsNotNone(g.image_for_client_id(i))
+        # A request no eviction could satisfy evicts nothing: a petabyte of pixels
+        g.simulated_alloc_failures = 0
+        self.ae(li(a='t', i=9, f=32, s=4294967295, v=65536, o='z', payload=zlib.compress(b'x')).code, 'ENOMEM')
+        self.assertIsNotNone(g.image_for_client_id(5))
+        self.assertIsNotNone(g.image_for_client_id(7))
+        # failing again after the eviction fails the command, without aborting
+        g.simulated_alloc_failures = 2
+        self.ae(li(a='t', i=6).code, 'ENOMEM')
+        self.ae(g.simulated_alloc_failures, 0)
+        self.assertIsNone(g.image_for_client_id(4))
+        self.assertIsNotNone(g.image_for_client_id(7))
 
     @unittest.skipIf(Image is None, 'PIL not available, skipping PNG tests')
     def test_cached_rgba_conversion(self):

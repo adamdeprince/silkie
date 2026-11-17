@@ -1677,7 +1677,7 @@ expand_rgb_data(Window *w, size_t idx) {
 static bool
 expand_png_data(Window *w, size_t idx) {
     png_read_data d = {0};
-    inflate_png_inner(&d, img.data, img.sz, 2000);
+    inflate_png_inner_limited(&d, img.data, img.sz, 2000);
     if (d.ok) {
         free(img.data);
         img.data = d.decompressed;
