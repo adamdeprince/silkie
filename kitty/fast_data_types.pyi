@@ -882,6 +882,8 @@ class ColorProfile:
     def get_transparent_background_color(self, index: int) -> Color | None: ...
     def set_transparent_background_color(self, index: int, color: Color | None = None, opacity: float | None = None) -> None: ...
     def reset_layer(self, layer: int) -> None: ...
+    def set_eink_colors(self, spec: Optional[Dict[str, Optional[int]]]) -> bool: ...
+    def eink_colors_active(self) -> bool: ...
     def color_stack_depth(self) -> int: ...
     def test_mark_colors(self) -> tuple[tuple[int, int], ...]: ...
 
@@ -1109,6 +1111,39 @@ def cell_size_for_window(os_window_id: int) -> Tuple[int, int]:
     pass
 
 def set_eink_mode(enabled: bool) -> None:
+    pass
+
+def refresh_display_info() -> None:
+    pass
+
+def os_window_eink_state(os_window_id: int) -> tuple[bool, bool]:
+    pass
+
+def set_os_window_eink_chrome(os_window_id: int, spec: Optional[Dict[str, Optional[int]]]) -> None:
+    pass
+
+def os_window_monitor_info(os_window_id: int) -> Optional[Dict[str, Any]]:
+    pass
+
+def simulate_monitor_changes(ticks: Sequence[tuple[int, Optional[Dict[str, Any]]]]) -> list[Dict[str, Any]]:
+    pass
+
+def set_test_monitor_identity(identity: Optional[Dict[str, Any]] = None, active: bool = True) -> None:
+    pass
+
+def set_monitor_sysfs_root(root: Optional[str] = None) -> None:
+    pass
+
+def parse_edid(data: bytes) -> Optional[Dict[str, Any]]:
+    pass
+
+def intern_monitor_identity(identity: Dict[str, Any]) -> Dict[str, Any]:
+    pass
+
+def monitor_matches(identity: Dict[str, Any], match: str) -> bool:
+    pass
+
+def known_e_paper_monitors() -> list[Dict[str, Any]]:
     pass
 
 def wakeup_main_loop() -> None:

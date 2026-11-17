@@ -84,6 +84,41 @@ vidmodeFromModeInfo(const XRRModeInfo *mi, const XRRCrtcInfo *ci) {
 }
 
 
+// The EDID of the monitor on the output, from the RandR output property the
+// X server fills in from the kernel. As long as the property is, read in two
+// steps: its size first, then all of it.
+static void
+readOutputEDID(_GLFWmonitor *monitor) {
+    free(monitor->edid);
+    monitor->edid = NULL;
+    monitor->edid_size = 0;
+    if (!XRRGetOutputProperty) return;
+    static Atom edid_atom = None;
+    if (edid_atom == None) edid_atom = XInternAtom(_glfw.x11.display, RR_PROPERTY_RANDR_EDID, False);
+    Atom type;
+    int format;
+    unsigned long nitems, bytes_after;
+    unsigned char *prop = NULL;
+    if (XRRGetOutputProperty(_glfw.x11.display, monitor->x11.output, edid_atom, 0, 0, False, False, AnyPropertyType, &type, &format,
+            &nitems, &bytes_after, &prop) != Success) return;
+    if (prop) XFree(prop);
+    prop = NULL;
+    if (type != XA_INTEGER || format != 8 || !bytes_after) return;
+    // The length is counted in 32 bit units
+    const unsigned long units = bytes_after / 4 + 1;
+    if (units > LONG_MAX) return;
+    if (XRRGetOutputProperty(_glfw.x11.display, monitor->x11.output, edid_atom, 0, (long)units, False, False, AnyPropertyType, &type,
+            &format, &nitems, &bytes_after, &prop) != Success) return;
+    if (prop && type == XA_INTEGER && format == 8 && nitems) {
+        monitor->edid = malloc(nitems);
+        if (monitor->edid) {
+            memcpy(monitor->edid, prop, nitems);
+            monitor->edid_size = nitems;
+        }
+    }
+    if (prop) XFree(prop);
+}
+
 //////////////////////////////////////////////////////////////////////////
 //////                       GLFW internal API                      //////
 //////////////////////////////////////////////////////////////////////////
@@ -118,6 +153,8 @@ _glfwPollMonitorsX11(void) {
 
             for (j = 0; j < disconnectedCount; j++) {
                 if (disconnected[j] && disconnected[j]->x11.output == sr->outputs[i]) {
+                    // Another monitor can be plugged into the output between two polls
+                    readOutputEDID(disconnected[j]);
                     disconnected[j] = NULL;
                     break;
                 }
@@ -155,6 +192,8 @@ _glfwPollMonitorsX11(void) {
             monitor->physicalSizeAssumed = size_assumed;
             monitor->x11.output = sr->outputs[i];
             monitor->x11.crtc = oi->crtc;
+            monitor->nameIsConnector = true;
+            readOutputEDID(monitor);
 
             for (j = 0; j < screenCount; j++) {
                 if (screens[j].x_org == ci->x && screens[j].y_org == ci->y && screens[j].width == (short int)ci->width &&

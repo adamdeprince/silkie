@@ -643,6 +643,27 @@ glfwGetWindowDisplayInfo(GLFWwindow *handle, GLFWdisplayinfo *info) {
     _glfwPlatformGetWindowDisplayInfo(window, info);
 }
 
+GLFWAPI bool
+glfwGetWindowMonitorIdentity(GLFWwindow *handle, GLFWmonitoridentity *identity) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    assert(window != NULL);
+
+    memset(identity, 0, sizeof(*identity));
+    _GLFW_REQUIRE_INIT_OR_RETURN(false);
+    const _GLFWmonitor *monitor = _glfwPlatformGetWindowCurrentMonitor(window);
+    if (!monitor) return false;
+    identity->connector = monitor->nameIsConnector ? monitor->name : NULL;
+    identity->make = monitor->make;
+    identity->model = monitor->model;
+    identity->description = monitor->description;
+    identity->edid = monitor->edid;
+    identity->edid_size = monitor->edid ? monitor->edid_size : 0;
+    identity->vendor_id = monitor->vendor_id;
+    identity->product_id = monitor->product_id;
+    identity->has_ids = monitor->has_ids;
+    return true;
+}
+
 GLFWAPI monotonic_t
 glfwGetDoubleClickInterval(GLFWwindow *handle) {
     _GLFWwindow *window = (_GLFWwindow *)handle;

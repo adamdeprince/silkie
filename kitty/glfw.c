@@ -13,6 +13,7 @@
 #include "control-codes.h"
 #include <structmember.h>
 #include "glfw-wrapper.h"
+#include "monitor_info.h"
 #ifdef __APPLE__
 #include "cocoa_window.h"
 #else
@@ -2377,7 +2378,7 @@ apply_window_chrome_state(GLFWwindow *w, WindowChromeState new_state, int width,
 void
 set_os_window_chrome(OSWindow *w) {
     if (!w->handle || w->is_layer_shell) return;
-    color_type bg = OPT(background);
+    color_type bg = os_window_background(w);
     if (w->num_tabs > w->active_tab) {
         Tab *tab = w->tabs + w->active_tab;
         if (tab->num_windows > tab->active_window) {
@@ -3713,37 +3714,50 @@ display_bits(const char *value, int *out) {
     return true;
 }
 
-void
-os_window_display_info(OSWindow *w, DisplayInfo *d) {
-    // The display the window is on, see docs/display-protocol.rst
-    GLFWdisplayinfo g = {0};
-    char *saveptr = NULL;
-    if (w && w->handle) glfwGetWindowDisplayInfo(w->handle, &g);
-    *d = (DisplayInfo){.kind = display_kinds[g.kind], .color = display_colors[g.color], .gamut = display_gamuts[g.gamut],
-        .bits = g.bits, .red_bits = g.red_bits, .green_bits = g.green_bits, .blue_bits = g.blue_bits, .gray_bits = g.gray_bits,
-        .precision = g.bits || g.red_bits || g.green_bits || g.blue_bits || g.gray_bits ? "framebuffer" : "unknown",
-        .period_us = g.period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g.scale, .ppi = g.ppi, .output_type = "unknown"};
-    // What the surface Silkie draws into holds, as OpenGL says once the window has been drawn
-    if (w && w->linear_output_checked) {
-        const int r = w->output.red_bits, gr = w->output.green_bits, b = w->output.blue_bits;
-        d->output_bits = r == gr && r == b ? r : 0;
-        if (r > 0 && gr > 0 && b > 0) d->output_type = w->output.is_float ? "float" : "fixed";
-        d->output_dither = output_dither_bits(w);
+// Whether a list of key=value pairs has the key
+static bool
+display_spec_has_key(const char *spec, const char *key) {
+    const size_t n = strlen(key);
+    for (const char *p = spec; p && *p;) {
+        while (*p == ' ') p++;
+        if (strncmp(p, key, n) == 0 && p[n] == '=') return true;
+        while (*p && *p != ' ') p++;
     }
-    // Overrides for what the OS cannot tell us
-    if (OPT(eink_mode)) d->kind = display_kinds[GLFW_DISPLAY_KIND_EINK];
-    if (!OPT(display_info) || !OPT(display_info)[0]) return;
-    RAII_ALLOC(char, buf, strdup(OPT(display_info)));
-    if (!buf) fatal("Out of memory parsing display_info");
+    return false;
+}
+
+static void
+clear_channel_widths(DisplayInfo *d) {
+    d->bits = d->red_bits = d->green_bits = d->blue_bits = d->gray_bits = 0;
+    d->precision = "unknown";
+}
+
+// Applies the key=value pairs of spec, see the display_info option, labelling the precision they give with label.
+// Returns false when out of memory, having applied nothing.
+static bool
+apply_display_spec(DisplayInfo *d, const char *spec, const char *label, bool allow_kind, bool *color_declared) {
+    if (!spec || !spec[0]) return true;
+    RAII_ALLOC(char, buf, strdup(spec));
+    if (!buf) {
+        log_error("Out of memory applying the display properties: %s", spec);
+        return false;
+    }
+    char *saveptr = NULL;
     const char *detected_color = d->color;
     int bits = -1, red_bits = -1, green_bits = -1, blue_bits = -1, gray_bits = -1;
     for (char *tok = strtok_r(buf, " ", &saveptr); tok; tok = strtok_r(NULL, " ", &saveptr)) {
         char *val = strchr(tok, '=');
         if (!val) continue;
         *val++ = 0;
-        if (!strcmp(tok, "kind") && !OPT(eink_mode)) d->kind = display_name(display_kinds, arraysz(display_kinds), val, d->kind);
-        else if (!strcmp(tok, "color")) d->color = display_name(display_colors, arraysz(display_colors), val, d->color);
-        else if (!strcmp(tok, "gamut")) d->gamut = display_name(display_gamuts, arraysz(display_gamuts), val, d->gamut);
+        if (!strcmp(tok, "kind")) {
+            if (allow_kind) d->kind = display_name(display_kinds, arraysz(display_kinds), val, d->kind);
+        } else if (!strcmp(tok, "color")) {
+            const char *c = display_name(display_colors, arraysz(display_colors), val, NULL);
+            if (c) {
+                d->color = c;
+                if (color_declared) *color_declared = true;
+            }
+        } else if (!strcmp(tok, "gamut")) d->gamut = display_name(display_gamuts, arraysz(display_gamuts), val, d->gamut);
         else if (!strcmp(tok, "bits")) display_bits(val, &bits);
         else if (!strcmp(tok, "red_bits")) display_bits(val, &red_bits);
         else if (!strcmp(tok, "green_bits")) display_bits(val, &green_bits);
@@ -3754,11 +3768,8 @@ os_window_display_info(OSWindow *w, DisplayInfo *d) {
         else if (!strcmp(tok, "period")) d->period_us = atoi(val);
         else if (!strcmp(tok, "ppi")) d->ppi = (float)atof(val);
     }
-    if (d->color != detected_color) {
-        // An RGB framebuffer does not establish the precision of a gray panel.
-        d->bits = d->red_bits = d->green_bits = d->blue_bits = d->gray_bits = 0;
-        d->precision = "unknown";
-    }
+    // An RGB framebuffer does not establish the precision of a gray panel.
+    if (d->color != detected_color) clear_channel_widths(d);
     if (d->color == display_colors[GLFW_DISPLAY_COLOR_RGB]) {
         if (bits >= 0) d->red_bits = d->green_bits = d->blue_bits = bits;
         if (red_bits >= 0) d->red_bits = red_bits;
@@ -3766,19 +3777,126 @@ os_window_display_info(OSWindow *w, DisplayInfo *d) {
         if (blue_bits >= 0) d->blue_bits = blue_bits;
         d->gray_bits = 0;
         d->bits = d->red_bits == d->green_bits && d->red_bits == d->blue_bits ? d->red_bits : 0;
-        if (bits >= 0 || red_bits >= 0 || green_bits >= 0 || blue_bits >= 0) d->precision = "configured";
+        if (bits >= 0 || red_bits >= 0 || green_bits >= 0 || blue_bits >= 0) d->precision = label;
     } else {
         if (bits >= 0) d->gray_bits = bits;
         if (gray_bits >= 0) d->gray_bits = gray_bits;
         if (d->color == display_colors[GLFW_DISPLAY_COLOR_MONO]) {
             // Monochrome has exactly two levels. Use color=gray for more.
             d->gray_bits = 1;
-            if (d->color != detected_color) d->precision = "configured";
+            if (d->color != detected_color) d->precision = label;
         }
         d->bits = d->gray_bits;
         d->red_bits = d->green_bits = d->blue_bits = 0;
-        if (bits >= 0 || gray_bits >= 0) d->precision = "configured";
+        if (bits >= 0 || gray_bits >= 0) d->precision = label;
     }
+    return true;
+}
+
+static void
+display_info_from(OSWindow *w, const GLFWdisplayinfo *g, const MonitorIdentity *monitor, DisplayInfo *d) {
+    *d = (DisplayInfo){.kind = display_kinds[g->kind], .color = display_colors[g->color], .gamut = display_gamuts[g->gamut],
+        .bits = g->bits, .red_bits = g->red_bits, .green_bits = g->green_bits, .blue_bits = g->blue_bits, .gray_bits = g->gray_bits,
+        .precision = g->bits || g->red_bits || g->green_bits || g->blue_bits || g->gray_bits ? "framebuffer" : "unknown",
+        .period_us = g->period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g->scale, .ppi = g->ppi, .output_type = "unknown",
+        .monitor = monitor};
+    // What the surface Silkie draws into holds, as OpenGL says once the window has been drawn
+    if (w && w->linear_output_checked) {
+        const int r = w->output.red_bits, gr = w->output.green_bits, b = w->output.blue_bits;
+        d->output_bits = r == gr && r == b ? r : 0;
+        if (r > 0 && gr > 0 && b > 0) d->output_type = w->output.is_float ? "float" : "fixed";
+        d->output_dither = output_dither_bits(w);
+    }
+    // What is known of the monitor beyond what the OS says: its EDID, the built-in table, then the monitor_info option
+    bool color_declared = false;
+    if (monitor) {
+        if (monitor->edid_grayscale && d->color == display_colors[GLFW_DISPLAY_COLOR_RGB]) {
+            d->color = display_colors[GLFW_DISPLAY_COLOR_GRAY];
+            clear_channel_widths(d);
+            color_declared = true;
+        }
+        const KnownMonitor *k = monitor->known;
+        if (k) {
+            d->kind = display_kinds[k->kind];
+            if (k->color >= 0) {
+                const char *before = d->color;
+                d->color = display_colors[k->color];
+                color_declared = true;
+                if (d->color != before) clear_channel_widths(d);
+                if (k->color != GLFW_DISPLAY_COLOR_RGB) {
+                    d->gray_bits = k->color == GLFW_DISPLAY_COLOR_MONO ? 1 : k->gray_bits;
+                    if (d->gray_bits) d->precision = "model";
+                    d->bits = d->gray_bits;
+                    d->red_bits = d->green_bits = d->blue_bits = 0;
+                }
+            }
+        }
+        for (size_t i = 0; i < OPT(monitor_info).count; i++) {
+            if (monitor_matches(monitor, OPT(monitor_info).matches[i]))
+                apply_display_spec(d, OPT(monitor_info).specs[i], "configured", true, &color_declared);
+        }
+    }
+    if (OPT(eink_mode)) {
+        // As before monitors were told apart, e-paper whose colors nothing declares shows gray
+        d->kind = display_kinds[GLFW_DISPLAY_KIND_EINK];
+        if (!color_declared && !display_spec_has_key(OPT(display_info), "color") && d->color == display_colors[GLFW_DISPLAY_COLOR_RGB]) {
+            d->color = display_colors[GLFW_DISPLAY_COLOR_GRAY];
+            clear_channel_widths(d);
+        }
+    }
+    d->eink = (d->kind == display_kinds[GLFW_DISPLAY_KIND_EINK] ? EINK_REFRESH : 0) |
+              (d->color != display_colors[GLFW_DISPLAY_COLOR_RGB] ? EINK_GRAY : 0);
+    // Overrides for what the OS cannot tell programs, which change nothing else
+    apply_display_spec(d, OPT(display_info), "configured", !OPT(eink_mode), NULL);
+}
+
+// The monitor the window is on, NULL when not known
+static const MonitorIdentity *
+window_monitor_identity(OSWindow *w) {
+    GLFWmonitoridentity g;
+    bool has_identity;
+    if (test_monitor_identity(&g, &has_identity)) return has_identity ? intern_monitor_identity(&g) : NULL;
+    if (!w || !w->handle || !glfwGetWindowMonitorIdentity(w->handle, &g)) return NULL;
+    return intern_monitor_identity(&g);
+}
+
+void
+os_window_display_info(OSWindow *w, DisplayInfo *d) {
+    // The display the window is on, see docs/display-protocol.rst
+    GLFWdisplayinfo g = {0};
+    if (w && w->handle) glfwGetWindowDisplayInfo(w->handle, &g);
+    display_info_from(w, &g, window_monitor_identity(w), d);
+}
+
+// Takes in what is known now of the display of the window and returns whether what Silkie does for it changed: e-paper
+// behavior and black on white, see os_window_is_eink(). Like the depth of the display, a change is acted on once it
+// has lasted, so a window dragged across the boundary between two displays does not flip back and forth.
+// explicit is for a change the user made, such as of eink_mode, which is acted on at once.
+bool
+update_eink_state(OSWindow *w, const DisplayInfo *d, bool explicit, monotonic_t now, monotonic_t *wait) {
+    const unsigned before = w->eink.known ? w->eink.acted : 0;
+    if (explicit) w->eink.known = false;
+    debounce_display_change(&w->eink, d->eink, now, wait);
+    return w->eink.acted != before;
+}
+
+// For --debug-rendering and remote control: the monitor and what is done for it
+void
+log_window_monitor(OSWindow *w, const DisplayInfo *d) {
+    if (w->logged_monitor == d->monitor) return;
+    w->logged_monitor = d->monitor;
+    const MonitorIdentity *m = d->monitor;
+    if (!m) {
+        debug_rendering("OS window %llu is on an unknown monitor\n", w->id);
+        return;
+    }
+    char product[16] = "";
+    if (m->product >= 0) snprintf(product, sizeof(product), "0x%04X", (unsigned)m->product);
+#define S(x) (m->x ? m->x : "")
+    debug_rendering("OS window %llu is on the monitor connector=%s make=%s model=%s mfg=%s product=%s description=%s edid=%s known=%s:"
+        " kind=%s color=%s gray_bits=%d\n", w->id, S(connector), S(make), S(model), m->mfg, product, S(description),
+        m->edid_source[0] ? m->edid_source : "none", m->known ? m->known->name : "no", d->kind, d->color, d->gray_bits);
+#undef S
 }
 
 unsigned
@@ -3831,6 +3949,54 @@ get_monitor_workarea(PYNOARG) {
         PyTuple_SET_ITEM(result, i, monitor_workarea);
     }
     return Py_NewRef(result);
+}
+
+// The monitor an OS window is on and what is known of it, for remote control, None for no such OS window
+static PyObject *
+os_window_monitor_info(PyObject *self UNUSED, PyObject *os_wid) {
+    OSWindow *w = os_window_for_id(PyLong_AsUnsignedLongLong(os_wid));
+    if (PyErr_Occurred()) return NULL;
+    if (!w) Py_RETURN_NONE;
+    DisplayInfo d;
+    os_window_display_info(w, &d);
+    RAII_PyObject(monitor, monitor_identity_as_dict(d.monitor));
+    if (!monitor) return NULL;
+    return Py_BuildValue("{sO ss ss si sO sO}", "monitor", monitor, "kind", d.kind, "color", d.color, "gray_bits", d.gray_bits, "eink",
+        os_window_is_eink(w) ? Py_True : Py_False, "gray", os_window_is_gray(w) ? Py_True : Py_False);
+}
+
+// test only: what is reported and done for an OS window that moves between monitors, as a sequence of (milliseconds,
+// identity), the identity being a dict as for set_test_monitor_identity() or None for an unknown monitor
+static PyObject *
+simulate_monitor_changes(PyObject *self UNUSED, PyObject *ticks) {
+    RAII_PyObject(seq, PySequence_Fast(ticks, "expected a sequence of (milliseconds, identity)"));
+    if (!seq) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    RAII_PyObject(ans, PyList_New(0));
+    if (!ans) return NULL;
+    RAII_PyObject(module, PyImport_ImportModule("kitty.fast_data_types"));
+    if (!module) return NULL;
+    RAII_PyObject(setter, PyObject_GetAttrString(module, "set_test_monitor_identity"));
+    if (!setter) return NULL;
+    for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(seq); i++) {
+        long long ms;
+        PyObject *identity;
+        if (!PyArg_ParseTuple(PySequence_Fast_GET_ITEM(seq, i), "LO", &ms, &identity)) return NULL;
+        RAII_PyObject(r, PyObject_CallFunctionObjArgs(setter, identity, NULL));
+        if (!r) return NULL;
+        GLFWdisplayinfo g = {0};
+        DisplayInfo d;
+        display_info_from(NULL, &g, window_monitor_identity(NULL), &d);
+        const monotonic_t now = ms_to_monotonic_t(ms);
+        const bool changed = update_eink_state(w, &d, false, now, NULL);
+        RAII_PyObject(state, Py_BuildValue("{ss ss si sO sO sO}", "kind", d.kind, "color", d.color, "gray_bits", d.gray_bits, "eink",
+            os_window_is_eink(w) ? Py_True : Py_False, "gray", os_window_is_gray(w) ? Py_True : Py_False, "changed", changed ? Py_True : Py_False));
+        if (!state || PyList_Append(ans, state) != 0) return NULL;
+    }
+    RAII_PyObject(r, PyObject_CallFunction(setter, "Op", Py_None, 0));
+    if (!r) return NULL;
+    return Py_NewRef(ans);
 }
 
 static PyObject *
@@ -4679,6 +4845,8 @@ static PyMethodDef module_methods[] = {
     {"glfw_primary_monitor_size", (PyCFunction)primary_monitor_size, METH_NOARGS, ""},
     {"glfw_get_monitor_workarea", (PyCFunction)get_monitor_workarea, METH_NOARGS, ""},
     {"glfw_get_monitor_names", (PyCFunction)get_monitor_names, METH_NOARGS, ""},
+    {"os_window_monitor_info", (PyCFunction)os_window_monitor_info, METH_O, ""},
+    {"simulate_monitor_changes", (PyCFunction)simulate_monitor_changes, METH_O, ""},
     {"glfw_primary_monitor_content_scale", (PyCFunction)primary_monitor_content_scale, METH_NOARGS, ""},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

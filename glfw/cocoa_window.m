@@ -3812,6 +3812,18 @@ _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
     }
 }
 
+// The monitor of the screen the window is on, mostly
+_GLFWmonitor *
+_glfwPlatformGetWindowCurrentMonitor(_GLFWwindow *window) {
+    NSScreen *screen = [window->ns.object screen];
+    if (!screen) return NULL;
+    const CGDirectDisplayID display = [[screen deviceDescription][@"NSScreenNumber"] unsignedIntValue];
+    for (int i = 0; i < _glfw.monitorCount; i++) {
+        if (_glfw.monitors[i]->ns.displayID == display) return _glfw.monitors[i];
+    }
+    return NULL;
+}
+
 monotonic_t
 _glfwPlatformGetDoubleClickInterval(_GLFWwindow *window UNUSED) {
     return s_double_to_monotonic_t([NSEvent doubleClickInterval]);

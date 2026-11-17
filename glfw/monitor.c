@@ -166,6 +166,9 @@ _glfwFreeMonitor(_GLFWmonitor *monitor) {
     free(monitor->modes);
     free((void *)monitor->name);
     free((void *)monitor->description);
+    free(monitor->make);
+    free(monitor->model);
+    free(monitor->edid);
     free(monitor);
 }
 

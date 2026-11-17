@@ -233,11 +233,17 @@ typedef struct ExtraCursor {
     index_type cell;
 } ExtraCursor;
 
+struct MonitorIdentity;
 typedef struct { // see docs/display-protocol.rst
     const char *kind, *color, *gamut, *precision, *output_type;
     int bits, red_bits, green_bits, blue_bits, gray_bits, output_bits, output_dither;
     unsigned period_us;
     float headroom, scale, ppi;
+    // The monitor, NULL when not known. Interned, so a different monitor is a different pointer, see monitor_info.c
+    const struct MonitorIdentity *monitor;
+    // What Silkie does for this display, EINK_REFRESH and EINK_GRAY, from what is known of it before the display_info
+    // option, which changes only what programs are told
+    unsigned eink;
 } DisplayInfo;
 
 typedef struct ExtraCursors {

@@ -86,30 +86,64 @@ definitions.
 E-paper and color switching
 ---------------------------
 
-For an external e-paper monitor, including a BOOX monitor that the operating
-system treats as an ordinary display, add this to ``silkie.conf``::
+Silkie knows which monitor each window is on, and treats a window on an
+e-paper monitor as such, even when the operating system thinks it is an
+ordinary display, as it does for every e-paper monitor seen so far. It knows
+some e-paper monitors by the model in their EDID, never by serial number
+(among them the ONYX BOOX Mira and Mira Pro, several DASUNG Paperlike models
+and the Modos Glider). Declare any other
+with :opt:`monitor_info` in ``silkie.conf``, by its model, connector, EDID
+manufacturer and product code, or a part of its description::
+
+    monitor_info MIRA253 kind=eink color=gray bits=4
+    monitor_info "OBX:0x0011" kind=eink color=gray
+    monitor_info DP-7 kind=eink color=rgb
+
+``kitten @ ls`` shows what Silkie knows of the monitor of each OS window, under
+``display``, and ``silkie --debug-rendering`` logs it when a window moves to
+another monitor. What follows applies to the windows on that monitor only: a
+window dragged to an ordinary monitor looks and behaves as usual again once it
+has stayed there for a moment, and comes back when it returns.
+
+E-paper (``kind=eink``) and gray (``color=gray`` or ``mono``) are independent,
+as there is color e-paper:
+
+* On e-paper, which ghosts when it changes, the cursor and blinking text do not
+  blink, there is no cursor trail, animated images stay on the frame they show,
+  an indeterminate progress bar stands still, a keyboard scroll jumps rather
+  than glides and the output is not dithered, since dither shows as grain that
+  ghosts. For now custom shaders, the visual bell, pixel scrolling and the
+  repaint timing stay as configured. Programs are told ``kind=eink`` through the :doc:`display-protocol`,
+  so that they can avoid animation and frequent redraws themselves.
+* On a display that shows only gray, text is black on white, or white on black
+  with ``color_scheme dark``, over the colors of themes, profiles,
+  ``launch --color``, sessions and programs, which come back when the window
+  moves to another display. Images are shown as they are, and the monitor
+  reduces them to its levels of gray.
+
+To treat every window as on e-paper whatever its monitor, add::
 
     eink_mode yes
 
-Silkie uses black text on white and reports ``kind=eink`` to applications
-through the :doc:`display-protocol`. Applications can use that information to
-avoid animation, smooth scrolling and frequent redraws. Software must support
-the protocol to use it.
+With it a display whose colors nothing declares, in Silkie's table,
+:opt:`monitor_info` or :opt:`display_info`, is taken to show gray, so a color
+e-paper monitor needs its colors declared, for example
+``monitor_info "<its model>" kind=eink color=rgb`` or ``display_info color=rgb``.
 
 Press ``ctrl+shift+f12`` to switch between black on white and white on black.
 The display is still reported as e-paper in either scheme. Press
-``ctrl+shift+alt+f12`` to toggle e-paper mode. These shortcuts use ``kitty_mod``
-(by default ``ctrl+shift``) and affect all Silkie windows. The actions are also
-available from the command palette. To choose your own shortcuts::
+``ctrl+shift+alt+f12`` to toggle :opt:`eink_mode`. These shortcuts use
+``kitty_mod`` (by default ``ctrl+shift``). The actions are also available from
+the command palette. To choose your own shortcuts::
 
     map f6 set_color_scheme toggle
     map f7 set_eink_mode toggle
 
 Use ``color_scheme light`` or ``color_scheme dark`` for a persistent color
 choice on any display. ``set_color_scheme auto`` returns to configured colors
-and automatic themes, or to black on white while e-paper mode is enabled.
-Explicit light and dark choices take precedence over automatic themes and
-OS appearance changes. Reloading the configuration restores the saved choices.
+and automatic themes. Explicit light and dark choices take precedence over
+automatic themes and OS appearance changes. Reloading the configuration
+restores the saved choices.
 
 With ``color_scheme auto``, Silkie follows the OS appearance: it uses
 :file:`dark-theme.auto.conf`, :file:`light-theme.auto.conf` or
@@ -119,19 +153,12 @@ OS appearance selects a built-in light theme, as long as :file:`silkie.conf`
 sets no colors of its own; by default the colors stay as configured. To
 customize the built-in theme, copy :file:`builtin-light-theme.conf` from the
 Silkie package to :file:`light-theme.auto.conf`. Colors from profiles, ``launch --color``, the
-ssh kitten and programs stay on top of any theme. E-paper mode shows black on
-white over all of them.
+ssh kitten and programs stay on top of any theme. The black on white of a gray
+display shows over all of them.
 
-E-paper mode declares the display kind without assuming its color depth or
-refresh timing. For a panel known to have sixteen levels of gray, also set::
-
-    display_info color=gray bits=4
-
-Leave that line out for a color e-paper monitor, or declare its actual
-capabilities. ``display_info kind=eink`` remains available as a reporting-only
-override that leaves the color scheme unchanged. These declarations apply to
-all windows in the Silkie process, so toggle the mode when moving between an
-ordinary monitor and an e-paper monitor.
+:opt:`display_info` declares properties of every display that only change what
+programs are told, for example ``display_info kind=eink`` reports e-paper
+without changing anything Silkie does.
 
 Minimum contrast
 ----------------

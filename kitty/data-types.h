@@ -378,6 +378,11 @@ typedef struct {
     // has entries of type COLOR_NOT_SET for colors not set by the program.
     DynamicColors configured, overridden;
     ColorLayer global_layer, window_layer, session_layer;
+    // The colors forced for a display that shows only gray, black on white, above every layer and the colors set by
+    // the program, while eink_active, see set_eink_colors(). The colors the program had set are kept in
+    // eink_saved_overridden and come back when it is turned off, unless the program sets others meanwhile.
+    DynamicColors eink_colors, eink_saved_overridden;
+    bool eink_active;
     // The mark colors set by the program, entries of type COLOR_NOT_SET for colors not set by the program
     MarkColors overridden_mark_colors;
     // The current mark colors resolved from the layers and overridden_mark_colors, in

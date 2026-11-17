@@ -3905,21 +3905,71 @@ opt(
     option_type='to_bool',
     ctype='bool',
     long_text="""
-Declare an e-paper display even when the operating system identifies it as
-an ordinary monitor, for example an external BOOX monitor. Silkie reports
-:code:`kind=eink` through the :doc:`display protocol </display-protocol>`
-and uses black text on white when :opt:`color_scheme` is :code:`auto`.
-An explicit :code:`color_scheme dark` also works on e-paper.
+Treat every Silkie window as being on e-paper, whatever monitor it is on.
+Usually this is not needed: Silkie recognizes the e-paper monitors in its
+built-in table, and :opt:`monitor_info` declares others, for the windows on
+that monitor only, so that a window moved to an ordinary monitor looks
+ordinary again.
 
-This setting applies to all Silkie windows. Switch at runtime with
-:code:`set_eink_mode yes`, :code:`no` or :code:`toggle`; the default shortcut
-is :code:`ctrl+shift+alt+f12`. Display subscribers receive the change.
-Reloading the configuration restores the configured setting.
+A window on e-paper reports :code:`kind=eink` through the :doc:`display
+protocol </display-protocol>` and avoids what makes such a panel ghost: the
+cursor and text do not blink, there is no cursor trail, animated images stay
+on the frame they show, an indeterminate progress bar does not move, keyboard
+scrolling jumps rather than glides, and the output is not dithered. For now
+:opt:`custom_shaders`, the visual bell, :opt:`pixel_scroll` and the repaint
+timing stay as configured, and images are not reduced to the levels of gray
+of the panel, which the monitor does itself. Being e-paper does not make a
+display monochrome, as there is color e-paper. Black
+text on white, or white on black with an explicit :code:`color_scheme dark`,
+follows from a display that shows only gray (:code:`color=gray` or
+:code:`mono`). With this option a display whose colors nothing declares, in
+the built-in table, :opt:`monitor_info` or :opt:`display_info`, is taken to
+show gray, as before. For color e-paper declare its colors, for example
+:code:`display_info color=rgb`.
 
-Color capability and refresh timing are not inferred from e-paper mode.
-Use :opt:`display_info` to declare them if needed, for example
-:code:`display_info color=gray bits=4` for a sixteen-level grayscale panel.
-E-paper mode takes precedence over :code:`display_info kind=...`.
+Switch at runtime with :code:`set_eink_mode yes`, :code:`no` or
+:code:`toggle`; the default shortcut is :code:`ctrl+shift+alt+f12`. Display
+subscribers receive the change. Reloading the configuration restores the
+configured setting. This option takes precedence over :code:`kind=...` in
+:opt:`display_info` and :opt:`monitor_info`.
+""",
+)
+
+opt(
+    '+monitor_info',
+    '',
+    option_type='monitor_info',
+    ctype='!monitor_info',
+    add_to_default=False,
+    long_text="""
+Properties of one monitor that the operating system cannot report, for the
+windows on that monitor. The first word selects the monitor, quoted when it
+has spaces, and the rest are :code:`key=value` pairs with the keys of
+:opt:`display_info`::
+
+    monitor_info MIRA253 kind=eink color=gray bits=4
+    monitor_info "OBX:0x0011" kind=eink color=gray
+    monitor_info DP-7 kind=eink color=rgb
+
+A monitor is selected by its EDID manufacturer ID and product code as
+:code:`MFG:PRODUCT`, with the product code in decimal or in hex with
+:code:`0x`, or :code:`MFG:*` for every product of the manufacturer; or else by
+its model (the name the system gives, or the EDID name descriptor), the name
+of its connector, such as :code:`DP-7`, or its make, each compared whole and
+without regard to case; or by a part of the description the system gives of
+it. Serial numbers are not used, as they say whose monitor it is. :code:`kitten @ ls` shows these for the
+monitor of each OS window, and :option:`kitty --debug-rendering` logs them
+when a window moves to another monitor.
+
+Unlike :opt:`display_info`, which only changes what programs are told, this
+changes what Silkie does: a monitor declared :code:`kind=eink` gets the
+e-paper behavior described for :opt:`eink_mode`, and one declared
+:code:`color=gray` or :code:`mono` black text on white. The two are
+independent, so color e-paper is :code:`kind=eink color=rgb`. Declarations
+here override the built-in table of e-paper monitors and what the operating
+system says. Use this option once per monitor; when several lines select a
+monitor, each key takes its value from the last of them. :opt:`display_info`
+still overrides what programs are told.
 """,
 )
 
@@ -3950,9 +4000,14 @@ use :code:`color=rgb red_bits=5 green_bits=6 blue_bits=5`; the report's legacy
 :code:`color=gray gray_bits=4` for sixteen levels. :code:`color=mono` always
 means one bit; use :code:`gray` for more than two levels.
 
-The report identifies declared precision as :code:`configured`. Detected
-framebuffer widths are labeled :code:`framebuffer`, since they do not establish
-physical panel precision or color calibration. Unknown channel widths are zero.
+The report identifies declared precision as :code:`configured`, and precision
+from Silkie's table of monitors as :code:`model`. Detected framebuffer widths
+are labeled :code:`framebuffer`, since they do not establish physical panel
+precision or color calibration. Unknown channel widths are zero.
+
+This option applies to every monitor and only changes what programs are told,
+not what Silkie does; :opt:`monitor_info` declares the properties of one
+monitor and acts on them.
 """,
 )
 

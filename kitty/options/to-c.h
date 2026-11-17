@@ -277,6 +277,50 @@ display_info(PyObject *src, Options *opts) {
 
 #undef STR_SETTER
 
+static inline void
+free_monitor_info(Options *opts) {
+    for (size_t i = 0; i < opts->monitor_info.count; i++) {
+        free(opts->monitor_info.matches[i]);
+        free(opts->monitor_info.specs[i]);
+    }
+    free(opts->monitor_info.matches);
+    free(opts->monitor_info.specs);
+    zero_at_ptr(&opts->monitor_info);
+}
+
+// A dict of match to spec, in the order of the lines of the config
+static inline void
+monitor_info(PyObject *src, Options *opts) {
+    free_monitor_info(opts);
+    if (!PyDict_Check(src) || !PyDict_GET_SIZE(src)) return;
+    const size_t n = (size_t)PyDict_GET_SIZE(src);
+    opts->monitor_info.matches = calloc(n, sizeof(char *));
+    opts->monitor_info.specs = calloc(n, sizeof(char *));
+    if (!opts->monitor_info.matches || !opts->monitor_info.specs) {
+        free_monitor_info(opts);
+        PyErr_NoMemory();
+        return;
+    }
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    while (PyDict_Next(src, &pos, &key, &value)) {
+        const char *k = PyUnicode_Check(key) ? PyUnicode_AsUTF8(key) : NULL, *v = PyUnicode_Check(value) ? PyUnicode_AsUTF8(value) : NULL;
+        if (!k || !v) {
+            PyErr_Clear();
+            continue;
+        }
+        const size_t i = opts->monitor_info.count;
+        if (!(opts->monitor_info.matches[i] = strdup(k)) || !(opts->monitor_info.specs[i] = strdup(v))) {
+            free(opts->monitor_info.matches[i]);
+            opts->monitor_info.matches[i] = NULL;
+            free_monitor_info(opts);
+            PyErr_NoMemory();
+            return;
+        }
+        opts->monitor_info.count++;
+    }
+}
+
 #define parse_animation(duration, name, start, end)                                                        \
     opts->duration = parse_s_double_to_monotonic_t(PyTuple_GET_ITEM(src, 0));                              \
     opts->animation.name = free_animation(opts->animation.name);                                           \
@@ -793,6 +837,7 @@ free_allocs_in_options(Options *opts) {
     free_detect_url_regex(opts);
     free_font_features(opts);
     free_background_images(opts);
+    free_monitor_info(opts);
 #define F(x)       \
     free(opts->x); \
     opts->x = NULL;

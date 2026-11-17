@@ -229,12 +229,13 @@ check_os_window_output(OSWindow *w) {
 bool
 output_dither_levels(const OSWindow *w, float levels[3]) {
     const int bits[3] = {w->output.red_bits, w->output.green_bits, w->output.blue_bits};
-    if (!OPT(output_dither) || bits[0] <= 0 || bits[1] <= 0 || bits[2] <= 0) return false;
+    // Dither is grain on e-paper, which shows it as noise that ghosts as it changes
+    if (!OPT(output_dither) || os_window_is_eink(w) || bits[0] <= 0 || bits[1] <= 0 || bits[2] <= 0) return false;
     const bool shallow = !w->output.is_float && bits[0] <= 8 && bits[1] <= 8 && bits[2] <= 8;
-    if (!shallow && w->output.display_deep && w->output.is_float) return false;
+    if (!shallow && w->output.depth.acted && w->output.is_float) return false;
     for (int i = 0; i < 3; i++) {
         // normalized integer channels have at most 16 bits in OpenGL, what is above that is not a step any display has
-        const int b = shallow || w->output.display_deep ? MIN(bits[i], 16) : 8;
+        const int b = shallow || w->output.depth.acted ? MIN(bits[i], 16) : 8;
         if (levels) levels[i] = (float)((1u << b) - 1u);
     }
     return true;
@@ -249,32 +250,40 @@ output_dither_bits(const OSWindow *w) {
     return (int)lroundf(log2f(narrowest + 1.f));
 }
 
-// How long a change in the depth of the display has to last before it is acted on
-#define OUTPUT_DEPTH_DEBOUNCE ms_to_monotonic_t(300ll)
+// How long a change in the display a window is on has to last before it is acted on
+#define DISPLAY_CHANGE_DEBOUNCE ms_to_monotonic_t(300ll)
 
-// Takes in whether the system says the display of the window is deep now and returns whether what was acted on
+// Takes in what the system says now about a property of the display of a window and returns whether what was acted on
 // changed. The first answer is acted on at once, later ones once they have lasted, as a window dragged across the
 // boundary between displays can be on either for a moment. wait is how long until a change seen will have lasted, or -1
 bool
-update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wait) {
+debounce_display_change(DisplayChange *c, unsigned now_value, monotonic_t now, monotonic_t *wait) {
     if (wait) *wait = -1;
-    if (!w->output.display_depth_known) {
-        w->output.display_depth_known = true;
-        w->output.display_deep = w->output.display_deep_seen = deep_now;
-        w->output.display_deep_seen_at = now;
+    if (!c->known) {
+        c->known = true;
+        c->acted = c->seen = now_value;
+        c->seen_at = now;
         return true;
     }
-    if (deep_now != w->output.display_deep_seen) {
-        w->output.display_deep_seen = deep_now;
-        w->output.display_deep_seen_at = now;
+    if (now_value != c->seen) {
+        c->seen = now_value;
+        c->seen_at = now;
     }
-    if (w->output.display_deep_seen == w->output.display_deep) return false;
-    const monotonic_t lasted = now - w->output.display_deep_seen_at;
-    if (lasted < OUTPUT_DEPTH_DEBOUNCE) {
-        if (wait) *wait = OUTPUT_DEPTH_DEBOUNCE - lasted;
+    if (c->seen == c->acted) return false;
+    const monotonic_t lasted = now - c->seen_at;
+    if (lasted < DISPLAY_CHANGE_DEBOUNCE) {
+        if (wait) *wait = DISPLAY_CHANGE_DEBOUNCE - lasted;
         return false;
     }
-    w->output.display_deep = deep_now;
+    c->acted = now_value;
+    return true;
+}
+
+// Takes in whether the system says the display of the window is deep now and returns whether what was acted on
+// changed, see debounce_display_change()
+bool
+update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wait) {
+    if (!debounce_display_change(&w->output.depth, deep_now, now, wait)) return false;
     w->output.refused_switch = 0;
     return true;
 }
@@ -288,7 +297,7 @@ update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wa
 bool
 os_window_wants_float_surface(const OSWindow *w) {
     if (OPT(deep_color) == DEEP_COLOR_ALWAYS && OPT(macos_colorspace) != 0) return true;
-    return w->output.display_deep && hdr_should_be_active(w);
+    return w->output.depth.acted && hdr_should_be_active(w);
 }
 
 // The window has a new surface, with a new OpenGL context that shares all objects with the old one, except those that
@@ -3371,13 +3380,13 @@ draw_cells(
 
 static void
 populate_border_colors(GLuint colors[9], color_type active_window_bg, unsigned int num_visible_windows, bool all_windows_have_same_bg, const OSWindow *w) {
-    colors[0] = (num_visible_windows > 1 && !all_windows_have_same_bg) ? OPT(background) : active_window_bg;
+    colors[0] = (num_visible_windows > 1 && !all_windows_have_same_bg) ? os_window_background(w) : active_window_bg;
     colors[1] = OPT(active_border_color);
     colors[2] = OPT(inactive_border_color);
     colors[3] = 0;
     colors[4] = OPT(bell_border_color);
-    colors[5] = OPT(tab_bar_background);
-    colors[6] = OPT(tab_bar_margin_color);
+    colors[5] = os_window_tab_bar_background(w);
+    colors[6] = os_window_tab_bar_margin_color(w);
     colors[7] = w->tab_bar_edge_color.left;
     colors[8] = w->tab_bar_edge_color.right;
 }
@@ -3637,7 +3646,7 @@ scale_output_to_hdr_white_level(const OSWindow *w) {
 
 void
 blank_os_window(OSWindow *osw) {
-    color_type color = OPT(background);
+    color_type color = os_window_background(osw);
     if (osw->num_tabs > 0) {
         Tab *t = osw->tabs + osw->active_tab;
         if (t->num_windows == 1) {
@@ -3972,10 +3981,10 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
         (dst)[2] = srgb_color((c) & 0xFF);         \
         (dst)[3] = 1.f;                            \
     } while (0)
-    FILL_COLOR(d->background, OPT(background));
-    FILL_COLOR(d->foreground, OPT(foreground));
-    color_type active_bg = OPT(background);
-    color_type cursor_color = OPT(foreground);
+    FILL_COLOR(d->background, os_window_background(os_window));
+    FILL_COLOR(d->foreground, os_window_foreground(os_window));
+    color_type active_bg = os_window_background(os_window);
+    color_type cursor_color = os_window_foreground(os_window);
     float cursor_opacity = 0.f;
     WindowGeometry active_win_geom = {0};
     d->active_window_alternate_screen_age = -1.f;
@@ -4031,7 +4040,7 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
         CursorTrail *ct = NULL;
         d->cursor_trail_age = -1.f;
         for (int i = 0; i < CURSOR_TRAIL_HISTORY_SIZE; i++) d->cursor_trail_history_age[i / 4][i % 4] = -1.f;
-        if (OPT(cursor_trail) && os_window->num_tabs > 0) {
+        if (os_window_has_cursor_trail(os_window) && os_window->num_tabs > 0) {
             CursorTrail *candidate = &os_window->tabs[os_window->active_tab].cursor_trail;
             if (candidate->needs_render) ct = candidate;
             // The history outlives the trail so that effects started by a move can finish
@@ -4288,7 +4297,7 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
 
 static void
 stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, monotonic_t now) {
-    if (OPT(cursor_trail) && tab->cursor_trail.needs_render && !(custom_shaders.end.active && custom_shaders.end.bypass_builtin_trail))
+    if (os_window_has_cursor_trail(os_window) && tab->cursor_trail.needs_render && !(custom_shaders.end.active && custom_shaders.end.bypass_builtin_trail))
         draw_cursor_trail(&tab->cursor_trail, active_window);
     if (os_window->needs_layers) {
         float sx = global_state.layers_render_texture.width > 0 ? (float)os_window->viewport_width / (float)global_state.layers_render_texture.width : 1.f;
@@ -4924,7 +4933,7 @@ os_window_output_state(OSWindow *w, bool switched) {
     return Py_BuildValue("{sOsOsOsOs(fff)sisssisOsOsO}", "linear", w->linear_output ? Py_True : Py_False, "encode_in_shader",
         w->output.encode_in_shader ? Py_True : Py_False, "needs_layers", w->output.encode_in_shader || dither ? Py_True : Py_False, "dither",
         dither ? Py_True : Py_False, "levels", levels[0], levels[1], levels[2], "output_bits", d.output_bits, "output_type", d.output_type,
-        "output_dither", d.output_dither, "display_deep", w->output.display_deep ? Py_True : Py_False, "switched", switched ? Py_True : Py_False,
+        "output_dither", d.output_dither, "display_deep", w->output.depth.acted ? Py_True : Py_False, "switched", switched ? Py_True : Py_False,
         "layers_float", layers_are_float(w) ? Py_True : Py_False);
 }
 

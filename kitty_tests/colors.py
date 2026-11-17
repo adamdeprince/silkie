@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from kitty.boss import Boss
-from kitty.colors import AutoTheme, SessionColorSchemes, ThemeColors, color_scheme_spec
+from kitty.colors import AutoTheme, SessionColorSchemes, ThemeColors, color_scheme_spec, eink_color_spec
 from kitty.config import load_config
 from kitty.fast_data_types import Color, get_options, set_options
 from kitty.options.types import Options
@@ -16,16 +16,9 @@ from .base import BaseTest, parse_bytes
 
 class TestColorSchemes(BaseTest):
     def test_explicit_color_schemes(self):
-        for scheme, eink, expected in (
-            ('auto', False, None),
-            ('auto', True, (0, 0xFFFFFF)),
-            ('light', False, (0, 0xFFFFFF)),
-            ('dark', False, (0xFFFFFF, 0)),
-            ('dark', True, (0xFFFFFF, 0)),
-        ):
-            with self.subTest(scheme=scheme, eink=eink):
-                opts = Options({'color_scheme': scheme, 'eink_mode': eink})
-                spec = color_scheme_spec(opts)
+        for scheme, expected in (('auto', None), ('light', (0, 0xFFFFFF)), ('dark', (0xFFFFFF, 0))):
+            with self.subTest(scheme=scheme):
+                spec = color_scheme_spec(Options({'color_scheme': scheme}))
                 if expected is None:
                     self.assertIsNone(spec)
                     continue
@@ -34,8 +27,17 @@ class TestColorSchemes(BaseTest):
                 self.ae((spec['cursor'], spec['cursor_text_color']), expected)
                 self.ae((spec['selection_foreground'], spec['selection_background']), (bg, fg))
                 self.ae((spec['active_tab_foreground'], spec['active_tab_background']), (bg, fg))
+        # The colors of a gray display are black on white, unless the scheme is explicitly dark
+        for scheme, expected in (('auto', (0, 0xFFFFFF)), ('light', (0, 0xFFFFFF)), ('dark', (0xFFFFFF, 0))):
+            with self.subTest(eink_scheme=scheme):
+                spec = eink_color_spec(Options({'color_scheme': scheme}))
+                self.ae((spec['foreground'], spec['background']), expected)
 
     def test_eink_startup_and_reload(self):
+        # E-ink mode no longer changes the configured colors: the e-ink colors are a layer of each window on a gray
+        # display, under which the theme is applied as usual and comes back when the layer goes
+        from kitty.fast_data_types import ColorProfile
+
         themes = ThemeColors()
         themes.themes['dark'] = AutoTheme(0, {'foreground': 0x123456, 'background': 0x654321}, (), {})
         # refresh() would forget the theme, as there is no such file
@@ -43,9 +45,14 @@ class TestColorSchemes(BaseTest):
             for _ in range(32):
                 opts = load_config(overrides=['eink_mode yes'])
                 themes.patch_opts(opts)
-                self.ae((int(opts.foreground), int(opts.background)), (0, 0xFFFFFF))
+                self.ae((int(opts.foreground), int(opts.background)), (0x123456, 0x654321))
+                self.ae(themes.applied_theme, 'dark')
                 set_options(opts)
-                self.assertFalse(themes.on_system_color_scheme_change('dark'))
+                cp = ColorProfile(opts)
+                self.assertTrue(cp.set_eink_colors(eink_color_spec(opts)))
+                self.ae((int(cp.default_fg), int(cp.default_bg)), (0, 0xFFFFFF))
+                self.assertTrue(cp.set_eink_colors(None))
+                self.ae((int(cp.default_fg), int(cp.default_bg)), (0x123456, 0x654321))
                 opts = load_config(overrides=['eink_mode no'])
                 themes.patch_opts(opts)
                 self.ae((int(opts.foreground), int(opts.background)), (0x123456, 0x654321))

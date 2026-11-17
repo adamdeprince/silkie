@@ -917,6 +917,7 @@ extern bool init_desktop(PyObject *);
 extern bool init_fonts(PyObject *);
 extern bool init_native_ui(PyObject *);
 extern bool init_glfw(PyObject *m);
+extern bool init_monitor_info(PyObject *m);
 extern bool init_dnd(PyObject *m);
 extern bool init_child(PyObject *m);
 extern bool init_state(PyObject *module);
@@ -972,6 +973,7 @@ PyInit_fast_data_types(void) {
     if (!init_ColorProfile(m)) return NULL;
     if (!init_Screen(m)) return NULL;
     if (!init_glfw(m)) return NULL;
+    if (!init_monitor_info(m)) return NULL;
     if (!init_dnd(m)) return NULL;
     if (!init_child(m)) return NULL;
     if (!init_state(m)) return NULL;

@@ -23,7 +23,7 @@ from .fast_data_types import (
     set_os_window_chrome,
 )
 from .options.types import Options, all_colors, nullable_colors, special_colors
-from .rgb import color_from_int
+from .rgb import color_as_int, color_from_int
 from .types import run_once
 from .typing_compat import WindowType
 
@@ -45,16 +45,8 @@ def color_profile_signature(profile: ColorProfile) -> dict[str, Any]:
     return colors
 
 
-def color_scheme_spec(opts: Options) -> ColorsSpec | None:
-    """
-    The colors forced by the color_scheme option, or by e-ink mode, which shows
-    black on white, or None when the colors follow the system color scheme.
-    """
-    scheme = opts.color_scheme
-    if scheme == 'auto':
-        if not opts.eink_mode:
-            return None
-        scheme = 'light'
+def scheme_colors(scheme: str) -> ColorsSpec:
+    'Black on white for the light scheme, white on black for the dark one'
     fg, bg = (0, 0xFFFFFF) if scheme == 'light' else (0xFFFFFF, 0)
     return {
         'foreground': fg,
@@ -72,9 +64,78 @@ def color_scheme_spec(opts: Options) -> ColorsSpec | None:
     }
 
 
-def colors_forced_by_eink(opts: Options) -> bool:
-    'E-ink mode shows black on white over every color layer, including the colors of windows, sessions and programs'
-    return bool(opts.eink_mode)
+def color_scheme_spec(opts: Options) -> ColorsSpec | None:
+    """
+    The colors forced by the color_scheme option, or None when the colors
+    follow the system color scheme. E-ink mode is per OS window, see
+    eink_color_spec().
+    """
+    scheme = opts.color_scheme
+    if scheme == 'auto':
+        return None
+    return scheme_colors(scheme)
+
+
+def eink_color_spec(opts: Options) -> ColorsSpec:
+    """
+    The colors of an OS window on a display that shows only gray: black on
+    white, or white on black with an explicit color_scheme dark. They are
+    shown over every color layer, including the colors of windows, sessions
+    and programs, which come back when the window moves to another display.
+    """
+    return scheme_colors('dark' if opts.color_scheme == 'dark' else 'light')
+
+
+def tab_bar_spec_from_options(opts: Options) -> ColorsSpec:
+    'The colors of the tab bar from the options, as they are without e-ink colors'
+    return {
+        'active_tab_foreground': color_as_int(opts.active_tab_foreground),
+        'active_tab_background': color_as_int(opts.active_tab_background),
+        'inactive_tab_foreground': color_as_int(opts.inactive_tab_foreground),
+        'inactive_tab_background': color_as_int(opts.inactive_tab_background),
+        'tab_bar_background': color_as_int(opts.tab_bar_background) if opts.tab_bar_background else None,
+    }
+
+
+def sync_eink_colors(os_window_ids: Iterable[int] | None = None) -> None:
+    """
+    Show the colors of a display that shows only gray in the OS windows on one
+    and the ordinary colors in the others, see os_window_eink_state(). Only
+    colors that change are redrawn and told to programs.
+    """
+    from .fast_data_types import os_window_eink_state, set_os_window_eink_chrome
+    boss = get_boss()
+    opts = get_options()
+    spec = eink_color_spec(opts)
+    wanted = None if os_window_ids is None else frozenset(os_window_ids)
+    states: dict[int, bool] = {}
+
+    def is_gray(os_window_id: int) -> bool:
+        if (ans := states.get(os_window_id)) is None:
+            ans = states[os_window_id] = os_window_eink_state(os_window_id)[1]
+        return ans
+
+    for w in tuple(boss.all_windows):
+        os_window_id = getattr(w, 'os_window_id', 0)
+        if wanted is not None and os_window_id not in wanted:
+            continue
+        cp = w.screen.color_profile
+        bg_before = cp.default_bg
+        if cp.set_eink_colors(spec if is_gray(os_window_id) else None):
+            if cp.default_bg != bg_before:
+                boss.default_bg_changed_for(w.id)
+            w.notify_child_of_color_change()
+            w.refresh()
+    for tm in tuple(boss.all_tab_managers):
+        if wanted is not None and tm.os_window_id not in wanted:
+            continue
+        gray = is_gray(tm.os_window_id)
+        tm.tab_bar.patch_colors(spec if gray else tab_bar_spec_from_options(opts))
+        tm.tab_bar.layout()
+        tm.mark_tab_bar_dirty()
+        if (t := tm.active_tab) is not None:
+            t.relayout_borders()
+        set_os_window_eink_chrome(tm.os_window_id, spec if gray else None)
 
 
 class BackgroundImageOptions(TypedDict, total=False):
@@ -252,9 +313,9 @@ class ThemeColors:
         )
         self.applied_theme, self.applied_builtin_theme = '', False
         self.update_builtin_light_theme_allowed(opts)
-        # color_scheme light or dark, and e-ink mode, take precedence over the
-        # theme for the system color scheme. They change only the colors they
-        # name, so the transparent background colors are kept.
+        # color_scheme light or dark take precedence over the theme for the
+        # system color scheme. They change only the colors they name, so the
+        # transparent background colors are kept.
         if (spec := color_scheme_spec(opts)) is not None:
             patch_options_with_color_spec(opts, spec, None)
             patch_global_colors(spec, True)
@@ -326,25 +387,19 @@ class ThemeColors:
         return True
 
     def apply_color_scheme(self) -> None:
-        'Apply a change of the color_scheme option or of e-ink mode'
+        'Apply a change of the color_scheme option'
         opts = get_options()
         if (spec := color_scheme_spec(opts)) is not None:
             self.applied_theme, self.applied_builtin_theme = '', False
-            forced = colors_forced_by_eink(opts)
-            if forced:
-                for w in get_boss().all_windows:
-                    w.screen.color_profile.reset_layer(COLOR_LAYER_SESSION)
-            patch_colors(spec, None, True, replace_window_colors=forced)
-            return
-        # Back to auto: the theme for the system color scheme, if any, otherwise the configured colors
-        self.refresh()
-        if not self.apply_theme(glfw_get_system_color_theme()) and self.configured_colors is not None:
-            self.applied_theme, self.applied_builtin_theme = '', False
-            patch_colors(*self.configured_colors, configured=True)
-        # e-ink mode removed the session colors
-        for w in get_boss().all_windows:
-            if w.session_color_schemes:
-                w.apply_session_color_scheme()
+            patch_colors(spec, None, True)
+        else:
+            # Back to auto: the theme for the system color scheme, if any, otherwise the configured colors
+            self.refresh()
+            if not self.apply_theme(glfw_get_system_color_theme()) and self.configured_colors is not None:
+                self.applied_theme, self.applied_builtin_theme = '', False
+                patch_colors(*self.configured_colors, configured=True)
+        # The colors of gray displays depend on the scheme
+        sync_eink_colors()
 
 
 theme_colors = ThemeColors()
@@ -558,3 +613,5 @@ def patch_colors(
             if notify_on_bg_change and color_profile_signature(w.screen.color_profile) != colors_before[w.id]:
                 w.notify_child_of_color_change()
             w.refresh()
+    # The tab bars of OS windows on gray displays keep the colors of such displays
+    sync_eink_colors(os_window_ids)

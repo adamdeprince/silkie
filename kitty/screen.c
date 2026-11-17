@@ -29,6 +29,7 @@
 #include "charsets.h"
 #include "lineops.h"
 #include "hyperlink.h"
+#include "monitor_info.h"
 #include <structmember.h>
 #include <limits.h>
 #include <sys/types.h>
@@ -2080,20 +2081,61 @@ send_visibility_report(Screen *self) {
 // A reply to a query when id is not negative, otherwise an event, which has
 // the time the terminal learnt of it as t, in milliseconds on monotonic(), the
 // clock of every extension, as for the tablet pointer protocol
+// A field with a string as UTF-8 encoded as base64 with padding, as the other extensions send strings, or an empty
+// string for no string. NULL when out of memory.
+static char *
+display_string_field(const char *key, const char *value) {
+    if (!value || !*value) return strdup("");
+    const size_t len = strlen(value), klen = strlen(key);
+    if (len > (SIZE_MAX - 3) / 4 * 3 - 3) return NULL;
+    const size_t encoded = required_buffer_size_for_base64_encode(len);
+    if (encoded > SIZE_MAX - klen - 3) return NULL;
+    char *ans = malloc(klen + encoded + 3);
+    if (!ans) return NULL;
+    ans[0] = ':';
+    memcpy(ans + 1, key, klen);
+    ans[klen + 1] = '=';
+    size_t out_len = encoded;
+    base64_encode8((const unsigned char *)value, len, (unsigned char *)ans + klen + 2, &out_len, true);
+    ans[klen + 2 + out_len] = 0;
+    return ans;
+}
+
+// A reply to a query when id is not negative, otherwise an event, which has
+// the time the terminal learnt of it as t, in milliseconds on monotonic(), the
+// clock of every extension, as for the tablet pointer protocol
 static void
 send_display_report(Screen *self, const char *op, int id, const DisplayInfo *d) {
     const char *key = id >= 0 ? "id" : "t", *mode = id >= 0 ? (self->display_events ? ":mode=1" : ":mode=0") : "";
     const unsigned long long serial = id >= 0 ? (unsigned)id : (unsigned long long)(MAX(0, monotonic()) / MONOTONIC_T_1e6);
+    // The monitor, its fields present only when known, see docs/display-protocol.rst
+    const MonitorIdentity *m = d->monitor;
+    char ids[32] = "";  // ":mfg=XYZ:product=65535" at most, three letters and a 16 bit number
+    if (m && m->mfg[0]) {
+        if (m->product >= 0) snprintf(ids, sizeof(ids), ":mfg=%s:product=%d", m->mfg, m->product);
+        else snprintf(ids, sizeof(ids), ":mfg=%s", m->mfg);
+    }
+    RAII_ALLOC(char, make, display_string_field("make", m ? m->make : NULL));
+    RAII_ALLOC(char, model, display_string_field("model", m ? m->model : NULL));
+    RAII_ALLOC(char, connector, display_string_field("connector", m ? m->connector : NULL));
+    RAII_ALLOC(char, description, display_string_field("description", m ? m->description : NULL));
+    if (!make || !model || !connector || !description) {
+        log_error("Out of memory formatting a display report, not sent");
+        return;
+    }
     const char *format = "777;display;v=1:op=%s:%s=%llu%s:kind=%s:color=%s:bits=%d:gamut=%s:headroom=%g:scale=%g:period=%u:ppi=%g"
-        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d";
+        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d%s%s%s%s%s";
 #define DISPLAY_REPORT_ARGS op, key, serial, mode, d->kind, d->color, d->bits, d->gamut, d->headroom, d->scale, d->period_us, d->ppi, \
     d->red_bits, d->green_bits, d->blue_bits, d->gray_bits, d->precision, d->output_bits, d->output_type ? d->output_type : "unknown", \
-    d->output_dither
+    d->output_dither, ids, make, model, connector, description
     const int n = snprintf(NULL, 0, format, DISPLAY_REPORT_ARGS);
     if (n < 0) return;
     const size_t size = (size_t)n + 1;
     RAII_ALLOC(char, buf, malloc(size));
-    if (!buf) fatal("Out of memory formatting display report");
+    if (!buf) {
+        log_error("Out of memory formatting a display report, not sent");
+        return;
+    }
     snprintf(buf, size, format, DISPLAY_REPORT_ARGS);
 #undef DISPLAY_REPORT_ARGS
     write_escape_code_to_child(self, ESC_OSC, buf);
