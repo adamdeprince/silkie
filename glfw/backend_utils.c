@@ -140,7 +140,9 @@ free_timers(EventLoopData *eld) {
     eld->timers_count = 0;
 }
 
-id_type
+// addTimer(), removeTimer(), removeAllTimers() and dispatchTimers() are exported,
+// like utf_8_strndup(), so that kitty_tests/glfw.py can test the timer table
+GLFWAPI id_type
 addTimer(
     EventLoopData *eld, const char *name, monotonic_t interval, int enabled, bool repeats, timer_callback_func cb, void *cb_data, GLFWuserdatafreefun free) {
     if (eld->timers_count >= eld->timers_capacity && !grow_timers(eld)) return 0;
@@ -157,12 +159,12 @@ addTimer(
     return timer_counter;
 }
 
-void
+GLFWAPI void
 removeTimer(EventLoopData *eld, id_type timer_id) {
     removeX(timers, timer_id, update_timers);
 }
 
-void
+GLFWAPI void
 removeAllTimers(EventLoopData *eld) {
     for (nfds_t i = 0; i < eld->timers_count; i++) {
         if (eld->timers[i].free && eld->timers[i].callback_data) eld->timers[i].free(eld->timers[i].id, eld->timers[i].callback_data);
@@ -230,7 +232,7 @@ dispatchEvents(EventLoopData *eld) {
     }
 }
 
-size_t
+GLFWAPI size_t
 dispatchTimers(EventLoopData *eld) {
     if (!eld->timers_count || eld->timers[0].trigger_at == MONOTONIC_T_MAX) return 0;
     // timer_dispatches has room for every timer, see grow_timers()
