@@ -872,6 +872,8 @@ def patch_color_profiles(
 def create_canvas(d: bytes, w: int, x: int, y: int, cw: int, ch: int, bpp: int) -> bytes: ...
 def dmabuf_parse_spec(spec: bytes) -> tuple[int, str, int, tuple[tuple[int, int, int], ...]]: ...  # Linux only
 def dmabuf_take_fds(spec: bytes, session_of: int) -> tuple[int, ...]: ...  # Linux only
+def iosurface_create_for_tests(width: int, height: int) -> tuple[int, object]: ...  # macOS only
+def iosurface_held_count() -> int: ...  # macOS only
 def os_window_font_size(os_window_id: int, new_sz: float = -1.0, force: bool = False) -> float:
     pass
 
