@@ -800,8 +800,10 @@ dispatch_osc(PS *self, uint8_t *buf, size_t limit, bool is_extended_osc) {
         case 9:
             // ConEmu OSC 9 sub-commands that must act at this point in the
             // output are handled here, the others in Window.desktop_notify(),
-            // see https://conemu.github.io/en/AnsiEscapeCodes.html
-            if (limit - i >= 2 && buf[i] == '9' && buf[i + 1] == ';') {
+            // see https://conemu.github.io/en/AnsiEscapeCodes.html. OSC 777
+            // payloads that are none of the frames above fall through to
+            // here, and must reach desktop_notify unchanged.
+            if (code == 9 && limit - i >= 2 && buf[i] == '9' && buf[i + 1] == ';') {
                 // ConEmu cwd reporting: OSC 9;9;path
                 i += 2;
 #ifdef DUMP_COMMANDS
@@ -812,7 +814,7 @@ dispatch_osc(PS *self, uint8_t *buf, size_t limit, bool is_extended_osc) {
                 process_cwd_notification(self->screen, code, (char *)buf + i, limit - i);
                 break;
             }
-            if (limit - i >= 2 && buf[i] == '1' && buf[i + 1] == '2' && (limit - i == 2 || buf[i + 2] == ';')) {
+            if (code == 9 && limit - i >= 2 && buf[i] == '1' && buf[i + 1] == '2' && (limit - i == 2 || buf[i + 2] == ';')) {
                 // ConEmu OSC 9;12: the cursor is at the start of a prompt, mark it exactly as OSC 133;A does
                 char prompt_start[] = "A";
 #ifdef DUMP_COMMANDS

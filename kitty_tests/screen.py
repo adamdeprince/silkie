@@ -4268,6 +4268,12 @@ class TestScreen(BaseTest):
             self.assertTrue(is_conemu_osc9_command(x), x)
         for x in ('hello', '13;x', '0;x', '1x', '', '42'):
             self.assertFalse(is_conemu_osc9_command(x), x)
+        # OSC 777 payloads that look like ConEmu sub-commands are not ones,
+        # they go to desktop_notify as they are
+        c.notifications = []
+        parse_bytes(s, b'\x1b]777;9;/elsewhere\x07\x1b]777;12\x07')
+        self.ae(path_from_osc7_url(s.last_reported_cwd), '/q/r')
+        self.ae(c.notifications, [(777, '9;/elsewhere'), (777, '12')])
 
     def test_conemu_osc9_prompt_start(self):
         # OSC 9;12 marks the start of a prompt exactly as OSC 133;A does
