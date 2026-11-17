@@ -627,10 +627,13 @@ tab_members(struct OSWindow *w, unsigned long long *ids, size_t cap) {
         if (cap) ids[0] = host->os_window_id(w);
         return 1;
     }
-    const gint n = gtk_notebook_get_n_pages(GTK_NOTEBOOK(p->hw->notebook));
-    for (gint i = 0; i < n; i++) {
+    const gint pages = gtk_notebook_get_n_pages(GTK_NOTEBOOK(p->hw->notebook));
+    size_t n = 0;
+    for (gint i = 0; i < pages; i++) {
         Page *q = page_at(p->hw, i);
-        if ((size_t)i < cap && q) ids[i] = q->id;
+        if (!q) continue;
+        if (n < cap) ids[n] = q->id;
+        n++;
     }
     return n;
 }
@@ -821,16 +824,20 @@ on_spin_changed(GtkSpinButton *s, gpointer data) {
     (void)data;
     PyObject *f = field_of(s);
     if (!f || settings.building) return;
-    char buf[64];
+    char buf[64];  // a formatted long is at most 20 characters and a %g double at most 13
     if (strcmp(str_item(f, "kind"), "int") == 0) g_snprintf(buf, sizeof(buf), "%ld", (long)gtk_spin_button_get_value_as_int(s));
     else g_snprintf(buf, sizeof(buf), "%g", gtk_spin_button_get_value(s));
     if (strtod(buf, NULL) == strtod(str_item(f, "value"), NULL)) return;
     commit_field(s, buf);
 }
 
+#define HEX_COLOR_SZ sizeof("#rrggbb")
+
 static void
-hex_of(const GdkRGBA *c, char *buf, size_t sz) {
-    g_snprintf(buf, sz, "#%02x%02x%02x", (int)(c->red * 255 + 0.5), (int)(c->green * 255 + 0.5), (int)(c->blue * 255 + 0.5));
+hex_of(const GdkRGBA *c, char buf[HEX_COLOR_SZ]) {
+#define C(x) (int)(CLAMP(c->x, 0.0, 1.0) * 255 + 0.5)
+    g_snprintf(buf, HEX_COLOR_SZ, "#%02x%02x%02x", C(red), C(green), C(blue));
+#undef C
 }
 
 static void
@@ -838,8 +845,8 @@ on_color_set(GtkColorButton *b, gpointer data) {
     (void)data;
     GdkRGBA c;
     gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(b), &c);
-    char buf[16];
-    hex_of(&c, buf, sizeof(buf));
+    char buf[HEX_COLOR_SZ];
+    hex_of(&c, buf);
     commit_field(b, buf);
 }
 
@@ -851,8 +858,8 @@ on_none_toggled(GtkToggleButton *t, gpointer data) {
     if (on) { commit_field(t, "none"); return; }
     GdkRGBA c;
     gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(color), &c);
-    char buf[16];
-    hex_of(&c, buf, sizeof(buf));
+    char buf[HEX_COLOR_SZ];
+    hex_of(&c, buf);
     commit_field(t, buf);
 }
 

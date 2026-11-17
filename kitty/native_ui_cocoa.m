@@ -219,7 +219,7 @@ fill_menu(NSMenu *menu, NSArray *items) {
             mi.representedObject = d;
             NSNumber *key = d[@"key"], *mods = d[@"mods"];
             if (key && mods) {
-                char kbuf[32] = {0};
+                char kbuf[32] = {0};  // holds one UTF-8 encoded code point, at most 4 bytes, and its NUL
                 int cocoa_mods = 0;
                 get_cocoa_key_equivalent((uint32_t)key.unsignedIntValue, mods.intValue, kbuf, sizeof(kbuf), &cocoa_mods);
                 if (kbuf[0]) {

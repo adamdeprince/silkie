@@ -247,14 +247,26 @@ native_tabs_members(PyObject *self UNUSED, PyObject *pyid) {
     B(tab_members);
     OSWindow *w = window_arg(PyLong_AsUnsignedLongLong(pyid));
     if (!w) return NULL;
-    size_t cap = global_state.num_os_windows + 1;
-    RAII_ALLOC(id_type, ids, malloc(cap * sizeof(id_type)));
-    if (!ids) return PyErr_NoMemory();
-    // A group cannot hold more than all OS windows, so a second attempt is not needed
-    const size_t n = MIN(b->tab_members(w, ids, cap), cap);
+    // Start with room for every OS window and grow if the toolkit reports more members, for instance pages
+    // whose OS window is being closed, rather than dropping the members that do not fit
+    size_t cap = global_state.num_os_windows + 1, n;
+    RAII_ALLOC(id_type, ids, NULL);
+    while (true) {
+        if (cap > SIZE_MAX / sizeof(id_type)) return PyErr_NoMemory();
+        id_type *q = realloc(ids, cap * sizeof(id_type));
+        if (!q) return PyErr_NoMemory();
+        ids = q;
+        n = b->tab_members(w, ids, cap);
+        if (n <= cap) break;
+        cap = n;
+    }
     PyObject *ans = PyTuple_New(n);
     if (!ans) return NULL;
-    for (size_t i = 0; i < n; i++) PyTuple_SET_ITEM(ans, i, PyLong_FromUnsignedLongLong(ids[i]));
+    for (size_t i = 0; i < n; i++) {
+        PyObject *id = PyLong_FromUnsignedLongLong(ids[i]);
+        if (!id) { Py_DECREF(ans); return NULL; }
+        PyTuple_SET_ITEM(ans, i, id);
+    }
     return ans;
 }
 
