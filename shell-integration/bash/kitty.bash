@@ -357,12 +357,17 @@ _ksi_main() {
         fi; if _ksi_s_is_ok "conda" && [ -n "${CONDA_DEFAULT_ENV}" ] && builtin command -v conda >/dev/null 2>/dev/null && [ "${CONDA_DEFAULT_ENV}" != "$orig_conda_env" ]; then
             sourced="y"
             conda activate "${CONDA_DEFAULT_ENV}"
-        fi; if _ksi_s_is_ok "env_var" && [[ -n "${KITTY_CLONE_SOURCE_CODE}" ]]; then
+        fi
+        # SILKIE_CLONE_SOURCE_CODE and SILKIE_CLONE_SOURCE_PATH are the documented names. The KITTY_ names are still
+        # read, when the SILKIE_ ones are not set, for compatibility with existing scripts.
+        builtin local ksi_clone_code="${SILKIE_CLONE_SOURCE_CODE-${KITTY_CLONE_SOURCE_CODE}}"
+        builtin local ksi_clone_path="${SILKIE_CLONE_SOURCE_PATH-${KITTY_CLONE_SOURCE_PATH}}"
+        if _ksi_s_is_ok "env_var" && [[ -n "${ksi_clone_code}" ]]; then
             sourced="y"
-            builtin eval "${KITTY_CLONE_SOURCE_CODE}"
-        fi; if _ksi_s_is_ok "path" && [[ -r "${KITTY_CLONE_SOURCE_PATH}" ]]; then
+            builtin eval "${ksi_clone_code}"
+        fi; if _ksi_s_is_ok "path" && [[ -r "${ksi_clone_path}" ]]; then
             sourced="y"
-            builtin source "${KITTY_CLONE_SOURCE_PATH}"
+            builtin source "${ksi_clone_path}"
         fi
         builtin unset -f _ksi_s_is_ok
         # Ensure PATH has no duplicate entries

@@ -147,6 +147,13 @@ canonicalize_path_wide(const char *srcpath, wchar_t *dest, size_t sz) {
 
 static int
 run_embedded(RunData *run_data) {
+    // SILKIE_DEVELOP_FROM is the documented name. The frozen importer from bypy reads only KITTY_DEVELOP_FROM, which
+    // is still accepted for compatibility with existing scripts, so the documented name is copied over it.
+    const char *develop_from = getenv("SILKIE_DEVELOP_FROM");
+    if (develop_from && setenv("KITTY_DEVELOP_FROM", develop_from, 1) != 0) {
+        fprintf(stderr, "Failed to set KITTY_DEVELOP_FROM from SILKIE_DEVELOP_FROM: %s\n", strerror(errno));
+        return 1;
+    }
     bypy_pre_initialize_interpreter(false);
     char extensions_dir_full[PATH_MAX + 1] = {0}, python_home_full[PATH_MAX + 1] = {0};
 #ifdef __APPLE__

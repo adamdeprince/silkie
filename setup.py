@@ -293,6 +293,14 @@ class CompilationDatabase:
                 json.dump([{'output': c.key, 'arguments': c.cmd, 'directory': src_base} for c in self.link_commands], f, indent=2, sort_keys=True)
 
 
+def silkie_build_env(name: str) -> Optional[str]:
+    # SILKIE_<name> is the documented name. KITTY_<name> is still read for compatibility with existing packaging
+    # scripts. SILKIE_<name> wins whenever it is set, even to an empty value, as in kitty.constants.silkie_env, which
+    # setup.py does not import.
+    ans = os.environ.get(f'SILKIE_{name}')
+    return os.environ.get(f'KITTY_{name}') if ans is None else ans
+
+
 class Options:
     action: str = 'build'
     debug: bool = False
@@ -313,14 +321,14 @@ class Options:
     extra_logging: List[str] = []
     extra_include_dirs: List[str] = []
     extra_library_dirs: List[str] = []
-    link_time_optimization: bool = 'KITTY_NO_LTO' not in os.environ
+    link_time_optimization: bool = silkie_build_env('NO_LTO') is None
     update_check_interval: float = 24.0
     shell_integration: str = 'enabled'
-    egl_library: Optional[str] = os.getenv('KITTY_EGL_LIBRARY')
-    startup_notification_library: Optional[str] = os.getenv('KITTY_STARTUP_NOTIFICATION_LIBRARY')
-    canberra_library: Optional[str] = os.getenv('KITTY_CANBERRA_LIBRARY')
-    systemd_library: Optional[str] = os.getenv('KITTY_SYSTEMD_LIBRARY')
-    fontconfig_library: Optional[str] = os.getenv('KITTY_FONTCONFIG_LIBRARY')
+    egl_library: Optional[str] = silkie_build_env('EGL_LIBRARY')
+    startup_notification_library: Optional[str] = silkie_build_env('STARTUP_NOTIFICATION_LIBRARY')
+    canberra_library: Optional[str] = silkie_build_env('CANBERRA_LIBRARY')
+    systemd_library: Optional[str] = silkie_build_env('SYSTEMD_LIBRARY')
+    fontconfig_library: Optional[str] = silkie_build_env('FONTCONFIG_LIBRARY')
     building_arch: str = ''
 
     # Extras

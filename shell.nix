@@ -70,7 +70,7 @@ in
       shellHook =
         if stdenv.isDarwin
         then ''
-          export KITTY_NO_LTO=
+          export SILKIE_NO_LTO=
           # Add fonts by hand
 
           if [ ! -e ./fonts/SymbolsNerdFontMono-Regular.ttf ]; then
@@ -79,10 +79,10 @@ in
           fi
         ''
         else ''
-          export KITTY_EGL_LIBRARY='${lib.getLib libGL}/lib/libEGL.so.1'
-          export KITTY_STARTUP_NOTIFICATION_LIBRARY='${libstartup_notification}/lib/libstartup-notification-1.so'
-          export KITTY_CANBERRA_LIBRARY='${libcanberra}/lib/libcanberra.so'
-          export KITTY_FONTCONFIG_LIBRARY='${fontconfig.lib}/lib/libfontconfig.so'
+          export SILKIE_EGL_LIBRARY='${lib.getLib libGL}/lib/libEGL.so.1'
+          export SILKIE_STARTUP_NOTIFICATION_LIBRARY='${libstartup_notification}/lib/libstartup-notification-1.so'
+          export SILKIE_CANBERRA_LIBRARY='${libcanberra}/lib/libcanberra.so'
+          export SILKIE_FONTCONFIG_LIBRARY='${fontconfig.lib}/lib/libfontconfig.so'
 
           # Add fonts by hand
           if [ ! -e ./fonts/SymbolsNerdFontMono-Regular.ttf ]; then

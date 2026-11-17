@@ -494,6 +494,39 @@ function _set_status_prompt; function fish_prompt; echo -n "$pipestatus $status 
         pty.wait_till(lambda: pty.callbacks.last_cmd_exit_status == exit_status, timeout_msg=lambda: f'{pty.callbacks.last_cmd_exit_status=} != {exit_status}')
         pty.wait_till(lambda: pty.callbacks.last_cmd_cmdline == cmd, timeout_msg=lambda: f'{pty.callbacks.last_cmd_cmdline=!r} != {cmd!r}')
 
+    def test_clone_source_env_names(self):
+        # SILKIE_CLONE_SOURCE_CODE and SILKIE_CLONE_SOURCE_PATH win over the KITTY_ names, which are still read when the
+        # SILKIE_ ones are not set
+        shells = []
+        if shutil.which('zsh'):
+            shells.append(('zsh', 'PS1=XXX'))
+        if bash_ok():
+            shells.append(('bash', 'PS1=XXX'))
+        if shutil.which('fish'):
+            shells.append(('fish', 'set -g fish_greeting\nfunction fish_prompt; echo -n XXX; end'))
+        if not shells:
+            self.skipTest('No shell with integration is installed')
+        with tempfile.TemporaryDirectory() as tdir:
+            paths = {}
+            for name in ('SILKIE', 'KITTY'):
+                paths[name] = os.path.join(tdir, name)
+                with open(paths[name], 'w') as f:
+                    print(f'echo {name}-PATH', file=f)
+            cases = (
+                ('env_var', {'SILKIE_CLONE_SOURCE_CODE': 'echo SILKIE-CODE', 'KITTY_CLONE_SOURCE_CODE': 'echo KITTY-CODE'}, 'SILKIE-CODE'),
+                ('env_var', {'KITTY_CLONE_SOURCE_CODE': 'echo KITTY-CODE'}, 'KITTY-CODE'),
+                ('path', {'SILKIE_CLONE_SOURCE_PATH': paths['SILKIE'], 'KITTY_CLONE_SOURCE_PATH': paths['KITTY']}, 'SILKIE-PATH'),
+                ('path', {'KITTY_CLONE_SOURCE_PATH': paths['KITTY']}, 'KITTY-PATH'),
+            )
+            for shell, rc in shells:
+                for strategy, env, expected in cases:
+                    with self.subTest(shell=shell, env=env):
+                        extra_env = {'KITTY_IS_CLONE_LAUNCH': 'true', 'KITTY_CLONE_SOURCE_STRATEGIES': f',{strategy},', **env}
+                        with self.run_shell(shell=shell, rc=rc, extra_env=extra_env) as pty:
+                            pty.wait_till(lambda: 'XXX' in pty.screen_contents())
+                            self.assertIn(expected, pty.screen_contents())
+                            self.assertNotIn(expected.replace('SILKIE', 'KITTY') if 'SILKIE' in expected else 'SILKIE', pty.screen_contents())
+
     @unittest.skipUnless(bash_ok(), 'bash not installed, too old, or debug build')
     def test_bash_integration(self):
         ps1 = 'prompt> '

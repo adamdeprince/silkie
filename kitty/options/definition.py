@@ -3694,10 +3694,12 @@ in the newly cloned window. The supported strategies are:
     environments created by :program:`conda`.
 :code:`env_var`
     Execute the contents of the environment variable
-    :envvar:`KITTY_CLONE_SOURCE_CODE` with :code:`eval`.
+    :envvar:`SILKIE_CLONE_SOURCE_CODE` with :code:`eval`. The old name
+    :envvar:`KITTY_CLONE_SOURCE_CODE` is still read when it is not set.
 :code:`path`
     Source the file pointed to by the environment variable
-    :envvar:`KITTY_CLONE_SOURCE_PATH`.
+    :envvar:`SILKIE_CLONE_SOURCE_PATH`. The old name
+    :envvar:`KITTY_CLONE_SOURCE_PATH` is still read when it is not set.
 
 This option must be a comma separated list of the above values. Only the
 first valid match, in the order specified, is sourced.
@@ -4361,8 +4363,9 @@ reports. A destination of :kbd:`hyper` or :kbd:`meta` cannot be expressed in
 Cocoa's modifier flags, so such a remap is left unapplied there rather than
 silently losing the modifier.
 
-On Wayland, kitty only detects the :kbd:`hyper` and :kbd:`meta` modifiers when
-:envvar:`KITTY_WAYLAND_DETECT_MODIFIERS` is set in the environment. Without it
+On Wayland, Silkie only detects the :kbd:`hyper` and :kbd:`meta` modifiers when
+:envvar:`SILKIE_WAYLAND_DETECT_MODIFIERS` (or the old name
+:envvar:`KITTY_WAYLAND_DETECT_MODIFIERS`) is set in the environment. Without it
 those two never appear on key events at all, so remapping to or from them has
 nothing to act on there.
 

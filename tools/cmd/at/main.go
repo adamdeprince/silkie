@@ -357,7 +357,12 @@ func get_password(password string, password_file string, password_env string, us
 		}
 	}
 	if !ans.is_set && password_env != "" {
-		ans.val, ans.is_set = os.LookupEnv(password_env)
+		if password_env == "SILKIE_RC_PASSWORD" {
+			// The default name. KITTY_RC_PASSWORD is still read for compatibility with existing scripts.
+			ans.val, ans.is_set = utils.SilkieEnv("RC_PASSWORD")
+		} else {
+			ans.val, ans.is_set = os.LookupEnv(password_env)
+		}
 	}
 	if !ans.is_set && use_password == "always" {
 		ans.is_set = true
