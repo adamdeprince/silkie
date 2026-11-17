@@ -1297,8 +1297,11 @@ class AliasMap:
     def resolve_aliases(self, definition: str, map_type: MapType = MapType.MAP) -> tuple[KeyAction, ...]:
         key = definition, map_type
         if (ans := self.resolved.get(key)) is None:
-            if len(self.resolved) >= 256:
-                self.resolved.clear()
+            # The memo has no size bound by design: it holds one entry per
+            # distinct definition resolved since the aliases last changed,
+            # which is cleared by append() and update(). Definitions sent by
+            # remote control action commands add entries too; memory use is
+            # for the OS (ulimit, the OOM killer) to police, not a cap here.
             ans = self.resolved[key] = tuple(resolve_aliases_and_parse_actions(definition, self.aliases, map_type))
         return ans
 
