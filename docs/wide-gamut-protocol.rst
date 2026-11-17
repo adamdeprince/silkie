@@ -54,7 +54,10 @@ ids used for text::
 ``G=1`` is Display P3 and ``G=2`` is Rec. 2020. ``G=0``, any other value and
 no key at all are sRGB. As for text, the components are encoded with the sRGB
 transfer curve in every gamut. The key applies to RGB and RGBA data, ``f=24``
-and ``f=32``, and belongs in the first chunk of a chunked transmission. It
+and ``f=32``, and belongs in the first chunk of a chunked transmission. In
+Silkie it also applies to RGB565 and to the high precision formats ``f=632``
+and ``f=664``, whose curve the ``E`` key may change, so that ``G=2`` with
+``E=16`` is Rec. 2020 with PQ, see :doc:`precision-image-protocol`. It
 applies in the same way to the pixels of a GPU surface, ``t=g``. It is ignored
 for ``f=64``, whose pixels are linear extended sRGB by definition, see the
 :doc:`hdr-protocol`. A vector image, ``f=200``, also ignores ``G``: each paint

@@ -483,6 +483,43 @@ send_image_to_gpu(GLuint *tex_id, const void *data, GLsizei width, GLsizei heigh
     glTexImage2D(GL_TEXTURE_2D, 0, is_float ? GL_RGBA16F : GL_SRGB_ALPHA, width, height, 0, is_opaque ? GL_RGB : GL_RGBA, is_float ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE, data);
 }
 
+// The pixels of an image that the graphics shader decodes itself, see docs/silkie/precision-image-protocol.rst: high
+// precision pixels, kept at their precision in a normalized texture of their own size, and eight bit pixels with a
+// transfer function other than sRGB, which the GPU must not take for sRGB. The formats are all required, color
+// renderable and filterable, in the desktop OpenGL 3.1 and later that Silkie uses. OpenGL ES has R16 and RGBA16 only
+// with EXT_texture_norm16; a port to it would fall back to RGBA32F, as half floats cannot hold sixteen bit values.
+// The wire bytes are little-endian, the words are read in the byte order of the host.
+void
+send_encoded_image_to_gpu(GLuint *tex_id, const void *data, GLsizei width, GLsizei height, uint8_t deep, bool is_opaque, bool is_4byte_aligned) {
+    if (!(*tex_id)) { glGenTextures(1, tex_id); }
+    glBindTexture(GL_TEXTURE_2D, *tex_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    static const GLfloat border_color[4] = {0};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_color);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    GLint internal_format;
+    GLenum format, type;
+    switch (deep) {
+        // gray is in the red channel alone, the shader copies it to green and blue
+        case DEEP_GRAY16: internal_format = GL_R16; format = GL_RED; type = GL_UNSIGNED_SHORT; break;
+        // red in bits 0-9 of the word, green in 10-19, blue in 20-29 and alpha in 30-31
+        case DEEP_RGB10A2: internal_format = GL_RGB10_A2; format = GL_RGBA; type = GL_UNSIGNED_INT_2_10_10_10_REV; break;
+        case DEEP_RGBA16: internal_format = GL_RGBA16; format = GL_RGBA; type = GL_UNSIGNED_SHORT; break;
+        default: internal_format = GL_RGBA8; format = is_opaque ? GL_RGB : GL_RGBA; type = GL_UNSIGNED_BYTE; break;
+    }
+    // The rows of a sixteen bit gray image of odd width start at every other byte
+    glPixelStorei(GL_UNPACK_ALIGNMENT, is_4byte_aligned ? 4 : deep == DEEP_GRAY16 ? 2 : 1);
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    if (deep) glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, type, data);
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    if (deep) glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
+#endif
+}
+
 // Copies a texture backed by a GPU surface, a rectangle texture on macOS and a 2D one on Linux, into an image texture
 void
 copy_surface_texture_to_texture(bool rectangle, GLuint source_tex_id, GLuint *tex_id, GLsizei width, GLsizei height) {
@@ -1340,6 +1377,9 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
     // color images are untagged, their colors are those of the terminal.
     const GLint image_gamut_loc = try_program_uniform_location(program, "image_gamut");
     const GLint output_gamut_loc = try_program_uniform_location(program, "output_gamut");
+    // High precision images and those with a transfer function are decoded by the shader, see docs/silkie/precision-image-protocol.rst
+    const GLint image_decode_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_decode") : -1;
+    const GLint image_is_gray_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_is_gray") : -1;
     const unsigned viewport_width = get_gpu_viewport().width;
     if (output_gamut_loc >= 0) glUniform1ui(output_gamut_loc, current_output_gamut);
     const bool is_indexed = program == GRAPHICS_INDEXED_PROGRAM || program == GRAPHICS_INDEXED_UNSCALED_PROGRAM;
@@ -1349,6 +1389,8 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
         glBindTexture(GL_TEXTURE_2D, spatial_window && spatial_window->spatial.eye > 0 && group->right_texture_id ? group->right_texture_id : group->texture_id);
         if (has_texture_uniforms) glUniform1f(program_uniform_location(program, "tone_peak"), group->tone_map ? group->peak : 0.f);
         if (image_gamut_loc >= 0) glUniform1ui(image_gamut_loc, group->gamut);
+        if (image_decode_loc >= 0) glUniform1ui(image_decode_loc, group->decode);
+        if (image_is_gray_loc >= 0) glUniform1ui(image_is_gray_loc, group->is_gray);
         if (has_alpha_loc > -1) glUniform1ui(has_alpha_loc, group->indexed_px_sz == 2);
         if (group->group_count == 0) {
             i++;

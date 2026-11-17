@@ -35,11 +35,24 @@ static const float3x3 xyz_to_gamut[3] = {
 // window in the same way and then written in the sRGB primaries, unclipped.
 public float3
 convert_from_gamut(float3 c, uint gamut, uint output_gamut) {
+    return convert_from_gamut_upto(c, gamut, output_gamut, 1.f);
+}
+
+// The same for a color that may be brighter than SDR white, which is clipped
+// to the gamut of the window at ceiling instead of one
+public float3
+convert_from_gamut_upto(float3 c, uint gamut, uint output_gamut, float ceiling) {
     if (gamut == GAMUT_SRGB || gamut == output_gamut || output_gamut == GAMUT_UNMANAGED) return c;
-    if ((output_gamut & GAMUT_EXTENDED) == 0u) return clamp(mul(xyz_to_gamut[output_gamut], mul(gamut_to_xyz[gamut], c)), 0.f, 1.f);
+    if ((output_gamut & GAMUT_EXTENDED) == 0u) return clamp(mul(xyz_to_gamut[output_gamut], mul(gamut_to_xyz[gamut], c)), 0.f, ceiling);
     uint window_gamut = output_gamut & 3u;
-    if (gamut != window_gamut) c = clamp(mul(xyz_to_gamut[window_gamut], mul(gamut_to_xyz[gamut], c)), 0.f, 1.f);
+    if (gamut != window_gamut) c = clamp(mul(xyz_to_gamut[window_gamut], mul(gamut_to_xyz[gamut], c)), 0.f, ceiling);
     return mul(xyz_to_gamut[GAMUT_SRGB], mul(gamut_to_xyz[window_gamut], c));
+}
+
+// The luminance, Y, of a linear color in one of the gamuts colors and images are tagged with
+public float
+luminance_in_gamut(float3 c, uint gamut) {
+    return dot(gamut_to_xyz[min(gamut, GAMUT_REC2020)][1], c);
 }
 
 // The last step for a window drawn in extended sRGB: a linear color in the

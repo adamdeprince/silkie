@@ -102,7 +102,10 @@ each sample to make a round trip to the application.
 
 Send one-, two-, four-, or eight-bit grayscale pixels and RGB565 without
 requiring compression; :doc:`packed-image-protocol` describes the compact
-wire encodings, independent of the display's color model.
+wire encodings, independent of the display's color model. Send 16-bit gray,
+RGB10A2 and 16-bit RGBA at their full precision, encoded with sRGB, linear,
+PQ or HLG, so that HDR10 frames go to the GPU as they are; see
+:doc:`precision-image-protocol`.
 
 Color beyond ordinary SDR
 ~~~~~~~~~~~~~~~~~~~~~~~~~
