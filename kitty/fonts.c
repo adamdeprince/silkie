@@ -797,11 +797,41 @@ chars_as_utf8(const ListOfChars *lc, char *buf, size_t bufsz, char_type zero_cha
     return n;
 }
 
+static bool
+is_nerd_font_codepoint(char_type ch) {
+    // The Private Use Area ranges of the glyph sets in Nerd Fonts
+    switch (ch) {
+        START_ALLOW_CASE_RANGE
+        case 0xe000 ... 0xe00a:   // Pomicons
+        case 0xe0a0 ... 0xe0d7:   // Powerline and Powerline Extra
+        case 0xe200 ... 0xe2a9:   // Font Awesome Extension
+        case 0xe300 ... 0xe3e3:   // Weather
+        case 0xe5fa ... 0xe6b7:   // Seti-UI and Custom
+        case 0xe700 ... 0xe8ef:   // Devicons
+        case 0xea60 ... 0xec1e:   // Codicons
+        case 0xed00 ... 0xf2ff:   // Font Awesome
+        case 0xf300 ... 0xf381:   // Font Logos
+        case 0xf400 ... 0xf533:   // Octicons
+        case 0xf0001 ... 0xf1af0: // Material Design
+            return true;
+            END_ALLOW_CASE_RANGE
+    }
+    return false;
+}
+
 static ssize_t
 fallback_font(FontGroup *fg, const CPUCell *cpu_cell, const GPUCell *gpu_cell, const ListOfChars *lc) {
     bool bold = gpu_cell->attrs.bold;
     bool italic = gpu_cell->attrs.italic;
     bool emoji_presentation = has_emoji_presentation(cpu_cell, lc);
+    // Nerd Font icons are private use codepoints, whose glyph depends on the
+    // font, not on the style. Looking for a bold or italic font covering one
+    // tends to find an unrelated text font that happens to cover it, for
+    // example Liberation Serif Italic for the check mark U+f00c. So ignore the
+    // style, which also renders such icons the same way in every style. Other
+    // private use codepoints are left alone, as they may be used by fonts
+    // that do have styled variants.
+    if ((bold || italic) && is_nerd_font_codepoint(lc->chars[0])) bold = italic = false;
     char style = emoji_presentation ? 'a' : 'A';
     if (bold) style += italic ? 3 : 2;
     else style += italic ? 1 : 0;
@@ -2660,21 +2690,6 @@ test_render_line(PyObject UNUSED *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
-static uint32_t
-alpha_blend(uint32_t fg, uint32_t bg) {
-    uint32_t r1 = (fg >> 16) & 0xFF, g1 = (fg >> 8) & 0xFF, b1 = fg & 0xFF, a = (fg >> 24) & 0xff;
-    uint32_t r2 = (bg >> 16) & 0xFF, g2 = (bg >> 8) & 0xFF, b2 = bg & 0xFF;
-    float alpha = a / 255.f;
-
-#define mix(x) uint32_t x = ((uint32_t)(alpha * x##1 + (1.0f - alpha) * x##2)) & 0xff;
-    mix(r);
-    mix(g);
-    mix(b);
-#undef mix
-    // Combine components into result color
-    return (0xff000000) | (r << 16) | (g << 8) | b;
-}
-
 static PyObject *
 render_decoration(PyObject *self UNUSED, PyObject *args) {
     const char *which;
@@ -2684,8 +2699,8 @@ render_decoration(PyObject *self UNUSED, PyObject *args) {
     PyObject *ans = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)fcm.cell_width * fcm.cell_height);
     if (!ans) return NULL;
     memset(PyBytes_AS_STRING(ans), 0, PyBytes_GET_SIZE(ans));
-#define u(x) \
-    if (strcmp(which, #x) == 0) add_##x##_underline((uint8_t *)PyBytes_AS_STRING(ans), fcm)
+#define u(x) else if (strcmp(which, #x) == 0) add_##x##_underline((uint8_t *)PyBytes_AS_STRING(ans), fcm)
+    if (0) {}
     u(curl);
     u(dashed);
     u(dotted);
@@ -2714,18 +2729,45 @@ concat_cells(PyObject UNUSED *self, PyObject *args) {
     size_t num_cells = PyTuple_GET_SIZE(cells), r, c, i;
     PyObject *ans = PyBytes_FromStringAndSize(NULL, (size_t)4 * cell_width * cell_height * num_cells);
     if (ans == NULL) return PyErr_NoMemory();
+    if (!cell_width || !cell_height || !num_cells) return ans;
     pixel *dest = (pixel *)PyBytes_AS_STRING(ans);
+    const uint8_t bg_r = (bgcolor >> 16) & 0xff, bg_g = (bgcolor >> 8) & 0xff, bg_b = bgcolor & 0xff;
+    RAII_ALLOC(uint8_t, rgba, is_32_bit ? malloc((size_t)4 * cell_width) : NULL);
+    if (is_32_bit && !rgba) {
+        Py_DECREF(ans);
+        return PyErr_NoMemory();
+    }
     for (r = 0; r < cell_height; r++) {
         for (c = 0; c < num_cells; c++) {
             void *s = ((uint8_t *)PyBytes_AS_STRING(PyTuple_GET_ITEM(cells, c)));
             if (is_32_bit) {
+                // sprite pixels are 0xRRGGBBAA, convert them to RGBA bytes
                 pixel *src = (pixel *)s + cell_width * r;
-                for (i = 0; i < cell_width; i++) dest[i] = (pixel)bgcolor;
-                blend_over_opaque((uint8_t *)dest, 4, (const uint8_t *)src, cell_width);
+                uint8_t *d = (uint8_t *)dest;
+                for (i = 0; i < cell_width; i++) {
+                    rgba[4 * i] = (src[i] >> 24) & 0xff;
+                    rgba[4 * i + 1] = (src[i] >> 16) & 0xff;
+                    rgba[4 * i + 2] = (src[i] >> 8) & 0xff;
+                    rgba[4 * i + 3] = src[i] & 0xff;
+                    d[4 * i] = bg_r;
+                    d[4 * i + 1] = bg_g;
+                    d[4 * i + 2] = bg_b;
+                    d[4 * i + 3] = 0xff;
+                }
+                blend_over_opaque(d, 4, rgba, cell_width);
                 dest += cell_width;
             } else {
+                // white text with the sprite pixels as its alpha, blended onto bgcolor
                 uint8_t *src = (uint8_t *)s + cell_width * r;
-                for (i = 0; i < cell_width; i++, dest++) dest[0] = alpha_blend(0x00ffffff | ((src[i] & 0xff) << 24), bgcolor);
+                uint8_t *d = (uint8_t *)dest;
+                for (i = 0; i < cell_width; i++) {
+                    const uint32_t a = src[i];
+                    d[4 * i] = (uint8_t)((255 * a + bg_r * (255 - a)) / 255);
+                    d[4 * i + 1] = (uint8_t)((255 * a + bg_g * (255 - a)) / 255);
+                    d[4 * i + 2] = (uint8_t)((255 * a + bg_b * (255 - a)) / 255);
+                    d[4 * i + 3] = 0xff;
+                }
+                dest += cell_width;
             }
         }
     }
@@ -2841,7 +2883,7 @@ parse_font_feature(const char *spec) {
     ParsedFontFeature *self = (ParsedFontFeature *)ParsedFontFeature_Type.tp_alloc(&ParsedFontFeature_Type, 0);
     if (self != NULL) {
         if (!hb_feature_from_string(spec, -1, &self->feature)) {
-            PyErr_Format(PyExc_ValueError, "%s is not a valid font feature", self);
+            PyErr_Format(PyExc_ValueError, "%s is not a valid font feature", spec);
             Py_CLEAR(self);
         }
     }

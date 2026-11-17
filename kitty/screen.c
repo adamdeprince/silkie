@@ -1050,6 +1050,15 @@ init_text_loop_line(Screen *self, text_loop_state *s) {
     init_segmentation_state(self, s);
 }
 
+// Used when the cursor is moved after the current char has already been
+// through grapheme segmentation, so the segmentation state must be preserved
+static void
+reinit_text_loop_line(Screen *self, text_loop_state *s) {
+    const GraphemeSegmentationResult seg = s->seg;
+    init_text_loop_line(self, s);
+    s->seg = seg;
+}
+
 static void
 zero_cells(text_loop_state *s, CPUCell *c, GPUCell *g) {
     *c = s->cc;
@@ -1644,7 +1653,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
         if (self->cursor->x < self->columns && s->cp[self->cursor->x].is_multicell) {
             if (s->cp[self->cursor->x].y) {
                 move_cursor_past_multicell(self, 1);
-                init_text_loop_line(self, s);
+                reinit_text_loop_line(self, s);
             } else nuke_multicell_char_at(self, self->cursor->x, self->cursor->y, s->cp[self->cursor->x].x != 0);
         }
 
@@ -1653,14 +1662,14 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
             if ((unsigned)char_width > self->columns) continue; // discard too wide character
             if (self->modes.mDECAWM) {
                 continue_to_next_line(self);
-                init_text_loop_line(self, s);
+                reinit_text_loop_line(self, s);
             } else self->cursor->x = self->columns - char_width;
             CPUCell *c = &s->cp[self->cursor->x];
             if (c->is_multicell) {
                 if (c->y) {
                     // this also removes the multicell chars in the cells the char will occupy
                     move_cursor_past_multicell(self, char_width);
-                    init_text_loop_line(self, s);
+                    reinit_text_loop_line(self, s);
                 } else nuke_multicell_char_at(self, self->cursor->x, self->cursor->y, c->x > 0);
             }
         }
@@ -1676,7 +1685,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
                 if (second->y) {
                     self->cursor->x++;
                     move_cursor_past_multicell(self, 2);
-                    init_text_loop_line(self, s);
+                    reinit_text_loop_line(self, s);
                     fc = s->cp + self->cursor->x;
                     second = fc + 1;
                 } else nuke_multicell_char_at(self, self->cursor->x + 1, self->cursor->y, true);
@@ -3745,12 +3754,13 @@ report_device_status(Screen *self, unsigned int which, bool private) {
             x = self->cursor->x;
             y = self->cursor->y;
             if (x >= self->columns) {
-                if (y < self->lines - 1) {
+                // A wrap at the bottom margin scrolls the region, leaving the cursor on the same row
+                if (y < self->lines - 1 && y != self->margin_bottom) {
                     x = 0;
                     y++;
                 } else x--;
             }
-            if (self->modes.mDECOM) y -= MAX(y, self->margin_top);
+            if (self->modes.mDECOM) y -= MIN(y, self->margin_top);
             // 1-based indexing
             int sz = snprintf(buf, sizeof(buf) - 1, "%s%u;%uR", (private ? "?" : ""), y + 1, x + 1);
             if (sz > 0) write_escape_code_to_child(self, ESC_CSI, buf);
@@ -4150,9 +4160,10 @@ screen_history_scroll_to_prompt(Screen *self, int num_of_prompts_to_jump, int sc
     } else {
         int delta = num_of_prompts_to_jump < 0 ? -1 : 1;
         num_of_prompts_to_jump = num_of_prompts_to_jump < 0 ? -num_of_prompts_to_jump : num_of_prompts_to_jump;
-        int y = -self->scrolled_by;
+        const int oldest_y = -(int)self->historybuf->count;
+        int y = -(int)self->scrolled_by;
 #define ensure_y_ok \
-    if (y >= (int)self->lines || -y > (int)self->historybuf->count) return false;
+    if (y >= (int)self->lines || y < oldest_y) return false;
         ensure_y_ok;
         y += scroll_offset;
         while (num_of_prompts_to_jump) {
@@ -4160,10 +4171,12 @@ screen_history_scroll_to_prompt(Screen *self, int num_of_prompts_to_jump, int sc
             ensure_y_ok;
             if (range_line_(self, y)->attrs.prompt_kind == PROMPT_START) { num_of_prompts_to_jump--; }
         }
-        y -= scroll_offset;
 #undef ensure_y_ok
-        self->scrolled_by = y >= 0 ? 0 : -y;
-        screen_set_last_visited_prompt(self, 0);
+        const int viewport_top = MAX(oldest_y, MIN(0, y - scroll_offset));
+        self->scrolled_by = -viewport_top;
+        const int prompt_y = y - viewport_top;
+        // The context above the prompt can include another command's output.
+        screen_set_last_visited_prompt(self, prompt_y >= 0 && prompt_y < (int)self->lines ? prompt_y : 0);
     }
     if (old != self->scrolled_by) {
         reset_pixel_scroll(self, 0);
@@ -7591,7 +7604,7 @@ scroll_prompt_to_bottom(Screen *self, PyObject *args UNUSED) {
 static void
 dump_line_with_attrs(Screen *self, int y, PyObject *accum) {
     Line *line = range_line_(self, y);
-    RAII_PyObject(u, PyUnicode_FromFormat("\x1b[31m%d: \x1b[39m", y++));
+    RAII_PyObject(u, PyUnicode_FromFormat("\x1b[31m%d: \x1b[39m", y));
     if (!u) return;
     RAII_PyObject(r1, PyObject_CallOneArg(accum, u));
     if (!r1) return;

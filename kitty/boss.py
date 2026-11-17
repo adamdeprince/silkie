@@ -456,6 +456,8 @@ class Boss:
         self.os_window_map: dict[int, TabManager] = {}
         self.os_window_death_actions: dict[int, Callable[[], None]] = {}
         self.thumbnail_request_queue: deque[PendingThumbnailRequest] = deque()
+        # A window drag whose source finished before its drop on kitty was delivered
+        self.awaiting_window_drop = False
         self.cursor_blinking = True
         self.shutting_down = False
         self.misc_config_errors: list[str] = []
@@ -2271,6 +2273,10 @@ class Boss:
             w = tm.active_window
             if w is not None:
                 w.focus_changed(focused)
+                if focused:
+                    # focus_changed() is a no-op if the window became active while
+                    # the OS window was unfocused, so clear the bell indicator here as well
+                    w.clear_needs_attention()
                 if is_macos and focused:
                     cocoa_set_menubar_title(w.title or '')
                     update_native_menus()
@@ -2332,6 +2338,10 @@ class Boss:
         return window
 
     def on_drop_move(self, os_window_id: int, x: int, y: int, from_self: bool, is_leave: bool) -> None:
+        if is_leave and from_self and self.awaiting_window_drop:
+            # The drop that was awaited is not going to be delivered
+            self.awaiting_window_drop = False
+            self._hide_force_shown_title_bars()
         if (tm := self.os_window_map.get(os_window_id)) is None:
             return
         if from_self:
@@ -2359,6 +2369,12 @@ class Boss:
                     q.on_window_drop_move(window_id, (not is_leave) and (q is tm), x, y)
 
     def on_drop(self, os_window_id: int, drop: dict[str, bytes] | int, from_self: bool, x: int, y: int) -> None:
+        window_mime_key = f'application/net.kovidgoyal.kitty-window-{os.getpid()}'
+        tm = self.os_window_map.get(os_window_id)
+        if self.awaiting_window_drop:
+            self.awaiting_window_drop = False
+            if isinstance(drop, int) or tm is None or window_mime_key not in drop:
+                self._hide_force_shown_title_bars()  # otherwise hidden by on_window_drop() after classifying the drop
         if isinstance(drop, int):
             import errno
 
@@ -2368,9 +2384,8 @@ class Boss:
                 msg = os.strerror(drop)
             self.show_error(_('Drop failed'), f'[{code}] {msg}')
             return
-        if (tm := self.os_window_map.get(os_window_id)) is None:
+        if tm is None:
             return
-        window_mime_key = f'application/net.kovidgoyal.kitty-window-{os.getpid()}'
         if widb := drop.get(window_mime_key):
             window_id = int(widb)
             tm.on_window_drop(x, y, window_id)
@@ -2421,19 +2436,36 @@ class Boss:
 
         add_timer(remove_dropped_files, DROPPED_FILE_PROMISES_LIFETIME, False)
 
+    def _hide_force_shown_title_bars(self) -> None:
+        "Hide the window title bars that were shown only for the duration of a window drag"
+        for tm in self.all_tab_managers:
+            for t in tm:
+                if t.force_show_title_bars:
+                    t.force_show_title_bars = False
+                    t.relayout()
+
     def on_drag_source_finished(
-        self, was_dropped: bool, was_canceled: bool, accepted_mime_type: str, action: int, data: dict[str, bytes] | None, needs_toplevel_on_wayland: bool
+        self,
+        was_dropped: bool,
+        was_canceled: bool,
+        accepted_mime_type: str,
+        action: int,
+        data: dict[str, bytes] | None,
+        needs_toplevel_on_wayland: bool,
+        dropped_on_kitty: bool,
     ) -> None:
         window_mime_key = f'application/net.kovidgoyal.kitty-window-{os.getpid()}'
         if wid_bytes := (data or {}).get(window_mime_key):
             window_id = int(wid_bytes.decode())
             if get_window_being_dragged()[0] == window_id:
                 # Drop was not handled by on_drop (e.g. dropped outside kitty or on Wayland)
-                for tm in self.all_tab_managers:
-                    for t in tm:
-                        if t.force_show_title_bars:
-                            t.force_show_title_bars = False
-                            t.relayout()
+                if dropped_on_kitty and not was_canceled:
+                    # The drop will be delivered to on_drop() after this. Hiding the title bars
+                    # shown for the drag now would change the window geometry it is classified
+                    # against, so leave that to on_window_drop().
+                    self.awaiting_window_drop = True
+                else:
+                    self._hide_force_shown_title_bars()
                 set_window_being_dragged()
                 self._update_drag_over(None)
                 for tm in self.all_tab_managers:

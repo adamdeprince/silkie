@@ -1038,10 +1038,8 @@ load_image_data_from_file(
     int fd;
     *was_opened = false;
     if (is_shm) {
-        if (fname[0] != '/') {
-            FAIL_IMAGE_FILE("Failed to open shared memory object: %s with error: %s", fname, "POSIX SHM names must start with /");
-            return false;
-        }
+        // Names without a leading slash are allowed, as, for example, macOS
+        // sandboxed applications can only use names of the form group-id/name
         fd = safe_shm_open(fname, O_RDONLY, 0);
     } else {
         // The policy check has to happen before the file is opened. Merely
@@ -3166,6 +3164,7 @@ update_current_frame(GraphicsManager *self, Image *img, const CoalescedFrameData
         data = &cfd;
     }
     upload_to_gpu(self, img, data);
+    img->displayed_frame_id = current_frame(img)->id;
     if (needs_load) free(data->buf);
     img->current_frame_shown_at = monotonic();
 }
@@ -3457,6 +3456,51 @@ handle_palette_edit_command(GraphicsManager *self, GraphicsCommand *g, Image *im
 
 #undef ABRT
 
+static bool
+promote_dependents_to_keyframes(GraphicsManager *self, Image *img, const uint32_t base_id) {
+    for (unsigned i = 0; i < img->extra_framecnt; i++) {
+        Frame *f = img->extra_frames + i;
+        if (f->base_frame_id != base_id) continue;
+        CoalescedFrameData cfd = get_coalesced_frame_data(self, img, f);
+        if (!cfd.buf) return false;
+        const ImageAndFrame key = {.image_id = img->internal_id, .frame_id = f->id};
+        void *frame_data = cfd.buf;
+        const bool transient = f->transient || cfd.transient;
+        bool added = add_to_cache(self, key, &frame_data, (size_t)(cfd.is_opaque ? 3 : 4) * img->width * img->height, transient);
+        free(frame_data); // NULL if ownership was transferred to the cache
+        if (!added) return false;
+        f->transient = transient;
+        f->alpha_blend = false;
+        f->base_frame_id = 0;
+        f->bgcolor = 0;
+        f->is_opaque = cfd.is_opaque;
+        f->is_4byte_aligned = cfd.is_4byte_aligned;
+        f->x = 0;
+        f->y = 0;
+        f->width = img->width;
+        f->height = img->height;
+    }
+    return true;
+}
+
+static bool
+dependents_fit_in_cache(GraphicsManager *self, Image *img, const uint32_t base_id, const size_t victim_sz) {
+    const size_t full = (size_t)4 * img->width * img->height;
+    size_t growth = 0;
+    for (unsigned i = 0; i < img->extra_framecnt; i++) {
+        const Frame *f = img->extra_frames + i;
+        if (f->base_frame_id != base_id) continue;
+        const size_t cur = (size_t)(f->is_opaque ? 3 : 4) * f->width * f->height;
+        if (full > cur) growth += full - cur;
+    }
+    if (growth <= victim_sz) return true;
+    growth -= victim_sz;
+    const size_t limit = self->storage_limit * 5;
+    if (cache_size(self) + growth <= limit) return true;
+    remove_images(self, trim_predicate, img->internal_id);
+    return cache_size(self) + growth <= limit;
+}
+
 static Image *
 handle_delete_frame_command(GraphicsManager *self, const GraphicsCommand *g, bool *is_dirty) {
     if (!g->id && !g->image_number) {
@@ -3475,6 +3519,14 @@ handle_delete_frame_command(GraphicsManager *self, const GraphicsCommand *g, boo
     ImageAndFrame key = {.image_id = img->internal_id};
     bool remove_root = frame_number == 1;
     uint32_t removed_gap = 0;
+    const uint32_t victim_id = remove_root ? img->root_frame.id : img->extra_frames[frame_number - 2].id;
+    const Frame *victim = remove_root ? &img->root_frame : img->extra_frames + frame_number - 2;
+    const size_t victim_sz = (size_t)(victim->is_opaque ? 3 : 4) * victim->width * victim->height;
+    if (!dependents_fit_in_cache(self, img, victim_id, victim_sz) || !promote_dependents_to_keyframes(self, img, victim_id)) {
+        if (PyErr_Occurred()) PyErr_Print();
+        REPORT_ERROR("Failed to preserve frames that depend on deleted frame: %u", frame_number);
+        return NULL;
+    }
     if (remove_root) {
         key.frame_id = img->root_frame.id;
         remove_from_cache(self, key);
@@ -3498,8 +3550,9 @@ handle_delete_frame_command(GraphicsManager *self, const GraphicsCommand *g, boo
         update_current_frame(self, img, NULL);
         return NULL;
     }
-    if (removed_idx == img->current_frame_index) update_current_frame(self, img, NULL);
-    else if (removed_idx < img->current_frame_index) img->current_frame_index--;
+    const unsigned removed_index = remove_root ? 0 : removed_idx + 1;
+    if (img->current_frame_index > removed_index) img->current_frame_index--;
+    else if (img->current_frame_index == removed_index) update_current_frame(self, img, NULL);
     return NULL;
 }
 
@@ -4372,7 +4425,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         "{sI sI sI sI sI sI sI "
         "sO sI sO "
         "sI sI sI "
-        "sI sI sy# sN sO sf sI sI sN sI sI}",
+        "sI sI sI sy# sN sO sf sI sI sN sI sI}",
         "texture_id",
         texture_id_for_img(img),
         U(client_id),
@@ -4395,6 +4448,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
 
         U(animation_duration),
         U(gamut),
+        U(displayed_frame_id),
         "data",
         cfd.buf,
         (Py_ssize_t)(cfd.buf ? (img->indexed_px_sz ? img->indexed_px_sz : stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep)) * img->width * img->height : 0),

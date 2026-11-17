@@ -390,8 +390,6 @@ class PTY:
         window_id=0,
         log_data_flow=False,
     ):
-        from kitty.child import openpty
-
         self.log_data_flow = log_data_flow
         if isinstance(argv, str):
             argv = shlex.split(argv)
@@ -401,57 +399,69 @@ class PTY:
         self.cell_width = cell_width
         self.cell_height = cell_height
         if argv is None:
+            from kitty.child import openpty
+
             self.master_fd, self.slave_fd = openpty()
             self.initial_termios_state = termios.tcgetattr(self.master_fd)
-            self.set_window_size(rows=rows, columns=columns)
         else:
-            self.spawn_child(argv, rows, columns, cwd, env, stdin_fd)
+            self.child_pid, self.master_fd = self.spawn_child(argv, rows, columns, cwd, env, stdin_fd)
+        if stdin_fd is not None:
+            os.close(stdin_fd)
         os.set_blocking(self.master_fd, False)
+        self.set_window_size(rows=rows, columns=columns)
         self.needs_da1 = needs_da1
         self.callbacks = Callbacks(self)
         self.screen = Screen(self.callbacks, rows, columns, scrollback, cell_width, cell_height, window_id, self.callbacks)
         self.received_bytes = b''
 
     def spawn_child(self, argv, rows, columns, cwd, env, stdin_fd):
-        # Fork and exec in C, as kitty does for its own children. A child forked
-        # by Python runs Python code before exec, which is unsafe once the test
-        # process has threads, and CoreText starts threads on macOS.
+        # Do not use pty.fork() as that runs Python code in the forked child
+        # before exec(), and macOS (since Tahoe 26.2) sometimes kills processes
+        # that do anything non-trivial between fork() and exec() with SIGKILL.
+        # spawn() does all the child setup in C using only async-signal-safe
+        # functions. The window size is set before spawning so that the child
+        # sees the correct size from the start.
         from kitty.child import openpty
         from kitty.constants import kitten_exe
         from kitty.fast_data_types import spawn
 
-        self.master_fd, slave_fd = openpty()
-        ready_read_fd, ready_write_fd = os.pipe()
-        env = dict(os.environ if env is None else env)
-        pass_fds = ()
-        if debug_stdout > -1:
-            env['KITTY_STDIO_FORWARDED'] = str(debug_stdout)
-            pass_fds = (debug_stdout,)
+        master, slave = openpty()
         try:
-            self.child_pid = spawn(
-                argv[0],
-                cwd or os.getcwd(),
-                tuple(argv),
-                tuple(f'{k}={v}' for k, v in env.items()),
-                self.master_fd,
-                slave_fd,
-                -1 if stdin_fd is None else stdin_fd,
-                -1,
-                ready_read_fd,
-                ready_write_fd,
-                (),
-                kitten_exe(),
-                False,
-                pass_fds,
-            )
+            s = struct.pack('HHHH', rows, columns, columns * self.cell_width, rows * self.cell_height)
+            fcntl.ioctl(master, termios.TIOCSWINSZ, s)
+            env = dict(os.environ if env is None else env)
+            pass_fds: tuple[int, ...] = ()
+            if debug_stdout > -1:
+                env['KITTY_STDIO_FORWARDED'] = str(debug_stdout)
+                pass_fds = (debug_stdout, debug_stderr)
+            ready_read_fd, ready_write_fd = os.pipe()
+            try:
+                pid = spawn(
+                    argv[0],
+                    cwd or os.getcwd(),
+                    tuple(argv),
+                    tuple(f'{k}={v}' for k, v in env.items()),
+                    master,
+                    slave,
+                    -1 if stdin_fd is None else stdin_fd,
+                    -1,
+                    ready_read_fd,
+                    ready_write_fd,
+                    (),
+                    kitten_exe(),
+                    False,
+                    pass_fds,
+                )
+            finally:
+                os.close(ready_read_fd)
+                # Closing the write end tells the child it can exec
+                os.close(ready_write_fd)
+        except BaseException:
+            os.close(master)
+            raise
         finally:
-            os.close(slave_fd)
-            os.close(ready_read_fd)
-            if stdin_fd is not None:
-                os.close(stdin_fd)
-        # The child waits for the ready pipe to close, so it starts with its final screen size
-        self.set_window_size(rows=rows, columns=columns)
-        os.close(ready_write_fd)
+            os.close(slave)
+        return pid, master
 
     def reset_termios_state(self):
         if s := getattr(self, 'initial_termios_state', None):
@@ -479,7 +489,7 @@ class PTY:
         if hasattr(self, 'slave_fd'):
             os.close(self.slave_fd)
             del self.slave_fd
-        if self.child_pid > 0 and not self.child_waited_for:
+        if getattr(self, 'child_pid', 0) > 0 and not self.child_waited_for:
             st = time.monotonic()
             while time.monotonic() - st < 2:
                 pid, ec = os.waitpid(self.child_pid, os.WNOHANG)
@@ -546,9 +556,22 @@ class PTY:
         end_time = time.monotonic() + timeout
         while time.monotonic() <= end_time:
             si_pid, status = os.waitpid(self.child_pid, os.WNOHANG)
-            if si_pid == self.child_pid and os.WIFEXITED(status):
-                ec = os.waitstatus_to_exitcode(status) if hasattr(os, 'waitstatus_to_exitcode') else require_exit_code
+            if si_pid == self.child_pid:
+                # The child has been reaped, calling waitpid() on it again
+                # would fail with ECHILD, so handle every kind of termination
+                # here, not just a normal exit.
                 self.child_waited_for = True
+                with suppress(OSError):
+                    while self.process_input_from_child(timeout=0):
+                        pass
+                if os.WIFSIGNALED(status):
+                    sig = os.WTERMSIG(status)
+                    try:
+                        signame = signal.Signals(sig).name
+                    except ValueError:
+                        signame = str(sig)
+                    raise AssertionError(f'Child was killed by signal: {signame}. {self.screen_contents_for_error()}')
+                ec = os.waitstatus_to_exitcode(status)
                 if require_exit_code is not None and ec != require_exit_code:
                     raise AssertionError(f'Child exited with exit status: {status} code: {ec} != {require_exit_code}. {self.screen_contents_for_error()}')
                 return status

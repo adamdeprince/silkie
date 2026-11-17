@@ -10,13 +10,26 @@ from kitty.constants import is_macos, kitty_exe
 from .base import BaseTest
 
 
+def spawn_and_wait_for_ready(code: str, what: str) -> subprocess.Popen:
+    # Run code via kitty +runpy and wait for it to print ready. stderr is
+    # captured, as in test workers it is /dev/null, so that the reason the
+    # child failed is reported.
+    p = subprocess.Popen([kitty_exe(), '+runpy', code], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    line = p.stdout.readline().strip()
+    p.stdout.close()
+    if line != b'ready':
+        p.kill()
+        err = p.stderr.read().decode('utf-8', 'replace')
+        p.stderr.close()
+        raise AssertionError(f'Unexpected output from {what}: {line!r} exit code: {p.wait()} stderr:\n{err}')
+    p.stderr.close()
+    return p
+
+
 class ChildMemoryTest(BaseTest):
     def _spawn_allocating_child(self, alloc_bytes: int) -> subprocess.Popen:
-        p = subprocess.Popen(
-            [
-                kitty_exe(),
-                '+runpy',
-                f"""\
+        return spawn_and_wait_for_ready(
+            f"""\
 import sys, time
 buf = bytearray({alloc_bytes})
 for i in range(0, {alloc_bytes}, 4096):
@@ -25,16 +38,8 @@ sys.stdout.write("ready\\n")
 sys.stdout.flush()
 time.sleep(300)
 """,
-            ],
-            stdout=subprocess.PIPE,
+            'allocating child',
         )
-        line = p.stdout.readline().strip()
-        p.stdout.close()
-        if line != b'ready':
-            p.kill()
-            p.wait()
-            raise AssertionError(f'Unexpected output from allocating child: {line!r}')
-        return p
 
     def _terminate(self, p: subprocess.Popen) -> None:
         p.terminate()
@@ -103,3 +108,49 @@ time.sleep(300)
             self.assertGreater(mem_walk, 0)
         finally:
             self._terminate(child)
+
+    def test_descendants_from_threads(self):
+        if is_macos:
+            self.skipTest('Per thread children lists are Linux only')
+        from kitty import child
+
+        # A process that starts its child from a non-main thread, as kitten does
+        code = """\
+import sys, threading, time
+def run_child(started):
+    import subprocess, sys, time
+    subprocess.Popen(
+        [sys.executable, '-c', 'import time; time.sleep(300)'],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    started.set()
+    time.sleep(300)  # keep the thread alive so the child stays its child
+started = threading.Event()
+threading.Thread(target=run_child, args=(started,), daemon=True).start()
+if not started.wait(10):
+    raise SystemExit('Failed to start child')
+sys.stdout.write("ready\\n")
+sys.stdout.flush()
+time.sleep(300)
+"""
+        p = spawn_and_wait_for_ready(code, 'wrapper')
+        inner: list[int] = []
+        try:
+            inner = child.children_of_process(p.pid)
+            self.ae(len(inner), 1)
+            self.ae(child._get_descendants_of(p.pid), set(inner))
+            # Kernels without /proc/<pid>/task/<tid>/children
+            orig = child.proc_children_supported
+            child.proc_children_supported = lambda: False  # type: ignore
+            try:
+                self.ae(child.children_of_process(p.pid), inner)
+                self.ae(child._get_descendants_of(p.pid), set(inner))
+            finally:
+                child.proc_children_supported = orig
+        finally:
+            p.terminate()
+            p.wait()
+            for c in inner:
+                try:
+                    os.kill(c, 15)
+                except ProcessLookupError:
+                    pass

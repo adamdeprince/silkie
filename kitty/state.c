@@ -937,7 +937,7 @@ make_window_context_current(id_type window_id) {
 
 void
 dispatch_pending_clicks(id_type timer_id UNUSED, void *data UNUSED) {
-    bool dispatched = false;
+    bool dispatched = false, any_dispatched = false;
     do { // dispatching a click can cause windows/tabs/etc to close so do it one at a time.
         const monotonic_t now = monotonic();
         dispatched = false;
@@ -956,7 +956,11 @@ dispatch_pending_clicks(id_type timer_id UNUSED, void *data UNUSED) {
                 }
             }
         }
+        any_dispatched |= dispatched;
     } while (dispatched);
+    // This runs from a timer, outside the main loop tick, so ensure any state
+    // changed by the click actions is processed and rendered
+    if (any_dispatched) request_tick_callback();
 }
 
 bool
@@ -1387,6 +1391,8 @@ PYWRAP1(mark_tab_bar_dirty) {
     WITH_OS_WINDOW(os_window_id)
     os_window->has_too_few_tabs = !should_be_shown;
     os_window->tab_bar_data_updated = false;
+    // This can be called outside the main loop tick, so ensure the tab bar is redrawn
+    request_tick_callback();
     END_WITH_OS_WINDOW
     Py_RETURN_NONE;
 }

@@ -28,6 +28,21 @@ class TestScreen(BaseTest):
                 self.ae(str(s.line(row)), '界')
                 if lines == 4:
                     self.ae(str(s.line(1)), lower_row)
+        # grapheme clusters must not be split by the cursor move
+        for text in ('\U0001f1fa\U0001f1f8', '\U0001f468‍\U0001f469'):
+            with self.subTest(text=text):
+                s = self.create_screen(cols=4, lines=4)
+                s.cursor_position(1, 2)
+                draw_multicell(s, 'X', scale=2)
+                s.cursor_position(2, 1)
+                s.draw(text)
+                self.ae((s.cursor.x, s.cursor.y), (2, 2))
+                self.ae(s.cpu_cells(2, 0)['text'], text)
+        s = self.create_screen(cols=4, lines=4)
+        s.cursor_position(1, 4)
+        s.draw('\U0001f468‍\U0001f469')
+        self.ae((s.cursor.x, s.cursor.y), (2, 1))
+        self.ae(s.cpu_cells(1, 0)['text'], '\U0001f468‍\U0001f469')
 
     def test_wide_collision_at_scroll_margin(self) -> None:
         for alternate in (False, True):
@@ -713,6 +728,35 @@ class TestScreen(BaseTest):
         c.clear()
         parse_bytes(s, b'\x1b[?2033l\x1b[?2033$p')  # ]]
         self.ae(c.wtcbuf, b'\x1b[?2033;2$y')  # ]
+
+    def test_cursor_position_report_origin_mode(self):
+        s = self.create_screen(cols=10, lines=10)
+
+        def report(private=''):
+            s.callbacks.clear()
+            parse_bytes(s, f'\x1b[{private}6n'.encode())  # ]
+            return s.callbacks.wtcbuf.decode()
+
+        for top in (1, 3):
+            for origin in (False, True):
+                parse_bytes(s, f'\x1b[{top};8r\x1b[?6{"h" if origin else "l"}'.encode())  # ]]
+                for row in (1, 4):
+                    parse_bytes(s, f'\x1b[{row};5H'.encode())  # ]
+                    for private in ('', '?'):
+                        with self.subTest(top=top, origin=origin, row=row, private=private):
+                            self.ae(report(private), f'\x1b[{private}{row};5R')  # ]
+        # cursor addressing is clamped to the bottom margin in origin mode
+        parse_bytes(s, b'\x1b[3;8r\x1b[?6h\x1b[99;5H')  # ]]]
+        self.ae(report(), '\x1b[6;5R')  # ]
+        # pending wrap at the bottom margin stays on the same row
+        parse_bytes(s, b'\x1b[6;10Hx')  # ]
+        self.ae(report(), '\x1b[6;10R')  # ]
+        # pending wrap inside the region moves to the start of the next row
+        parse_bytes(s, b'\x1b[2;10Hx')  # ]
+        self.ae(report(), '\x1b[3;1R')  # ]
+        # pending wrap at the bottom of the screen outside the region
+        parse_bytes(s, b'\x1b[?6l\x1b[10;10Hx')  # ]]
+        self.ae(report(), '\x1b[10;10R')  # ]
 
     def test_da1(self):
         s = self.create_screen()
@@ -2810,6 +2854,64 @@ class TestScreen(BaseTest):
         s.draw('a foo')
         ae(s, 'foo', 2)
 
+    def test_scroll_to_prompt_with_short_scrollback(self):
+        for lines_before_prompt in (0, 1):
+            with self.subTest(lines_before_prompt=lines_before_prompt):
+                s = self.create_screen(cols=12, lines=4, scrollback=10)
+                if lines_before_prompt:
+                    parse_bytes(s, b'\x1b]133;C\x07older\r\n')
+                parse_bytes(s, b'\x1b]133;A\x07$ a\r\n')
+                parse_bytes(s, b'\x1b]133;C\x07a0\r\n\r\n\r\n')
+                parse_bytes(s, b'\x1b]133;A\x07$ live')
+                self.ae(s.historybuf.count, lines_before_prompt + 1)
+
+                self.assertTrue(s.scroll_to_prompt(-1, 3))
+                self.ae(s.scrolled_by, s.historybuf.count)
+                s.scroll_to_absolute(0)
+
+                output = []
+                s.cmd_output(2, output.append)
+                self.ae(''.join(output).rstrip(), 'a0')
+                self.assertTrue(s.scroll_to_prompt(0))
+                self.ae(s.scrolled_by, s.historybuf.count)
+                self.ae(str(s.visual_line(lines_before_prompt)), '$ a')
+
+    def test_scroll_to_prompt_offset_tracks_target_command(self):
+        # With a scroll offset the top of the viewport is in the output of the
+        # command above the target, which must not be used as the last visited prompt
+        def create():
+            s = self.create_screen(cols=12, lines=5, scrollback=50)
+            for i in range(4):
+                parse_bytes(s, f'\x1b]133;A\x07$ c{i}\r\n'.encode())
+                parse_bytes(s, f'\x1b]133;C\x07o{i}a\r\no{i}b\r\no{i}c\r\no{i}d\r\n'.encode())
+            parse_bytes(s, b'\x1b]133;A\x07$ live')
+            return s
+
+        def last_visited_output(s):
+            output = []
+            s.cmd_output(2, output.append)
+            return ''.join(output).split()
+
+        expected = ['o3a', 'o3b', 'o3c', 'o3d']
+        for offset in range(5):
+            with self.subTest(offset=offset):
+                s = create()
+                self.assertTrue(s.scroll_to_prompt(-1, offset))
+                self.ae(s.scrolled_by, offset + 1)
+                self.ae(str(s.visual_line(offset)), '$ c3')
+                self.ae(last_visited_output(s), expected)
+                s.scroll_to_absolute(0)
+                self.assertTrue(s.scroll_to_prompt(0))
+                self.ae(s.scrolled_by, offset + 1)
+                self.ae(str(s.visual_line(offset)), '$ c3')
+
+        # Jumping forward with an offset records the prompt jumped to
+        s = create()
+        self.assertTrue(s.scroll_to_prompt(-2, 0))
+        self.assertTrue(s.scroll_to_prompt(1, 2))
+        self.ae(str(s.visual_line(2)), '$ c3')
+        self.ae(last_visited_output(s), expected)
+
     def test_prompt_marking(self):
         # ]]]]]]]]]]]]]]]]}}}}}}}}}}}}}}}}))))))))))))))))))))))
 
@@ -3312,6 +3414,34 @@ class TestScreen(BaseTest):
         for i in reversed(range(1, 15)):
             t('<', f'image:7:{i}:0')
         t('<', '0')
+    def test_decoration_sgr_round_trip(self):
+        for code, extra, expected in (
+            (1, '', '4'), (2, '', '4:2'), (3, '', '4:3'), (4, '', '4:4'), (5, '', '4:5'),
+            (4, ';3;31', '3;31;4:4'), (5, ';3;31', '3;31;4:5'),
+        ):
+            s = self.create_screen(cols=5, lines=2)
+            parse_bytes(s, f'\x1b[4:{code}{extra}mx'.encode())
+            ansi = s.line(0).as_ansi()
+            self.ae(ansi, f'\x1b[{expected}mx')
+            s2 = self.create_screen(cols=5, lines=2)
+            parse_bytes(s2, ansi.encode())
+            self.ae(s2.line(0).as_ansi(), ansi)
+
+    def test_dump_lines_continued(self):
+        s = self.create_screen(cols=5, lines=3, scrollback=5)
+        s.draw('abcdefgh')
+        s.carriage_return(), s.linefeed()
+        s.draw('xy')
+        for which_screen in (0, 1):
+            accum = []
+            s.dump_lines_with_attrs(accum.append, which_screen)
+            lines = re.sub(r'\x1b\[[\d;]*m', '', ''.join(accum)).splitlines()
+            rows = [x for x in lines if re.match(r'-?\d+: ', x)]
+            if which_screen == 0:
+                self.ae(len(rows), 3)
+                self.assertIn('continued', rows[1])
+            for i, row in enumerate(rows):
+                self.assertEqual('continued' in row, which_screen == 0 and i == 1, row)
 
     def test_color_profile(self):
         from kitty.fast_data_types import patch_color_profiles
