@@ -233,31 +233,44 @@ parseMapping(_GLFWmapping *mapping, const char *string) {
 //////////////////////////////////////////////////////////////////////////
 
 static void
-set_key_action(_GLFWwindow *window, const GLFWkeyevent *ev, int action, int idx) {
-    const unsigned sz = arraysz(window->activated_keys);
-    if (idx < 0) {
-        for (unsigned i = 0; i < sz; i++) {
-            if (window->activated_keys[i].native_key_id == 0) {
-                idx = i;
-                break;
-            }
-        }
-        if (idx < 0) {
-            idx = sz - 1;
-            memmove(window->activated_keys, window->activated_keys + 1, sizeof(window->activated_keys[0]) * (sz - 1));
-            window->activated_keys[sz - 1].native_key_id = 0;
-        }
-    }
+remove_activated_key(_GLFWwindow *window, size_t idx) {
+    GLFWkeyevent *keys = window->activated_keys.items;
+    const size_t count = window->activated_keys.count;
+    if (idx >= count) return;
+    memmove(keys + idx, keys + idx + 1, sizeof(keys[0]) * (count - 1 - idx));
+    window->activated_keys.count--;
+}
+
+// Makes room for one more held key, growing the set as needed
+static bool
+reserve_activated_key(_GLFWwindow *window) {
+    if (window->activated_keys.count < window->activated_keys.capacity) return true;
+    size_t cap = window->activated_keys.capacity ? window->activated_keys.capacity : 16, bytes;
+    if (window->activated_keys.capacity && __builtin_mul_overflow(cap, (size_t)2, &cap)) return false;
+    if (__builtin_mul_overflow(cap, sizeof(GLFWkeyevent), &bytes)) return false;
+    GLFWkeyevent *keys = realloc(window->activated_keys.items, bytes);
+    if (!keys) return false;
+    window->activated_keys.items = keys;
+    window->activated_keys.capacity = cap;
+    return true;
+}
+
+static void
+set_key_action(_GLFWwindow *window, const GLFWkeyevent *ev, int action, ssize_t idx) {
     if (action == GLFW_RELEASE) {
-        memset(window->activated_keys + idx, 0, sizeof(window->activated_keys[0]));
-        if (idx < (int)sz - 1) {
-            memmove(window->activated_keys + idx, window->activated_keys + idx + 1, sizeof(window->activated_keys[0]) * (sz - 1 - idx));
-            memset(window->activated_keys + sz - 1, 0, sizeof(window->activated_keys[0]));
-        }
-    } else {
-        window->activated_keys[idx] = *ev;
-        window->activated_keys[idx].text = NULL;
+        if (idx > -1) remove_activated_key(window, idx);
+        return;
     }
+    if (idx < 0) {
+        if (!reserve_activated_key(window)) {
+            _glfwInputError(GLFW_OUT_OF_MEMORY, "Out of memory tracking held keys, forgetting the oldest");
+            if (!window->activated_keys.count) return;
+            remove_activated_key(window, 0);
+        }
+        idx = window->activated_keys.count++;
+    }
+    window->activated_keys.items[idx] = *ev;
+    window->activated_keys.items[idx].text = NULL;
 }
 
 // Notifies shared code of a physical key event
@@ -266,13 +279,12 @@ void
 _glfwInputKeyboard(_GLFWwindow *window, GLFWkeyevent *ev) {
     if (ev->native_key_id > 0) {
         bool repeated = false;
-        int idx = -1;
+        ssize_t idx = -1;
         int current_action = GLFW_RELEASE;
-        const unsigned sz = arraysz(window->activated_keys);
-        for (unsigned i = 0; i < sz; i++) {
-            if (window->activated_keys[i].native_key_id == ev->native_key_id) {
+        for (size_t i = 0; i < window->activated_keys.count; i++) {
+            if (window->activated_keys.items[i].native_key_id == ev->native_key_id) {
                 idx = i;
-                current_action = window->activated_keys[i].action;
+                current_action = window->activated_keys.items[i].action;
                 break;
             }
         }
@@ -280,7 +292,7 @@ _glfwInputKeyboard(_GLFWwindow *window, GLFWkeyevent *ev) {
         if (ev->action == GLFW_RELEASE) {
             if (current_action == GLFW_RELEASE) return;
             if (idx > -1) {
-                const GLFWkeyevent *press_event = window->activated_keys + idx;
+                const GLFWkeyevent *press_event = window->activated_keys.items + idx;
                 if (press_event->action == GLFW_PRESS || press_event->action == GLFW_REPEAT) {
                     // Compose sequences under X11 give a different key value for press and release events
                     // but we want the same key value so override it.
@@ -814,16 +826,8 @@ glfwSetInputMode(GLFWwindow *handle, int mode, int value) {
 
         if (!value) {
             // Release all sticky keys
-            for (unsigned i = arraysz(window->activated_keys) - 1; i-- > 0;) {
-                if (window->activated_keys[i].action == _GLFW_STICK) {
-                    if (i < arraysz(window->activated_keys) - 1) {
-                        memmove(
-                            window->activated_keys + i,
-                            window->activated_keys + i + 1,
-                            sizeof(window->activated_keys[0]) * (arraysz(window->activated_keys) - 1 - i));
-                    }
-                    memset(window->activated_keys + arraysz(window->activated_keys) - 1, 0, sizeof(window->activated_keys[0]));
-                }
+            for (size_t i = window->activated_keys.count; i-- > 0;) {
+                if (window->activated_keys.items[i].action == _GLFW_STICK) remove_activated_key(window, i);
             }
         }
 
@@ -889,12 +893,11 @@ glfwGetKey(GLFWwindow *handle, uint32_t key) {
     if (!key) return GLFW_RELEASE;
 
     int current_action = GLFW_RELEASE;
-    const unsigned sz = arraysz(window->activated_keys);
-    int idx = -1;
-    for (unsigned i = 0; i < sz; i++) {
-        if (window->activated_keys[i].key == key) {
+    ssize_t idx = -1;
+    for (size_t i = 0; i < window->activated_keys.count; i++) {
+        if (window->activated_keys.items[i].key == key) {
             idx = i;
-            current_action = window->activated_keys[i].action;
+            current_action = window->activated_keys.items[i].action;
             break;
         }
     }

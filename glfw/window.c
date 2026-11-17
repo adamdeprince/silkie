@@ -49,10 +49,13 @@ _glfwInputWindowFocus(_GLFWwindow *window, bool focused) {
     if (!focused) {
         _glfw.focusedWindowId = 0;
 
-        for (unsigned i = 0; i < arraysz(window->activated_keys); i++) {
-            if (window->activated_keys[i].key > 0 && window->activated_keys[i].action == GLFW_PRESS) {
-                const int native_key = _glfwPlatformGetNativeKeyForKey(window->activated_keys[i].key);
-                GLFWkeyevent ev = {.key = window->activated_keys[i].key, .native_key = native_key, .action = GLFW_RELEASE, .fake_event_on_focus_change = true};
+        // The keyboard callback can change the set of held keys, so walk it backwards and recheck the bounds
+        for (size_t i = window->activated_keys.count; i-- > 0;) {
+            if (i >= window->activated_keys.count) continue;
+            const GLFWkeyevent *k = window->activated_keys.items + i;
+            if (k->key > 0 && k->action == GLFW_PRESS) {
+                const int native_key = _glfwPlatformGetNativeKeyForKey(k->key);
+                GLFWkeyevent ev = {.key = k->key, .native_key = native_key, .action = GLFW_RELEASE, .fake_event_on_focus_change = true};
                 _glfwInputKeyboard(window, &ev);
             }
         }
@@ -410,6 +413,7 @@ glfwDestroyWindow(GLFWwindow *handle) {
         *prev = window->next;
     }
 
+    free(window->activated_keys.items);
     free(window);
 }
 

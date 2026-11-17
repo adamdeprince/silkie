@@ -9,10 +9,48 @@ from kitty.key_encoding import EventType, KeyEvent, decode_key_event, encode_key
 from kitty.keys import Mappings
 from kitty.options.utils import KeyFallbackType
 
-from .base import BaseTest
+from .base import BaseTest, parse_bytes
 
 
 class TestKeys(BaseTest):
+    def test_long_key_text(self):
+        # Text of any length reaches the child whole: an IME can commit a sentence and a device such as an AlphaSmart
+        # types its stored text, so there is no maximum.
+        enc = defines.encode_key_for_tty
+        text = ''.join(chr(c) for c in range(0x20, 0x7f)) + 'é€😀' * 1000 + 'x' * 70000
+
+        # text embedded in the key encoding as code points (report all keys as escape codes + report associated text)
+        flags = 0b11000
+        ans = enc(ord('a'), text=text, key_encoding_flags=flags)
+        self.ae(ans, f'\x1b[97;;{":".join(str(ord(c)) for c in text)}u')
+        self.ae(enc(ord('a'), text='', key_encoding_flags=flags), '\x1b[97u')
+        # text sent as is when the key is not encoded
+        self.ae(enc(ord('a'), text=text), text)
+
+        GLFW_IME_COMMIT_TEXT = 2
+        s = self.create_screen()
+        cb = s.callbacks
+
+        def child_gets(expected, **kw):
+            cb.clear()
+            defines.test_key_input_to_screen(s, **kw)
+            self.ae(cb.wtcbuf, expected.encode('utf-8'))
+
+        child_gets(text, key=ord('a'), text=text)
+        child_gets(text, text=text, ime_state=GLFW_IME_COMMIT_TEXT)
+        parse_bytes(s, f'\x1b[>{flags}u'.encode())
+        child_gets(ans, key=ord('a'), text=text)
+        # an IME commit is always sent as text
+        child_gets(text, text=text, ime_state=GLFW_IME_COMMIT_TEXT)
+        parse_bytes(s, b'\x1b[<u')
+
+        # a fast stream of keys arrives whole and in order
+        cb.clear()
+        for ch in text[:5000]:
+            defines.test_key_input_to_screen(s, key=ord(ch) if ch.isascii() else 0, text=ch)
+            defines.test_key_input_to_screen(s, key=ord(ch) if ch.isascii() else 0, action=defines.GLFW_RELEASE)
+        self.ae(cb.wtcbuf, text[:5000].encode('utf-8'))
+
     def test_encode_key_event(self):
         enc = defines.encode_key_for_tty
         ae = self.assertEqual

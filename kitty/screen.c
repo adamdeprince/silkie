@@ -2031,6 +2031,11 @@ write_to_child(Screen *self, const char *data, size_t sz) {
     return written;
 }
 
+bool
+screen_write_to_child(Screen *self, const char *data, size_t sz) {
+    return write_to_child(self, data, sz);
+}
+
 static void
 get_prefix_and_suffix_for_escape_code(unsigned char which, const char **prefix, const char **suffix) {
     *suffix = "\033\\";
@@ -3349,14 +3354,14 @@ screen_fake_move_cursor_to_position(Screen *self, index_type start_x, index_type
         x = 0;
     }
     if (count) {
-        char output[KEY_BUFFER_SIZE + 1] = {0};
+        char output[KEY_BUFFER_SIZE + 1] = {0}; // enough for any key event without text, see keys.h
         if (self->prompt_settings.uses_special_keys_for_cursor_movement) {
             const char *k = key == GLFW_FKEY_RIGHT ? "1" : "1;1";
             int num = snprintf(output, KEY_BUFFER_SIZE, "\x1b[%su", k);
             for (unsigned i = 0; i < count; i++) write_to_child(self, output, num);
         } else {
             GLFWkeyevent ev = {.key = key, .action = GLFW_PRESS};
-            int num = encode_glfw_key_event(&ev, false, 0, output);
+            ssize_t num = encode_glfw_key_event(&ev, false, 0, output, sizeof(output));
             if (num != SEND_TEXT_TO_CHILD) {
                 for (unsigned i = 0; i < count; i++) write_to_child(self, output, num);
             }

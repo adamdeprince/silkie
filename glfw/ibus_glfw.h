@@ -49,7 +49,9 @@ typedef struct {
     xkb_keysym_t ibus_keysym;
     GLFWid window_id;
     GLFWkeyevent glfw_ev;
-    char __embedded_text[64];
+    // The key's text while the event waits for IBUS to reply. ibus_process_key() stores the text, whatever its
+    // length, in the same allocation as the event, just past the structure.
+    char *embedded_text;
 } _GLFWIBUSKeyEvent;
 
 void glfw_connect_to_ibus(_GLFWIBUSData *ibus);

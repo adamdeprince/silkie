@@ -120,7 +120,8 @@ terminate(void) {
 char *
 _glfw_strdup(const char *source) {
     const size_t length = strlen(source);
-    char *result = malloc(length + 1);
+    char *result = malloc(length + 1); // length + 1 cannot overflow: source and its NUL already occupy that much memory
+    if (!result) return NULL;
     memcpy(result, source, length);
     result[length] = 0;
     return result;

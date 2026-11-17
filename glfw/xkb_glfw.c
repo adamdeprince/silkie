@@ -596,6 +596,13 @@ glfw_xkb_update_masks(_GLFWXKBData *xkb) {
 
 #endif
 
+// The text of the key event being handled. It is sized from the text: a Compose file can map a sequence to a string
+// of any length, so no fixed size is always enough.
+static struct {
+    char *data;
+    size_t capacity;
+} key_text_buf;
+
 static void
 release_keyboard_data(_GLFWXKBData *xkb) {
 #define US(group, state, unref)  \
@@ -626,6 +633,9 @@ glfw_xkb_release(_GLFWXKBData *xkb) {
         xkb->context = NULL;
     }
     glfw_ibus_terminate(&xkb->ibus);
+    free(key_text_buf.data);
+    key_text_buf.data = NULL;
+    key_text_buf.capacity = 0;
 }
 
 bool
@@ -868,14 +878,65 @@ glfw_xkb_should_repeat(_GLFWXKBData *xkb, xkb_keycode_t keycode) {
 }
 
 
+static char *
+key_text(void) {
+    static char empty[1];
+    return key_text_buf.data ? key_text_buf.data : empty;
+}
+
+static void
+clear_key_text(void) {
+    key_text()[0] = 0;
+}
+
+// Makes room for len bytes of text and its NUL; on failure the text is cleared and false returned.
+static bool
+reserve_key_text(int len) {
+    size_t needed;
+    if (len < 0 || __builtin_add_overflow((size_t)len, (size_t)1, &needed)) {
+        clear_key_text();
+        return false;
+    }
+    if (needed > key_text_buf.capacity) {
+        size_t cap = key_text_buf.capacity ? key_text_buf.capacity : 64;
+        while (cap < needed) {
+            if (__builtin_mul_overflow(cap, (size_t)2, &cap)) {
+                cap = needed;
+                break;
+            }
+        }
+        char *d = realloc(key_text_buf.data, cap);
+        if (!d) {
+            _glfwInputError(GLFW_OUT_OF_MEMORY, "Out of memory storing %d bytes of key text, dropping it", len);
+            clear_key_text();
+            return false;
+        }
+        key_text_buf.data = d;
+        key_text_buf.capacity = cap;
+    }
+    return true;
+}
+
+// Both xkbcommon functions return the length of the whole text, like snprintf(), so ask for it, then fetch it
+static void
+store_compose_text(struct xkb_compose_state *composeState) {
+    if (reserve_key_text(xkb_compose_state_get_utf8(composeState, NULL, 0)))
+        xkb_compose_state_get_utf8(composeState, key_text_buf.data, key_text_buf.capacity);
+}
+
+static void
+store_key_text(struct xkb_state *state, xkb_keycode_t code) {
+    if (reserve_key_text(xkb_state_key_get_utf8(state, code, NULL, 0))) xkb_state_key_get_utf8(state, code, key_text_buf.data, key_text_buf.capacity);
+}
+
 static xkb_keysym_t
-compose_symbol(struct xkb_compose_state *composeState, xkb_keysym_t sym, int *compose_completed, char *key_text, int n) {
+compose_symbol(struct xkb_compose_state *composeState, xkb_keysym_t sym, int *compose_completed) {
     *compose_completed = 0;
     if (sym == XKB_KEY_NoSymbol || !composeState) return sym;
     if (xkb_compose_state_feed(composeState, sym) != XKB_COMPOSE_FEED_ACCEPTED) return sym;
     switch (xkb_compose_state_get_status(composeState)) {
         case XKB_COMPOSE_COMPOSED:
-            xkb_compose_state_get_utf8(composeState, key_text, n);
+            store_compose_text(composeState);
             *compose_completed = 1;
             return xkb_compose_state_get_one_sym(composeState);
         case XKB_COMPOSE_COMPOSING:
@@ -1027,7 +1088,6 @@ is_switch_layout_key(xkb_keysym_t xkb_sym) {
 void
 glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t xkb_keycode, int action) {
     if (!xkb->keymap) return;
-    static char key_text[64] = {0};
     const xkb_keysym_t *syms, *clean_syms, *default_syms;
     xkb_keysym_t xkb_sym, shifted_xkb_sym = XKB_KEY_NoSymbol, alternate_xkb_sym = XKB_KEY_NoSymbol;
     xkb_keycode_t code_for_sym = xkb_keycode, ibus_keycode = xkb_keycode;
@@ -1041,7 +1101,7 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
     XKBStateGroup *sg = &xkb->states;
     int num_syms = xkb_state_key_get_syms(sg->state, code_for_sym, &syms);
     int num_clean_syms = xkb_state_key_get_syms(sg->clean_state, code_for_sym, &clean_syms);
-    key_text[0] = 0;
+    clear_key_text();
     // According to the documentation of xkb_compose_state_feed it does not
     // support multi-sym events, so we ignore them
     if (num_syms != 1 || num_clean_syms != 1) {
@@ -1054,7 +1114,7 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         const char *text_type = "composed_text";
         int compose_completed;
-        xkb_sym = compose_symbol(sg->composeState, syms[0], &compose_completed, key_text, sizeof(key_text));
+        xkb_sym = compose_symbol(sg->composeState, syms[0], &compose_completed);
         if (xkb_sym == XKB_KEY_NoSymbol && !compose_completed) {
             debug("compose not complete, ignoring.\n");
             return;
@@ -1072,14 +1132,14 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
             } else if (!is_switch_layout_key(xkb_sym)) xkb_sym = clean_syms[0];
             // xkb returns text even if alt and/or super are pressed
             if (((GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER | GLFW_MOD_HYPER | GLFW_MOD_META) & sg->modifiers) == 0) {
-                xkb_state_key_get_utf8(sg->state, code_for_sym, key_text, sizeof(key_text));
+                store_key_text(sg->state, code_for_sym);
             }
             text_type = "text";
         }
-        if ((1 <= key_text[0] && key_text[0] <= 31) || key_text[0] == 127) {
-            key_text[0] = 0; // don't send text for ascii control codes
+        if ((1 <= key_text()[0] && key_text()[0] <= 31) || key_text()[0] == 127) {
+            clear_key_text(); // don't send text for ascii control codes
         }
-        if (key_text[0]) { debug("%s: %s ", text_type, key_text); }
+        if (key_text()[0]) { debug("%s: %s ", text_type, key_text()); }
     }
     if (is_switch_layout_key(xkb_sym)) {
         debug(" is a keyboard layout shift key, ignoring.\n");
@@ -1119,8 +1179,8 @@ glfw_xkb_handle_key_event(_GLFWwindow *window, _GLFWXKBData *xkb, xkb_keycode_t 
     glfw_ev.action = action;
     glfw_ev.key = glfw_sym;
     glfw_ev.mods = sg->modifiers;
-    glfw_ev.text = key_text;
-    _GLFWIBUSKeyEvent ibus_ev;
+    glfw_ev.text = key_text();
+    _GLFWIBUSKeyEvent ibus_ev = {0};
     ibus_ev.glfw_ev = glfw_ev;
     ibus_ev.ibus_keycode = ibus_keycode;
     ibus_ev.window_id = window->id;
