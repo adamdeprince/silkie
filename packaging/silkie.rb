@@ -1,5 +1,5 @@
 cask "silkie" do
-  version "0.49.2-silkie20261116.2"
+  version "0.49.2-silkie20261117.1"
   sha256 "d752bc653d3ef4bfcf14c9fb280a17c105db6fb63aa688a2de98d171872501ca"
   url "https://brew.goblinreactor.com/casks/silkie-#{version}.zip"
   name "Silkie"
