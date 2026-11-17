@@ -1587,7 +1587,8 @@ class TestScreen(BaseTest):
                 del t.ex
 
         t('XYZ', ('p;XYZ', False))
-        t('a' * VT_PARSER_BUFFER_SIZE, ('p;' + 'a' * (VT_PARSER_BUFFER_SIZE - 8), True), (';' + 'a' * 8, False))
+        # A long write is passed on in pieces, each naming the same clipboard
+        t('a' * VT_PARSER_BUFFER_SIZE, ('p;' + 'a' * (VT_PARSER_BUFFER_SIZE - 7), True), ('p;' + 'a' * 7, False))
         t('', ('p;', False))
         t('!', ('p;!', False))
 

@@ -265,14 +265,15 @@ def shell_prompt_marking(payload: str) -> None:
 def clipboard_control(payload: str) -> None:
     global clipboard_control_pending
     code, data = payload.split(';', 1)
+    # -52 marks a piece of a long OSC 52 write. The pieces after the first repeat its where field.
     if code == '-52':
         if clipboard_control_pending:
-            clipboard_control_pending += data.lstrip(';')
+            clipboard_control_pending += data.partition(';')[2]
         else:
-            clipboard_control_pending = payload
+            clipboard_control_pending = '52;' + data
         return
     if clipboard_control_pending:
-        clipboard_control_pending += data.lstrip(';')
+        clipboard_control_pending += data.partition(';')[2]
         payload = clipboard_control_pending
         clipboard_control_pending = ''
     write(f'{OSC}{payload}\x07')

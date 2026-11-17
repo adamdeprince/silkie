@@ -14,6 +14,7 @@ from kitty.fast_data_types import (
     has_avx512,
     has_sse4_2,
     test_blend_pixels,
+    test_fail_escape_code_allocations,
     test_find_either_of_two_bytes,
     test_printable_ascii_run_length,
     test_utf8_decode_to_sentinel,
@@ -1028,6 +1029,126 @@ class TestParser(BaseTest):
         too_many = ('CSI escape code has too many parameters, ignoring it',)
         pb('\033[' + '1;' * 255 + '1:2m\033[31m', too_many, ('select_graphic_rendition', '31'))
         pb('\033[' + '1;' * 256 + 'm\033[31m', ('select_graphic_rendition', ';'.join('1' * 256)), ('select_graphic_rendition', '31'))
+
+    def test_st_terminated_codes_of_any_length(self):
+        s = self.create_screen()
+        c = s.callbacks
+        size = 10 * 1024 * 1024
+        # stray backslashes and ESCs that do not start a terminator are part of the payload
+        unit = b'abcdefghijklmnopqrstuvwxyz0123456789\\x\x1bA'
+        payload = (unit * (size // len(unit) + 1))[:size]
+        remote_cmds = []
+        c.handle_remote_cmd = lambda msg: remote_cmds.append(bytes(msg))
+        g = s.grman
+        raw = bytes(range(256)) * (3 * size // 4 // 256)
+        width = 1024
+        raw = raw[: len(raw) // (3 * width) * 3 * width]
+        b64 = base64_encode(raw)
+        self.assertGreater(len(b64), size - 4096)
+
+        def feed(data, chunk):
+            if chunk:
+                s.test_parse_in_chunks(data, chunk)
+            else:
+                parse_bytes(s, data)
+
+        for chunk in (1, 1024, 65536, 0):
+            for terminator in (b'\x07', b'\033\\'):
+                c.clear()
+                feed(b'1\033]9;' + payload + terminator + b'2', chunk)
+                self.ae(len(c.notifications), 1)
+                self.assertTrue(c.notifications[0] == (9, payload.decode()), f'OSC damaged with chunk size: {chunk}')
+                self.ae(str(s.line(0)), '12')
+                s.reset()
+            remote_cmds.clear()
+            feed(b'1\033P@kitty-cmd{' + payload + b'\033\\2', chunk)
+            self.ae(len(remote_cmds), 1)
+            self.assertTrue(remote_cmds[0] == b'{' + payload, f'DCS damaged with chunk size: {chunk}')
+            self.ae(str(s.line(0)), '12')
+            s.reset()
+            c.clear()
+            feed(f'1\033_Ga=t,i=7,f=24,s={width},v={len(raw) // (3 * width)};'.encode() + b64 + b'\033\\2', chunk)
+            self.ae(c.wtcbuf, b'\033_Gi=7;OK\033\\')
+            img = g.image_for_client_id(7)
+            self.assertTrue(img['data'] == raw, f'APC damaged with chunk size: {chunk}')
+            self.ae(str(s.line(0)), '12')
+            s.reset()
+
+    def test_terminator_split_from_held_code(self):
+        # The ESC of ESC \\ is the last byte moved out of the read buffer
+        s = self.create_screen()
+        c = s.callbacks
+        t = VT_PARSER_BUFFER_SIZE // 4
+        parse_bytes(s, b'\033]9;' + b'a' * (t - 1) + b'\033')
+        parse_bytes(s, b'\\x')
+        self.ae(c.notifications, [(9, 'a' * (t - 1))])
+        self.ae(str(s.line(0)), 'x')
+        # and an ESC that does not start a terminator is kept
+        c.clear()
+        parse_bytes(s, b'\033]9;' + b'a' * (t - 1) + b'\033')
+        parse_bytes(s, b'b\x07y')
+        self.ae(c.notifications, [(9, 'a' * (t - 1) + '\x1bb')])
+        self.ae(str(s.line(0)), 'xy')
+        # the ESC is not passed on with a piece of an OSC 52 write
+        parse_bytes(s, b'\033]52;c;' + b'a' * t + b'\033')
+        parse_bytes(s, b'\\z')
+        self.ae(c.cc_buf, [('c;' + 'a' * t, True), ('c;', False)])
+        c.clear()
+        parse_bytes(s, b'\033]52;c;' + b'a' * t + b'\033')
+        parse_bytes(s, b'b\033\\')
+        self.ae(c.cc_buf, [('c;' + 'a' * t, True), ('c;\x1bb', False)])
+        self.ae(str(s.line(0)), 'xyz')
+
+    def test_long_osc_52(self):
+        s = self.create_screen()
+        c = s.callbacks
+        data = b'x' * (10 * 1024 * 1024)
+        for chunk in (1, 1024, 65536, 0):
+            for where in 'cp':
+                c.clear()
+                code = f'\033]52;{where};'.encode() + data + b'\033\\'
+                if chunk:
+                    s.test_parse_in_chunks(code, chunk)
+                else:
+                    parse_bytes(s, code)
+                prefix = f'{where};'
+                self.assertTrue(all(x.startswith(prefix) for x, _ in c.cc_buf))
+                self.ae([p for _, p in c.cc_buf], [True] * (len(c.cc_buf) - 1) + [False])
+                self.assertTrue(''.join(x[len(prefix):] for x, _ in c.cc_buf) == data.decode(), f'OSC 52 damaged with chunk size: {chunk}')
+                self.assertGreater(len(c.cc_buf), 1)
+                self.ae(str(s.line(0)), '')
+
+    def test_escape_code_that_cannot_be_held(self):
+        s = self.create_screen()
+        c = s.callbacks
+        payload = b'y' * (3 * VT_PARSER_BUFFER_SIZE)
+        try:
+            test_fail_escape_code_allocations(True)
+            for chunk in (1, 1024, 0):
+                for code in (b'\033]9;' + payload + b'\x07', b'\033P@kitty-cmd{' + payload + b'\033\\', b'\033_Ga=t,i=8,f=24,s=1,v=1;' + payload + b'\033\\'):
+                    cd = CmdDump()
+                    c.clear()
+                    data = b'1' + code + b'2'
+                    if chunk:
+                        s.test_parse_in_chunks(data, chunk, cd)
+                    else:
+                        parse_bytes(s, data, cd)
+                    r = cd.get_result()
+                    self.ae(r[0], ('draw', '1'))
+                    self.assertTrue(r[1][0].startswith('Out of memory holding a VTE_'), r[1])
+                    self.ae(r[2:], (('draw', '2'),))
+                    self.ae(str(s.line(0)), '12')
+                    self.ae(c.notifications, [])
+                    s.reset()
+            # an escape code that ends in the read buffer needs no memory
+            c.clear()
+            parse_bytes(s, b'\033]9;short\x07')
+            self.ae(c.notifications, [(9, 'short')])
+        finally:
+            test_fail_escape_code_allocations(False)
+        c.clear()
+        s.test_parse_in_chunks(b'\033]9;' + payload + b'\x07', 1024)
+        self.ae(c.notifications, [(9, payload.decode())])
 
     def test_csi_code_rep(self):
         s = self.create_screen(8)

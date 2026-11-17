@@ -7086,6 +7086,40 @@ test_parse_written_data(Screen *screen, PyObject *args) {
 }
 
 static PyObject *
+test_parse_in_chunks(Screen *screen, PyObject *args) {
+    // Feeds data to the parser chunk_size bytes at a time, parsing after each chunk, as happens
+    // when a child writes in small pieces
+    RAII_PY_BUFFER(src);
+    Py_ssize_t chunk_size;
+    ParseData pd = {0};
+    if (!PyArg_ParseTuple(args, "y*n|O", &src, &chunk_size, &pd.dump_callback)) return NULL;
+    if (chunk_size < 1) {
+        PyErr_SetString(PyExc_ValueError, "chunk_size must be positive");
+        return NULL;
+    }
+    const bool dump = pd.dump_callback && pd.dump_callback != Py_None;
+    const uint8_t *p = src.buf;
+    size_t left = src.len;
+    while (left) {
+        size_t avail;
+        uint8_t *dest = vt_parser_create_write_buffer(screen->vt_parser, &avail);
+        const size_t n = MIN(left, MIN(avail, (size_t)chunk_size));
+        memcpy(dest, p, n);
+        vt_parser_commit_write(screen->vt_parser, n);
+        if (!n) {
+            PyErr_SetString(PyExc_RuntimeError, "The parser buffer is full and parsing did not free any of it");
+            return NULL;
+        }
+        p += n;
+        left -= n;
+        pd.now = monotonic();
+        if (dump) parse_worker_dump(screen, &pd, true);
+        else parse_worker(screen, &pd, true);
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 multicell_data_as_dict(CPUCell mcd) {
     return Py_BuildValue(
         "{sI sI sI sI sO sI sI}",
@@ -7184,6 +7218,7 @@ static PyMethodDef methods[] = {
     METHODB(test_create_write_buffer, METH_NOARGS),
     METHODB(test_commit_write_buffer, METH_VARARGS),
     METHODB(test_parse_written_data, METH_VARARGS),
+    METHODB(test_parse_in_chunks, METH_VARARGS),
     METHODB(test_draw_overlay_line, METH_VARARGS),
     MND(line_edge_colors, METH_NOARGS) MND(ime_text_around_cursor, METH_NOARGS) MND(line, METH_O) MND(dump_lines_with_attrs, METH_VARARGS)
         MND(cpu_cells, METH_VARARGS) MND(cursor_at_prompt, METH_NOARGS){"visual_line", (PyCFunction)pyvisual_line, METH_VARARGS, ""},

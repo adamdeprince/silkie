@@ -172,11 +172,19 @@ class TestClipboard(BaseTest):
             rrm.parse_osc_52(memoryview(b'c;SGVs!!!bG8='))
             self.ae(written, [])
             # including when the invalid data is spread over multiple chunks
-            # (continuation chunks have an empty where field, see continue_osc_52() in vt-parser.c)
+            # (continuation chunks repeat the where field, see stream_osc_52() in vt-parser.c)
             rrm.parse_osc_52(memoryview(b'c;SGVs'), is_partial=True)
-            rrm.parse_osc_52(memoryview(b';!!!!'), is_partial=True)
-            rrm.parse_osc_52(memoryview(b';bG8='))
+            rrm.parse_osc_52(memoryview(b'c;!!!!'), is_partial=True)
+            rrm.parse_osc_52(memoryview(b'c;bG8='))
             self.ae(written, [])
+            # a long write in pieces reaches the clipboard it named, including the primary selection
+            for where in 'cp':
+                rrm.parse_osc_52(memoryview(f'{where};'.encode() + standard_b64encode(b'abc')), is_partial=True)
+                rrm.parse_osc_52(memoryview(f'{where};'.encode() + standard_b64encode(b'def')), is_partial=True)
+                rrm.parse_osc_52(memoryview(f'{where};'.encode() + standard_b64encode(b'ghi')))
+                self.ae([(x.is_primary_selection, x.data_for()) for x in written], [(where == 'p', b'abcdefghi')])
+                self.ae(rrm.osc52_in_flight_write_requests, {})
+                written.clear()
             # unpadded data is however tolerated for OSC 52
             rrm.parse_osc_52(memoryview(b'c;' + standard_b64encode(b'unpadded').rstrip(b'=')))
             self.ae([x.data_for() for x in written], [b'unpadded'])
