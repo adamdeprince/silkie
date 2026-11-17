@@ -336,6 +336,7 @@ available headroom and control transparency at the cell level.</p>
 </pre></div>
 </div>
 <p>安装脚本会在添加或修改 Goblin Reactor 软件源之前征求许可，并安装未经修改的 Iosevka 字体及其 SIL 开源字体许可证声明。Silkie 默认使用较宽的 Extended 字形。</p>
+<p>macOS 应用没有使用 Apple Developer ID 签名，也未经 Apple 公证，因此 macOS 会拒绝直接打开下载的应用。在 macOS 上，安装脚本和 Homebrew cask 会在安装后清除 <code class="docutils literal notranslate"><span class="pre">silkie.app</span></code> 的隔离标记，让 Silkie 可以正常打开。如果 macOS 仍然阻止打开，请在“系统设置 &gt; 隐私与安全性”中批准 Silkie，或运行 <code class="docutils literal notranslate"><span class="pre">xattr</span> <span class="pre">-dr</span> <span class="pre">com.apple.quarantine</span> <span class="pre">/Applications/silkie.app</span></code>。</p>
 <p>从源码构建时，请使用 <code class="docutils literal notranslate"><span class="pre">silkie</span></code> 分支。你需要 Git、C 编译器和 Go；Linux 还需要 <a class="reference internal" href="install.html"><span class="doc">安装指南</span></a> 中列出的系统库。构建脚本会下载其余构建依赖。</p>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--branch<span class="w"> </span>silkie<span class="w"> </span>https://github.com/adamdeprince/silkie.git
 <span class="nb">cd</span><span class="w"> </span>silkie

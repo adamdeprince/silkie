@@ -23,6 +23,10 @@ Source approval is read from your terminal, so it also works when the
 script is piped to Bash. macOS needs Apple Silicon and macOS 26 or newer;
 Homebrew is installed with your permission if it is missing.
 
+The macOS app is not signed with an Apple Developer ID or notarized, so the
+installer and the Homebrew cask clear its quarantine flag after installing it;
+otherwise macOS would refuse to open it.
+
 The manual commands are below.
 
 On Apple Silicon with macOS 26 Tahoe, install the Homebrew cask::
@@ -31,7 +35,9 @@ On Apple Silicon with macOS 26 Tahoe, install the Homebrew cask::
    brew install --cask goblinreactor/tap/silkie
    brew install --cask font-iosevka
 
-The application requires macOS approval before first launch. The
+The cask clears the app's quarantine flag after installing it. If macOS
+still blocks first launch, approve Silkie in System Settings > Privacy &
+Security, or run ``xattr -dr com.apple.quarantine /Applications/silkie.app``. The
 `Homebrew repository's Silkie instructions <https://brew.goblinreactor.com/#silkie>`_
 explain app approval and the available release.
 

@@ -157,6 +157,13 @@ The installer asks before adding or changing Goblin Reactor package sources.
 It installs unmodified Iosevka with its SIL Open Font License notice.
 Silkie uses Iosevka's wider Extended faces by default.
 
+The macOS app is not signed with an Apple Developer ID or notarized by Apple,
+so macOS would refuse to open it as downloaded. On macOS the install script
+and the Homebrew cask clear the quarantine flag from ``silkie.app`` after
+installing it, so Silkie opens normally. If macOS still blocks it, approve
+Silkie in System Settings > Privacy & Security, or run
+``xattr -dr com.apple.quarantine /Applications/silkie.app``.
+
 To build from source, use the ``silkie`` branch. You will need Git, a C compiler, and
 Go; Linux also needs the system libraries listed in the
 :doc:`installation guide <install>`. The build script downloads the remaining

@@ -115,11 +115,15 @@ def stage(source: Path, output: Path, version: str) -> None:
   app "silkie.app"
   binary "#{{appdir}}/silkie.app/Contents/MacOS/silkie", target: "silkie"
   binary "#{{appdir}}/silkie.app/Contents/MacOS/kitten", target: "silkie-kitten"
+  postflight do
+    # Ad-hoc signed and not notarized: Gatekeeper refuses the quarantined download.
+    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{{appdir}}/silkie.app"]
+  end
   caveats <<~EOS
     Launch with silkie; companion tools use silkie-kitten.
     Configuration: ~/.config/kitty/kitty.conf.
-    This build is ad-hoc signed and is not Apple-notarized.
-    Approve first launch in System Settings > Privacy & Security if prompted.
+    This build is ad-hoc signed and is not Apple-notarized, so the cask
+    clears its quarantine flag after installing it.
   EOS
 end
 ''')

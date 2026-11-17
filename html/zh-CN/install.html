@@ -346,6 +346,7 @@
 </pre></div>
 </div>
 <p>安装脚本会说明所需的 Goblin Reactor 软件源，并在添加或修改之前征求许可。它会复用匹配的现有软件源，验证 APT 签名密钥，并通过 Homebrew 或 APT 安装 <code class="docutils literal notranslate"><span class="pre">silkie</span></code>。此外还会安装未经修改的 Iosevka 字体：macOS 使用官方 Homebrew <code class="docutils literal notranslate"><span class="pre">font-iosevka</span></code> cask，Linux 则下载并校验上游发布文件的校验和。软件源许可从终端读取，因此脚本通过管道传给 Bash 时也能使用。macOS 需要 Apple Silicon 和 macOS 26 或更高版本；如果缺少 Homebrew，脚本会征得许可后安装。</p>
+<p>macOS 应用没有使用 Apple Developer ID 签名，也未经公证，因此安装脚本和 Homebrew cask 会在安装后清除它的隔离标记；否则 macOS 会拒绝打开它。</p>
 <p>手动安装命令如下。</p>
 <p>在运行 macOS 26 Tahoe 的 Apple Silicon 机器上，安装 Homebrew cask：:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">brew</span> <span class="n">tap</span> <span class="n">goblinreactor</span><span class="o">/</span><span class="n">tap</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">brew</span><span class="o">.</span><span class="n">goblinreactor</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">homebrew</span><span class="o">-</span><span class="n">tap</span><span class="o">.</span><span class="n">git</span>
@@ -353,7 +354,7 @@
 <span class="n">brew</span> <span class="n">install</span> <span class="o">--</span><span class="n">cask</span> <span class="n">font</span><span class="o">-</span><span class="n">iosevka</span>
 </pre></div>
 </div>
-<p>首次启动应用前，需要在 macOS 中批准运行。<a class="reference external" href="https://brew.goblinreactor.com/#silkie">Homebrew 仓库的 Silkie 安装说明</a> 介绍了批准步骤和可用版本。</p>
+<p>cask 会在安装后清除应用的隔离标记。如果 macOS 仍然阻止首次启动，请在“系统设置 &gt; 隐私与安全性”中批准 Silkie，或运行 <code class="docutils literal notranslate"><span class="pre">xattr</span> <span class="pre">-dr</span> <span class="pre">com.apple.quarantine</span> <span class="pre">/Applications/silkie.app</span></code>。<a class="reference external" href="https://brew.goblinreactor.com/#silkie">Homebrew 仓库的 Silkie 安装说明</a> 介绍了批准步骤和可用版本。</p>
 <p>Linux 的 <a class="reference external" href="https://apt.goblinreactor.com/#silkie">已签名 APT 仓库</a> 提供安装说明、签名密钥和各发行版的软件源配置。当前目标包括 Ubuntu 26.04 的 amd64 和 arm64，以及旧世界 LoongArch64（<code class="docutils literal notranslate"><span class="pre">loongarch64</span></code>）的麒麟 V10 SP1。仓库还列出了 Ubuntu 24.04 和 Debian 13 的 amd64 软件包。请选择与系统匹配的发行套件；旧世界 <code class="docutils literal notranslate"><span class="pre">loongarch64</span></code> 和新世界 <code class="docutils literal notranslate"><span class="pre">loong64</span></code> 是不同的二进制目标。</p>
 <p>按上述说明配置软件源后：:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">update</span>

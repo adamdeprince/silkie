@@ -248,3 +248,11 @@ msgstr "如需使用 Iosevka 原来较窄的字宽，可配置：::"
 # Installer and Extended-width defaults.
 msgid "Install Iosevka Slab separately for the serif role. For CJK text, install a regional Sarasa Term or Noto Sans CJK family. Font files are separate from the application; when a preferred font is absent, the operating system substitutes an available face. The :doc:`font-protocol` reference links the font sources and explains regional glyph selection."
 msgstr "衬线字体角色需要另行安装 Iosevka Slab。中日韩文本可安装相应地区的 Sarasa Term 或 Noto Sans CJK 字体。字体文件与应用分开提供；首选字体缺失时，操作系统会替换为可用字体。:doc:`font-protocol` 列出了字体来源，并说明了地区字形的选择方式。"
+
+# Unsigned macOS app and installer dequarantine.
+msgid "The macOS app is not signed with an Apple Developer ID or notarized, so the installer and the Homebrew cask clear its quarantine flag after installing it; otherwise macOS would refuse to open it."
+msgstr "macOS 应用没有使用 Apple Developer ID 签名，也未经公证，因此安装脚本和 Homebrew cask 会在安装后清除它的隔离标记；否则 macOS 会拒绝打开它。"
+
+# Unsigned macOS app and installer dequarantine.
+msgid "The cask clears the app's quarantine flag after installing it. If macOS still blocks first launch, approve Silkie in System Settings > Privacy & Security, or run ``xattr -dr com.apple.quarantine /Applications/silkie.app``. The `Homebrew repository's Silkie instructions <https://brew.goblinreactor.com/#silkie>`_ explain app approval and the available release."
+msgstr "cask 会在安装后清除应用的隔离标记。如果 macOS 仍然阻止首次启动，请在“系统设置 > 隐私与安全性”中批准 Silkie，或运行 ``xattr -dr com.apple.quarantine /Applications/silkie.app``。`Homebrew 仓库的 Silkie 安装说明 <https://brew.goblinreactor.com/#silkie>`_ 介绍了批准步骤和可用版本。"

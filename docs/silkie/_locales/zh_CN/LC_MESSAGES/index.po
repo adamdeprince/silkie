@@ -390,3 +390,7 @@ msgstr "二进制软件包可从面向 Apple Silicon macOS 的 `Homebrew <https:
 # Installer and Extended-width defaults.
 msgid "The installer asks before adding or changing Goblin Reactor package sources. It installs unmodified Iosevka with its SIL Open Font License notice. Silkie uses Iosevka's wider Extended faces by default."
 msgstr "安装脚本会在添加或修改 Goblin Reactor 软件源之前征求许可，并安装未经修改的 Iosevka 字体及其 SIL 开源字体许可证声明。Silkie 默认使用较宽的 Extended 字形。"
+
+# Unsigned macOS app and installer dequarantine.
+msgid "The macOS app is not signed with an Apple Developer ID or notarized by Apple, so macOS would refuse to open it as downloaded. On macOS the install script and the Homebrew cask clear the quarantine flag from ``silkie.app`` after installing it, so Silkie opens normally. If macOS still blocks it, approve Silkie in System Settings > Privacy & Security, or run ``xattr -dr com.apple.quarantine /Applications/silkie.app``."
+msgstr "macOS 应用没有使用 Apple Developer ID 签名，也未经 Apple 公证，因此 macOS 会拒绝直接打开下载的应用。在 macOS 上，安装脚本和 Homebrew cask 会在安装后清除 ``silkie.app`` 的隔离标记，让 Silkie 可以正常打开。如果 macOS 仍然阻止打开，请在“系统设置 > 隐私与安全性”中批准 Silkie，或运行 ``xattr -dr com.apple.quarantine /Applications/silkie.app``。"
