@@ -16,7 +16,7 @@ Descriptors are dicts with:
 """
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any
 
 from .fast_data_types import get_boss, get_options
 from .profiles import load_profiles
@@ -26,28 +26,24 @@ if TYPE_CHECKING:
 
 
 UNLIMITED = 'Unlimited'
-# The compression levels of zstd, 1 to ZSTD_maxCLevel(), which is 22 in every version of the format
-ZSTD_LEVELS = range(1, 23)
 SCROLLBACK_SUGGESTIONS = (UNLIMITED, '1000', '10000', '100000', '1000000')
+DEFAULT_CONTRAST = 'Default'
+CONTRAST_SUGGESTIONS = (DEFAULT_CONTRAST, '0%', '20%', '40%', '60%', '80%', '100%')
 
 
-class ScrollbackSettings(NamedTuple):
-    lines: int  # negative for unlimited, as with the scrollback_lines option
-    compression: str  # none or zstd:<level>
-
-
-def scrollback_settings_supported() -> bool:
-    ' Per tab scrollback settings need windows that can change theirs, see Tab.set_scrollback_settings() '
-    from .window import Window
-    return hasattr(Window, 'set_scrollback_settings')
+def zstd_levels() -> range:
+    ' The compression levels of the zstd library in use, the negative, fastest ones included '
+    from .fast_data_types import HistoryBuf
+    lo, hi, _ = HistoryBuf.zstd_levels()
+    return range(lo, hi + 1)
 
 
 def scrollback_lines_text(lines: int) -> str:
-    return UNLIMITED if lines < 0 or lines >= 2**32 - 1 else str(lines)
+    return UNLIMITED if lines < 0 else str(lines)
 
 
 def parse_scrollback_lines(text: str) -> int:
-    ' Raises ValueError for text that is neither a number of lines nor Unlimited '
+    ' Raises ValueError for text that is neither a number of lines nor Unlimited, -1 is unlimited '
     text = text.strip()
     if text.lower() in (UNLIMITED.lower(), 'infinite', '-1'):
         return -1
@@ -56,26 +52,49 @@ def parse_scrollback_lines(text: str) -> int:
     return int(text)
 
 
+def compression_text(compression: int | str) -> str:
+    return 'none' if compression == 'none' else str(compression)
+
+
 def parse_compression(text: str) -> str:
+    ' none or a zstd level of the library in use, raises ValueError for anything else '
     text = text.strip().lower()
     if text in ('', 'none'):
         return 'none'
-    kind, _, level = text.partition(':')
-    if kind != 'zstd' or not level.isdigit() or int(level) not in ZSTD_LEVELS:
+    if text.startswith('zstd:'):
+        text = text[5:]
+    try:
+        level = int(text)
+    except ValueError:
+        raise ValueError(text) from None
+    if level not in zstd_levels():
         raise ValueError(text)
-    return f'zstd:{int(level)}'
+    return str(level)
 
 
-def current_scrollback_settings(tab: 'Tab') -> ScrollbackSettings:
+def current_scrollback_settings(tab: 'Tab') -> tuple[int, int | str]:
+    ' (lines, compression) of the tab: -1 lines is unlimited, compression is none or a zstd level '
+    if (w := tab.active_window) is not None:
+        return w.scrollback_settings
+    from .options.utils import scrollback_settings_for_display
     if (s := getattr(tab, 'scrollback_settings', None)) is not None:
-        return s
+        return scrollback_settings_for_display(*s)
     opts = get_options()
-    compression = getattr(opts, 'scrollback_compression', 'none')
-    if compression is True:
-        compression = 'zstd:3'
-    elif compression is False:
-        compression = 'none'
-    return ScrollbackSettings(opts.scrollback_lines, str(compression))
+    return scrollback_settings_for_display(opts.scrollback_lines, opts.scrollback_compression)
+
+
+def contrast_text(value: float | None) -> str:
+    ' The minimum contrast of a tab as shown, Default when it follows its profile or the options '
+    return DEFAULT_CONTRAST if value is None else f'{value:g}%'
+
+
+def parse_contrast(text: str) -> float | None:
+    ' None for Default, a percentage otherwise, raises ValueError for anything else '
+    text = text.strip()
+    if not text or text.lower() == DEFAULT_CONTRAST.lower():
+        return None
+    from .window import parse_minimum_contrast_value
+    return parse_minimum_contrast_value(text)
 
 
 def section(title: str) -> dict[str, Any]:
@@ -96,17 +115,21 @@ def tab_settings_model(tm: 'TabManager') -> dict[str, Any]:
             {'name': 'title', 'title': 'Tab name', 'kind': 'text', 'value': tab.name, 'placeholder': tab.title,
              'help': 'The name of this tab. Leave empty to follow the title of its window.'},
         ]
-        supported = scrollback_settings_supported()
-        s = current_scrollback_settings(tab)
-        note = '' if supported else ' Not available in this build.'
+        lines, compression = current_scrollback_settings(tab)
+        levels = zstd_levels()
         fields += [
             section('Scrollback'),
-            {'name': 'scrollback_lines', 'title': 'Lines', 'kind': 'combo', 'value': scrollback_lines_text(s.lines),
-             'choices': [[x, x] for x in SCROLLBACK_SUGGESTIONS], 'enabled': supported,
-             'help': f'How many lines of history the windows of this tab keep, a number or {UNLIMITED}.{note}'},
-            {'name': 'scrollback_compression', 'title': 'Compression', 'kind': 'choice', 'value': s.compression,
-             'choices': [['none', 'None']] + [[f'zstd:{n}', f'zstd level {n}'] for n in ZSTD_LEVELS], 'enabled': supported,
-             'help': f'Compress the history kept in memory. Higher levels are smaller and slower.{note}'},
+            {'name': 'scrollback_lines', 'title': 'Lines', 'kind': 'combo', 'value': scrollback_lines_text(lines),
+             'choices': [[x, x] for x in SCROLLBACK_SUGGESTIONS],
+             'help': f'How many lines of history the windows of this tab keep, a number or {UNLIMITED}.'},
+            {'name': 'scrollback_compression', 'title': 'Compression', 'kind': 'choice', 'value': compression_text(compression),
+             'choices': [['none', 'None']] + [[str(n), f'zstd level {n}'] for n in levels],
+             'help': 'Compress the history kept in memory. Higher levels are smaller and slower, levels below 1 are the fastest.'},
+            section('Colors'),
+            {'name': 'minimum_contrast', 'title': 'Minimum contrast', 'kind': 'combo', 'value': contrast_text(tab.minimum_contrast_override),
+             'choices': [[x, x] for x in CONTRAST_SUGGESTIONS], 'placeholder': contrast_text(tab.minimum_contrast),
+             'help': f'Make text at least this much more legible against its background, from 0% to 100%. {DEFAULT_CONTRAST} follows the profile of '
+             'this tab or the minimum_contrast option.'},
         ]
     return {'title': 'Tab Settings', 'fields': fields}
 
@@ -149,7 +172,7 @@ class TabSettingsController:
         except ValueError:
             return f'Enter a number of lines or {UNLIMITED}'
         if (tab := tm.active_tab) is not None:
-            tab.set_scrollback_settings(lines, current_scrollback_settings(tab).compression)
+            tab.set_scrollback_settings(lines, current_scrollback_settings(tab)[1])
         return ''
 
     def set_scrollback_compression(self, tm: 'TabManager', value: str) -> str:
@@ -158,7 +181,16 @@ class TabSettingsController:
         except ValueError:
             return 'Choose None or a zstd level'
         if (tab := tm.active_tab) is not None:
-            tab.set_scrollback_settings(current_scrollback_settings(tab).lines, compression)
+            tab.set_scrollback_settings(current_scrollback_settings(tab)[0], compression)
+        return ''
+
+    def set_minimum_contrast(self, tm: 'TabManager', value: str) -> str:
+        try:
+            contrast = parse_contrast(value)
+        except ValueError:
+            return f'Enter a percentage from 0% to 100% or {DEFAULT_CONTRAST}'
+        if (tab := tm.active_tab) is not None:
+            tab.set_minimum_contrast(contrast)
         return ''
 
 

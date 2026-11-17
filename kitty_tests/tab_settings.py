@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from kitty import tab_settings as ts
+from kitty.fast_data_types import HistoryBuf
+from kitty.options.utils import SCROLLBACK_COMPRESSION_NONE, scrollback_settings_for_display, scrollback_settings_from
 
 from .base import BaseTest
 
@@ -20,15 +22,24 @@ class FakeTab(list):
     def __init__(self, name: str = '', title: str = 'vim', windows: tuple = ()) -> None:
         super().__init__(windows)
         self.name, self.title = name, title
-        self.scrollback_settings = None
+        self.active_window = windows[0] if windows else None
+        self.scrollback_settings: tuple[int, int] | None = None  # as Tab.scrollback_settings
+        self.minimum_contrast_override: float | None = None
         self.titles: list[str] = []
+
+    @property
+    def minimum_contrast(self) -> float:
+        return 25. if self.minimum_contrast_override is None else self.minimum_contrast_override
 
     def set_title(self, title: str) -> None:
         self.name = title
         self.titles.append(title)
 
-    def set_scrollback_settings(self, lines: int, compression: str) -> None:
-        self.scrollback_settings = ts.ScrollbackSettings(lines, compression)
+    def set_scrollback_settings(self, lines: int, compression: int | str, recompress: bool = False) -> None:
+        self.scrollback_settings = scrollback_settings_from(lines, compression)
+
+    def set_minimum_contrast(self, value: float | None) -> None:
+        self.minimum_contrast_override = value
 
 
 def tab_manager(os_window_id: int = 3, profile_id: str = 'default', tab: FakeTab | None = None) -> SimpleNamespace:
@@ -44,7 +55,7 @@ class TestTabSettings(BaseTest):
 
     def setUp(self) -> None:
         super().setUp()
-        self.opts = SimpleNamespace(scrollback_lines=2000, scrollback_compression='none', native_tab_settings_button=True)
+        self.opts = SimpleNamespace(scrollback_lines=2000, scrollback_compression=SCROLLBACK_COMPRESSION_NONE, native_tab_settings_button=True)
         self.boss = SimpleNamespace(os_window_map={}, set_profile_of=MagicMock())
         self.patches = [
             patch('kitty.tab_settings.load_profiles', return_value=PROFILES),
@@ -60,37 +71,44 @@ class TestTabSettings(BaseTest):
         super().tearDown()
 
     def test_tab_settings_model(self) -> None:
+        lo, hi, _ = HistoryBuf.zstd_levels()
         tm = tab_manager(profile_id='work', tab=FakeTab(name='', title='htop'))
-        with patch('kitty.tab_settings.scrollback_settings_supported', return_value=False):
-            model = ts.tab_settings_model(tm)  # type: ignore
+        model = ts.tab_settings_model(tm)  # type: ignore
         self.ae(model['title'], 'Tab Settings')
         kinds = [f['kind'] for f in model['fields']]
-        self.ae(kinds, ['choice', 'button', 'section', 'text', 'section', 'combo', 'choice'])
+        self.ae(kinds, ['choice', 'button', 'section', 'text', 'section', 'combo', 'choice', 'section', 'combo'])
         f = fields_by_name(model)
         self.ae(f['profile']['value'], 'work')
         self.ae(f['profile']['choices'], [['default', 'Default'], ['work', 'Work']])
         self.ae((f['title']['value'], f['title']['placeholder']), ('', 'htop'))
+        # the option values are used while the tab has no settings of its own and no window
         self.ae(f['scrollback_lines']['value'], '2000')
         self.ae(f['scrollback_compression']['value'], 'none')
+        # every level of the zstd library in use, the negative, fastest ones included
         self.ae(f['scrollback_compression']['choices'][0], ['none', 'None'])
-        self.ae(f['scrollback_compression']['choices'][-1], ['zstd:22', 'zstd level 22'])
-        # until windows can change their scrollback, its fields are shown but cannot be used
-        self.assertFalse(f['scrollback_lines']['enabled'])
-        self.assertIn('Not available', f['scrollback_lines']['help'])
+        self.ae([c[0] for c in f['scrollback_compression']['choices'][1:]], [str(n) for n in range(lo, hi + 1)])
+        self.assertLess(lo, 1)
         for x in model['fields']:
             self.assertTrue(x['title'], 'every field has a label, also used for assistive technology')
+            self.assertNotIn('enabled', x, 'no field is shown as unavailable')
+        # the minimum contrast follows the profile or the options by default, shown as the placeholder
+        self.ae((f['minimum_contrast']['value'], f['minimum_contrast']['placeholder']), ('Default', '25%'))
+        self.ae(f['minimum_contrast']['choices'][0], ['Default', 'Default'])
 
         tm.active_tab.name = 'build'
-        tm.active_tab.scrollback_settings = ts.ScrollbackSettings(-1, 'zstd:3')
-        with patch('kitty.tab_settings.scrollback_settings_supported', return_value=True):
-            f = fields_by_name(ts.tab_settings_model(tm))  # type: ignore
+        tm.active_tab.set_scrollback_settings(-1, 'zstd:3')
+        tm.active_tab.set_minimum_contrast(40.)
+        f = fields_by_name(ts.tab_settings_model(tm))  # type: ignore
         self.ae(f['title']['value'], 'build')
-        self.ae((f['scrollback_lines']['value'], f['scrollback_compression']['value']), ('Unlimited', 'zstd:3'))
-        self.assertTrue(f['scrollback_lines']['enabled'])
-        # the option values are used while the tab has no settings of its own; a negative count is parsed to 2**32 - 1
-        self.opts.scrollback_lines, self.opts.scrollback_compression = 2**32 - 1, True
+        self.ae((f['scrollback_lines']['value'], f['scrollback_compression']['value']), ('Unlimited', '3'))
+        self.ae(f['minimum_contrast']['value'], '40%')
+        # with a window, what the window has is shown
+        w = SimpleNamespace(scrollback_settings=(5000, -2))
+        f = fields_by_name(ts.tab_settings_model(tab_manager(tab=FakeTab(windows=(w,)))))  # type: ignore
+        self.ae((f['scrollback_lines']['value'], f['scrollback_compression']['value']), ('5000', '-2'))
+        self.opts.scrollback_lines = 2**32 - 1
         f = fields_by_name(ts.tab_settings_model(tab_manager()))  # type: ignore
-        self.ae((f['scrollback_lines']['value'], f['scrollback_compression']['value']), ('Unlimited', 'zstd:3'))
+        self.ae(f['scrollback_lines']['value'], 'Unlimited')
 
     def test_tab_settings_events(self) -> None:
         c = ts.TabSettingsController()
@@ -110,18 +128,36 @@ class TestTabSettings(BaseTest):
         self.ae(c.on_event(3, 'set', 'title', ''), '')
         self.ae(tm.active_tab.titles, ['logs', ''], 'an unchanged name is not set again, empty follows the window title')
 
+        def settings():
+            return scrollback_settings_for_display(*tm.active_tab.scrollback_settings)
+
+        lo, hi, _ = HistoryBuf.zstd_levels()
         self.ae(c.on_event(3, 'set', 'scrollback_lines', ' 5000 '), '')
-        self.ae(tm.active_tab.scrollback_settings, ts.ScrollbackSettings(5000, 'none'))
+        self.ae(settings(), (5000, 'none'))
         self.ae(c.on_event(3, 'set', 'scrollback_lines', 'unlimited'), '')
-        self.ae(tm.active_tab.scrollback_settings.lines, -1)
+        self.ae(settings()[0], -1)
         self.ae(c.on_event(3, 'set', 'scrollback_lines', 'lots'), 'Enter a number of lines or Unlimited')
         self.ae(c.on_event(3, 'set', 'scrollback_lines', '1e9'), 'Enter a number of lines or Unlimited')
-        self.ae(c.on_event(3, 'set', 'scrollback_compression', 'zstd:19'), '')
-        self.ae(tm.active_tab.scrollback_settings, ts.ScrollbackSettings(-1, 'zstd:19'))
-        self.ae(c.on_event(3, 'set', 'scrollback_compression', 'zstd:23'), 'Choose None or a zstd level')
+        self.ae(c.on_event(3, 'set', 'scrollback_compression', '19'), '')
+        self.ae(settings(), (-1, 19))
+        self.ae(c.on_event(3, 'set', 'scrollback_compression', str(lo)), '')
+        self.ae(settings(), (-1, lo))
+        self.ae(c.on_event(3, 'set', 'scrollback_compression', 'zstd:5'), '')
+        self.ae(settings(), (-1, 5))
+        self.ae(c.on_event(3, 'set', 'scrollback_compression', str(hi + 1)), 'Choose None or a zstd level')
         self.ae(c.on_event(3, 'set', 'scrollback_compression', 'gzip:3'), 'Choose None or a zstd level')
         self.ae(c.on_event(3, 'set', 'scrollback_compression', 'none'), '')
-        self.ae(tm.active_tab.scrollback_settings, ts.ScrollbackSettings(-1, 'none'))
+        self.ae(settings(), (-1, 'none'))
+
+        self.ae(c.on_event(3, 'set', 'minimum_contrast', '40%'), '')
+        self.ae(tm.active_tab.minimum_contrast_override, 40.)
+        self.ae(c.on_event(3, 'set', 'minimum_contrast', '75'), '')
+        self.ae(tm.active_tab.minimum_contrast_override, 75.)
+        self.ae(c.on_event(3, 'set', 'minimum_contrast', 'Default'), '')
+        self.assertIsNone(tm.active_tab.minimum_contrast_override)
+        for bad in ('101%', 'lots', '-5'):
+            self.ae(c.on_event(3, 'set', 'minimum_contrast', bad), 'Enter a percentage from 0% to 100% or Default', bad)
+        self.assertIsNone(tm.active_tab.minimum_contrast_override)
 
         with patch('kitty.native_ui.open_settings') as open_settings:
             self.ae(c.on_event(3, 'activate', 'edit_profile'), '')
@@ -151,14 +187,15 @@ class TestTabSettings(BaseTest):
         self.ae(calls, [(3, True), (3, False)])
 
     def test_tab_scrollback_settings(self) -> None:
+        # The popover sets the scrollback through Tab.set_scrollback_settings(), which tells every window of the tab
         from kitty.tabs import Tab
         applied: list = []
-        windows = [SimpleNamespace(set_scrollback_settings=lambda *a: applied.append(a)), SimpleNamespace()]
+        windows = [SimpleNamespace(set_scrollback_settings=lambda *a, **kw: applied.append((a, kw))), SimpleNamespace()]
         tab = Tab.__new__(Tab)
         tab.windows = windows  # type: ignore
         tab.set_scrollback_settings(100, 'zstd:3')
-        self.ae(tab.scrollback_settings, ts.ScrollbackSettings(100, 'zstd:3'))
-        self.ae(applied, [(100, 'zstd:3')], 'windows that can change their scrollback are told, others are left alone')
+        self.ae(scrollback_settings_for_display(*tab.scrollback_settings), (100, 3))
+        self.ae(applied, [((100, 3), {'recompress': False})], 'windows that can change their scrollback are told, others are left alone')
 
     def test_settings_window_selects_profile(self) -> None:
         from kitty import native_ui
