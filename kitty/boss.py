@@ -623,7 +623,8 @@ class Boss:
     @ac('win', 'Open a new OS window using the specified :ref:`profile <profiles>`')
     def new_os_window_with_profile(self, profile_id: str = '') -> None:
         os_window_id = self.add_os_window(profile=load_profiles().get(profile_id))
-        self.os_window_map[os_window_id].new_tab()
+        # The launch wrapper is told this is a new OS window, not a new tab
+        self.os_window_map[os_window_id].new_tab(special_window=SpecialWindow(None, launch_request=user_launch_request('os-window')))
 
     @ac('win', 'Change the :ref:`profile <profiles>` used by the active OS window and the terminals in it')
     def set_window_profile(self, profile_id: str = '') -> None:

@@ -248,6 +248,13 @@ def index_for_new_tab(existing_titles: Sequence[str], active_idx: int, location:
     return n
 
 
+def launch_request_for_profile(launch_request: LaunchRequest | None, profile: Profile) -> LaunchRequest | None:
+    "The launch request with the default shell of the windows of an OS Window with profile, for the launch wrapper"
+    if launch_request is None:
+        return None
+    return launch_request._replace(default_shell=tuple(command_of(profile) or resolved_shell(get_options())))
+
+
 def tabs_for_title_match(tm: 'TabManager | None') -> tuple['Tab', ...]:
     """
     The tabs the special value @title of launch --focus-existing and detach-window
@@ -1024,7 +1031,7 @@ class Tab:  # {{{
             remote_control_fd=remote_control_fd,
             hold_after_ssh=hold_after_ssh,
             startup_command_via_shell_integration=startup_command_via_shell_integration,
-            launch_request=launch_request,
+            launch_request=launch_request_for_profile(launch_request, profile),
         )
         ans.fork()
         return ans

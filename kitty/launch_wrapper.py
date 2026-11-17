@@ -36,6 +36,10 @@ class LaunchRequest(NamedTuple):
     source_window_id: int | None = None
     # The user variables from launch --var
     user_vars: tuple[tuple[str, str], ...] = ()
+    # The shell a window gets when no command is specified, set when the child
+    # is created: the command of the profile of its OS window, if any, otherwise
+    # the shell option. Empty means the shell option.
+    default_shell: tuple[str, ...] = ()
 
 
 class LaunchContext(NamedTuple):
@@ -124,7 +128,7 @@ def prefix_for_launch(req: LaunchRequest, argv: Sequence[str], cwd: str, env: Ma
         argv=tuple(argv),
         cwd=cwd,
         env=MappingProxyType(dict(env)),
-        is_default_shell=list(argv) == resolved_shell(get_options()),
+        is_default_shell=list(argv) == list(req.default_shell or resolved_shell(get_options())),
         window_id=window_id,
         launch_type=req.launch_type,
         source_window_id=req.source_window_id,

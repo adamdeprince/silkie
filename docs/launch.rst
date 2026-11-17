@@ -266,7 +266,7 @@ Wrapping the programs run in new windows
 You can have kitty run the program in every new window via a wrapper command of
 your choosing, for example, to open new windows inside the same container or
 development environment as the window they are opened from. To do so, create
-the file :file:`launch_wrapper.py` in the kitty config directory, defining a
+the file :file:`launch_wrapper.py` in the Silkie config directory, defining a
 function named ``prefix_for_launch()``. kitty calls it just before starting the
 program in a new window and runs the program with the list of strings it returns
 placed before the command. Return ``None`` or an empty list to run the program
@@ -274,7 +274,7 @@ unchanged. For example:
 
 .. code-block:: python
 
-    # ~/.config/kitty/launch_wrapper.py
+    # ~/.config/silkie/launch_wrapper.py
     from collections.abc import Sequence
 
     from kitty.launch_wrapper import LaunchContext

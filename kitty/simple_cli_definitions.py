@@ -362,7 +362,8 @@ are normally loaded automatically are also ignored, namely, the settings saved
 by the Settings window (:file:`settings.conf`), the profiles, the automatic
 color theme files (:file:`*-theme.auto.conf`), :file:`open-actions.conf`,
 :file:`launch-actions.conf`, :file:`mime.types`, :file:`paste-actions.py`,
-:file:`notifications.py` and the custom window icon (:file:`kitty.app.png`).
+:file:`notifications.py`, :file:`launch_wrapper.py` and the custom window icon
+(:file:`kitty.app.png`).
 """
 
 CONFIG_HELP = """\

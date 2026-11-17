@@ -352,3 +352,27 @@ class LaunchWrapperTest(BaseTest):
                 c, exe, argv = self._fork(launch_request=req, user_func=self._recording(empty))
                 self.ae(argv, ('/bin/prog', 'arg'))
         self.ae(len(errors), 4)
+
+    def test_launch_wrapper_default_shell_of_profile(self):
+        # A profile's command is the default shell of the windows of its OS windows
+        from kitty.boss import Boss
+        from kitty.launch_wrapper import LaunchRequest
+        from kitty.profiles import Profile
+        from kitty.tabs import launch_request_for_profile
+
+        req = LaunchRequest('window')
+        rec = self._recording(None)
+        self._fork(argv=('/bin/fish', '-l'), launch_request=req._replace(default_shell=('/bin/fish', '-l')), user_func=rec)
+        self.assertTrue(self.contexts[-1].is_default_shell)
+        self._fork(argv=('/bin/fish', '-l'), launch_request=req, user_func=rec)
+        self.assertFalse(self.contexts[-1].is_default_shell)
+        # Tab.launch_child() sets it from the profile of the tab
+        self.ae(launch_request_for_profile(req, Profile('p', 'P', command='/bin/fish -l')).default_shell, ('/bin/fish', '-l'))
+        self.assertIsNone(launch_request_for_profile(None, Profile('p', 'P')))
+        # new_os_window_with_profile asks the wrapper for an OS window
+        requests = []
+        tm = SimpleNamespace(new_tab=lambda special_window=None, **kw: requests.append(special_window.launch_request.launch_type))
+        boss = SimpleNamespace(add_os_window=lambda profile=None: 3, os_window_map={3: tm}, active_window_for_cwd=None)
+        with patch('kitty.boss.load_profiles', return_value={}), patch('kitty.launch_wrapper.get_boss', return_value=boss):
+            Boss.new_os_window_with_profile(boss, 'missing')  # type: ignore
+        self.ae(requests, ['os-window'])
