@@ -2795,6 +2795,26 @@ emit_srgb8_row(void *ctx, uint32_t y, const float *rgba) {
     }
 }
 
+// Hands each row of a half float frame (f=64) to emit as floats, like decode_frame_rows(): its values are already
+// linear, in the sRGB primaries, with straight alpha
+static bool
+half_frame_rows(const Image *img, const CoalescedFrameData *cfd, void (*emit)(void *ctx, uint32_t y, const float *rgba), void *ctx) {
+    const size_t num = (size_t)img->width * 4;
+    float *row = malloc(num * sizeof(float));
+    if (!row) return false;
+    for (uint32_t y = 0; y < img->height; y++) {
+        const uint8_t *src = cfd->buf + (size_t)y * num * sizeof(uint16_t);
+        for (size_t i = 0; i < num; i++) {
+            uint16_t h;  // memcpy as the rows need not be aligned
+            memcpy(&h, src + i * sizeof(h), sizeof(h));
+            row[i] = half_to_float(h);
+        }
+        emit(ctx, y, row);
+    }
+    free(row);
+    return true;
+}
+
 // The pixels of a frame that needs_decoding() as half float RGBA, the f=64 representation, or NULL when out of memory
 static uint8_t *
 decode_frame_to_half(const Image *img, const CoalescedFrameData *cfd) {
@@ -3631,12 +3651,14 @@ grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uin
     *width = img->width;
     *height = img->height;
     uint8_t *ans = cfd.buf;
-    if (needs_decoding(img, &cfd)) {
-        // A pointer image is SDR: what is brighter than SDR white is shown at SDR white
+    const bool decode = needs_decoding(img, &cfd);
+    if (decode || cfd.is_float) {
+        // A pointer image is eight bit sRGB: what is brighter than SDR white is shown at SDR white. Half float pixels
+        // are eight bytes each, not RGBA bytes, and linear, so they are encoded as the decoded pixels are.
         if ((size_t)img->width * img->height > SIZE_MAX / 4) return NULL;
         Srgb8Rows rows = {.out = malloc((size_t)img->width * img->height * 4), .width = img->width};
         if (!rows.out) return NULL;
-        if (!decode_frame_rows(img, &cfd, emit_srgb8_row, &rows)) {
+        if (!(decode ? decode_frame_rows : half_frame_rows)(img, &cfd, emit_srgb8_row, &rows)) {
             free(rows.out);
             return NULL;
         }

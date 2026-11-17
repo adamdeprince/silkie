@@ -282,3 +282,20 @@ class TestPrecisionGraphics(BaseTest):
         a, b = floats(screen.grman.render_vector_linear(20, 8, 4)), floats(screen.grman.render_vector_linear(21, 8, 4))
         self.assert_close(a, b, places=3)
         self.assertGreater(max(floats(screen.grman.render_vector_linear(22, 8, 4))), 40)
+
+    def test_pointer_images_of_high_precision_images(self):
+        # A pointer image is eight bit sRGB RGBA: half float pixels are encoded
+        # from their linear values, clamped to SDR white, as decoded ones are
+        screen = self.create_screen()
+
+        def srgb8(v):
+            v = min(max(v, 0), 1)
+            return round(255 * (12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055))
+
+        px = (0.5, 2.0, -0.25, 0.25), (0.0031, 1.0, 0.18, 1.0)
+        self.image(screen, b''.join(struct.pack('<4e', *p) for p in px), f=64, s=2, v=1, i=1)
+        expected = bytes(b for p in px for b in (*map(srgb8, p[:3]), round(255 * p[3])))
+        self.ae(screen.grman.rgba_for_client_id(1), expected)
+        # the same colors as a decoded image, sixteen bit linear RGBA
+        self.image(screen, b''.join(struct.pack('<4H', *(round(65535 * min(max(c, 0), 1)) for c in p)) for p in px), f=RGBA16, s=2, v=1, i=2, E=LINEAR)
+        self.ae(screen.grman.rgba_for_client_id(2), expected)
