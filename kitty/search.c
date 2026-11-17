@@ -935,8 +935,8 @@ screen_search_tick_all(monotonic_t now, monotonic_t budget) {
                     w->tabs[t].windows[i].render_data.screen->search->query)
                     n++;
     }
-    if (!n) return -1;
-    const monotonic_t share = MAX(budget / (monotonic_t)n, ms_to_monotonic_t(1));
+    // stopped searches are visited too, the next render removes their highlights
+    const monotonic_t share = MAX(budget / (monotonic_t)MAX(n, (size_t)1), ms_to_monotonic_t(1));
     for (size_t o = 0; o < global_state.num_os_windows; o++) {
         OSWindow *w = global_state.os_windows + o;
         for (size_t t = 0; t < w->num_tabs; t++) {
