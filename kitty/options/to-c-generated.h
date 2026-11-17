@@ -292,6 +292,19 @@ convert_from_opts_cursor_trail_color(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_scrollback_compression(PyObject *val, Options *opts) {
+    opts->scrollback_compression = PyLong_AsLong(val);
+}
+
+static void
+convert_from_opts_scrollback_compression(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "scrollback_compression");
+    if (ret == NULL) return;
+    convert_from_python_scrollback_compression(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_scrollbar(PyObject *val, Options *opts) {
     opts->scrollbar = scrollbar(val);
 }
@@ -1818,6 +1831,8 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_cursor_trail_start_threshold(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_cursor_trail_color(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_scrollback_compression(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_scrollbar(py_opts, opts);
     if (PyErr_Occurred()) return false;

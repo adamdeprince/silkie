@@ -239,6 +239,8 @@ class Tab:  # {{{
     has_indeterminate_progress: bool = False
     last_focused_window_with_progress_id: int = 0
     allow_relayouts: bool = True
+    # (lines, compression) for the windows of this tab, inherited by new ones, see Window.set_scrollback_settings()
+    scrollback_settings: tuple[int, int] | None = None
 
     def __init__(
         self,
@@ -320,6 +322,16 @@ class Tab:  # {{{
         if self.current_layout.name not in self.enabled_layouts:
             self._set_current_layout(self.enabled_layouts[0])
         self.relayout()
+
+    def set_scrollback_settings(self, lines: int, compression: int | str, recompress: bool = False) -> None:
+        """ Set the scrollback of every window in this tab and of the windows
+        opened in it later: lines negative for unlimited or a count;
+        compression 'none', a zstd level or 'zstd:<level>' """
+        from .options.utils import scrollback_settings_from
+        self.scrollback_settings = scrollback_settings_from(lines, compression)
+        for w in self:
+            if hasattr(w, 'set_scrollback_settings'):
+                w.set_scrollback_settings(*self.scrollback_settings, recompress=recompress)
 
     def apply_options(self, is_active: bool) -> None:
         aw = self.active_window

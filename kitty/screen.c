@@ -169,7 +169,9 @@ new_screen_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwds) {
         self->main_linebuf = alloc_linebuf(lines, columns, self->text_cache);
         self->alt_linebuf = alloc_linebuf(lines, columns, self->text_cache);
         self->linebuf = self->main_linebuf;
-        self->historybuf = alloc_historybuf(MAX(scrollback, lines), columns, OPT(scrollback_pager_history_size), self->text_cache);
+        self->historybuf = alloc_historybuf(
+            MAX(scrollback, lines), columns, OPT(scrollback_pager_history_size), self->text_cache, OPT(scrollback_compression) != INT_MIN,
+            OPT(scrollback_compression) == INT_MIN ? 0 : OPT(scrollback_compression));
         self->main_grman = grman_alloc(false);
         self->alt_grman = grman_alloc(false);
         self->active_hyperlink_id = 0;
@@ -306,7 +308,7 @@ screen_dirty_sprite_positions(Screen *self) {
         linebuf_mark_line_dirty(self->main_linebuf, i);
         linebuf_mark_line_dirty(self->alt_linebuf, i);
     }
-    for (index_type i = 0; i < self->historybuf->count; i++) historybuf_mark_line_dirty(self->historybuf, i);
+    historybuf_mark_all_dirty(self->historybuf);
 }
 
 typedef struct CursorTrack {
@@ -1199,6 +1201,20 @@ text_cache_gc_process_cells(TextCache *tc, TextCacheGCData *gc, CPUCell *cells, 
     }
 }
 
+typedef struct {
+    TextCache *tc;
+    TextCacheGCData *gc;
+} TextCacheGCVisit;
+
+static bool
+text_cache_gc_visit_history(void *data, CPUCell *cells, index_type xnum) {
+    TextCacheGCVisit *v = data;
+    bool has_idx = false;
+    for (index_type x = 0; x < xnum && !has_idx; x++) has_idx = cells[x].ch_is_idx;
+    if (has_idx) text_cache_gc_process_cells(v->tc, v->gc, cells, xnum);
+    return has_idx;
+}
+
 static void
 text_cache_gc_process_linebuf(TextCache *tc, TextCacheGCData *gc, LineBuf *lb) {
     if (lb) text_cache_gc_process_cells(tc, gc, lb->cpu_cell_buf, (size_t)lb->ynum * lb->xnum);
@@ -1212,10 +1228,8 @@ screen_garbage_collect_text_cache(Screen *self) {
     TextCacheGCData *gc = tc_gc_begin(self->text_cache);
     if (!gc) return; // allocation failure, cache left unchanged
     if (self->historybuf->count) {
-        for (index_type y = self->historybuf->count; y-- > 0;) {
-            CPUCell *cells = historybuf_cpu_cells(self->historybuf, y);
-            text_cache_gc_process_cells(self->text_cache, gc, cells, self->historybuf->xnum);
-        }
+        TextCacheGCVisit v = {.tc = self->text_cache, .gc = gc};
+        historybuf_rewrite_cpu_cells(self->historybuf, HISTORY_HAS_TEXT_IDX, text_cache_gc_visit_history, &v);
     }
     text_cache_gc_process_linebuf(self->text_cache, gc, self->main_linebuf);
     text_cache_gc_process_linebuf(self->text_cache, gc, self->alt_linebuf);
@@ -4601,6 +4615,7 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
         return;
     }
     const bool is_overlay_active = screen_is_overlay_active(self);
+    const uint64_t history_cache_clock = historybuf_cache_clock(self->historybuf);
     clamp_scroll_position(self);
     screen_reset_dirty(self);
     update_overlay_position(self);
@@ -4645,6 +4660,7 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
         }
         update_overlay_line_data(self, address);
     }
+    historybuf_cache_trim(self->historybuf, history_cache_clock);
 }
 
 static bool
@@ -4982,34 +4998,62 @@ limit_without_trailing_whitespace(const Line *line, index_type limit) {
     return limit;
 }
 
+// Which cells of a range of lines a selection covers. These flags were a bit
+// in each cell, but the cells of compressed history lines are a cache that is
+// freed as a long selection is walked, so they live here, sized to the selection.
+typedef struct {
+    int y0, num_lines;
+    index_type xnum;
+    uint8_t *bits;
+} SelectionFlags;
+
+static inline bool
+selection_flag(const SelectionFlags *f, int y, index_type x) {
+    if (y < f->y0 || y >= f->y0 + f->num_lines || x >= f->xnum) return false;
+    const size_t i = (size_t)(y - f->y0) * f->xnum + x;
+    return f->bits[i >> 3] & (1u << (i & 7));
+}
+
+static inline void
+set_selection_flag(SelectionFlags *f, int y, index_type x) {
+    if (y < f->y0 || y >= f->y0 + f->num_lines || x >= f->xnum) return;
+    const size_t i = (size_t)(y - f->y0) * f->xnum + x;
+    f->bits[i >> 3] |= 1u << (i & 7);
+}
+
 static void
-flag_selection_to_extract_text(Screen *self, const Selection *s, int *miny, int *y_limit) {
+free_selection_flags(SelectionFlags *f) {
+    free(f->bits);
+    f->bits = NULL;
+}
+
+static bool
+flag_selection_to_extract_text(Screen *self, const Selection *s, int *miny, int *y_limit, SelectionFlags *flags) {
     IterationData idata;
     bool has_history = self->linebuf == self->main_linebuf;
     iteration_data(s, &idata, self->columns, has_history ? -self->historybuf->count : 0, 0);
-    Line *line;
     *miny = idata.y;
     *y_limit = MIN(idata.y_limit, (int)self->lines);
-    if (*miny >= *y_limit) return;
+    if (*miny >= *y_limit) return true;
     static const int max_scale = ((1u << SCALE_BITS) - 1u);
-    for (int y = idata.y - max_scale; y < *y_limit; y++) {
-        line = checked_range_line(self, y);
-        if (line)
-            for (index_type x = 0; x < line->xnum; x++) line->cpu_cells[x].temp_flag = 0;
-    }
+    flags->y0 = idata.y - max_scale;
+    flags->num_lines = *y_limit - flags->y0;
+    flags->xnum = self->columns;
+    size_t nbits;
+    if (__builtin_mul_overflow((size_t)flags->num_lines, (size_t)flags->xnum, &nbits) || nbits > SIZE_MAX - 7) return false;
+    if (!(flags->bits = calloc((nbits + 7) / 8, 1))) return false;
+    const int min_valid_y = -(int)self->historybuf->count;
     Line temp = {.xnum = self->columns, .text_cache = self->text_cache};
     for (int y = idata.y; y < *y_limit; y++) {
         range_line(self, y, &temp);
-        CPUCell *c;
         XRange xr = xrange_for_iteration_with_multicells(&idata, y, &temp);
         for (index_type x = xr.x; x < xr.x_limit; x++) {
-            c = temp.cpu_cells + x;
-            c->temp_flag = 1;
+            const CPUCell *c = temp.cpu_cells + x;
+            set_selection_flag(flags, y, x);
             if (c->is_multicell && c->y) {
                 for (int ym = y - c->y; ym < y; ym++) {
-                    line = checked_range_line(self, ym);
-                    if (line) {
-                        line->cpu_cells[x].temp_flag = 1;
+                    if (min_valid_y <= ym && ym < (int)self->lines) {
+                        set_selection_flag(flags, ym, x);
                         *miny = MIN(*miny, ym);
                     }
                 }
@@ -5020,16 +5064,19 @@ flag_selection_to_extract_text(Screen *self, const Selection *s, int *miny, int 
     while (*y_limit > *miny) {
         range_line(self, *y_limit - 1, &temp);
         for (index_type x = 0; x < temp.xnum; x++) {
-            if (temp.cpu_cells[x].temp_flag && temp.cpu_cells[x].ch_and_idx && (!temp.cpu_cells[x].is_multicell || !temp.cpu_cells[x].y)) return;
+            if (selection_flag(flags, *y_limit - 1, x) && temp.cpu_cells[x].ch_and_idx && (!temp.cpu_cells[x].is_multicell || !temp.cpu_cells[x].y))
+                return true;
         }
         (*y_limit)--;
     }
+    return true;
 }
 
 static PyObject *
 text_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool strip_trailing_whitespace) {
     int min_y, y_limit;
-    flag_selection_to_extract_text(self, sel, &min_y, &y_limit);
+    __attribute__((cleanup(free_selection_flags))) SelectionFlags flags = {0};
+    if (!flag_selection_to_extract_text(self, sel, &min_y, &y_limit, &flags)) return PyErr_NoMemory();
     if (min_y >= y_limit) return PyTuple_New(0);
     size_t before = self->as_ansi_buf.len;
     RAII_PyObject(ans, PyTuple_New(y_limit - min_y));
@@ -5039,8 +5086,8 @@ text_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool st
     for (int i = 0, y = min_y; y < y_limit; y++, i++) {
         Line *line = range_line_(self, y);
         index_type x_limit = line->xnum, x_start = 0;
-        while (x_limit && !line->cpu_cells[x_limit - 1].temp_flag) x_limit--;
-        while (x_start < x_limit && !line->cpu_cells[x_start].temp_flag) x_start++;
+        while (x_limit && !selection_flag(&flags, y, x_limit - 1)) x_limit--;
+        while (x_start < x_limit && !selection_flag(&flags, y, x_start)) x_start++;
         bool is_only_whitespace_line = false;
         // Don't strip trailing whitespace from soft-wrapped lines as those spaces
         // are part of the original text content that continues on the next line
@@ -5062,7 +5109,7 @@ text_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool st
         } else {
             while (x_start < x_limit) {
                 index_type end = x_start;
-                while (end < x_limit && line->cpu_cells[end].temp_flag) end++;
+                while (end < x_limit && selection_flag(&flags, y, end)) end++;
                 if (!unicode_in_range(line, x_start, end, true, add_trailing_newline, false, !is_first_line, &self->as_ansi_buf)) return PyErr_NoMemory();
                 x_start = MAX(x_start + 1, end);
             }
@@ -5078,7 +5125,8 @@ text_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool st
 static PyObject *
 ansi_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool strip_trailing_whitespace) {
     int min_y, y_limit;
-    flag_selection_to_extract_text(self, sel, &min_y, &y_limit);
+    __attribute__((cleanup(free_selection_flags))) SelectionFlags flags = {0};
+    if (!flag_selection_to_extract_text(self, sel, &min_y, &y_limit, &flags)) return PyErr_NoMemory();
     if (min_y >= y_limit) return PyTuple_New(0);
     ANSILineState s = {.output_buf = &self->as_ansi_buf};
     s.output_buf->active_hyperlink_id = 0;
@@ -5094,8 +5142,8 @@ ansi_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool st
         s.output_buf->len = 0;
         Line *line = range_line_(self, y);
         index_type x_limit = line->xnum, x_start = 0;
-        while (x_limit && !line->cpu_cells[x_limit - 1].temp_flag) x_limit--;
-        while (x_start < x_limit && !line->cpu_cells[x_start].temp_flag) x_start++;
+        while (x_limit && !selection_flag(&flags, y, x_limit - 1)) x_limit--;
+        while (x_start < x_limit && !selection_flag(&flags, y, x_start)) x_start++;
         bool is_only_whitespace_line = false;
         // Don't strip trailing whitespace from soft-wrapped lines as those spaces
         // are part of the original text content that continues on the next line
@@ -5116,7 +5164,7 @@ ansi_for_range(Screen *self, const Selection *sel, bool insert_newlines, bool st
             char_type prefix_char = need_newline ? '\n' : 0;
             while (x_start < x_limit) {
                 index_type end = x_start;
-                while (end < x_limit && line->cpu_cells[end].temp_flag) end++;
+                while (end < x_limit && selection_flag(&flags, y, end)) end++;
                 if (line_as_ansi(line, &s, x_start, end, prefix_char, !is_first_line)) has_escape_codes = true;
                 need_newline = insert_newlines && !line->cpu_cells[line->xnum - 1].next_char_was_wrapped;
                 prefix_char = 0;
@@ -7294,10 +7342,7 @@ screen_mark_all(Screen *self) {
         linebuf_init_line(self->alt_linebuf, y);
         mark_text_in_line(self->marker, self->alt_linebuf->line, &self->as_ansi_buf);
     }
-    for (index_type y = 0; y < self->historybuf->count; y++) {
-        historybuf_init_line(self->historybuf, y, self->historybuf->line);
-        mark_text_in_line(self->marker, self->historybuf->line, &self->as_ansi_buf);
-    }
+    historybuf_apply_marker(self->historybuf, self->marker, &self->as_ansi_buf);
     self->is_dirty = true;
 }
 
@@ -7332,6 +7377,8 @@ scroll_to_next_mark(Screen *self, PyObject *args) {
     if (backwards) {
         for (unsigned int y = self->scrolled_by; y < self->historybuf->count; y++) {
             historybuf_init_line(self->historybuf, y, self->historybuf->line);
+            // compressed lines are marked only when rendered
+            if (historybuf_line_is_compressed(self->historybuf, y)) mark_text_in_line(self->marker, self->historybuf->line, &self->as_ansi_buf);
             if (line_has_mark(self->historybuf->line, mark)) {
                 screen_history_scroll(self, y - self->scrolled_by + 1, true);
                 Py_RETURN_TRUE;
@@ -7343,6 +7390,7 @@ scroll_to_next_mark(Screen *self, PyObject *args) {
             if (y > self->lines) {
                 historybuf_init_line(self->historybuf, y - self->lines, self->historybuf->line);
                 line = self->historybuf->line;
+                if (historybuf_line_is_compressed(self->historybuf, y - self->lines)) mark_text_in_line(self->marker, line, &self->as_ansi_buf);
             } else {
                 linebuf_init_line(self->linebuf, self->lines - y);
                 line = self->linebuf->line;
@@ -7486,6 +7534,16 @@ reverse_scroll(Screen *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+
+static PyObject *
+set_scrollback_mode(Screen *self, PyObject *args) {
+    // lines: the scrollback limit (at least the screen height), compression: a zstd level or INT_MIN for none
+    unsigned int lines;
+    int compression, recompress = 0;
+    if (!PyArg_ParseTuple(args, "Ii|p", &lines, &compression, &recompress)) return NULL;
+    historybuf_set_mode(self->historybuf, MAX(lines, self->lines), compression != INT_MIN, compression == INT_MIN ? 0 : compression, recompress);
+    Py_RETURN_NONE;
+}
 
 static PyObject *
 scroll_prompt_to_bottom(Screen *self, PyObject *args UNUSED) {
@@ -7848,7 +7906,7 @@ static PyMethodDef methods[] = {
                 MND(erase_in_line, METH_VARARGS) MND(erase_in_display, METH_VARARGS) MND(clear_scrollback, METH_NOARGS)
                     MND(scroll_until_cursor_prompt, METH_VARARGS) MND(hyperlinks_as_set, METH_NOARGS) MND(garbage_collect_hyperlink_pool, METH_NOARGS)
                         MND(garbage_collect_text_cache, METH_NOARGS) MND(text_cache_count, METH_NOARGS) MND(hyperlink_for_id, METH_O)
-                            MND(reverse_scroll, METH_VARARGS) MND(scroll_prompt_to_bottom, METH_NOARGS) METHOD(current_char_width, METH_NOARGS)
+                            MND(reverse_scroll, METH_VARARGS) MND(set_scrollback_mode, METH_VARARGS) MND(scroll_prompt_to_bottom, METH_NOARGS) METHOD(current_char_width, METH_NOARGS)
                                 MND(insert_lines, METH_VARARGS)
                                     MND(delete_lines, METH_VARARGS){"insert_characters", (PyCFunction)py_insert_characters, METH_O, ""},
     MND(delete_characters, METH_VARARGS) MND(erase_characters, METH_VARARGS) MND(current_pointer_shape, METH_NOARGS) MND(change_pointer_shape, METH_VARARGS)
@@ -7932,11 +7990,22 @@ test_set_history_reuse(PyObject *self UNUSED, PyObject *val) {
     Py_RETURN_NONE;
 }
 
+static PyObject *
+test_set_history_compression(PyObject *self UNUSED, PyObject *args) {
+    HistoryCompressionParams p = {0};
+    unsigned long long frame_bytes = 0;
+    if (!PyArg_ParseTuple(args, "|IIK", &p.hot_lines, &p.block_lines, &frame_bytes)) return NULL;
+    p.frame_bytes = (size_t)frame_bytes;
+    historybuf_set_compression_params(&p);
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_methods[] = {
     {"is_emoji_presentation_base", (PyCFunction)screen_is_emoji_presentation_base, METH_O, ""},
     {"truncate_point_for_length", (PyCFunction)screen_truncate_point_for_length, METH_VARARGS, ""},
     {"test_ch_and_idx", test_ch_and_idx, METH_O, ""},
     {"test_set_history_reuse", test_set_history_reuse, METH_O, ""},
+    {"test_set_history_compression", test_set_history_compression, METH_VARARGS, ""},
     {NULL} /* Sentinel */
 };
 

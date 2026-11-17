@@ -76,6 +76,7 @@ typedef struct Options {
     unsigned int url_style;
     unsigned int scrollback_pager_history_size;
     bool scrollback_fill_enlarged_window;
+    int scrollback_compression; // a zstd level, or INT_MIN for none
     char_type *select_by_word_characters;
     char_type *select_by_word_characters_forward;
     color_type url_color, background, foreground, active_border_color, inactive_border_color, bell_border_color, tab_bar_background, tab_bar_margin_color,

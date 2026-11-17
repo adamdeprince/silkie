@@ -128,6 +128,7 @@ typedef struct MultiCellCommand {
 
 typedef struct ANSILineOutput {
     const GPUCell *prev_gpu_cell;
+    GPUCell prev_gpu_cell_storage;
     const CPUCell *current_multicell_state;
     index_type pos, limit;
     ANSIBuf *output_buf;

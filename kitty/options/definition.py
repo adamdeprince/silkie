@@ -616,15 +616,117 @@ agr('scrollback', 'Scrollback')
 
 opt(
     'scrollback_lines',
-    '2000',
+    '-1',
     option_type='scrollback_lines',
     long_text="""
-Number of lines of history to keep in memory for scrolling back. Memory is
-allocated on demand. Negative numbers are (effectively) infinite scrollback.
-Note that using very large scrollback is not recommended as it can slow down
-performance of the terminal and also use large amounts of RAM. Instead, consider
-using :opt:`scrollback_pager_history_size`. Note that on config reload if this
-is changed it will only affect newly created windows, not existing ones.
+Number of lines of history to keep for scrolling back, or :code:`unlimited`
+(the default, also written as any negative number). Memory is allocated as
+lines arrive: with :opt:`scrollback_compression` (the default) unlimited
+history costs little, see that option for measured sizes; with
+:code:`scrollback_compression none` every line costs about 48 bytes per
+column (5.7 KB a line at 120 columns). Any combination of the two options
+works. On config reload a change only affects newly created windows. A
+profile, :option:`launch --scrollback-lines`, a :code:`launch` line in a
+session file and :code:`kitten @ set-scrollback-compression --lines` set it
+for a window or a tab; windows opened later in that tab get the same.
+""",
+)
+
+opt(
+    'scrollback_compression',
+    '9',
+    option_type='scrollback_compression',
+    ctype='int',
+    long_text="""
+How the scrollback is kept: :code:`none` keeps every line uncompressed, as
+kitty does; a zstd compression level compresses it, from the fastest negative
+levels to the slowest and smallest (the range of the zstd library Silkie runs
+with: -131072 to 22 for zstd 1.5). Any combination with
+:opt:`scrollback_lines` works.
+
+The newest 2048 lines are always kept uncompressed, so output, scrolling near
+the bottom and editing near the screen cost nothing extra. Older lines are
+handed, 128 at a time, to a background thread that first encodes them
+compactly (about 100 bytes for a line of log output, freeing the 5.7 KB the
+line took) and then compresses them, so output never waits for compression;
+until then they are readable as before. If output outpaces compression the
+encoded lines wait, without limit, until the thread catches up.
+
+The compressed stream is cut into frames of 1 MiB of encoded lines. Frames
+exist for random access to old scrollback: showing an old line decompresses
+only its frame (about 1.5 ms for any page of a 1.5 million line history),
+instead of everything before it. Each frame starts without zstd's context,
+which is the cost: frames of 128 KB (about 1000 log lines) measured 21.2
+bytes a line, 1 MiB 20.4, 4 MiB 20.5; a random page took 0.2, 1.7 and 5.7 ms.
+
+With a line limit, lines past it are dropped a whole frame at a time, so
+trimming is coarse: up to one frame of extra lines is kept, hidden (3.8% at a
+100,000 line limit of log output), and the frame taken from the start loses
+the context the next frame never had. Compression is otherwise as efficient
+as with unlimited scrollback, and far smaller than uncompressed: 2.1 instead
+of 577 MB for 100,000 lines of log output at 120 columns.
+
+Measured on an M-series Mac with 1.47 million lines of colored log output
+(143 MB, wrapped at 120 columns) and one million lines of :code:`seq`, with
+unlimited scrollback. Memory is all the scrollback takes once compressed,
+including the 2048 uncompressed lines (about 12 MB at 120 columns); the
+compressor CPU is its threads' total time, all of it off the threads that
+parse and draw output:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Level
+     - Log output: memory (compressed bytes a line)
+     - Log output: compressor CPU
+     - :code:`seq`: memory
+   * - :code:`none`
+     - 8.4 GB (5760 uncompressed)
+     - none
+     - 5.8 GB
+   * - -1
+     - 60 MB (28.6)
+     - 0.8 s
+     - 20 MB
+   * - 3
+     - 57 MB (24.2)
+     - 0.9 s
+     - 20 MB
+   * - 9 (default)
+     - 49 MB (20.4)
+     - 2.2 s
+     - 20 MB
+   * - 18
+     - 46 MB (17.8)
+     - 19 s
+     - 19 MB
+   * - 19
+     - 45 MB (17.7)
+     - 22 s
+     - 20 MB
+
+Higher levels trade compressor CPU time, which on a laptop is battery, for a
+smaller scrollback; past 9 the gains are small and the compressor falls well
+behind fast output (level 18 needed 18 seconds after the log was printed to
+catch up, holding the lines encoded meanwhile). Output speed does not depend
+on the level: benchmark.py measured 120-140 MB/s of ASCII and 145-180 MB/s of
+Unicode text with compression, against 106-111 and 153-156 MB/s for kitty's
+uncompressed scrollback (both with a 20,000 line limit). Unlimited scrollback
+at level 9 under a sustained flood faster than the compressor (1 GB of random
+ASCII at 130 MB/s) held up to 3 GB while it caught up. Each window's
+compressor bounds its tables by its 64 KiB window: 1-2 MB at any level
+instead of 11 MB at level 9 and 51 MB at 18, with the same ratio. Scrolling to
+the top took 1.2-1.5 ms at every level, copying the whole history as text 0.7 s
+(0.4 s uncompressed) and a width change, which rewraps every line, 0.6 s (1.1
+s).
+
+Changing this on config reload applies to lines compressed from then on in the
+windows that do not set their own. A profile,
+:option:`launch --scrollback-compression`, a :code:`launch` line in a session
+file and :code:`kitten @ set-scrollback-compression` set it for a window or a
+tab (windows opened later in that tab get the same);
+:code:`kitten @ set-scrollback-compression --recompress` also recompresses,
+in the background, what is already compressed.
 """,
 )
 
@@ -849,7 +951,10 @@ in a separate window. The current implementation stores the data in UTF-8, so
 approximately 10000 lines per megabyte at 100 chars per line, for pure ASCII,
 unformatted text. A value of zero or less disables this feature. The maximum
 allowed size is 4GB. Note that on config reload if this is changed it will only
-affect newly created windows, not existing ones.
+affect newly created windows, not existing ones. Lines go into it as they
+leave the scrollback past :opt:`scrollback_lines`: with unlimited scrollback,
+Silkie's default, nothing does, and this buffer stays empty; it is useful only
+with a line limit.
 """,
 )
 

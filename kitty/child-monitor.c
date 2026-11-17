@@ -1739,6 +1739,8 @@ process_global_state(void *data) {
         input_read = true;
     }
     if (parse_input(self)) input_read = true;
+    // take in what the scrollback compressor thread has finished
+    historybuf_retire_all();
     render(now, input_read);
 #ifdef __APPLE__
     if (has_cocoa_pending_actions) {
@@ -1764,7 +1766,10 @@ static PyObject *
 main_loop(ChildMonitor *self, PyObject *a UNUSED) {
 #define main_loop_doc "The main thread loop"
     state_check_timer = add_main_loop_timer(1000, true, do_state_check, self, NULL);
+    // the scrollback compressor wakes the loop when it has finished work to take in
+    historybuf_set_wakeup(wakeup_main_loop);
     run_main_loop(process_global_state, self);
+    historybuf_set_wakeup(NULL);
 #ifdef __APPLE__
     cocoa_free_actions_data();
 #endif

@@ -96,14 +96,31 @@ process_cell(HyperLinkPool *pool, hyperlink_id_type *map, HyperLinks clone, CPUC
     c->hyperlink_id = new_id;
 }
 
+typedef struct {
+    HyperLinkPool *pool;
+    hyperlink_id_type *map;
+    HyperLinks clone;
+} RemapData;
+
+static bool
+remap_history_cells(void *data, CPUCell *cells, index_type xnum) {
+    RemapData *d = data;
+    bool changed = false;
+    for (index_type x = 0; x < xnum; x++) {
+        if (!cells[x].hyperlink_id) continue;
+        const hyperlink_id_type before = cells[x].hyperlink_id;
+        process_cell(d->pool, d->map, d->clone, cells + x);
+        if (cells[x].hyperlink_id != before) changed = true;
+    }
+    return changed;
+}
+
 static void
 remap_hyperlink_ids(Screen *self, bool preserve_hyperlinks_in_history, hyperlink_id_type *map, HyperLinks clone) {
     HyperLinkPool *pool = (HyperLinkPool *)self->hyperlink_pool;
     if (self->historybuf->count && preserve_hyperlinks_in_history) {
-        for (index_type y = self->historybuf->count; y-- > 0;) {
-            CPUCell *cells = historybuf_cpu_cells(self->historybuf, y);
-            for (index_type x = 0; x < self->historybuf->xnum; x++) process_cell(pool, map, clone, cells + x);
-        }
+        RemapData d = {.pool = pool, .map = map, .clone = clone};
+        historybuf_rewrite_cpu_cells(self->historybuf, HISTORY_HAS_HYPERLINKS, remap_history_cells, &d);
     }
     LineBuf *second = self->linebuf, *first = second == self->main_linebuf ? self->alt_linebuf : self->main_linebuf;
     for (index_type i = 0; i < self->lines * self->columns; i++) process_cell(pool, map, clone, first->cpu_cell_buf + i);

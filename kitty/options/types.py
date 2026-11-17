@@ -459,6 +459,7 @@ option_names = (
     'resize_in_steps',
     'restore_session_after_logout',
     'scale_line_thickness_with_font_size',
+    'scrollback_compression',
     'scrollback_fill_enlarged_window',
     'scrollback_lines',
     'scrollback_pager',
@@ -708,8 +709,9 @@ class Options:
     resize_in_steps: bool = False
     restore_session_after_logout: bool = False
     scale_line_thickness_with_font_size: bool = True
+    scrollback_compression: int = 9
     scrollback_fill_enlarged_window: bool = False
-    scrollback_lines: int = 2000
+    scrollback_lines: int = 4294967295
     scrollback_pager: list[str] = ['less', '--chop-long-lines', '--RAW-CONTROL-CHARS', '+INPUT_LINE_NUMBER']
     scrollback_pager_history_size: int = 0
     scrollbar: choices_for_scrollbar = 'scrolled'

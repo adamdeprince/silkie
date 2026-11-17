@@ -39,6 +39,8 @@ class Launch(RemoteCommand):
     copy_cmdline/bool: Boolean indicating whether to copy the cmdline from the current window
     copy_env/list.str=copy_local_env: List of strings representing the local env vars
     hold/bool: Boolean indicating whether to keep window open after cmd exits
+    scrollback_lines/str: The number of scrollback lines or unlimited
+    scrollback_compression/str: none or a zstd compression level
     location/choices.first.after.before.neighbor.last.vsplit.hsplit.split.default: Where in the tab to open the new window
     allow_remote_control/bool: Boolean indicating whether to allow remote control from the new window
     remote_control_password/list.str: A list of remote control passwords
