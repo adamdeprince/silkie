@@ -50,7 +50,7 @@ fragment_main(float2 texcoord: TEXCOORD, float4 frag_coord: SV_Position, uniform
     }
     if (encode_srgb == 0.0f) return float4(linear_output_from_extended(color_premul.rgb, output_gamut), color_premul.a);
     // A surface with 8 bits or fewer per channel is dithered to its steps, dither_levels, which are zero for any other
-    if (dither_levels.x > 0.f && color_premul.a > 0.f)
-        return dither_premultiplied(linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut)), color_premul.a, frag_coord.xy, dither_levels);
-    return vec4_premul(linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut)), color_premul.a);
+    float3 encoded = linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut));
+    if (dither_levels.x > 0.f && color_premul.a > 0.f) return dither_premultiplied(encoded, color_premul.a, frag_coord.xy, dither_levels);
+    return vec4_premul(encoded, color_premul.a);
 }

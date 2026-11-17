@@ -1569,7 +1569,10 @@ attach_opengl_context_to_window(_GLFWwindow *window, const _GLFWctxconfig *ctxco
         bool deep = false;
         if (!wanted.floatColor && fbconfig->deepColor == GLFW_DEEP_COLOR_ALWAYS) {
             deep = _glfwCreateDeepColorContextEGL(window, ctxconfig, &wanted);
-            debug("Window %llu %s\n", window->id, deep ? "has a 10 bit surface for deep color" : "has no deep color: no such EGL window surfaces");
+            debug("Window %llu %s\n", window->id,
+                deep                 ? "has a 10 bit surface for deep color"
+                : wanted.transparent ? "has no deep color: 10 bit surfaces have too little alpha for a transparent window"
+                                     : "has no deep color: no such EGL window surfaces");
         }
         if (!deep && !_glfwCreateContextEGL(window, ctxconfig, &wanted)) return false;
         window->wl.hdr.enabled = window->context.egl.floatColor;

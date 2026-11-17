@@ -3128,6 +3128,10 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
     GLint anim_progress_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "animation_progress");
     GLint convert_to_srgb_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "convert_to_srgb");
     GLint wide_gamut_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "wide_gamut");
+    GLint dither_levels_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "dither_levels");
+    float dither_levels[3] = {0};
+    output_dither_levels(os_window, dither_levels);
+    static const float no_dither[3] = {0};
     const unsigned num_groups = (unsigned)custom_shaders.end.num_groups;
     const unsigned textures_mask = custom_shaders.end.textures;
     const int vw = os_window->viewport_width, vh = os_window->viewport_height;
@@ -3272,6 +3276,8 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
         // shaders: encoded, unless the window is an HDR one, and in the primaries of the window
         glUniform1i(convert_to_srgb_loc, is_last && !os_window->linear_output ? 1 : 0);
         glUniform1ui(wide_gamut_loc, is_last ? os_window->wide_gamut : 0);
+        // and dithered to its steps, as the blit does
+        if (dither_levels_loc >= 0) glUniform3fv(dither_levels_loc, 1, is_last ? dither_levels : no_dither);
         // debug_rendering("Custom shader draw group %u: anim_progress=%.4f viewport=(%.2f,%.2f,%.2f,%.2f)\n", g, anim_progress, vp_x, vp_y, vp_w, vp_h);
         draw_quad(false, 0);
     }

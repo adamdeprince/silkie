@@ -1208,7 +1208,7 @@ class TestScreen(BaseTest):
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=7\x1b\\')
         self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=7:mode=0:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
-                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown\x1b\\')
+                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown:output_bits=0:output_type=unknown:output_dither=0\x1b\\')
         c.clear()
         before = int(monotonic() * 1000)
         parse_bytes(s, b'\x1b]777;display;v=1:op=mode:mode=1\x1b\\')
@@ -1217,14 +1217,15 @@ class TestScreen(BaseTest):
         self.assertGreaterEqual(t, before - 1)
         self.assertLessEqual(t, int(monotonic() * 1000) + 1)
         self.ae(c.wtcbuf, (f'\x1b]777;display;v=1:op=event:t={t}:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
-                          ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown\x1b\\').encode())
+                          ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown'
+                          ':output_bits=0:output_type=unknown:output_dither=0\x1b\\').encode())
         c.clear()
         parse_bytes(s, b'\x1b]777;display;v=1:op=mode\x1b\\')
         self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=mode:mode=1\x1b\\')
         c.clear()
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=8\x1b\\')
         self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=8:mode=1:kind=unknown:color=rgb:bits=0:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
-                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown\x1b\\')
+                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=0:precision=unknown:output_bits=0:output_type=unknown:output_dither=0\x1b\\')
         c.clear()
         parse_bytes(s, b'\x1b]777;display;v=2:op=query:id=7\x1b\\')
         parse_bytes(s, b'\x1b]777;display;v=1:op=query\x1b\\')
@@ -1239,7 +1240,7 @@ class TestScreen(BaseTest):
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=0\x1b\\')
         self.ae(c.wtcbuf, b'\x1b]777;display;v=1:op=cap:id=0:mode=0:kind=eink:color=gray:bits=4:gamut=unknown:headroom=1:scale=0:period=0:ppi=226'
-                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured\x1b\\')
+                         b':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured:output_bits=0:output_type=unknown:output_dither=0\x1b\\')
         # A frame from a program follows the rules every extension shares, see docs/extension-framing.rst
         assert_extension_frames(self, s, 'display')
 
