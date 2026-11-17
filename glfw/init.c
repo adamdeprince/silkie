@@ -121,6 +121,7 @@ char *
 _glfw_strdup(const char *source) {
     const size_t length = strlen(source);
     char *result = malloc(length + 1);
+    if (!result) return NULL;
     memcpy(result, source, length);
     result[length] = 0;
     return result;
