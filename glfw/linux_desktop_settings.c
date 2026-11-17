@@ -22,7 +22,21 @@ static const char *supported_namespaces[3] = {FDO_DESKTOP_NAMESPACE, GNOME_DESKT
 #define FDO_APPEARANCE_KEY "color-scheme"
 
 
-static char theme_name[128] = {0};
+static char *theme_name = NULL;  // the cursor theme, NULL when not known
+
+// Returns whether the cursor theme changed. Out of memory keeps the previous theme.
+static bool
+set_cursor_theme_name(const char *name) {
+    if (theme_name && strcmp(theme_name, name) == 0) return false;
+    char *copy = _glfw_strdup(name);
+    if (!copy) {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, "Out of memory storing the name of the cursor theme: %s", name);
+        return false;
+    }
+    free(theme_name);
+    theme_name = copy;
+    return true;
+}
 // Pango font descriptions from the desktop, allocated to fit, NULL until the desktop sends one
 static char *interface_font = NULL;
 
@@ -465,10 +479,7 @@ process_gnome_setting(const char *key, DBusMessageIter *value) {
         if (dbus_message_iter_get_arg_type(value) == DBUS_TYPE_STRING) {
             const char *name;
             dbus_message_iter_get_basic(value, &name);
-            if (name && strncmp(theme_name, name, sizeof(theme_name) - 1) != 0) {
-                strncpy(theme_name, name, sizeof(theme_name) - 1);
-                cursor_theme_changed = true;
-            }
+            if (name && set_cursor_theme_name(name)) cursor_theme_changed = true;
         }
     }
 }
@@ -563,14 +574,14 @@ glfw_wait_for_desktop_settings(monotonic_t timeout) {
 
 void
 glfw_current_cursor_theme(const char **theme, int *size) {
-    *theme = theme_name[0] ? theme_name : NULL;
+    *theme = theme_name && theme_name[0] ? theme_name : NULL;
     *size = (theme_size > 0 && theme_size < 2048) ? theme_size : 32;
 }
 
 static void
 get_cursor_theme_from_env(void) {
     const char *q = getenv("XCURSOR_THEME");
-    if (q) strncpy(theme_name, q, sizeof(theme_name) - 1);
+    if (q) set_cursor_theme_name(q);
     const char *env = getenv("XCURSOR_SIZE");
     theme_size = 32;
     if (env) {
