@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # License: GPL v3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
-from unittest.mock import patch
+from functools import partial
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
-from kitty.fast_data_types import LEFT_EDGE, Color, Region
-from kitty.options.utils import tab_title_wrap
-from kitty.tab_bar import CellRange, TabBar, TabBarData, TabExtent, WindowDropTarget, as_rgb, powerline_symbols, truncate_line, wrap_title
+from kitty.fast_data_types import GLFW_MOUSE_BUTTON_LEFT, GLFW_PRESS, GLFW_RELEASE, LEFT_EDGE, Color, Region, Screen
+from kitty.options.utils import copy_on_select, tab_title_wrap
+from kitty.tab_bar import CellRange, DrawData, ExtraData, TabBar, TabBarData, TabExtent, WindowDropTarget, as_rgb, powerline_symbols, truncate_line, wrap_title
+from kitty.tabs import MouseEvents, TabManager
 from kitty.utils import color_as_int
 
 from .base import BaseTest
@@ -161,6 +164,113 @@ class TestTabBar(BaseTest):
         self.ae(tb.tab_id_at(60, 130), 0)
         self.ae(tb.tab_id_at(180, 10), 0)
 
+    def test_tab_bar_selection(self) -> None:
+        tb = self.vertical_tab_bar(3)  # 12x8 cells, tabs on rows 0, 2 and 4
+        self.ae(tb.cell_at(-5, -5), (0, 0, True))
+        self.ae(tb.cell_at(300, 300), (11, 7, False))  # past the end includes the last cell
+        tb.start_selection(1, 50)
+        tb.update_selection(25, 50)
+        with patch('kitty.tab_bar.get_boss', return_value=DummyBoss()):
+            tb.update(tb.last_laid_out_tabs)  # erases the screen, the selection must be restored
+        self.ae(tb.finish_selection(), 't1 ')  # strip_trailing_spaces is never by default
+        self.assertFalse(tb.screen.has_selection())
+        # losing focus cancels a selection, as its release may never arrive
+        from kitty.boss import Boss
+
+        tb.start_selection(1, 50)
+        tm = SimpleNamespace(tab_bar=tb, active_window=None, active_tab=None, mark_tab_bar_dirty=Mock())
+        Boss.on_focus(SimpleNamespace(os_window_map={1: tm}), 1, False)  # type: ignore
+        self.assertIsNone(tb.selection)
+        self.assertFalse(tb.screen.has_selection())
+        for tab_bar_region in (region(0, 0, 120, 160), region(0, 0, 0, 0)):  # the second hides the tab bar
+            tb.start_selection(1, 50)
+            with (
+                patch('kitty.tab_bar.viewport_for_window', return_value=(region(120, 0, 400, 160), tab_bar_region, 400, 160, 10, 20)),
+                patch('kitty.tab_bar.set_tab_bar_render_data'),
+            ):
+                tb.layout()
+            self.assertIsNone(tb.selection)
+            self.assertFalse(tb.screen.has_selection())
+
+    def test_tab_bar_selection_mouse_handling(self) -> None:
+        tb = self.vertical_tab_bar(3)
+        s = tb.screen
+        s.cursor.x, s.cursor.y = 0, 7
+        s.draw('cpu 14%')  # text drawn below the tabs, as by a custom tab bar
+        tm = SimpleNamespace(
+            tab_bar=tb,
+            os_window_id=1,
+            recent_tab_bar_mouse_events=MouseEvents(),
+            new_tab=Mock(),
+            active_tab=None,
+            set_active_tab=Mock(),
+            tab_for_id=lambda tab_id: SimpleNamespace(id=tab_id) if tab_id > 0 else None,
+        )
+
+        def mouse(x: float, y: float, action: int = -1) -> None:
+            TabManager.handle_tab_bar_mouse(tm, x, y, -1 if action == -1 else GLFW_MOUSE_BUTTON_LEFT, 0, action)  # type: ignore
+
+        boss = Mock()
+        with (
+            patch('kitty.tabs.get_boss', return_value=boss),
+            patch('kitty.tabs.get_tab_being_dragged', return_value=(0, False, 0, 0)),
+            patch('kitty.tabs.set_tab_being_dragged'),
+        ):
+            # dragging over the text copies it and is not a click
+            mouse(1, 150, GLFW_PRESS)
+            mouse(25, 150)
+            self.assertTrue(s.has_selection())
+            mouse(300, 150)  # past the tab bar, over a window
+            mouse(300, 150, GLFW_RELEASE)
+            boss.copy_selected_text.assert_called_once_with('cpu 14%')
+            self.assertFalse(s.has_selection())
+            self.ae(len(tm.recent_tab_bar_mouse_events), 1)
+            # a double click on an empty area still opens a new tab and copies nothing
+            for action in (GLFW_PRESS, GLFW_RELEASE, GLFW_PRESS, GLFW_RELEASE):
+                mouse(5, 130, action)
+            tm.new_tab.assert_called_once()
+            boss.copy_selected_text.assert_called_once()
+            # a press on a tab starts no selection
+            mouse(5, 10, GLFW_PRESS)
+            self.assertIsNone(tb.selection)
+            mouse(5, 10, GLFW_RELEASE)
+            tm.recent_tab_bar_mouse_events.clear()
+            # jitter within drag_threshold during a double click selects nothing, so it opens a new tab
+            tm.new_tab.reset_mock()
+            for action in (GLFW_PRESS, GLFW_RELEASE, GLFW_PRESS):
+                mouse(3, 150, action)
+            mouse(7, 150)  # into the right half of the cell, selecting it but for drag_threshold
+            self.assertFalse(s.has_selection())
+            mouse(7, 150, GLFW_RELEASE)
+            tm.new_tab.assert_called_once()
+            boss.copy_selected_text.assert_called_once()
+            # a press outside the tab bar, as can reach it during a tab drag, starts no selection
+            mouse(300, 150, GLFW_PRESS)
+            self.assertIsNone(tb.selection)
+            # a press after a lost release cancels the selection left over, copying nothing
+            mouse(1, 150, GLFW_PRESS)
+            mouse(25, 150)
+            self.assertTrue(s.has_selection())
+            mouse(5, 10, GLFW_PRESS)
+            self.assertIsNone(tb.selection)
+            self.assertFalse(s.has_selection())
+            boss.copy_selected_text.assert_called_once()
+
+    def test_copy_selected_text(self) -> None:
+        from kitty.boss import Boss
+
+        for value, clipboard_calls, buffers in (('no', 0, {}), ('clipboard', 1, {}), ('a1', 0, {'a1': 'text'})):
+            self.set_options({'copy_on_select': copy_on_select(value)})
+            boss = SimpleNamespace(handle_clipboard_loss=Mock(), clipboard_buffers={})
+            boss.set_clipboard_buffer = partial(Boss.set_clipboard_buffer, boss)
+            boss.copy_text_to_buffer = partial(Boss.copy_text_to_buffer, boss)
+            with patch('kitty.boss.set_primary_selection') as primary, patch('kitty.boss.set_clipboard_string') as clipboard:
+                Boss.copy_selected_text(boss, 'text')  # type: ignore
+                Boss.copy_selected_text(boss, '')  # type: ignore
+            primary.assert_called_once_with('text')
+            self.ae(clipboard.call_count, clipboard_calls)
+            self.ae(boss.clipboard_buffers, buffers)
+
     def test_vertical_tab_bar_alignment(self) -> None:
         self.set_options(
             {
@@ -195,7 +305,7 @@ class TestTabBar(BaseTest):
         self.ae(tb.tab_id_at(5, 110), 1)
         self.ae(tb.tab_id_at(5, 150), 2)
 
-    def vertical_tab_bar(self, num_tabs: int = 2, height: int = 160, **opts: object) -> TabBar:
+    def vertical_tab_bar(self, num_tabs: int = 2, height: int = 160, width: int = 120, **opts: object) -> TabBar:
         self.set_options(
             {
                 'tab_bar_edge': LEFT_EDGE,
@@ -204,8 +314,8 @@ class TestTabBar(BaseTest):
                 **opts,
             }
         )
-        central = region(120, 0, 400, height)
-        tab_bar = region(0, 0, 120, height)
+        central = region(width, 0, 400, height)
+        tab_bar = region(0, 0, width, height)
         with (
             patch('kitty.tab_bar.cell_size_for_window', return_value=(10, 20)),
             patch('kitty.tab_bar.viewport_for_window', return_value=(central, tab_bar, 400, height, 10, 20)),
@@ -220,6 +330,14 @@ class TestTabBar(BaseTest):
     def screen_lines(self, tb: TabBar) -> list[str]:
         s = tb.screen
         return [str(s.line(i)).rstrip() for i in range(s.lines)]
+
+    def test_vertical_tab_bar_narrow_powerline(self) -> None:
+        # A short title fits in a narrow vertical tab bar, since the separator
+        # is drawn in a column of its own
+        sep = powerline_symbols['round'][0]
+        tb = self.vertical_tab_bar(width=40, tab_bar_style='powerline', tab_powerline_style='round', tab_title_template='{index}', tab_title_max_length=1)
+        self.ae(tb.screen.columns, 4)
+        self.ae(self.screen_lines(tb)[:3], [f' 1 {sep}', '', f' 2 {sep}'])
 
     def test_vertical_tab_bar_multiline_titles(self) -> None:
         # newlines are ignored unless tab_title_max_lines allows them, and the
@@ -625,6 +743,56 @@ class TestTabBar(BaseTest):
             tb.layout()
             tb.update(tuple(TabBarData(title=t, tab_id=i + 1, is_active=i == 0) for i, t in enumerate(titles)))
         return str(tb.screen.line(0)).rstrip()
+
+    def test_horizontal_tab_bar_uses_free_space(self) -> None:
+        line = self.horizontal_tab_bar_line
+        # space not needed by short tabs goes to the long ones, instead of
+        # being left unused at the end of the tab bar
+        long_title = 'abcdefghijklmn'
+        for style, columns, titles in (
+            ('fade', 25, ['1', long_title]),
+            ('fade', 35, ['1'] * 2 + [long_title]),
+            ('separator', 60, ['1'] * 8 + [long_title] * 2),
+            ('powerline', 80, ['1'] * 5 + [long_title] * 3),
+            ('slant', 126, ['1'] * 9 + [long_title] * 4),
+        ):
+            text = line(titles, columns, tab_bar_style=style)
+            self.ae(text.count(long_title), titles.count(long_title), (style, text))
+            self.assertNotIn('…', text)
+
+        # tabs drawn more than one cell wider than their max length, by a wide
+        # separator or the leading space of the powerline style, must still
+        # fit, rather than the last one being replaced by the overflow marker
+        for columns, titles, opts in (
+            (10, ['x' * 10] * 3, {'tab_bar_style': 'separator', 'tab_separator': ' ||'}),
+            (15, ['x' * 10, '~'], {'tab_bar_style': 'powerline'}),
+        ):
+            text = line(titles, columns, **opts)
+            self.assertFalse(text.endswith(' …'), (opts, text))
+
+        # no tabs
+        self.ae(line([], 60, tab_bar_style='separator'), '')
+
+    def test_horizontal_tab_bar_custom_draw_func_margin(self) -> None:
+        # a custom draw function may draw a wider overhang when given more
+        # space than the default max length it is measured at, so it is left
+        # some slack, rather than the last tab being replaced by the overflow marker
+        def draw_tab(
+            draw_data: DrawData, screen: Screen, tab: TabBarData, before: int, max_tab_length: int, index: int, is_last: bool, extra_data: ExtraData
+        ) -> int:
+            screen.draw(tab.title[:max_tab_length])
+            if len(tab.title) > max_tab_length and max_tab_length >= 8:
+                screen.draw('»')
+            end: int = screen.cursor.x
+            if not is_last:
+                screen.draw('|')
+            return end
+
+        with patch('kitty.tab_bar.load_custom_draw_tab', return_value=draw_tab):
+            for columns in (15, 16, 17):
+                text = self.horizontal_tab_bar_line(['x' * 30] * 2, columns, tab_bar_style='custom')
+                self.assertFalse(text.endswith(' …'), (columns, text))
+                self.ae(text.count('|'), 1, text)
 
     def test_tab_bar_title_cache(self) -> None:
         from contextlib import nullcontext

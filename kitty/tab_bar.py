@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # License: GPL v3 Copyright: 2018, Kovid Goyal <kovid at kovidgoyal.net>
 
+import math
 import os
 import re
 from collections.abc import Callable, Generator, Sequence
@@ -18,6 +19,7 @@ from .constants import config_dir, is_macos
 from .fast_data_types import (
     BOTTOM_EDGE,
     DECAWM,
+    EXTEND_CELL,
     LEFT_EDGE,
     LNM,
     RIGHT_EDGE,
@@ -655,9 +657,11 @@ def draw_tab_with_powerline(
         needs_soft_separator = False
 
     separator_symbol, soft_separator_symbol = powerline_symbols.get(draw_data.powerline_style, ('', ''))
-    min_title_length = 1 + 2
-    start_draw = 2
     is_vertical = draw_data.tab_bar_edge in ('left', 'right')
+    # Vertical tabs draw their separator in a column of its own, so they need
+    # room only for the leading space and a single character of the title.
+    min_title_length = 1 if is_vertical else 1 + 2
+    start_draw = 2
     first_row = screen.cursor.y
 
     if screen.cursor.x == 0:
@@ -817,6 +821,10 @@ class TabBar:
         self.left_edge_is_default = True
         self.right_edge_is_default = True
         self._last_viewport: tuple[Region, Region, int, int] | None = None
+        # (column, row, in left half of cell) of the start and end of a selection of text being dragged with the mouse
+        self.selection: tuple[tuple[int, int, bool], tuple[int, int, bool]] | None = None
+        # pixel position of the press that started the selection, until the mouse moves past drag_threshold
+        self.selection_press_position: tuple[float, float] | None = None
         self.apply_options()
 
     def apply_options(self) -> None:
@@ -872,6 +880,7 @@ class TabBar:
             self.os_window_id,
         )
         ts = opts.tab_bar_style
+        self.draw_func_is_custom = ts == 'custom'
         if ts == 'separator':
             self.draw_func: DrawTabFunc = draw_tab_with_separator
         elif ts == 'powerline':
@@ -995,6 +1004,7 @@ class TabBar:
         self.blank_rects = tuple(blank_rects)
 
     def layout(self) -> None:
+        self.cancel_selection()  # its cells mean nothing in another layout
         central, tab_bar, vw, vh, cell_width, cell_height = viewport_for_window(self.os_window_id)
         if self.is_vertical:
             if tab_bar.width < cell_width or tab_bar.height < cell_height:
@@ -1054,9 +1064,55 @@ class TabBar:
         if not self.laid_out_once:
             return False
         with caching_titles():
-            if self.is_vertical:
-                return self.update_vertical(data)
-            return self.update_horizontal(data)
+            ans = self.update_vertical(data) if self.is_vertical else self.update_horizontal(data)
+        self.apply_selection()  # redrawing erased it
+        return ans
+
+    def contains(self, x: float, y: float) -> bool:
+        g = self.window_geometry
+        return self.laid_out_once and g.left <= x < g.right and g.top <= y < g.bottom
+
+    def cell_at(self, x: float, y: float) -> tuple[int, int, bool]:
+        "The cell at the pixel position, clamped to the tab bar, and whether the position is in its left half"
+        g = self.window_geometry
+        x = min(max(x - g.left, 0), self.screen.columns * self.cell_width - 1)
+        y = min(max(y - g.top, 0), self.screen.lines * self.cell_height - 1)
+        return int(x // self.cell_width), int(y // self.cell_height), x % self.cell_width < self.cell_width / 2
+
+    def apply_selection(self) -> None:
+        if self.selection is not None:
+            (x, y, in_left_half_of_cell), end = self.selection
+            self.screen.start_selection(x, y, False, EXTEND_CELL, in_left_half_of_cell)
+            # not ended: ending a selection makes the selection of the active window the primary selection
+            self.screen.update_selection(*end, False)
+
+    def start_selection(self, x: float, y: float) -> None:
+        cell = self.cell_at(x, y)
+        self.selection = cell, cell
+        self.selection_press_position = x, y
+        self.apply_selection()
+
+    def update_selection(self, x: float, y: float) -> None:
+        if (p := self.selection_press_position) is not None:
+            # ignore jitter so that a click, as in a double click to open a new tab, selects nothing
+            if math.hypot(x - p[0], y - p[1]) <= get_options().drag_threshold:
+                return
+            self.selection_press_position = None
+        end = self.cell_at(x, y)
+        if self.selection is not None and end != self.selection[1]:
+            self.selection = self.selection[0], end
+            self.screen.update_selection(*end, False)
+
+    def finish_selection(self) -> str:
+        "Clear the selection, returning its text"
+        text = ''.join(self.screen.text_for_selection(False, get_options().strip_trailing_spaces != 'never'))
+        self.cancel_selection()
+        return text
+
+    def cancel_selection(self) -> None:
+        if self.selection is not None:
+            self.selection = self.selection_press_position = None
+            self.screen.clear_selection()
 
     def update_horizontal(self, data: Sequence[TabBarData]) -> bool:
         s = self.screen
@@ -1086,8 +1142,9 @@ class TabBar:
         ideal_tab_lengths = [i for i in range(len(data))]
         default_max_tab_length = max(1, (s.columns // max(1, len(data))) - 1)
         max_tab_lengths = [default_max_tab_length for _ in range(len(data))]
+        overhangs = [0] * len(data)
+        truncated: list[int] = []
         active_idx = 0
-        extra = 0
         ed.for_layout = True
         for i, t in enumerate(data):
             s.cursor.x = 0
@@ -1097,19 +1154,51 @@ class TabBar:
                 active_idx = i
             if tl < default_max_tab_length:
                 max_tab_lengths[i] = tl
-                extra += default_max_tab_length - tl
-        if extra > 0:
+            elif tl > default_max_tab_length:
+                truncated.append(i)
+
+        def tab_width(i: int) -> int:
+            return min(ideal_tab_lengths[i], max_tab_lengths[i] + overhangs[i])
+
+        # The overhang is measured at the default max length, the built-in
+        # styles draw the same overhang at any length, but custom ones might
+        # not, so leave them a cell of slack per truncated tab
+        margin = len(truncated) if self.draw_func_is_custom else 0
+
+        # A truncated tab can be drawn wider than its max length, for example
+        # by a separator after the title, so measure by how much. Draw it at a
+        # column like the one it will actually start at, as styles may draw
+        # differently at column zero. Overhangs only use up free space, so once
+        # there is none left, the remaining ones cannot change the layout and
+        # measuring them, which means drawing the tab again, can be skipped.
+        free = s.columns - margin - sum(min(tl, ml) for tl, ml in zip(ideal_tab_lengths, max_tab_lengths))
+        for i in truncated:
+            if free <= 0:
+                break
+            s.cursor.x = start = min(i, 1)
+            draw_tab(i, data[i], [], default_max_tab_length)
+            overhangs[i] = max(0, s.cursor.x - start - default_max_tab_length)
+            free -= min(overhangs[i], ideal_tab_lengths[i] - max_tab_lengths[i])
+
+        def space_left() -> int:
+            return s.columns - margin - sum(tab_width(i) for i in range(len(data)))
+
+        extra = space_left()
+        if data and extra > 0:
             if ideal_tab_lengths[active_idx] > max_tab_lengths[active_idx]:
                 d = min(extra, ideal_tab_lengths[active_idx] - max_tab_lengths[active_idx])
                 max_tab_lengths[active_idx] += d
-                extra -= d
-            if extra > 0:
+            # Hand out the remaining space evenly, repeating as a tab may need
+            # less than its share, leaving more for the others. A tab whose
+            # overhang already covers its ideal length stays an over achiever,
+            # raising its max length is harmless as it does not change its width.
+            while (extra := space_left()) > 0:
                 over_achievers = tuple(i for i in range(len(data)) if ideal_tab_lengths[i] > max_tab_lengths[i])
-                if over_achievers:
-                    amt_per_over_achiever = extra // len(over_achievers)
-                    if amt_per_over_achiever > 0:
-                        for i in over_achievers:
-                            max_tab_lengths[i] += amt_per_over_achiever
+                if not over_achievers:
+                    break
+                amt, rem = divmod(extra, len(over_achievers))
+                for n, i in enumerate(over_achievers):
+                    max_tab_lengths[i] = min(ideal_tab_lengths[i], max_tab_lengths[i] + amt + (n < rem))
 
         s.cursor.x = 0
         s.erase_in_line(2, False)
