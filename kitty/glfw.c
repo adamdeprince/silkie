@@ -3631,7 +3631,8 @@ set_os_window_title(OSWindow *w, const char *title) {
         return;
     }
     glfwSetWindowTitle(w->handle, buf);
-    if (title) native_ui_title_changed(w, title);
+    // The native tab label shows what the window title shows, without escape codes
+    native_ui_title_changed(w, buf);
 }
 
 void
