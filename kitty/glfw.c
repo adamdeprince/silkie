@@ -1052,18 +1052,31 @@ touch_callback(GLFWwindow *w, const GLFWTouchEvent *ev) {
     if (!set_callback_window(w)) return;
     OSWindow *osw = global_state.callback_os_window;
     if (OPT(debug_keyboard)) {
-        char points[1024];
-        size_t pos = 0;
-        points[0] = 0;
-        for (size_t i = 0; i < ev->num_points && pos < sizeof(points); i++) {
-            const GLFWTouchPoint *p = ev->points + i;
-            const int n = snprintf(
-                points + pos, sizeof(points) - pos, " [%d %s %.1f,%.1f%s]", p->id, touch_point_state_name(p->state), p->x, p->y,
-                p->confidence == GLFW_TOUCH_ACCIDENTAL ? " accidental" : "");
-            if (n < 0) break;
-            pos += (size_t)n;
+        // Every point is listed, however many there are: measure, then format
+#define FMT_POINT(buf, sz, p) \
+    snprintf(buf, sz, " [%d %s %.1f,%.1f%s]", (p)->id, touch_point_state_name((p)->state), (p)->x, (p)->y, \
+             (p)->confidence == GLFW_TOUCH_ACCIDENTAL ? " accidental" : "")
+        size_t total = 1;
+        bool ok = true;
+        for (size_t i = 0; ok && i < ev->num_points; i++) {
+            const int n = FMT_POINT(NULL, 0, ev->points + i);
+            if (n < 0 || (size_t)n > SIZE_MAX - total) ok = false;
+            else total += (size_t)n;
         }
-        timed_debug_print("\x1b[33mTouch\x1b[m %s modifiers: %s%s\n", touch_event_type_name(ev->type), format_mods(ev->keyboard_modifiers), points);
+        RAII_ALLOC(char, points, ok ? malloc(total) : NULL);
+        if (points) {
+            size_t pos = 0;
+            points[0] = 0;
+            for (size_t i = 0; i < ev->num_points; i++) {
+                const int n = FMT_POINT(points + pos, total - pos, ev->points + i);
+                if (n < 0 || (size_t)n >= total - pos) break;
+                pos += (size_t)n;
+            }
+        }
+#undef FMT_POINT
+        timed_debug_print(
+            "\x1b[33mTouch\x1b[m %s modifiers: %s%s\n", touch_event_type_name(ev->type), format_mods(ev->keyboard_modifiers),
+            points ? points : " [points not shown: out of memory]");
     }
     // A window that asked for finger reports gets the fingers themselves
     if (is_window_ready_for_callbacks() && touch_pointer_event(ev)) {
