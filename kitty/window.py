@@ -243,13 +243,13 @@ def process_title_from_child(title: memoryview, is_base64: bool, default_title: 
     return sanitize_title(stitle or default_title)
 
 
-@lru_cache(maxsize=64)
 def is_conemu_osc9_command(raw_data: str) -> bool:
     # ConEmu uses OSC 9 with numeric sub-commands 1-12, for example: 9;9;path
     # these must not be treated as iTerm2 style notifications
     return re.match(r'(?:1[0-2]|[1-9])(?:;|$)', raw_data) is not None
 
 
+@lru_cache(maxsize=64)
 def compile_match_query(exp: str, is_simple: bool = True) -> MatchPatternType:
     if is_simple:
         pat: MatchPatternType = re.compile(exp)

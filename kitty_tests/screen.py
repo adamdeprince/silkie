@@ -2409,6 +2409,13 @@ class TestScreen(BaseTest):
         for x in ('hello', '13;x', '0;x', '1x', '', '42'):
             self.assertFalse(is_conemu_osc9_command(x), x)
 
+    def test_match_query_cache(self):
+        # The ConEmu check must not take the cache that belongs to compile_match_query
+        from kitty.window import compile_match_query
+        self.assertTrue(hasattr(compile_match_query, 'cache_info'))
+        self.assertIs(compile_match_query('a.c'), compile_match_query('a.c'))
+        self.assertFalse(hasattr(is_conemu_osc9_command, 'cache_info'))
+
 
 def detect_url(self, scale=1):
     s = self.create_screen(cols=30 * scale)
