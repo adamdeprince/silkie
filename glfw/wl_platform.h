@@ -529,6 +529,13 @@ typedef struct _GLFWlibraryWayland {
     uint32_t swipe_fingers;
     _GLFWWaylandTabletPad *tablet_pads;   // every pad of the seat
     struct zxdg_output_manager_v1 *xdg_output_manager;
+    // Outputs that have been bound but not yet announced to GLFW via
+    // wl_output.done. They are not in _glfw.monitors yet but must still be
+    // freed if their global is removed before the done event arrives.
+    struct {
+        _GLFWmonitor **array;
+        int count;
+    } pending_monitors;
     struct zwlr_virtual_pointer_manager_v1 *virtual_pointer_manager;
     struct zwlr_virtual_pointer_v1 *virtual_pointer;
     struct zwp_virtual_keyboard_manager_v1 *virtual_keyboard_manager;
@@ -633,6 +640,15 @@ typedef struct _GLFWlibraryWayland {
     } drag;
 } _GLFWlibraryWayland;
 
+// The state of a monitor whose xdg_output logical geometry did not arrive
+// within one roundtrip, see wl_monitor.c
+typedef struct _GLFWxdgGeometryRetry {
+    bool pending;      // still missing: the monitor uses fallback values till it arrives
+    bool gave_up;      // every request went unanswered, no more are scheduled
+    unsigned requests; // get_xdg_output requests made for it, the first one included
+    id_type timer;     // the retry timer, 0 when none is scheduled
+} _GLFWxdgGeometryRetry;
+
 // Wayland-specific per-monitor data
 //
 typedef struct _GLFWmonitorWayland {
@@ -651,6 +667,9 @@ typedef struct _GLFWmonitorWayland {
     double fractional_scale;
     bool xdg_size_received;
     bool xdg_position_received;
+    // xdg_output logical geometry that was not there after one roundtrip, it
+    // is asked for again in the background, see wl_monitor.c
+    _GLFWxdgGeometryRetry xdg_geometry;
 
 } _GLFWmonitorWayland;
 
@@ -671,9 +690,13 @@ typedef struct _GLFWcursorWayland {
 
 void _glfwAddOutputWayland(uint32_t name, uint32_t version);
 void _glfwCreateXdgOutputWayland(_GLFWmonitor *monitor);
+bool _glfwRemoveOutputWayland(uint32_t name);
+void _glfwFreePendingOutputsWayland(void);
+void _glfwCreateXdgOutputsWayland(void);
 void _glfwWaylandBeforeBufferSwap(_GLFWwindow *window);
 void _glfwWaylandAfterBufferSwap(_GLFWwindow *window);
 void _glfwWaylandSurfaceOutputsChanged(_GLFWwindow *window);
+void _glfwWaylandMonitorGeometryArrived(_GLFWmonitor *monitor);
 void _glfwSetupWaylandDataDevice(void);
 void _glfwSetupWaylandPrimarySelectionDevice(void);
 double _glfwWaylandWindowScale(_GLFWwindow *);

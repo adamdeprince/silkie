@@ -208,6 +208,11 @@ class TestSettingsUI(BaseTest):
         self.assertTrue(profiles.delete_profile('my-work'))
         self.assertNotIn('my-work', profiles.load_profiles())
         self.assertIn(profiles.DEFAULT_PROFILE_ID, profiles.load_profiles())
+        # --config=NONE ignores the profiles, as it does the other files in the config directory
+        profiles.create_profile('Ignored')
+        self.assertIn('ignored', profiles.load_profiles())
+        with mock.patch('kitty.profiles.config_dir_files_ignored', return_value=True):
+            self.ae(tuple(profiles.load_profiles()), (profiles.DEFAULT_PROFILE_ID,))
 
     def test_profile_model(self):
         p = profiles.create_profile('Ops')

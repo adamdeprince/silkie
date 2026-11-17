@@ -585,6 +585,25 @@ window_from_surface_ref(void *data) {
     return ((_GLFWsurfaceRef *)data)->window;
 }
 
+// The xdg_output geometry of a monitor arrived after the monitor had been in
+// use with fallback values. A window's scale comes from the compositor when it
+// supports fractional or preferred buffer scales, and such windows are left
+// alone. The others deduce it from the monitors they are on, or from the
+// first monitor before they are on any, so recheck those as entering or
+// leaving an output would.
+void
+_glfwWaylandMonitorGeometryArrived(_GLFWmonitor *monitor) {
+    for (_GLFWwindow *window = _glfw.windowListHead; window; window = window->next) {
+        if (window->wl.expect_scale_from_compositor) continue;
+        bool affected = window->wl.monitorsCount < 1 && _glfw.monitorCount > 0 && _glfw.monitors[0] == monitor;
+        for (int i = 0; i < window->wl.monitorsCount && !affected; i++) affected = window->wl.monitors[i] == monitor;
+        if (affected && checkScaleChange(window)) {
+            debug("Scale changed to %.3f for window %llu after late xdg_output geometry\n", _glfwWaylandWindowScale(window), window->id);
+            apply_scale_changes(window, true, true);
+        }
+    }
+}
+
 static void
 surfaceHandleEnter(void *data, struct wl_surface *surface UNUSED, struct wl_output *output) {
     _GLFWwindow *window = window_from_surface_ref(data);
@@ -1586,6 +1605,7 @@ _glfwPlatformCreateWindow(
     window->wl.hdr.wanted = wndconfig->wl.hdr;
     window->wl.hdr.wanted_primaries = GLFW_COLOR_PRIMARIES_SRGB;
     strncpy(window->wl.appId, wndconfig->wl.appId, sizeof(window->wl.appId));
+    strncpy(window->wl.windowTag, wndconfig->wl.windowTag, sizeof(window->wl.windowTag));
     window->swaps_disallowed = true;
 
     window->wl.embedded.is_embedded = _glfw.wl.next_window_embedded;

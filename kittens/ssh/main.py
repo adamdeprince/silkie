@@ -196,7 +196,52 @@ ends with :code:`.conf`, it is assumed to be the name of a config file to load
 from the Silkie config directory, otherwise it is assumed to be the name of a
 color theme to load via the :doc:`themes kitten </kittens/themes>`. Note that
 only colors applying to the text/background are changed, other config settings
-in the .conf files/themes are ignored.
+in the .conf files/themes are ignored. To use different color schemes depending
+on whether the operating system is in dark or light mode, see
+:opt:`kitten-ssh.color_scheme_dark`.
+""",
+)
+
+opt(
+    'color_scheme_dark',
+    '',
+    long_text="""
+Specify a color scheme to use when connecting to the remote host while the
+operating system is in dark mode. Uses the same syntax as
+:opt:`kitten-ssh.color_scheme`. Similarly, use :opt:`kitten-ssh.color_scheme_light`
+and :opt:`kitten-ssh.color_scheme_no_preference` for light mode and when the
+operating system has no preference. When the operating system switches between
+modes, the colors of the remote session switch accordingly, just as for
+:ref:`automatic color themes <auto_color_scheme>` in Silkie itself. For a mode
+with no color scheme specified, :opt:`kitten-ssh.color_scheme` is used, and if
+that is also not specified, the colors from Silkie for that mode are used. For
+example::
+
+    color_scheme_dark Solarized Dark
+    color_scheme_light Solarized Light
+
+Requires the ssh kitten to be run in Silkie, outside of terminal multiplexers
+such as tmux. Otherwise, only :opt:`kitten-ssh.color_scheme` is used.
+""",
+)
+
+opt(
+    'color_scheme_light',
+    '',
+    long_text="""
+Specify a color scheme to use when connecting to the remote host while the
+operating system is in light mode. See :opt:`kitten-ssh.color_scheme_dark` for
+details.
+""",
+)
+
+opt(
+    'color_scheme_no_preference',
+    '',
+    long_text="""
+Specify a color scheme to use when connecting to the remote host while the
+operating system has no dark or light mode preference. See
+:opt:`kitten-ssh.color_scheme_dark` for details.
 """,
 )
 
@@ -235,6 +280,35 @@ you have to enter the password only once. Under the hood, it uses SSH
 ControlMasters and these are automatically cleaned up by kitty when it quits.
 You can map a shortcut to :ac:`close_shared_ssh_connections` to disconnect all
 active shared connections.
+""",
+)
+
+opt(
+    'shared_connection_timeout',
+    'auto',
+    option_type='seconds_or_auto',
+    long_text="""
+How long to wait, in seconds, for a shared connection (see
+:opt:`share_connections`) to respond before concluding that its connection to
+the server has died and making a new one. A shared connection can die without
+noticing, for example after a network change or suspend. When starting a session
+over an existing shared connection, the kitten checks the connection with a
+request that needs a round trip to the server. With the default value of
+:code:`auto` the timeout is derived from the round trip times measured over
+that connection: a connection is considered dead when a round trip takes ten
+times longer than the retransmission timeout TCP itself would use on it, so slow
+links such as satellite modems get correspondingly long timeouts and fast links
+detect a dead connection in well under a second. Until a round trip has been
+measured over a connection, no timeout is used. Set to :code:`0` to never time
+out. In all cases, shared connections started by the kitten use SSH's own
+keepalives (:code:`ServerAliveInterval=30` and :code:`ServerAliveCountMax=4`),
+so that a connection that has died is closed within a few minutes, unless you
+set :code:`ServerAliveInterval` in your SSH config or on the command line.
+To turn the keepalives off, use :code:`-o ServerAliveInterval=0` on the command
+line, since SSH does not report an explicit zero in its config files as being
+set. A session that has produced any output is never killed and a connection
+found to be dead is only told to stop accepting new sessions, so sessions in
+other windows using it are not interrupted.
 """,
 )
 

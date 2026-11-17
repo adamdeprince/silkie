@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .conf.types import Option
-from .constants import config_dir
-from .fast_data_types import get_options
+from .constants import config_dir, config_dir_files_ignored
+from .fast_data_types import COLOR_LAYER_WINDOW, get_options
 from .settings_model import (
     Layer,
     atomic_write_text,
@@ -116,6 +116,8 @@ def load_profile(path: str) -> Profile:
 def load_profiles() -> dict[str, Profile]:
     ' All profiles by id, the default profile first and always present '
     ans = {DEFAULT_PROFILE_ID: Profile(DEFAULT_PROFILE_ID, 'Default')}
+    if config_dir_files_ignored():  # --config=NONE
+        return ans
     with suppress(OSError):
         for name in sorted(os.listdir(profiles_dir()), key=str.lower):
             if name.endswith('.conf'):
@@ -293,7 +295,10 @@ def apply_to_window(w: 'Window', profile: Profile) -> None:
     color_lines = [f'{k}={profile.options[k][-1]}' for k in profile.options if k in ANSI_COLORS or k in COLOR_KEYS]
     if color_lines:
         spec, tbc = parse_colors(color_lines, allow_reading_conf_files=False)
-        patch_color_profiles(spec, tbc or get_options().transparent_background_colors, (w.screen.color_profile,), True)
+        # The window color layer, above the configured colors and below the
+        # colors set by sessions and programs. None for tbc leaves the
+        # transparent background colors as they are.
+        patch_color_profiles(spec, tbc, (w.screen.color_profile,), COLOR_LAYER_WINDOW)
     if 'cursor_shape' in parsed:
         w.screen.cursor.shape = parsed['cursor_shape']
     if 'window_padding_width' in parsed:

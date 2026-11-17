@@ -15,6 +15,14 @@ from kitty.typing_compat import EdgeLiteral, NotRequired, ReadableBuffer, Writea
 # Constants {{{
 SCALE_BITS: int
 NULL_COLOR_VALUE: int
+# Which layer of colors patch_color_profiles() changes: the colors set by the
+# program running in the window, the global configured colors, the configured
+# colors of individual windows or the color scheme of the session running in
+# the window, such as from the ssh kitten
+COLOR_LAYER_OVERRIDE: int
+COLOR_LAYER_GLOBAL: int
+COLOR_LAYER_WINDOW: int
+COLOR_LAYER_SESSION: int
 DEVELOP_ROOT: str
 WIDTH_BITS: int
 SUBSCALE_BITS: int
@@ -286,6 +294,7 @@ CURSOR_HOLLOW: int
 NO_CURSOR_SHAPE: int
 CURSOR_UNDERLINE: int
 DECAWM: int
+EXTEND_CELL: int
 LNM: int
 ANIMATION_SAMPLE_WAIT: int
 BGIMAGE_PROGRAM: int
@@ -592,6 +601,7 @@ def dbus_send_notification(
     replaces: int = 0,
     category: str = '',
     muted: bool = False,
+    desktop_entry: str = '',
 ) -> int:
     pass
 
@@ -846,15 +856,25 @@ class ColorProfile:
     def palette_color_is_generated(self, idx: int) -> None: ...
     def get_transparent_background_color(self, index: int) -> Color | None: ...
     def set_transparent_background_color(self, index: int, color: Color | None = None, opacity: float | None = None) -> None: ...
+    def reset_layer(self, layer: int) -> None: ...
+    def color_stack_depth(self) -> int: ...
+    def test_mark_colors(self) -> tuple[tuple[int, int], ...]: ...
 
 def patch_color_profiles(
-    spec: Dict[str, Optional[int]], transparent_background_colors: tuple[tuple[Color, float], ...], profiles: Tuple[ColorProfile, ...], change_configured: bool
+    spec: Dict[str, Optional[int]],
+    transparent_background_colors: Optional[tuple[tuple[Color, float], ...]],
+    profiles: Tuple[ColorProfile, ...],
+    layer: int,
+    clear_upper_layers: bool = False,
 ) -> None:
     pass
 
 def create_canvas(d: bytes, w: int, x: int, y: int, cw: int, ch: int, bpp: int) -> bytes: ...
 def dmabuf_parse_spec(spec: bytes) -> tuple[int, str, int, tuple[tuple[int, int, int], ...]]: ...  # Linux only
 def dmabuf_take_fds(spec: bytes, session_of: int) -> tuple[int, ...]: ...  # Linux only
+def iosurface_create_for_tests(width: int, height: int) -> tuple[int, object]: ...  # macOS only
+def iosurface_held_count() -> int: ...  # macOS only
+def fail_next_graphics_allocation(which: str) -> None: ...
 def os_window_font_size(os_window_id: int, new_sz: float = -1.0, force: bool = False) -> float:
     pass
 
@@ -1226,6 +1246,8 @@ class Screen:
     def test_frame_presented(self, period_us: int, t: int, tu: int) -> None: ...
     def test_input_wake(self) -> dict[str, bool]: ...
     def test_parse_in_chunks(self, data: bytes, chunk_size: int, dump_callback: Any = None) -> None: ...
+    def test_draw_overlay_line(self, text: str, xstart: int, ynum: int, preedit_cursor: int = -1) -> int: ...
+    def test_update_overlay_text(self, text: str, preedit_cursor: int = -1) -> int: ...
     def hyperlink_for_id(self, hyperlink_id: int) -> str: ...
     def erase_last_command(self) -> bool: ...
     def set_progress(self, state: int, percent: int) -> None: ...
@@ -1325,6 +1347,12 @@ class Screen:
     def clear_selection(self) -> None:
         pass
 
+    def start_selection(self, x: int, y: int, rectangle_select: bool = False, extend_mode: int = EXTEND_CELL, in_left_half_of_cell: bool = True) -> None:
+        pass
+
+    def update_selection(self, x: int, y: int, in_left_half_of_cell: bool = False, ended: bool = True, nearest: bool = False) -> None:
+        pass
+
     def set_mode(self, mode: int, private: bool = False) -> None:
         pass
 
@@ -1384,6 +1412,7 @@ class Screen:
     def deep_color(self, color: int) -> Optional[Tuple[int, int, int, int]]: ...
 
     def ime_text_around_cursor(self) -> Tuple[str, str]: ...
+    def overlay_line_start(self) -> int: ...
     def current_pointer_shape(self) -> str: ...
     def change_pointer_shape(self, op: str, name: str) -> None: ...
     def bell(self) -> None: ...

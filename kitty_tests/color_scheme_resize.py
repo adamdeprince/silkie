@@ -127,6 +127,32 @@ class TestColorSchemeResize(BaseTest):
         Boss.on_display_color_change(self.boss, 999)
         self.ae(self.killpg.call_count, 2)
 
+    def test_profile_switch_replaces_window_colors(self):
+        # The colors of a profile and of launch --color are in the window color
+        # layer, switching profiles replaces the profile's colors and keeps the
+        # launch --color ones on top
+        work = Profile('work', 'Work', options={'foreground': ['#123456'], 'color5': ['#222222']})
+        plain = Profile('plain', 'Plain')
+
+        class Manager:
+            def __iter__(inner):
+                return iter(((self.window,),))
+
+        tm = Manager()
+        tm.resize = Mock()
+        tm.apply_options = lambda: apply_to_window(self.window, tm.profile)
+        self.boss.active_tab_manager = tm
+        self.window.creation_spec = SimpleNamespace(colors=('color4=#111111',))
+        cp = self.screen.color_profile
+        configured_fg = int(cp.default_fg)
+        with patch('kitty.boss.load_profiles', return_value={'work': work, 'plain': plain}), patch('kitty.boss.apply_to_os_window'):
+            Boss.set_window_profile(self.boss, 'work')
+            self.ae((int(cp.default_fg), cp.as_dict()['color5'], cp.as_dict()['color4']), (0x123456, 0x222222, 0x111111))
+            Boss.set_window_profile(self.boss, 'plain')
+            self.ae(int(cp.default_fg), configured_fg)
+            self.ae(cp.as_dict()['color4'], 0x111111)
+            self.assertNotEqual(cp.as_dict()['color5'], 0x222222)
+
     def test_config_and_settings_reload_coalesce_color_layers(self):
         themes = ThemeColors()
         self.boss.mappings = SimpleNamespace(update_keymap=Mock())

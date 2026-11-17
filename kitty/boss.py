@@ -80,6 +80,7 @@ from .fast_data_types import (
     native_ui_available,
     BOTTOM_EDGE,
     CLOSE_BEING_CONFIRMED,
+    COLOR_LAYER_WINDOW,
     GLFW_FKEY_ESCAPE,
     GLFW_MOD_ALT,
     GLFW_MOD_CONTROL,
@@ -450,6 +451,7 @@ class Boss:
         self.update_check_process: Optional['PopenType[bytes]'] = None
         self.window_id_map: WeakValueDictionary[int, Window] = WeakValueDictionary()
         self.color_settings_at_startup: dict[str, Color | None] = {k: opts[k] for k in opts if isinstance(opts[k], Color) or k in nullable_colors}
+        self.transparent_background_colors_at_startup = opts.transparent_background_colors
         self.current_visual_select: VisualSelect | None = None
         # A list of events received so far that are potentially part of a sequence keybinding.
         self.cached_values = cached_values
@@ -616,12 +618,22 @@ class Boss:
         tm = self.active_tab_manager
         profile = load_profiles().get(profile_id)
         if tm is not None and profile is not None:
+            from .launch import apply_colors
+
             windows = tuple(w for tab in tm for w in tab)
             colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in windows}
             bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in windows}
+            # The colors of the previous profile are in the window color layer,
+            # which the new profile's colors, if any, replace, and launch --color is
+            # in that layer too, above the profile's colors
+            for w in windows:
+                w.screen.color_profile.reset_layer(COLOR_LAYER_WINDOW)
             tm.profile = profile
             apply_to_os_window(tm)
             tm.apply_options()
+            for w in windows:
+                if w.creation_spec and w.creation_spec.colors:
+                    apply_colors(w, w.creation_spec.colors)
             tm.resize()
             for w in windows:
                 if w.screen.color_profile.default_bg != bg_colors_before[w.id]:
@@ -2270,6 +2282,8 @@ class Boss:
     def on_focus(self, os_window_id: int, focused: bool) -> None:
         tm = self.os_window_map.get(os_window_id)
         if tm is not None:
+            if not focused:  # the release that would end a selection in the tab bar may never arrive
+                tm.tab_bar.cancel_selection()
             w = tm.active_window
             if w is not None:
                 w.focus_changed(focused)
@@ -3299,12 +3313,19 @@ class Boss:
     def set_primary_selection(self) -> None:
         w = self.active_window
         if w is not None and not w.destroyed:
-            text = w.text_for_selection()
-            if text:
-                set_primary_selection(text)
-                self.handle_clipboard_loss('primary', w.id)
-                if get_options().copy_on_select:
-                    self.copy_to_buffer(get_options().copy_on_select)
+            self.copy_selected_text(w.text_for_selection(), w.id)
+
+    def cancel_tab_bar_selection(self, os_window_id: int) -> None:
+        if (tm := self.os_window_map.get(os_window_id)) is not None:
+            tm.tab_bar.cancel_selection()
+
+    def copy_selected_text(self, text: str, source_window_id: int = 0) -> None:
+        "Make text that was just selected the primary selection and copy it as per copy_on_select"
+        if text:
+            set_primary_selection(text)
+            self.handle_clipboard_loss('primary', source_window_id)
+            if get_options().copy_on_select:
+                self.copy_text_to_buffer(text, get_options().copy_on_select, source_window_id)
 
     def get_active_selection(self) -> str | None:
         w = self.active_window
@@ -3339,16 +3360,18 @@ class Boss:
     def copy_to_buffer(self, buffer_name: str) -> None:
         w = self.window_for_dispatch or self.active_window
         if w is not None and not w.destroyed:
-            text = w.text_for_selection()
-            if text:
-                if buffer_name == 'clipboard':
-                    set_clipboard_string(text)
-                    self.handle_clipboard_loss('clipboard', w.id)
-                elif buffer_name == 'primary':
-                    set_primary_selection(text)
-                    self.handle_clipboard_loss('primary', w.id)
-                else:
-                    self.set_clipboard_buffer(buffer_name, text)
+            self.copy_text_to_buffer(w.text_for_selection(), buffer_name, w.id)
+
+    def copy_text_to_buffer(self, text: str, buffer_name: str, source_window_id: int = 0) -> None:
+        if text:
+            if buffer_name == 'clipboard':
+                set_clipboard_string(text)
+                self.handle_clipboard_loss('clipboard', source_window_id)
+            elif buffer_name == 'primary':
+                set_primary_selection(text)
+                self.handle_clipboard_loss('primary', source_window_id)
+            else:
+                self.set_clipboard_buffer(buffer_name, text)
 
     @ac(
         'cp',
@@ -3807,15 +3830,11 @@ class Boss:
                         self.show_error(_('Spatial display'), str(error))
             update_native_menus()
         # Update colors
-        from .colors import color_scheme_spec, patch_colors
+        from .colors import color_scheme_spec, colors_forced_by_eink, patch_colors
 
         if (spec := color_scheme_spec(opts)) is not None:
-            patch_colors(spec, configured=True, notify_on_bg_change=False)
-        if theme_colors.has_applied_theme:
-            theme_colors.refresh()
-            if theme_colors.has_applied_theme:  # in case the theme file was deleted
-                assert theme_colors.applied_theme  # to make type check happy
-                theme_colors.apply_theme(theme_colors.applied_theme, notify_on_bg_change=False)
+            patch_colors(spec, None, True, notify_on_bg_change=False, replace_window_colors=colors_forced_by_eink(opts))
+        theme_colors.on_config_reload(opts_already_patched=True)
         for w in self.all_windows:
             if w.screen.color_profile.default_bg != bg_colors_before.get(w.id):
                 self.default_bg_changed_for(w.id)
@@ -4461,6 +4480,9 @@ class Boss:
 
     def on_system_color_scheme_change(self, appearance: ColorSchemes, is_initial_value: bool) -> None:
         theme_colors.on_system_color_scheme_change(appearance, is_initial_value)
+        for w in self.all_windows:
+            if w.session_color_schemes:
+                w.apply_session_color_scheme(appearance)
 
     def on_display_color_change(self, os_window_id: int) -> None:
         if (tm := self.os_window_map.get(os_window_id)) is not None:

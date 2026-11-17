@@ -823,6 +823,154 @@ class TestGraphics(BaseTest):
         finally:
             os.close(dmabuf), os.close(mfd)
 
+    @unittest.skipUnless(sys.platform == 'darwin', 'IOSurfaces are macOS only')
+    def test_surface_image_with_paused_rendering(self):
+        # The copy of the images made while rendering is paused must not take
+        # the GPU surface of a t=g image along, freeing the copy released it
+        # a second time.
+        from kitty.fast_data_types import iosurface_create_for_tests, iosurface_held_count
+        s, g, pl, sl = load_helpers(self)
+        base = iosurface_held_count()
+        sid, handle = iosurface_create_for_tests(4, 2)
+        self.ae(pl(f'iosurface:{sid}', t='g', i=5), 'OK')
+        img = g.image_for_client_id(5)
+        self.ae((img['width'], img['height']), (4, 2))
+        self.ae(iosurface_held_count(), base + 1)
+        # paused and resumed, which frees the copies
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(iosurface_held_count(), base + 1)
+        self.assertTrue(s.pause_rendering(False))
+        self.ae(iosurface_held_count(), base + 1)
+        self.ae(pl('', a='r', i=5), 'OK')
+        # the image deleted while its copy is shown, then the copy freed
+        self.assertTrue(s.pause_rendering(True, 5000))
+        pl('', a='d', d='I', i=5)
+        self.assertIsNone(g.image_for_client_id(5))
+        self.ae(iosurface_held_count(), base)
+        self.assertTrue(s.pause_rendering(False))
+        self.ae(iosurface_held_count(), base)
+        # a screen freed while paused frees its copies too
+        self.ae(pl(f'iosurface:{sid}', t='g', i=6), 'OK')
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(iosurface_held_count(), base + 1)
+        del s, g, pl, sl
+        import gc
+        gc.collect()
+        self.ae(iosurface_held_count(), base)
+        del handle
+
+    def test_inflate_failures(self):
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        s, g, pl, sl = load_helpers(self)
+        data = byte_block(4 * 16 * 8)
+        z = zlib.compress(data)
+        # Out of memory fails the command and nothing else
+        fail_next_graphics_allocation('inflate')
+        self.assertTrue(pl(z, s=16, v=8, o='z').startswith('ENOMEM:'))
+        sl(z, s=16, v=8, o='z', expecting_data=data)
+        # more or less data than the size of the image, and data that is not zlib
+        for wrong in data + b'abcd', data[:-4]:
+            self.ae(pl(zlib.compress(wrong), s=16, v=8, o='z'), 'EINVAL:Image data size post inflation does not match expected size')
+        for bad in z[:len(z) // 2], b'not zlib data':
+            r = pl(bad, s=16, v=8, o='z')
+            self.assertTrue(r.startswith('EINVAL:Failed to inflate image data'), r)
+        # a stream that ends exactly at the end of the image, compressed in many small blocks
+        c = zlib.compressobj()
+        many = b''.join(c.compress(data[i:i + 7]) + c.flush(zlib.Z_FULL_FLUSH) for i in range(0, len(data), 7)) + c.flush()
+        sl(many, s=16, v=8, o='z', expecting_data=data)
+
+    def test_out_of_memory(self):
+        # Running out of memory fails the command, or skips what is being
+        # drawn, and leaves everything else as it was
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        s, g, pl, sl = load_helpers(self)
+        self.assertRaises(KeyError, fail_next_graphics_allocation, 'nonsense')
+
+        # a new image, and its texture
+        for which in 'image', 'texture':
+            fail_next_graphics_allocation(which)
+            self.assertTrue(pl('abc', s=1, v=1, f=24, i=3).startswith('ENOMEM:'), which)
+            self.ae(g.image_count, 0)
+        sl('abc', s=1, v=1, f=24, i=3)
+        # the texture of an image sent again, whose old pixels are gone already
+        fail_next_graphics_allocation('texture')
+        self.assertTrue(pl('def', s=1, v=1, f=24, i=3).startswith('ENOMEM:'))
+        self.ae(g.image_count, 0)
+        sl('def', s=1, v=1, f=24, i=3)
+        # a free id for an image sent by number
+        fail_next_graphics_allocation('client_ids')
+        self.assertTrue(pl('ghi', s=1, v=1, f=24, i=0, I=17).startswith('ENOMEM:'))
+        self.ae(g.image_count, 1)
+        self.ae(pl('ghi', s=1, v=1, f=24, i=0, I=17), 'OK')
+        self.ae(g.image_count, 2)
+        self.ae(g.image_for_client_number(17)['client_id'], 1)
+        # a placement
+        fail_next_graphics_allocation('ref')
+        self.assertTrue(pl('', a='p', i=3).startswith('ENOMEM:'))
+        self.ae(g.image_for_client_id(3)['refs.count'], 0)
+        self.ae(pl('', a='p', i=3), 'OK')
+        self.ae(g.image_for_client_id(3)['refs.count'], 1)
+
+    def test_out_of_memory_for_placement_ids(self):
+        # The placement id of a new placement, and the copies of the
+        # placements shown while rendering is paused
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        cw, ch = 10, 20
+        s, dx, dy, put_image, put_ref, layers, rect_eq = put_helpers(self, cw, ch, cols=100, lines=10)
+        g = s.grman
+        self.ae(put_image(s, cw, ch, cursor_movement=1)[1], 'OK')
+        fail_next_graphics_allocation('placement_id')
+        self.assertTrue(put_ref(s, id=1, placement_id=7, cursor_movement=1)[1][0].startswith('ENOMEM'))
+        self.ae(g.image_for_client_id(1)['refs.count'], 1)
+        self.ae(put_ref(s, id=1, placement_id=7, cursor_movement=1)[1][0], 'OK')
+        self.ae(put_ref(s, id=1, placement_id=8, cursor_movement=1)[1][0], 'OK')
+        self.ae(len(layers(s)), 3)
+        # a placement that could not be copied is not shown while paused,
+        # update_graphics_layers() gives what is drawn, the paused copies then
+        fail_next_graphics_allocation('ref')
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(len(s.update_graphics_layers()), 2)
+        self.assertTrue(s.pause_rendering(False))
+        self.ae(len(s.update_graphics_layers()), 3)
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(len(s.update_graphics_layers()), 3)
+        self.assertTrue(s.pause_rendering(False))
+
+    def test_out_of_memory_for_render_data(self):
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        cw, ch = 10, 20
+        s, dx, dy, put_image, put_ref, layers, rect_eq = put_helpers(self, cw, ch, cols=100, lines=10)
+        self.ae(put_image(s, cw, ch, cursor_movement=1)[1], 'OK')
+        # more placements than the render data has room for at first
+        n = 70
+        for i in range(1, n):
+            self.ae(put_ref(s, id=1, placement_id=i + 1, cursor_movement=1)[1][0], 'OK')
+        fail_next_graphics_allocation('render_data')
+        self.assertLess(len(layers(s)), n)
+        self.ae(len(layers(s)), n)
+
+    def test_out_of_memory_sorting_images_to_evict(self):
+        # Silkie has no storage quota, see docs/silkie/image-tiling.rst. Without the
+        # memory to sort the images that could be evicted when memory runs out,
+        # none is evicted and the command fails
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        s = self.create_screen()
+        g = s.grman
+        li = make_send_command(s)
+        big = dict(s=4, v=6, payload='x' * 72)
+        self.assertEqual(li(a='t', i=1, **big).code, 'OK')
+        self.assertEqual(li(a='t', i=2, N=1, **big).code, 'OK')
+        g.simulated_alloc_failures = 1
+        fail_next_graphics_allocation('sorted')
+        self.assertEqual(li(a='t', i=3).code, 'ENOMEM')
+        self.assertIsNotNone(g.image_for_client_id(1))
+        self.assertIsNotNone(g.image_for_client_id(2))
+        # with it, the transient image goes
+        g.simulated_alloc_failures = 1
+        self.assertEqual(li(a='t', i=3).code, 'OK')
+        self.assertIsNone(g.image_for_client_id(2))
+        self.assertIsNotNone(g.image_for_client_id(1))
+
     def test_load_images_from_file_edge_cases(self):
         s, g, pl, sl = load_helpers(self)
         random_data = byte_block(32 * 1024)

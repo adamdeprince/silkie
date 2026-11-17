@@ -168,6 +168,9 @@ typedef struct Options {
         size_t count;
     } detect_url_regex;
     bool tab_bar_hidden;
+    struct {
+        unsigned padding, min_cols;
+    } vertical_tab_bar;
     double font_size;
     struct {
         double outer, inner;
@@ -758,6 +761,8 @@ typedef struct GlobalState {
         monotonic_t at;
     } logout_quit;
     bool redirect_mouse_handling;
+    // Set once an IME composition has been seen, see sync_ime_position_with_cursor()
+    bool ime_used;
     WindowLogoTable *all_window_logos;
     int gl_version;
     bool supports_framebuffer_srgb;
@@ -933,6 +938,7 @@ bool is_os_window_fullscreen(OSWindow *);
 void update_ime_focus(OSWindow *osw, bool focused);
 void update_ime_position(Window *w, Screen *screen);
 bool update_ime_position_for_window(id_type window_id, bool force, int update_focus);
+void update_ime_state_in_os_window(OSWindow *osw, Window *window, int update_focus);
 void set_ignore_os_keyboard_processing(bool enabled);
 void push_modifier_remap_to_glfw(void);
 bool set_wheel_mappings(PyObject *py_opts, Options *opts);

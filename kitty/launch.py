@@ -14,7 +14,7 @@ from .cli import parse_args
 from .cli_stub import LaunchCLIOptions
 from .clipboard import set_clipboard_string, set_primary_selection
 from .constants import is_wayland
-from .fast_data_types import add_timer, get_boss, get_options, get_os_window_title, patch_color_profiles
+from .fast_data_types import COLOR_LAYER_WINDOW, add_timer, get_boss, get_options, get_os_window_title, patch_color_profiles
 from .options.utils import env as parse_env
 from .tabs import Tab, TabManager
 from .types import DockSpec, LayerShellConfig, OverlayType, dock_edges, parse_dock_spec, run_once
@@ -190,6 +190,10 @@ by the shell (needs :ref:`shell_integration` to work). The special value
 oldest foreground process associated with the currently active window rather
 than the newest foreground process. Finally, the special value :code:`root`
 refers to the process that was originally started when the window was created.
+If kitty itself started that process via a wrapper, such as :file:`/usr/bin/login`
+on macOS, the wrapper is ignored and its first child is used instead. The
+working directory reported by the shell is used only when the root process is in
+the foreground.
 
 When opening in the same working directory as the current window causes the new
 window to connect to a remote host, you can use the :option:`--hold-after-ssh`
@@ -656,7 +660,7 @@ def apply_colors(window: Window, spec: Sequence[str]) -> None:
 
     colors, transparent_background_colors = parse_colors(spec)
     profiles = (window.screen.color_profile,)
-    patch_color_profiles(colors, transparent_background_colors, profiles, True)
+    patch_color_profiles(colors, transparent_background_colors, profiles, COLOR_LAYER_WINDOW)
 
 
 def parse_var(defn: Iterable[str]) -> Iterator[tuple[str, str]]:

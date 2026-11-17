@@ -28,10 +28,12 @@ from typing import (
 from .child import ProcessDesc
 from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .clipboard import ClipboardRequestManager, set_clipboard_string
+from .colors import ColorSchemes, SessionColorSchemes, color_profile_signature, colors_forced_by_eink, parse_color_scheme_variants
 from .constants import (
     app_display_name,
     clear_handled_signals,
     config_dir,
+    config_dir_files_ignored,
     is_macos,
     kitten_exe,
     unserialize_launch_flag,
@@ -76,6 +78,7 @@ from .fast_data_types import (
     get_options,
     get_window_logo_settings_if_not_default,
     glfw_get_keyboard_repeat_interval,
+    glfw_get_system_color_theme,
     is_css_pointer_name_valid,
     is_modifier_key,
     last_focused_os_window_id,
@@ -173,9 +176,20 @@ class CwdRequest:
         window = self.window
         if not window:
             return ''
-        reported_cwd = path_from_osc7_url(window.screen.last_reported_cwd) if window.screen.last_reported_cwd else ''
+        reported_cwd = self.usable_reported_cwd(window)
         if reported_cwd and not window.child_is_remote and (self.request_type is CwdRequestType.last_reported or window.at_prompt):
             return reported_cwd
+        return self.cwd_of_process(window)
+
+    def usable_reported_cwd(self, window: 'Window') -> str:
+        reported_cwd = path_from_osc7_url(window.screen.last_reported_cwd) if window.screen.last_reported_cwd else ''
+        # For root, the reported cwd is only meaningful if it comes from the
+        # root process rather than from some other program it is running
+        if reported_cwd and (self.request_type is not CwdRequestType.root or window.root_in_foreground_processes):
+            return reported_cwd
+        return ''
+
+    def cwd_of_process(self, window: 'Window') -> str:
         if self.request_type is CwdRequestType.root:
             return window.get_cwd_of_root_child() or ''
         return window.get_cwd_of_child(oldest=self.request_type is CwdRequestType.oldest) or ''
@@ -184,8 +198,8 @@ class CwdRequest:
         window = self.window
         if not window:
             return ''
-        reported_cwd = path_from_osc7_url(window.screen.last_reported_cwd) if window.screen.last_reported_cwd else ''
-        if reported_cwd and (self.request_type is not CwdRequestType.root or window.root_in_foreground_processes):
+        reported_cwd = self.usable_reported_cwd(window)
+        if reported_cwd:
             ssh_kitten_cmdline = window.ssh_kitten_cmdline()
             if ssh_kitten_cmdline:
                 run_shell = argv[0] == resolved_shell(get_options())[0]
@@ -233,7 +247,7 @@ class CwdRequest:
                 return ''
             if not window.child_is_remote and (self.request_type is CwdRequestType.last_reported or window.at_prompt):
                 return reported_cwd
-        return window.get_cwd_of_child(oldest=self.request_type is CwdRequestType.oldest) or ''
+        return self.cwd_of_process(window)
 
 
 def process_title_from_child(title: memoryview, is_base64: bool, default_title: str) -> str:
@@ -560,6 +574,8 @@ def load_paste_filter() -> Callable[[str], str]:
     import runpy
     import traceback
 
+    if config_dir_files_ignored():
+        return lambda text: text
     try:
         m = runpy.run_path(os.path.join(config_dir, 'paste-actions.py'))
         func: Callable[[str], str] = m['filter_paste']
@@ -702,13 +718,13 @@ def color_control(cp: ColorProfile, code: int, value: str | bytes | memoryview =
                         elif colnum > 15:
                             cp.set_color(colnum, NULL_COLOR_VALUE)
                         else:
-                            cp.set_color(colnum, get_options().color_table[colnum])
+                            cp.reset_color(colnum)
         else:
             if attr:
                 delattr(cp, attr)
             else:
                 if 0 <= colnum <= 255:
-                    cp.set_color(colnum, get_options().color_table[colnum])
+                    cp.reset_color(colnum)
     if responses:
         payload = ';'.join(f'{k}={v}' for k, v in responses)
         return f'{code};{payload}'
@@ -883,8 +899,10 @@ class Window:
         if profile is not None:
             apply_to_window(self, profile)
         self.screen.track_activity = bool(opts.tab_activity_symbol)
+        self.session_color_schemes = SessionColorSchemes()
         if copy_colors_from is not None:
             self.screen.copy_colors_from(copy_colors_from.screen)
+            self.session_color_schemes.copy_from(copy_colors_from.session_color_schemes)
         self.remote_control_passwords = remote_control_passwords
         self.allow_remote_control = allow_remote_control
         self.scroll_animation = ScrollAnimation()
@@ -1022,7 +1040,7 @@ class Window:
         if field in ('id', 'window_id'):
             return pat.pattern == str(self.id)
         if field == 'pid':
-            return pat.pattern == str(self.child.pid)
+            return pat.pattern == str(self.child.root_pid)
         if field == 'title':
             return pat.search(self.override_title or self.title) is not None
         if field in 'cwd':
@@ -1788,8 +1806,26 @@ class Window:
                 tab.on_bell(self)
 
     def color_profile_popped(self, bg_changed: bool) -> None:
+        if self.session_color_schemes.color_stack_popped(self.screen.color_profile.color_stack_depth()):
+            self.apply_session_color_scheme()
         if bg_changed:
             get_boss().default_bg_changed_for(self.id, via_escape_code=True)
+
+    def apply_session_color_scheme(self, scheme: ColorSchemes | None = None) -> None:
+        # E-ink mode shows black on white over every color layer, the session
+        # colors are applied again when it is turned off
+        if colors_forced_by_eink(get_options()):
+            return
+        cp = self.screen.color_profile
+        bg_before = cp.default_bg
+        colors_before = color_profile_signature(cp)
+        self.session_color_schemes.apply(cp, glfw_get_system_color_theme() if scheme is None else scheme)
+        if cp.default_bg != bg_before:
+            get_boss().default_bg_changed_for(self.id)
+        # This bypasses patch_colors(), which tells the program its colors changed
+        if color_profile_signature(cp) != colors_before:
+            self.notify_child_of_color_change()
+        self.refresh()
 
     def report_color(self, code: str, col: Color) -> None:
         r, g, b = col.red, col.green, col.blue
@@ -1803,6 +1839,10 @@ class Window:
 
         if is_hard_reset and self.program_status.clear():
             self.program_status_changed()
+        # A reset clears the color stack, so the session color schemes, which
+        # are associated with color stack entries, are cleared as well
+        if self.session_color_schemes.clear():
+            self.apply_session_color_scheme()
         if self.progress.state is not ProgressState.unset:
             self.progress.update(0)  # unset
             if (tab := self.tabref()) is not None:
@@ -1957,6 +1997,22 @@ class Window:
 
         for line in get_ssh_data(msg, f'{os.getpid()}-{self.id}'):
             self.write_to_child(line)
+
+    def handle_remote_color_scheme(self, msg: memoryview) -> None:
+        # Used by the ssh kitten to set colors for the dark, light and no
+        # preference system color schemes, after pushing the current colors onto
+        # the color stack. The colors are removed when the stack is popped.
+        try:
+            variants = parse_color_scheme_variants(json.loads(base64_decode(msg)))
+        except Exception as e:
+            log_error(f'Invalid color scheme received from client: {e}')
+            return
+        depth = self.screen.color_profile.color_stack_depth()
+        if not depth:
+            log_error('Ignoring color scheme received from client as it was not preceded by pushing colors onto the color stack')
+            return
+        self.session_color_schemes.add(depth, variants)
+        self.apply_session_color_scheme()
 
     def handle_kitten_result(self, msg: memoryview) -> None:
         import base64
@@ -2342,7 +2398,7 @@ class Window:
 
     @property
     def root_in_foreground_processes(self) -> bool:
-        q = self.child.pid
+        q = self.child.root_pid
         for p in self.child.foreground_processes:
             if p['pid'] == q:
                 return True
@@ -2540,7 +2596,7 @@ class Window:
             'is_active': is_active,
             'title': self.title,
             'title_overridden': self.override_title is not None,
-            'pid': self.child.pid,
+            'pid': self.child.root_pid,
             'cwd': self.child.current_cwd or self.child.cwd,
             'cmdline': self.child.cmdline,
             'last_reported_cmdline': self.last_cmd_cmdline,
@@ -2683,7 +2739,7 @@ class Window:
             elif not self.at_prompt:
                 if self.last_cmd_cmdline:
                     unserialize_data['cmd_at_shell_startup'] = self.last_cmd_cmdline
-                elif self.child.pid != (pid := self.child.pid_for_cwd) and pid is not None:
+                elif self.child.root_pid != (pid := self.child.pid_for_cwd) and pid is not None:
                     # we have a shell running some command
                     with suppress(Exception):
                         fcmd = self.child.cmdline_of_pid(pid)

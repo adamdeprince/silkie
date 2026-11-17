@@ -2537,7 +2537,10 @@ opt(
 The maximum number of cells that can be used to render the text in a tab.
 A value of zero means that no limit is applied. For vertical tab bars, kitty
 uses a default sidebar width sized for about twenty title cells when this is
-left unset.
+left unset. When it is set, the sidebar is made just wide enough to fit titles
+of this length along with the decorations drawn by :opt:`tab_bar_style`. With
+the :code:`fade` style, use fewer values in :opt:`tab_fade` for a narrower
+sidebar.
 """,
 )
 
@@ -2991,6 +2994,27 @@ The value :code:`semantic` means use an algorithm that gives good readability in
 but changes the meaning of some colors compared to the fixed color encoding. The value
 :code:`legacy` gives worse readability in light themes but less deviation from the fixed
 color encoding.
+""",
+)
+
+opt(
+    'automatic_light_theme',
+    'yes',
+    option_type='to_bool',
+    long_text="""
+Use a built-in light color theme when the operating system color scheme is
+light. It applies only when there is no :file:`light-theme.auto.conf` in the
+Silkie config directory (see :ref:`auto_color_scheme`) and this config file does
+not set any colors, so it never replaces a color scheme you have chosen,
+including one from an included theme file. When the system switches to dark or
+no preference and there is no theme file for that scheme, the default colors
+are restored. Colors set by programs, by the ssh kitten or with
+:code:`launch --color` stay on top of the built-in theme, as with theme files.
+The theme is the file :file:`builtin-light-theme.conf` in the Silkie package, it
+is reproduced in the :ref:`auto_color_scheme` documentation. To customize it,
+copy it to :file:`light-theme.auto.conf` in the Silkie config directory. Set this
+option to :code:`no` to keep the default colors regardless of the system color
+scheme.
 """,
 )
 

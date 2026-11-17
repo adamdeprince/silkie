@@ -820,8 +820,11 @@ vertical_tab_bar_cols(const OSWindow *os_window, long margin_outer, long margin_
     long available_width = (long)os_window->viewport_width - margin_outer - margin_inner;
     if (available_width <= 0) return 0;
     unsigned available_cols = MAX(1u, (unsigned)available_width / cell_width);
-    unsigned title_cols = OPT(tab_title_max_length) > 0 ? (unsigned)OPT(tab_title_max_length) : 20u;
-    unsigned desired_cols = title_cols + 8u;
+    // Without an explicit title length use a default sidebar wide enough for
+    // about twenty title cells, otherwise fit the title and whatever
+    // decorations the tab bar style draws around it.
+    unsigned desired_cols = 28u;
+    if (OPT(tab_title_max_length) > 0) desired_cols = MAX((unsigned)OPT(tab_title_max_length) + OPT(vertical_tab_bar.padding), OPT(vertical_tab_bar.min_cols));
     unsigned soft_max = available_cols / 3u;
     if (soft_max < 6u) soft_max = available_cols;
     return MAX(1u, MIN(available_cols, MIN(desired_cols, MAX(1u, soft_max))));
@@ -963,6 +966,15 @@ dispatch_pending_clicks(id_type timer_id UNUSED, void *data UNUSED) {
     if (any_dispatched) request_tick_callback();
 }
 
+void
+update_ime_state_in_os_window(OSWindow *osw, Window *window, int update_focus) {
+    OSWindow *orig = global_state.callback_os_window;
+    global_state.callback_os_window = osw;
+    if (update_focus) update_ime_focus(osw, update_focus > 0);
+    if (update_focus >= 0 && window->render_data.screen) { update_ime_position(window, window->render_data.screen); }
+    global_state.callback_os_window = orig;
+}
+
 bool
 update_ime_position_for_window(id_type window_id, bool force, int update_focus) {
     for (size_t o = 0; o < global_state.num_os_windows; o++) {
@@ -974,11 +986,7 @@ update_ime_position_for_window(id_type window_id, bool force, int update_focus) 
                 if (window->id == window_id) {
                     // The screen may not be ready after the new window is created and focused, and still needs to enable IME.
                     if ((window->render_data.screen && (force || osw->is_focused)) || update_focus > 0) {
-                        OSWindow *orig = global_state.callback_os_window;
-                        global_state.callback_os_window = osw;
-                        if (update_focus) update_ime_focus(osw, update_focus > 0);
-                        if (update_focus >= 0 && window->render_data.screen) { update_ime_position(window, window->render_data.screen); }
-                        global_state.callback_os_window = orig;
+                        update_ime_state_in_os_window(osw, window, update_focus);
                         return true;
                     }
                     return false;
@@ -1144,6 +1152,45 @@ PYWRAP0(get_options) {
     return global_state.options_object;
 }
 
+static bool
+set_vertical_tab_bar_padding(PyObject *py_opts, Options *opts) {
+    // The number of cells each tab bar style draws around the title in a
+    // vertical tab bar, see the draw_tab_with_* functions in tab_bar.py.
+    // Custom styles can draw anything, so give them generous room.
+    opts->vertical_tab_bar.padding = 8;
+    opts->vertical_tab_bar.min_cols = 1;
+    RAII_PyObject(style, PyObject_GetAttrString(py_opts, "tab_bar_style"));
+    if (!style) return false;
+    if (PyUnicode_CompareWithASCIIString(style, "fade") == 0) {
+        RAII_PyObject(fade, PyObject_GetAttrString(py_opts, "tab_fade"));
+        if (!fade) return false;
+        Py_ssize_t n = PyObject_Length(fade);
+        if (n < 0) return false;
+        // Fade cells on both sides of the title, the trailing ones are only
+        // drawn when they end before the last column
+        opts->vertical_tab_bar.padding = 2 * (unsigned)n + (n < 2 ? 1 : 0);
+    } else if (PyUnicode_CompareWithASCIIString(style, "powerline") == 0) {
+        // Leading space, trailing space and the separator
+        opts->vertical_tab_bar.padding = 3;
+    } else if (PyUnicode_CompareWithASCIIString(style, "slant") == 0) {
+        // Separators and spaces on both sides of the title, tabs narrower
+        // than six cells show only an ellipsis
+        opts->vertical_tab_bar.padding = 4;
+        opts->vertical_tab_bar.min_cols = 6;
+    } else if (PyUnicode_CompareWithASCIIString(style, "separator") == 0) {
+        // The spaces in tab_separator, plus the column reserved at the end
+        RAII_PyObject(sep, PyObject_GetAttrString(py_opts, "tab_separator"));
+        if (!sep) return false;
+        Py_ssize_t len = PyUnicode_GetLength(sep);
+        if (len < 0) return false;
+        unsigned spaces = 0;
+        for (Py_ssize_t i = 0; i < len && PyUnicode_READ_CHAR(sep, i) == ' '; i++) spaces++;
+        for (Py_ssize_t i = len - 1; i >= (Py_ssize_t)spaces && PyUnicode_READ_CHAR(sep, i) == ' '; i--) spaces++;
+        opts->vertical_tab_bar.padding = spaces + 1;
+    }
+    return true;
+}
+
 PYWRAP1(set_options) {
     PyObject *opts;
     int is_wayland = 0, debug_rendering = 0, debug_font_fallback = 0;
@@ -1163,6 +1210,7 @@ PYWRAP1(set_options) {
     if (!convert_opts_from_python_opts(opts, &global_state.opts)) return NULL;
     if (!set_wheel_mappings(opts, &global_state.opts)) return NULL;
     if (!set_url_mappings(opts, &global_state.opts)) return NULL;
+    if (!set_vertical_tab_bar_padding(opts, &global_state.opts)) return NULL;
     push_modifier_remap_to_glfw();
     Py_XDECREF(global_state.options_object);
     global_state.options_object = Py_NewRef(opts);
@@ -1739,30 +1787,37 @@ PYWRAP1(patch_global_colors) {
     PyObject *spec;
     int configured;
     if (!PyArg_ParseTuple(args, "Op", &spec, &configured)) return NULL;
-#define P(name)                                                         \
-    {                                                                   \
-        PyObject *val = PyDict_GetItemString(spec, #name);              \
-        if (val) {                                                      \
-            if (val == Py_None) OPT(name) = 0;                          \
-            else if (PyLong_Check(val)) OPT(name) = PyLong_AsLong(val); \
-        }                                                               \
+#define P(name, convert)                                                 \
+    {                                                                    \
+        PyObject *val = PyDict_GetItemString(spec, #name);               \
+        if (val) {                                                       \
+            if (val == Py_None) OPT(name) = 0;                           \
+            else if (PyLong_Check(val)) {                                \
+                const __typeof__(convert(val)) converted = convert(val); \
+                if (PyErr_Occurred()) return NULL;                       \
+                OPT(name) = converted;                                   \
+            }                                                            \
+        }                                                                \
     }
-    P(active_border_color);
-    P(inactive_border_color);
-    P(bell_border_color);
-    P(tab_bar_background);
-    P(tab_bar_margin_color);
-    P(macos_titlebar_color);
-    P(wayland_titlebar_color);
-    P(scrollbar_handle_color);
-    P(scrollbar_track_color);
+    P(active_border_color, PyLong_AsLong);
+    P(inactive_border_color, PyLong_AsLong);
+    P(bell_border_color, PyLong_AsLong);
+    P(tab_bar_background, PyLong_AsLong);
+    P(tab_bar_margin_color, PyLong_AsLong);
+    // Signed because of the negative light/dark sentinels. An RGB payload with
+    // bit 31 set would overflow a 32-bit long, but macOS is 64-bit only.
+    P(macos_titlebar_color, PyLong_AsLong);
+    // The RGB payload of these options can set bit 31.
+    P(wayland_titlebar_color, PyLong_AsUnsignedLong);
+    P(scrollbar_handle_color, PyLong_AsUnsignedLong);
+    P(scrollbar_track_color, PyLong_AsUnsignedLong);
     if (configured) {
-        P(background);
+        P(background, PyLong_AsLong);
         const color_type prev_url_color = OPT(url_color);
-        P(url_color);
+        P(url_color, PyLong_AsLong);
         if (OPT(url_color) != prev_url_color) mark_all_color_profiles_dirty();
     }
-    if (PyErr_Occurred()) return NULL;
+#undef P
     Py_RETURN_NONE;
 }
 

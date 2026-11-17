@@ -325,7 +325,7 @@ def debug_config(opts: KittyOpts | None = None, global_shortcuts: dict[str, Sing
     p(yellow('  base dir:'), kitty_base_dir)
     p(yellow('  extensions dir:'), extensions_dir)
     p(yellow('  system shell:'), shell_path)
-    p(f'System color scheme: {green(glfw_get_system_color_theme())}. Applied color theme type: {yellow(theme_colors.applied_theme or "none")}')
+    p(f'System color scheme: {green(glfw_get_system_color_theme())}. Applied color theme type: {yellow(theme_colors.applied_theme or "none")}{" (built-in)" if theme_colors.applied_builtin_theme else ""}')
     if opts.config_paths:
         p(green('Loaded config files:'))
         p(' ', '\n  '.join(opts.config_paths))

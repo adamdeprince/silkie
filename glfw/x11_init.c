@@ -1197,7 +1197,7 @@ _glfwPlatformTerminate(void) {
         XCloseDisplay(_glfw.x11.display);
         _glfw.x11.display = NULL;
         uninstall_error_handler();
-        _glfw.x11.eventLoopData.fds[0].fd = -1;
+        if (_glfw.x11.eventLoopData.watches_count) _glfw.x11.eventLoopData.fds[0].fd = -1;
     }
 
     if (_glfw.x11.xcursor.handle) {

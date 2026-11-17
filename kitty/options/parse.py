@@ -76,6 +76,9 @@ class Parser:
     def auto_reload_config(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['auto_reload_config'] = float(val)
 
+    def automatic_light_theme(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['automatic_light_theme'] = to_bool(val)
+
     def background(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['background'] = to_color(val)
 

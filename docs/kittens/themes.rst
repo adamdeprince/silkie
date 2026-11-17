@@ -79,6 +79,16 @@ When using these colors, you can still dynamically change colors, but the next
 time the OS changes its color mode, any dynamic changes will be overridden.
 
 
+Even without any of these files, kitty switches to a built-in light theme when
+the OS color scheme is light, as long as :file:`kitty.conf` does not set any
+colors itself. Turn this off with :opt:`automatic_light_theme`. A
+:file:`light-theme.auto.conf` always takes precedence over the built-in theme.
+The built-in theme is shown below; to customize it, copy it to
+:file:`light-theme.auto.conf` in the kitty config directory.
+
+.. literalinclude:: ../../kitty/builtin-light-theme.conf
+   :language: conf
+
 .. note::
 
    On the GNOME desktop, the desktop reports the color preference as no-preference

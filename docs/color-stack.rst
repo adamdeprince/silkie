@@ -20,6 +20,8 @@ These escape codes save/restore the colors, default background, default
 foreground, selection background, selection foreground and cursor color and the
 256 colors of the ANSI color table.
 
+The stack has no maximum depth, pushes are never discarded to make room.
+
 .. note:: In July 2020, after several years, xterm copied this protocol
    extension, without acknowledgement, and using incompatible escape codes
    (XTPUSHCOLORS, XTPOPCOLORS, XTREPORTCOLORS). And they decided to save not
