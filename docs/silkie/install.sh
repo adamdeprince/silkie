@@ -83,8 +83,26 @@ install_macos() {
     fi
     brew update
     install_cask goblinreactor/tap/silkie
+    dequarantine_silkie_macos
     install_iosevka_macos
-    printf 'If macOS blocks first launch, approve Silkie in System Settings > Privacy & Security.\n'
+}
+
+dequarantine_silkie_macos() {
+    # The build is ad-hoc signed and not notarized, so Gatekeeper refuses a
+    # quarantined copy. Find the app through the cask's silkie symlink, which
+    # honours any --appdir in HOMEBREW_CASK_OPTS.
+    local launcher app
+    launcher=$(readlink "$(brew --prefix)/bin/silkie" || true)
+    app=${launcher%/Contents/MacOS/silkie}
+    if [ -z "$launcher" ] || [ "$app" = "$launcher" ] || [ ! -d "$app" ]; then
+        printf 'Could not locate silkie.app. If macOS blocks first launch, approve Silkie in System Settings > Privacy & Security.\n' >&2
+        return
+    fi
+    if /usr/bin/xattr -dr com.apple.quarantine "$app"; then
+        printf 'Cleared the macOS quarantine flag from %s.\n' "$app"
+    else
+        printf 'Could not clear the quarantine flag from %s. Run: xattr -dr com.apple.quarantine "%s"\n' "$app" "$app" >&2
+    fi
 }
 
 install_iosevka_linux() {
