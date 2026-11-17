@@ -401,7 +401,11 @@ initialize_window(Window *w, PyObject *title, bool init_gpu_resources) {
         if (PyErr_Occurred()) PyErr_Print();
     }
     if (init_gpu_resources) create_gpu_resources_for_window(w);
-    else { w->render_data.vao_idx = -1; }
+    else {
+        // Mock windows have no graphics context. Neither VAO may be deleted when
+        // the mock window is destroyed by the mouse regression tests.
+        w->render_data.vao_idx = w->window_title_render_data.vao_idx = -1;
+    }
 }
 
 static id_type
@@ -1154,6 +1158,7 @@ PYWRAP1(set_options) {
     global_state.debug_font_fallback = debug_font_fallback ? true : false;
     if (!convert_opts_from_python_opts(opts, &global_state.opts)) return NULL;
     if (!set_wheel_mappings(opts, &global_state.opts)) return NULL;
+    if (!set_url_mappings(opts, &global_state.opts)) return NULL;
     push_modifier_remap_to_glfw();
     Py_XDECREF(global_state.options_object);
     global_state.options_object = Py_NewRef(opts);
