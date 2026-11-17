@@ -113,7 +113,7 @@ func (h *handler) on_text(text string) error {
 		h.draw_screen()
 	}
 	if h.page == "edit-fraction" {
-		if len(h.fraction_input)+len(text) <= 32 && strings.Trim(text, "0123456789./eE+- ") == "" {
+		if strings.Trim(text, "0123456789./eE+- ") == "" {
 			h.fraction_input += text
 			h.status = ""
 			h.draw_screen()

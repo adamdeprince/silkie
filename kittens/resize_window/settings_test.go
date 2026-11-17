@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/kovidgoyal/kitty/tools/cli/markup"
 	"github.com/kovidgoyal/kitty/tools/tui/loop"
 )
 
@@ -202,5 +204,30 @@ func TestResizeStrategySwitchKeepsCommandLineOverride(t *testing.T) {
 	saved, err := load_settings(path)
 	if err != nil || saved.preferences("window").Fraction != "1/3" {
 		t.Fatalf("the --fraction override was saved: %+v, %v", saved, err)
+	}
+}
+
+func TestResizeFractionInputHasNoLengthLimit(t *testing.T) {
+	lp, err := loop.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &handler{lp: lp, ctx: markup.New(true), settings: default_settings(), opts: &Options{}, page: "edit-fraction"}
+	// Precise fractions can be written with as many digits as wanted
+	want := "0." + strings.Repeat("3", 200)
+	for _, text := range []string{want[:1], want[1:100], want[100:]} {
+		if err := h.on_text(text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if h.fraction_input != want {
+		t.Fatalf("fraction input was truncated to %d of %d characters", len(h.fraction_input), len(want))
+	}
+	if _, err := parse_fraction(h.fraction_input); err != nil {
+		t.Fatal(err)
+	}
+	// Characters that cannot be part of a fraction are still rejected
+	if err := h.on_text("x"); err != nil || h.fraction_input != want {
+		t.Fatalf("an invalid character was accepted: %v", err)
 	}
 }
