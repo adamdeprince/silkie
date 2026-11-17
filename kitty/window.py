@@ -1185,11 +1185,12 @@ class Window:
         screen and the scrollback of the window as you type, and moves between them. If
         Find is open, give it the keyboard. It is a bar at the top of the window: native
         on macOS, and on Linux when tabs are native, otherwise a line drawn in the window.
+        With an argument, find that text, for example: :code:`map f1 find TODO`.
         See :opt:`find_match_background` for the colors.
         ''')
-    def find(self) -> None:
+    def find(self, query: str = '') -> None:
         from .find import open_find_bar
-        open_find_bar(self)
+        open_find_bar(self, query)
 
     @ac('sc', 'Move to the next match of Find, up the screen to older output, as in iTerm2. Opens Find when there is nothing to find.')
     def find_next(self) -> None:

@@ -63,6 +63,8 @@ typedef struct NativeUIBackend {
     // model is None, giving the keyboard back to the terminal. callback(verb, value) reports what the user did, see
     // FindBar.on_native_event(). Returns false when the bar cannot be shown for w, then a bar is drawn in the window.
     bool (*find_bar)(struct OSWindow *w, PyObject *model, PyObject *callback);
+    // For tests: draw the find bar of w to a PNG file
+    bool (*snapshot_find_bar)(struct OSWindow *w, const char *path);
 } NativeUIBackend;
 
 // What a module loaded at runtime can use. It cannot link against the symbols of fast_data_types.

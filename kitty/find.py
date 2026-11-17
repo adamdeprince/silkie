@@ -248,9 +248,14 @@ def bar_for(w: 'Window', create: bool = True) -> FindBar | None:
 
 
 # The actions {{{
-def open_find_bar(w: 'Window') -> FindBar:
+def open_find_bar(w: 'Window', query: str = '') -> FindBar:
     b = bar_for(w)
     assert b is not None
+    if query:
+        b.query = query
+        b.error = ''
+        b.window_id = w.id
+        b.start()
     if b.window_id != w.id:
         if b.visible:
             b.stop()

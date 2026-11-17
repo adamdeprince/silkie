@@ -616,6 +616,269 @@ snapshot_tab(OSWindow *w, const char *path) {
 }
 // }}}
 
+// Find bar {{{
+// The find bar of kitty/find.py: a panel at the top right of the terminal, over it as in iTerm2 and Safari, so
+// that opening it does not resize the terminal. It reports what the user does to the callback.
+@interface FindSearchField : NSSearchField
+@property(nonatomic, assign) id findBar;
+@end
+
+@interface FindBarView : NSVisualEffectView <NSSearchFieldDelegate>
+@property(nonatomic) PyObject *callback;
+@property(nonatomic, retain) FindSearchField *field;
+@property(nonatomic, retain) NSTextField *status;
+@property(nonatomic, retain) NSSegmentedControl *arrows;
+@property(nonatomic, retain) NSButton *caseButton, *regexButton, *closeButton;
+@property(nonatomic) BOOL updating;
+- (void)emit:(const char *)verb value:(PyObject *)value;
+@end
+
+@implementation FindSearchField
+- (BOOL)becomeFirstResponder {
+    const BOOL ans = [super becomeFirstResponder];
+    if (ans) [(FindBarView *)_findBar emit:"focus" value:Py_True];
+    return ans;
+}
+@end
+
+static const CGFloat FIND_BAR_MARGIN = 8;
+static const void *FIND_BAR_KEY = &FIND_BAR_KEY;
+
+static NSButton *
+find_bar_toggle(NSString *title, NSString *tip, id target, SEL action) {
+    NSButton *b = [NSButton buttonWithTitle:title target:target action:action];
+    b.buttonType = NSButtonTypePushOnPushOff;
+    b.bezelStyle = NSBezelStyleTexturedRounded;
+    b.font = [NSFont monospacedSystemFontOfSize:[NSFont smallSystemFontSize] weight:NSFontWeightSemibold];
+    b.toolTip = tip;
+    [b setAccessibilityLabel:tip];
+    return b;
+}
+
+@implementation FindBarView
+
+- (instancetype)initWithFrame:(NSRect)frame {
+    if (!(self = [super initWithFrame:frame])) return nil;
+    self.material = NSVisualEffectMaterialPopover;
+    self.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    self.state = NSVisualEffectStateActive;
+    self.wantsLayer = YES;
+    self.layer.cornerRadius = 8;
+    self.layer.masksToBounds = YES;
+    self.layer.borderWidth = 0.5;
+    self.layer.borderColor = [NSColor separatorColor].CGColor;
+    [self setAccessibilityRole:NSAccessibilityGroupRole];
+    [self setAccessibilityLabel:@"Find"];
+
+    _field = [[FindSearchField alloc] init];
+    _field.findBar = self;
+    _field.placeholderString = @"Find";
+    _field.delegate = self;
+    _field.sendsSearchStringImmediately = YES;
+    _field.sendsWholeSearchString = NO;
+    [_field.widthAnchor constraintGreaterThanOrEqualToConstant:200].active = YES;
+    [_field setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+    _status = [NSTextField labelWithString:@""];
+    _status.font = [NSFont monospacedDigitSystemFontOfSize:[NSFont smallSystemFontSize] weight:NSFontWeightRegular];
+    _status.textColor = [NSColor secondaryLabelColor];
+    _status.alignment = NSTextAlignmentRight;
+    _status.lineBreakMode = NSLineBreakByTruncatingTail;
+    [_status.widthAnchor constraintGreaterThanOrEqualToConstant:70].active = YES;
+    [_status retain];
+
+    NSImage *up = [NSImage imageWithSystemSymbolName:@"chevron.up" accessibilityDescription:@"Find Next, up"];
+    NSImage *down = [NSImage imageWithSystemSymbolName:@"chevron.down" accessibilityDescription:@"Find Previous, down"];
+    _arrows = [[NSSegmentedControl segmentedControlWithImages:@[up, down] trackingMode:NSSegmentSwitchTrackingMomentary target:self action:@selector(arrowClicked:)] retain];
+    _arrows.segmentStyle = NSSegmentStyleTexturedRounded;
+    [_arrows setToolTip:@"Find Next: the match above, older output" forSegment:0];
+    [_arrows setToolTip:@"Find Previous: the match below, newer output" forSegment:1];
+
+    _caseButton = [find_bar_toggle(@"Aa", @"Match case", self, @selector(caseClicked:)) retain];
+    _regexButton = [find_bar_toggle(@".*", @"Regular expression", self, @selector(regexClicked:)) retain];
+
+    _closeButton = [[NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"xmark.circle.fill" accessibilityDescription:@"Done"] target:self action:@selector(closeClicked:)] retain];
+    _closeButton.bordered = NO;
+    _closeButton.toolTip = @"Done (Escape)";
+    _closeButton.contentTintColor = [NSColor secondaryLabelColor];
+
+    NSStackView *stack = [NSStackView stackViewWithViews:@[_field, _status, _arrows, _caseButton, _regexButton, _closeButton]];
+    stack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    stack.spacing = 6;
+    stack.edgeInsets = NSEdgeInsetsMake(6, 8, 6, 8);
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor], [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [stack.topAnchor constraintEqualToAnchor:self.topAnchor], [stack.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+    ]];
+    return self;
+}
+
+- (void)dealloc {
+    Py_CLEAR(_callback);
+    [_field release];
+    [_status release];
+    [_arrows release];
+    [_caseButton release];
+    [_regexButton release];
+    [_closeButton release];
+    [super dealloc];
+}
+
+- (void)emit:(const char *)verb value:(PyObject *)value {
+    if (!_callback || _updating) return;
+    PyObject *cb = Py_NewRef(_callback);  // the callback can hide the bar
+    PyObject *ret = PyObject_CallFunction(cb, "sO", verb, value ? value : Py_None);
+    if (!ret) PyErr_Print();
+    Py_XDECREF(ret);
+    Py_DECREF(cb);
+}
+
+- (void)controlTextDidChange:(NSNotification *)n {
+    (void)n;
+    RAII_PyObject(q, PyUnicode_FromString(_field.stringValue.UTF8String));
+    if (q) [self emit:"query" value:q];
+    else PyErr_Print();
+}
+
+- (void)controlTextDidEndEditing:(NSNotification *)n {
+    (void)n;
+    [self emit:"focus" value:Py_False];
+}
+
+- (BOOL)control:(NSControl *)control textView:(NSTextView *)tv doCommandBySelector:(SEL)sel {
+    (void)control; (void)tv;
+    const BOOL shift = ([NSApp currentEvent].modifierFlags & NSEventModifierFlagShift) != 0;
+    if (sel == @selector(insertNewline:) || sel == @selector(insertLineBreak:)) {
+        [self emit:shift ? "previous" : "next" value:NULL];
+        return YES;
+    }
+    if (sel == @selector(moveUp:)) { [self emit:"next" value:NULL]; return YES; }
+    if (sel == @selector(moveDown:)) { [self emit:"previous" value:NULL]; return YES; }
+    if (sel == @selector(cancelOperation:)) {
+        [self emit:"close" value:NULL];
+        return YES;
+    }
+    return NO;
+}
+
+- (void)arrowClicked:(NSSegmentedControl *)c { [self emit:c.selectedSegment == 0 ? "next" : "previous" value:NULL]; }
+- (void)caseClicked:(NSButton *)b { [self emit:"case_sensitive" value:b.state == NSControlStateValueOn ? Py_True : Py_False]; }
+- (void)regexClicked:(NSButton *)b { [self emit:"regex" value:b.state == NSControlStateValueOn ? Py_True : Py_False]; }
+- (void)closeClicked:(NSButton *)b { (void)b; [self emit:"close" value:NULL]; }
+
+- (void)applyModel:(NSDictionary *)m {
+    _updating = YES;
+    NSString *q = str_of(m, @"query");
+    // replacing the text while the user types moves the insertion point
+    if (![_field.stringValue isEqualToString:q]) _field.stringValue = q;
+    _caseButton.state = bool_of(m, @"case_sensitive") ? NSControlStateValueOn : NSControlStateValueOff;
+    _regexButton.state = bool_of(m, @"regex") ? NSControlStateValueOn : NSControlStateValueOff;
+    _status.stringValue = q.length ? str_of(m, @"status") : @"";
+    _status.textColor = bool_of(m, @"error") || ([str_of(m, @"status") isEqualToString:@"Not found"] && q.length) ? [NSColor systemRedColor] :
+                        bool_of(m, @"wrapped") ? [NSColor systemOrangeColor] : [NSColor secondaryLabelColor];
+    [_status setAccessibilityLabel:_status.stringValue];
+    _arrows.enabled = [m[@"total"] integerValue] > 0;
+    _updating = NO;
+}
+
+- (void)placeIn:(NSView *)v {
+    const NSSize sz = self.fittingSize;
+    const CGFloat width = MIN(MAX(sz.width, 380), MAX(v.bounds.size.width - 2 * FIND_BAR_MARGIN, 120));
+    const CGFloat y = v.isFlipped ? FIND_BAR_MARGIN : NSMaxY(v.bounds) - sz.height - FIND_BAR_MARGIN;
+    self.frame = NSMakeRect(NSMaxX(v.bounds) - width - FIND_BAR_MARGIN, y, width, sz.height);
+    self.autoresizingMask = NSViewMinXMargin | (v.isFlipped ? NSViewMaxYMargin : NSViewMinYMargin);
+}
+@end
+
+static FindBarView *
+find_bar_of(NSWindow *nw) {
+    return nw ? objc_getAssociatedObject(nw, FIND_BAR_KEY) : nil;
+}
+
+static bool
+find_bar(OSWindow *w, PyObject *model, PyObject *callback) {
+    @autoreleasepool {
+        NSWindow *nw = ns_window(w);
+        NSView *content = nw.contentView;
+        if (!nw || !content) return false;
+        FindBarView *bar = find_bar_of(nw);
+        if (model == Py_None) {
+            if (bar) {
+                const BOOL had_keyboard = [nw.firstResponder isKindOfClass:[NSText class]] && [(NSView *)nw.firstResponder isDescendantOf:bar];
+                PyObject *cb = bar.callback;
+                bar.callback = NULL;
+                Py_XDECREF(cb);
+                [bar removeFromSuperview];
+                objc_setAssociatedObject(nw, FIND_BAR_KEY, nil, OBJC_ASSOCIATION_RETAIN);
+                // the keyboard goes back to the terminal
+                if (had_keyboard || !nw.firstResponder || nw.firstResponder == nw) [nw makeFirstResponder:content];
+            }
+            return true;
+        }
+        NSDictionary *m = ns_from_python(model);
+        if (!bar) {
+            bar = [[[FindBarView alloc] initWithFrame:NSZeroRect] autorelease];
+            objc_setAssociatedObject(nw, FIND_BAR_KEY, bar, OBJC_ASSOCIATION_RETAIN);
+        }
+        if (bar.callback != callback) {
+            Py_XDECREF(bar.callback);
+            bar.callback = Py_NewRef(callback);
+        }
+        [bar applyModel:m];
+        if (bar.superview != content) {
+            [content addSubview:bar positioned:NSWindowAbove relativeTo:nil];
+            [bar placeIn:content];
+        }
+        if (bool_of(m, @"focus")) {
+            bar.updating = YES;
+            [nw makeFirstResponder:bar.field];
+            if (bool_of(m, @"select_all")) [bar.field selectText:nil];
+            bar.updating = NO;
+            RAII_PyObject(r, PyObject_CallFunction(callback, "sO", "focus", Py_True));
+            if (!r) PyErr_Print();
+        }
+        return true;
+    }
+}
+
+// For tests: draw the find bar of w to a PNG file, as the screen capture of a hidden window has no image. The
+// blur of the visual effect is done by the window server, it is drawn here as the window background.
+static bool
+snapshot_find_bar(OSWindow *w, const char *path) {
+    @autoreleasepool {
+        FindBarView *bar = find_bar_of(ns_window(w));
+        if (!bar || !bar.layer) return false;
+        [bar layoutSubtreeIfNeeded];
+        [bar displayIfNeeded];
+        const CGFloat scale = bar.window.backingScaleFactor > 0 ? bar.window.backingScaleFactor : 2;
+        const NSSize sz = bar.bounds.size;
+        NSBitmapImageRep *rep = [[[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:(NSInteger)(sz.width * scale)
+            pixelsHigh:(NSInteger)(sz.height * scale) bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
+            colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0] autorelease];
+        if (!rep) return false;
+        rep.size = sz;
+        NSGraphicsContext *gc = [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
+        [NSGraphicsContext saveGraphicsState];
+        [NSGraphicsContext setCurrentContext:gc];
+        CGContextRef ctx = gc.CGContext;
+        [bar.effectiveAppearance performAsCurrentDrawingAppearance:^{
+            [[NSColor windowBackgroundColor] setFill];
+            [[NSBezierPath bezierPathWithRoundedRect:bar.bounds xRadius:8 yRadius:8] fill];
+        }];
+        if (bar.isFlipped) {
+            CGContextTranslateCTM(ctx, 0, sz.height);
+            CGContextScaleCTM(ctx, 1, -1);
+        }
+        [bar.layer renderInContext:ctx];
+        [NSGraphicsContext restoreGraphicsState];
+        NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+        return [png writeToFile:@(path) atomically:YES];
+    }
+}
+// }}}
+
 // Menus {{{
 @interface NativeMenuTarget : NSObject
 + (NativeMenuTarget *)shared;
@@ -1549,6 +1812,8 @@ native_ui_cocoa_backend(void) {
         .update_settings = update_settings,
         .update_menu = update_menu,
         .snapshot_settings = snapshot_settings,
+        .find_bar = find_bar,
+        .snapshot_find_bar = snapshot_find_bar,
     };
     return &b;
 }

@@ -290,8 +290,24 @@ PENDING(hide_macos_app, HIDE)
 PENDING(hide_macos_other_apps, HIDE_OTHERS)
 PENDING(minimize_macos_window, MINIMIZE)
 PENDING(quit, QUIT)
-PENDING(paste_from_clipboard, PASTE_FROM_CLIPBOARD)
-PENDING(copy_or_noop, COPY_OR_NOOP)
+// A text field over the terminal, such as the find bar, edits its own text
+static NSText *
+field_with_keyboard(void) {
+    NSResponder *r = [NSApp keyWindow].firstResponder;
+    return [r isKindOfClass:[NSText class]] ? (NSText *)r : nil;
+}
+
+- (void)paste_from_clipboard:(id)sender {
+    NSText *t = field_with_keyboard();
+    if (t) [t paste:sender];
+    else set_cocoa_pending_action(PASTE_FROM_CLIPBOARD, NULL);
+}
+
+- (void)copy_or_noop:(id)sender {
+    NSText *t = field_with_keyboard();
+    if (t) [t copy:sender];
+    else set_cocoa_pending_action(COPY_OR_NOOP, NULL);
+}
 
 #define USER_ACTION(selector)                                     \
     -(void)selector : (id)sender {                                \
@@ -340,10 +356,12 @@ USER_ACTION(find_selection)
         if (![NSApp keyWindow]) return NO;
     } else if (item.action == @selector(paste_from_clipboard:)) {
         if (![NSApp keyWindow]) return NO;
+        if (field_with_keyboard()) return YES;
         NSPasteboard *pb = [NSPasteboard generalPasteboard];
         if (![pb stringForType:NSPasteboardTypeString]) return NO;
     } else if (item.action == @selector(copy_or_noop:)) {
         if (![NSApp keyWindow]) return NO;
+        if (field_with_keyboard()) return field_with_keyboard().selectedRange.length > 0;
         OSWindow *osw = current_os_window();
         if (osw && osw->num_tabs > osw->active_tab) {
             Tab *tab = osw->tabs + osw->active_tab;
@@ -1028,8 +1046,12 @@ cocoa_create_global_menu(void) {
     [findMenu release];
     apply_find_shortcuts_state();
     [editMenu addItem:[NSMenuItem separatorItem]];
+    // Sent to the first responder: they work in text fields, such as the find bar, and are disabled, passing
+    // their keys on, in the terminal, which does not answer them
+    [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
     MENU_ITEM(editMenu, @"Copy", copy_or_noop);
     MENU_ITEM(editMenu, @"Paste", paste_from_clipboard);
+    [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
     [editMenu release];
 
     NSMenuItem *windowMenuItem = [bar addItemWithTitle:@"Window" action:NULL keyEquivalent:@""];

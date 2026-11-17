@@ -877,6 +877,8 @@ _glfwPlatformInit(bool *supports_window_occlusion) {
           }
           last_keydown_shortcut_event.virtual_key_code = 0xffff;
           NSWindow *kw = [NSApp keyWindow];
+          // A text field has the keyboard, such as the find bar over the terminal: it gets the key the usual way
+          if ([kw.firstResponder isKindOfClass:[NSText class]]) return event;
           if (kw && kw.contentView) [kw.contentView keyDown:event];
           else debug_input("keyDown ignored as no keyWindow present\n");
           return nil;
@@ -892,6 +894,7 @@ _glfwPlatformInit(bool *supports_window_occlusion) {
               return nil;
           }
           NSWindow *kw = [NSApp keyWindow];
+          if ([kw.firstResponder isKindOfClass:[NSText class]]) return event;
           if (kw && kw.contentView) [kw.contentView keyUp:event];
           else debug_input("keyUp ignored as no keyWindow present\n");
           return nil;
@@ -912,6 +915,7 @@ _glfwPlatformInit(bool *supports_window_occlusion) {
               return event;
           }
           NSWindow *kw = [NSApp keyWindow];
+          if ([kw.firstResponder isKindOfClass:[NSText class]]) return event;
           if (kw && kw.contentView) [kw.contentView flagsChanged:event];
           else debug_input("flagsChanged ignored as no keyWindow present\n");
           return nil;

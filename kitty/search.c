@@ -877,7 +877,6 @@ notify(Screen *screen, ScreenSearch *s, monotonic_t now, bool force) {
 static monotonic_t
 tick(Screen *screen, ScreenSearch *s, monotonic_t now, monotonic_t budget, bool notify_window) {
     if (s->failed || !s->query) return -1;
-    const bool was_finished = scan_finished(s);
     if (is_stale(s, screen)) {
         reset_regions(s, screen);
         s->auto_scroll = false;
@@ -913,12 +912,13 @@ tick(Screen *screen, ScreenSearch *s, monotonic_t now, monotonic_t budget, bool 
     s->busy += t - start;
     refresh_current(screen, s);
     resolve_pending(screen, s);
-    const bool finished = scan_finished(s);
-    if (finished && !was_finished) {
+    const bool first_finished = scan_finished(s) && !s->finished_at;
+    if (first_finished) {
+        // the whole scrollback has been searched, the counter is final
         s->finished_at = t;
         mark_changed(s);
     }
-    if (notify_window) notify(screen, s, t, finished && !was_finished);
+    if (notify_window) notify(screen, s, t, first_finished);
     if (more) return 0;
     return wait;
 }

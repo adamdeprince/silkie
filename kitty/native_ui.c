@@ -336,6 +336,17 @@ native_tab_settings_show(PyObject *self UNUSED, PyObject *args) {
 }
 
 static PyObject *
+native_find_bar_snapshot(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    const char *path;
+    if (!PyArg_ParseTuple(args, "Ks", &id, &path)) return NULL;
+    B(snapshot_find_bar);
+    OSWindow *w = window_arg(id);
+    if (!w) return NULL;
+    return Py_NewRef(b->snapshot_find_bar(w, path) ? Py_True : Py_False);
+}
+
+static PyObject *
 native_tab_snapshot(PyObject *self UNUSED, PyObject *args) {
     unsigned long long id;
     const char *path;
@@ -401,6 +412,7 @@ static PyMethodDef methods[] = {
     {"native_tabs_members", native_tabs_members, METH_O, ""},
     {"native_tab_status", native_tab_status, METH_VARARGS, ""},
     {"native_find_bar", native_find_bar, METH_VARARGS, ""},
+    {"native_find_bar_snapshot", native_find_bar_snapshot, METH_VARARGS, ""},
     {"native_tab_snapshot", native_tab_snapshot, METH_VARARGS, ""},
     {"native_tab_settings_button", native_tab_settings_button, METH_VARARGS, ""},
     {"native_tab_settings_show", native_tab_settings_show, METH_VARARGS, ""},

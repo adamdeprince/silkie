@@ -627,6 +627,27 @@ class Boss:
         with open(path, 'w') as f:
             json.dump(ans, f)
 
+    @ac('debug', 'Draw the native find bar of the active OS window to the specified PNG file. It must be open.')
+    def debug_find_bar_snapshot(self, path: str) -> None:
+        from .fast_data_types import native_find_bar_snapshot
+        if (tm := self.active_tab_manager) is not None:
+            native_find_bar_snapshot(tm.os_window_id, path)
+
+    @ac('debug', 'Write the state of Find in the active OS window, as JSON, to the specified file. For tests.')
+    def debug_find_status(self, path: str) -> None:
+        import json
+
+        from .find import find_bars
+        ans: dict[str, Any] = {}
+        if (tm := self.active_tab_manager) is not None and (b := find_bars.get(tm.os_window_id)) is not None:
+            ans = {'visible': b.visible, 'native': b.native, 'query': b.query, 'window_id': b.window_id, 'model': b.model()}
+            if (w := b.window) is not None:
+                ans['search'] = w.screen.search_status()
+                ans['current'] = w.screen.search_current()
+                ans['scrolled_by'] = w.screen.scrolled_by
+        with open(path, 'w') as f:
+            json.dump(ans, f)
+
     @ac('debug', 'Draw the native window of the active tab, with its native tab bar, to the specified PNG file.')
     def debug_native_tab_snapshot(self, path: str) -> None:
         if (tm := self.active_tab_manager) is not None:

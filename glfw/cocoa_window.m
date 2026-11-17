@@ -1315,6 +1315,8 @@ static void flush_focus_loss_text(_GLFWwindow *window);
 
 - (void)mouseDown:(NSEvent *)event {
     if (!window) return;
+    // A click in the terminal gives it the keyboard back from a text field over it, such as a find bar
+    if (self.window.firstResponder != self) [self.window makeFirstResponder:self];
     if (handleTabletEvent(window, event)) return;
     _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_LEFT, GLFW_PRESS, translateFlags([event modifierFlags]));
 }

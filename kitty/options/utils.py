@@ -213,7 +213,7 @@ def kitten_parse(func: str, rest: str) -> FuncArgsType:
 
 
 @func_with_args('open_settings', 'new_tab_with_profile', 'new_os_window_with_profile', 'set_window_profile', 'debug_settings_snapshot',
-                'debug_native_tab_snapshot', 'debug_dock_status', 'open_tab_settings')
+                'debug_native_tab_snapshot', 'debug_dock_status', 'open_tab_settings', 'debug_find_bar_snapshot', 'debug_find_status')
 def single_string_arg(func: str, rest: str) -> FuncArgsType:
     return func, [rest.strip()]
 
@@ -377,6 +377,12 @@ def copy_to_buffer(func: str, rest: str) -> FuncArgsType:
 
 @func_with_args('paste_from_buffer')
 def paste_from_buffer(func: str, rest: str) -> FuncArgsType:
+    return func, [rest]
+
+
+@func_with_args('find', 'set_find_keys_to_terminal')
+def find_parse(func: str, rest: str) -> FuncArgsType:
+    # find takes the text to find, which can have spaces
     return func, [rest]
 
 
