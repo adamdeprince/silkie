@@ -22,6 +22,7 @@ typedef struct {
     bool cursor_key_mode, disambiguate, report_all_event_types, report_alternate_key, report_text, embed_text;
     const char *text;
     bool has_text;
+    size_t output_size;
 } KeyEvent;
 
 typedef struct {
@@ -30,6 +31,7 @@ typedef struct {
     char encoded_mods[4];
     const char *text;
     KeyAction action;
+    size_t output_size;
 } EncodingData;
 
 static void
@@ -63,15 +65,23 @@ init_encoding_data(EncodingData *ans, const KeyEvent *ev) {
     ans->key = ev->key;
     ans->add_text = ev->embed_text && ev->text && ev->text[0];
     ans->text = ev->text;
+    ans->output_size = ev->output_size;
     memcpy(ans->encoded_mods, ev->mods.encoded, sizeof(ans->encoded_mods));
 }
 
-static int
+static ssize_t
 serialize(const EncodingData *data, char *output, const char csi_trailer) {
-    int pos = 0;
+    // The buffer is sized for the whole encoding (see key_encoding_buffer_size()), so nothing is cut off: the
+    // clamping only keeps a wrongly sized buffer from overflowing. Two bytes stay free for the trailer and NUL.
+    const size_t limit = data->output_size - 2;
+    size_t pos = 0;
     bool second_field_not_empty = data->has_mods || data->add_actions;
     bool third_field_not_empty = data->add_text;
-#define P(fmt, ...) pos += snprintf(output + pos, KEY_BUFFER_SIZE - 2 <= pos ? 0 : KEY_BUFFER_SIZE - 2 - pos, fmt, __VA_ARGS__)
+#define P(fmt, ...)                                                                             \
+    {                                                                                           \
+        const int n_ = snprintf(output + pos, pos < limit ? limit - pos : 0, fmt, __VA_ARGS__); \
+        if (n_ > 0) pos += n_;                                                                  \
+    }
     P("\x1b%s", "[");
     if (data->key != 1 || data->add_alternates || second_field_not_empty || third_field_not_empty) P("%u", data->key);
     if (data->add_alternates) {
@@ -100,7 +110,7 @@ serialize(const EncodingData *data, char *output, const char csi_trailer) {
         }
     }
 #undef P
-    if (pos > KEY_BUFFER_SIZE - 2) pos = KEY_BUFFER_SIZE - 2;
+    if (pos > limit) pos = limit;
     output[pos++] = csi_trailer;
     output[pos] = 0;
     return pos;
@@ -157,7 +167,7 @@ legacy_functional_key_encoding_with_modifiers(uint32_t key_number, const KeyEven
     return snprintf(output, KEY_BUFFER_SIZE, "%s%s", prefix, main_bytes);
 }
 
-static int
+static ssize_t
 encode_function_key(const KeyEvent *ev, char *output) {
 #define SIMPLE(val) return snprintf(output, KEY_BUFFER_SIZE, "%s", val);
     char csi_trailer = 'u';
@@ -394,7 +404,7 @@ is_legacy_ascii_key(uint32_t key) {
     END_ALLOW_CASE_RANGE
 }
 
-static int
+static ssize_t
 encode_key(const KeyEvent *ev, char *output) {
     if (!ev->report_all_event_types && ev->action == RELEASE) return 0;
     if (GLFW_FKEY_FIRST <= ev->key && ev->key <= GLFW_FKEY_LAST) return encode_function_key(ev, output);
@@ -441,9 +451,21 @@ startswith_ascii_control_char(const char *p) {
     return false;
 }
 
-int
-encode_glfw_key_event(const GLFWkeyevent *e, const bool cursor_key_mode, const unsigned key_encoding_flags, char *output) {
+size_t
+key_encoding_buffer_size(const GLFWkeyevent *e) {
+    size_t ans = KEY_BUFFER_SIZE, text_bytes;
+    if (e->text && (__builtin_mul_overflow(strlen(e->text), (size_t)KEY_TEXT_ENCODING_BYTES_PER_BYTE, &text_bytes) ||
+                    __builtin_add_overflow(ans, text_bytes, &ans)))
+        return 0;
+    return ans;
+}
+
+ssize_t
+encode_glfw_key_event(
+    const GLFWkeyevent *e, const bool cursor_key_mode, const unsigned key_encoding_flags, char *output, size_t output_size) {
+    if (output_size < KEY_BUFFER_SIZE) return 0;
     KeyEvent ev = {
+        .output_size = output_size,
         .key = e->key,
         .shifted_key = e->shifted_key,
         .alternate_key = e->alternate_key,

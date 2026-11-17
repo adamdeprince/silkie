@@ -10,6 +10,7 @@
 #include "screen.h"
 #include "glfw-wrapper.h"
 #include <structmember.h>
+extern PyTypeObject Screen_Type;
 
 #ifndef __APPLE__
 #include <xkbcommon/xkbcommon.h>
@@ -193,6 +194,27 @@ format_mods(unsigned mods) {
     return buf;
 }
 
+// Encodes ev into a buffer sized for it: the stack buffer when that is big enough, else a heap buffer stored in
+// *heap for the caller to free. Returns NULL, having logged why, if there is no memory for it.
+static char *
+key_encoding_buffer(const GLFWkeyevent *ev, char *stack_buf, size_t stack_sz, char **heap, size_t *sz) {
+    *heap = NULL;
+    *sz = key_encoding_buffer_size(ev);
+    if (!*sz) {
+        log_error("Key event text too long to encode, dropping it");
+        return NULL;
+    }
+    if (*sz <= stack_sz) {
+        *sz = stack_sz;
+        return stack_buf;
+    }
+    if (!(*heap = malloc(*sz))) {
+        log_error("Out of memory encoding key event with %zu bytes of text, dropping it", strlen(ev->text));
+        return NULL;
+    }
+    return *heap;
+}
+
 static void
 send_key_to_child(id_type window_id, Screen *screen, const GLFWkeyevent *ev) {
     const int action = ev->action;
@@ -206,19 +228,23 @@ send_key_to_child(id_type window_id, Screen *screen, const GLFWkeyevent *ev) {
     if ((screen->scrolled_by || screen->pixel_scroll_offset_y != 0) && action == GLFW_PRESS && !is_no_action_key(key, native_key)) {
         screen_history_scroll(screen, SCROLL_FULL, false); // scroll back to bottom
     }
-    char encoded_key[KEY_BUFFER_SIZE] = {0};
-    int size = encode_glfw_key_event(ev, screen->modes.mDECCKM, screen_current_key_encoding_flags(screen), encoded_key);
+    char stack_buf[KEY_BUFFER_SIZE];
+    RAII_ALLOC(char, heap_buf, NULL);
+    size_t buf_sz;
+    char *encoded_key = key_encoding_buffer(ev, stack_buf, sizeof(stack_buf), &heap_buf, &buf_sz);
+    if (!encoded_key) return;
+    ssize_t size = encode_glfw_key_event(ev, screen->modes.mDECCKM, screen_current_key_encoding_flags(screen), encoded_key, buf_sz);
     if (size == SEND_TEXT_TO_CHILD) {
-        schedule_write_to_child(window_id, 1, text, strlen(text));
+        screen_write_to_child(screen, text, strlen(text));
         debug("sent key as text to child (window_id: %llu): %s\n", window_id, text);
     } else if (size > 0) {
         if (size == 1 && screen->modes.mHANDLE_TERMIOS_SIGNALS) {
             if (screen_send_signal_for_key(screen, *encoded_key)) return;
         }
-        schedule_write_to_child(window_id, 1, encoded_key, size);
+        screen_write_to_child(screen, encoded_key, size);
         if (OPT(debug_keyboard)) {
             debug("sent encoded key to child (window_id: %llu): ", window_id);
-            for (int ki = 0; ki < size; ki++) {
+            for (ssize_t ki = 0; ki < size; ki++) {
                 if (encoded_key[ki] == 27) {
                     debug("^[ ");
                 } else if (encoded_key[ki] == ' ') {
@@ -254,6 +280,15 @@ free_buffered_keys(Window *w) {
     for (size_t i = 0; i < w->buffered_keys.count; i++) free((char *)keys[i].text);
     free(w->buffered_keys.key_data);
     zero_at_ptr(&w->buffered_keys);
+}
+
+static void
+commit_ime_text(Screen *screen, const char *text) {
+    if (*text) {
+        screen_write_to_child(screen, text, strlen(text));
+        debug("committed pre-edit text: %s sent to child as text.\n", text);
+    } else debug("committed pre-edit text: (null)\n");
+    screen_update_overlay_text(screen, NULL);
 }
 
 void
@@ -299,13 +334,7 @@ on_key_input(const GLFWkeyevent *ev) {
             update_ime_position(w, screen);
             debug("updated pre-edit text: '%s'\n", text);
             return;
-        case GLFW_IME_COMMIT_TEXT:
-            if (*text) {
-                schedule_write_to_child(w->id, 1, text, strlen(text));
-                debug("committed pre-edit text: %s sent to child as text.\n", text);
-            } else debug("committed pre-edit text: (null)\n");
-            screen_update_overlay_text(screen, NULL);
-            return;
+        case GLFW_IME_COMMIT_TEXT: commit_ime_text(screen, text); return;
         case GLFW_IME_NONE:
             // for macOS, update ime position on every key input
             // because the position is required before next input
@@ -353,16 +382,26 @@ on_key_input(const GLFWkeyevent *ev) {
         return;
     }
     if (w->buffered_keys.enabled) {
+        // Keys typed before the child is ready are kept, in order, however many there are
         if (w->buffered_keys.capacity < w->buffered_keys.count + 1) {
-            w->buffered_keys.capacity = MAX(16u, w->buffered_keys.capacity + 8);
-            GLFWkeyevent *new = realloc(w->buffered_keys.key_data, w->buffered_keys.capacity * sizeof(GLFWkeyevent));
-            if (!new) fatal("Out of memory");
+            size_t cap = MAX(16u, w->buffered_keys.capacity), bytes;
+            if (w->buffered_keys.capacity && __builtin_mul_overflow(cap, (size_t)2, &cap)) cap = SIZE_MAX;
+            GLFWkeyevent *new = NULL;
+            if (__builtin_mul_overflow(cap, sizeof(GLFWkeyevent), &bytes) || !(new = realloc(w->buffered_keys.key_data, bytes))) {
+                log_error("Out of memory buffering a key typed before the child was ready, dropping it");
+                return;
+            }
             w->buffered_keys.key_data = new;
+            w->buffered_keys.capacity = cap;
         }
-        GLFWkeyevent *k = (GLFWkeyevent *)w->buffered_keys.key_data + w->buffered_keys.count++;
+        GLFWkeyevent *k = (GLFWkeyevent *)w->buffered_keys.key_data + w->buffered_keys.count;
         *k = *ev;
         // ev->text is only valid for the duration of this call
-        if (ev->text && !(k->text = strdup(ev->text))) fatal("Out of memory");
+        if (ev->text && !(k->text = strdup(ev->text))) {
+            log_error("Out of memory buffering a key typed before the child was ready, dropping it");
+            return;
+        }
+        w->buffered_keys.count++;
         debug("buffering key until child is ready\n");
     } else send_key_to_child(w->id, screen, ev);
 #undef dispatch_key_event
@@ -373,15 +412,15 @@ fake_scroll(Window *w, int amount, bool upwards) {
     if (!w) return;
     int key = upwards ? GLFW_FKEY_UP : GLFW_FKEY_DOWN;
     GLFWkeyevent ev = {.key = key};
-    char encoded_key[KEY_BUFFER_SIZE] = {0};
+    char encoded_key[KEY_BUFFER_SIZE] = {0}; // enough for any key event without text, see keys.h
     Screen *screen = w->render_data.screen;
     uint8_t flags = screen_current_key_encoding_flags(screen);
     while (amount-- > 0) {
         ev.action = GLFW_PRESS;
-        int size = encode_glfw_key_event(&ev, screen->modes.mDECCKM, flags, encoded_key);
+        ssize_t size = encode_glfw_key_event(&ev, screen->modes.mDECCKM, flags, encoded_key, sizeof(encoded_key));
         if (size > 0) schedule_write_to_child(w->id, 1, encoded_key, size);
         ev.action = GLFW_RELEASE;
-        size = encode_glfw_key_event(&ev, screen->modes.mDECCKM, flags, encoded_key);
+        size = encode_glfw_key_event(&ev, screen->modes.mDECCKM, flags, encoded_key, sizeof(encoded_key));
         if (size > 0) schedule_write_to_child(w->id, 1, encoded_key, size);
     }
 }
@@ -414,10 +453,35 @@ pyencode_key_for_tty(PyObject *self UNUSED, PyObject *args, PyObject *kw) {
             args, kw, "I|IIIIIzp", kwds, &key, &shifted_key, &alternate_key, &mods, &action, &key_encoding_flags, &text, &cursor_key_mode))
         return NULL;
     GLFWkeyevent ev = {.key = key, .shifted_key = shifted_key, .alternate_key = alternate_key, .text = text, .action = action, .mods = mods};
-    char output[KEY_BUFFER_SIZE + 1] = {0};
-    int num = encode_glfw_key_event(&ev, cursor_key_mode, key_encoding_flags, output);
+    char stack_buf[KEY_BUFFER_SIZE];
+    RAII_ALLOC(char, heap_buf, NULL);
+    size_t buf_sz;
+    char *output = key_encoding_buffer(&ev, stack_buf, sizeof(stack_buf), &heap_buf, &buf_sz);
+    if (!output) return PyErr_NoMemory();
+    ssize_t num = encode_glfw_key_event(&ev, cursor_key_mode, key_encoding_flags, output, buf_sz);
     if (num == SEND_TEXT_TO_CHILD) return PyUnicode_FromString(text);
     return PyUnicode_FromStringAndSize(output, MAX(0, num));
+}
+
+// Test hook: runs a key event (or, with ime_state GLFW_IME_COMMIT_TEXT, an input method commit) through the same code
+// that sends keyboard input to a window's child, writing to the screen's test child.
+static PyObject *
+pytest_key_input_to_screen(PyObject *self UNUSED, PyObject *args, PyObject *kw) {
+    static char *kwds[] = {"screen", "key", "shifted_key", "alternate_key", "mods", "action", "text", "ime_state", NULL};
+    PyObject *screen_obj;
+    unsigned int key = 0, shifted_key = 0, alternate_key = 0, mods = 0, action = GLFW_PRESS;
+    int ime_state = GLFW_IME_NONE;
+    const char *text = NULL;
+    if (!PyArg_ParseTupleAndKeywords(
+            args, kw, "O!|IIIIIzi", kwds, &Screen_Type, &screen_obj, &key, &shifted_key, &alternate_key, &mods, &action, &text, &ime_state))
+        return NULL;
+    Screen *screen = (Screen *)screen_obj;
+    if (ime_state == GLFW_IME_COMMIT_TEXT) commit_ime_text(screen, text ? text : "");
+    else {
+        GLFWkeyevent ev = {.key = key, .shifted_key = shifted_key, .alternate_key = alternate_key, .text = text, .action = action, .mods = mods};
+        send_key_to_child(screen->window_id, screen, &ev);
+    }
+    Py_RETURN_NONE;
 }
 
 static PyObject *
@@ -482,6 +546,7 @@ pyis_modifier_key(PyObject *self UNUSED, PyObject *a) {
 static PyMethodDef module_methods[] = {
     M(key_for_native_key_name, METH_VARARGS),
     M(encode_key_for_tty, METH_VARARGS | METH_KEYWORDS),
+    M(test_key_input_to_screen, METH_VARARGS | METH_KEYWORDS),
     M(inject_key, METH_VARARGS | METH_KEYWORDS),
     M(is_modifier_key, METH_O),
     {0}};

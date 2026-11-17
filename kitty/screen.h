@@ -352,6 +352,7 @@ int screen_cursor_at_a_shell_prompt(const Screen *);
 bool screen_prompt_supports_click_events(const Screen *, bool *is_relative);
 bool screen_fake_move_cursor_to_position(Screen *, index_type x, index_type y);
 bool screen_send_signal_for_key(Screen *, char key);
+bool screen_write_to_child(Screen *self, const char *data, size_t sz);
 bool get_line_edge_colors(Screen *self, color_type *left, color_type *right);
 bool get_line_edge_colors_at_row(Screen *self, index_type y, color_type *left, color_type *right, bool *left_is_default, bool *right_is_default);
 bool parse_sgr(Screen *screen, const uint8_t *buf, unsigned int num, const char *report_name, bool is_deccara);

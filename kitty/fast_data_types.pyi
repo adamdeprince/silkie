@@ -354,6 +354,18 @@ def encode_key_for_tty(
 ) -> str:
     pass
 
+def test_key_input_to_screen(
+    screen: Screen,
+    key: int = 0,
+    shifted_key: int = 0,
+    alternate_key: int = 0,
+    mods: int = 0,
+    action: int = 1,
+    text: str | None = None,
+    ime_state: int = 0,
+) -> None:
+    pass
+
 def log_error_string(s: str) -> None:
     pass
 
