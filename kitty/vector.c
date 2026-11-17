@@ -1239,6 +1239,7 @@ struct VectorDoc {
     bool is_sorted;
     unsigned clip_groups;  // the groups other than the root that have a clip path
     count_map clip_refs;   // how many of them clip to each id
+    count_map image_refs;  // how many i records draw each image id, for vector_doc_image_changed()
     // The elements with each parent id, whether or not that is an element, so
     // that deleting a group takes time in proportion to what it holds
     child_map children;
@@ -1295,6 +1296,7 @@ vector_doc_new(unsigned width, unsigned height) {
     d->height = height;
     vt_init(&d->by_id);
     vt_init(&d->clip_refs);
+    vt_init(&d->image_refs);
     vt_init(&d->children);
     d->root.t = identity;
     d->root.visible = true;
@@ -1316,6 +1318,7 @@ vector_doc_free(VectorDoc *d) {
     vt_create_for_loop(child_map_itr, it, &d->children) free(it.data->val.item);
     vt_cleanup(&d->children);
     vt_cleanup(&d->clip_refs);
+    vt_cleanup(&d->image_refs);
     free(d);
 }
 
@@ -1403,6 +1406,7 @@ remove_elem(VectorDoc *d, Elem *e) {
         d->clip_groups--;
         count_dec(&d->clip_refs, e->ref);
     }
+    if (e->type == 'i') count_dec(&d->image_refs, e->ref);
     elem_free(e);
 }
 
@@ -1432,7 +1436,8 @@ insert_elem(VectorDoc *d, Elem *e) {
     const bool same_parent = old && old->parent == e->parent;
     const bool keep_sorted = d->is_sorted && same_parent && has_render_order(old) == has_render_order(e);
     if (is_clip_group(e) && !count_inc(&d->clip_refs, e->ref)) return false;
-    if (!same_parent && !children_add(d, e)) goto undo_clip;
+    if (e->type == 'i' && !count_inc(&d->image_refs, e->ref)) goto undo_clip;
+    if (!same_parent && !children_add(d, e)) goto undo_image;
     if (old) {
         if (same_parent) {
             e->child_slot = old->child_slot;
@@ -1450,6 +1455,7 @@ insert_elem(VectorDoc *d, Elem *e) {
             d->clip_groups--;
             count_dec(&d->clip_refs, old->ref);
         }
+        if (old->type == 'i') count_dec(&d->image_refs, old->ref);
         elem_free(old);
         d->live--;
     } else {
@@ -1470,6 +1476,8 @@ insert_elem(VectorDoc *d, Elem *e) {
     return true;
 undo_children:
     children_remove(d, e);
+undo_image:
+    if (e->type == 'i') count_dec(&d->image_refs, e->ref);
 undo_clip:
     if (is_clip_group(e)) count_dec(&d->clip_refs, e->ref);
     return false;
@@ -3178,16 +3186,13 @@ vector_doc_clear_damage(VectorDoc *d) {
     d->damage = empty_box;
 }
 
+// This is asked of every vector image whenever any image goes, so it looks
+// the id up rather than going through the elements
 bool
 vector_doc_image_changed(VectorDoc *d, uint32_t id) {
-    for (size_t i = 0; i < d->count; i++) {
-        const Elem *e = d->order[i];
-        if (e && e->type == 'i' && e->ref == id) {
-            d->damage_all = true;
-            return true;
-        }
-    }
-    return false;
+    if (vt_is_end(vt_get(&d->image_refs, id))) return false;
+    d->damage_all = true;
+    return true;
 }
 
 // }}}

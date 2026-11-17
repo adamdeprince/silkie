@@ -3124,6 +3124,37 @@ class TestGraphics(BaseTest):
         g.render_vector_image(3, 300, 300)
         self.assertLess(time.monotonic() - start, 10)
 
+    def test_vector_image_references(self):
+        # Every raster image that is added, changed or deleted is looked up in every vector image, so that the ones
+        # drawing it are drawn again. That must not mean going through all of the elements of each.
+        s = self.create_screen()
+        g = s.grman
+        n = 300000
+        records = ''.join(f'p id={i} d=M1,1L2,2Z\n' for i in range(1, n + 1)) + 'i id=999999 img=7 t=4,0,0,4,0,0\n'
+        self.ae(parse_full_response(send_command(s, 'a=t,f=200,s=10,v=10,i=1', records)).code, 'OK')
+        pixels = bytearray()
+        g.update_vector_pixels(1, 10, 10, pixels)
+        self.assertIsNone(g.update_vector_pixels(1, 10, 10, pixels))
+        start = time.monotonic()
+        for i in range(2000, 7000):
+            send_command(s, f'a=t,f=24,i={i},s=1,v=1', b'\x00\xff\x00')
+        for i in range(2000, 7000):
+            send_command(s, f'a=d,d=I,i={i}')
+        self.assertLess(time.monotonic() - start, 10)
+        # images it does not draw change nothing, the one it draws all of it
+        self.assertIsNone(g.update_vector_pixels(1, 10, 10, pixels))
+        self.ae(parse_full_response(send_command(s, 'a=t,f=24,i=7,s=1,v=1', b'\xff\x00\x00')).code, 'OK')
+        self.ae(g.update_vector_pixels(1, 10, 10, pixels), (0, 0, 10, 10))
+        self.ae(pixels[(1 * 10 + 1) * 4:(1 * 10 + 1) * 4 + 4], b'\xff\x00\x00\xff')
+        send_command(s, 'a=d,d=I,i=7')
+        self.ae(g.update_vector_pixels(1, 10, 10, pixels), (0, 0, 10, 10))
+        self.ae(pixels[(1 * 10 + 1) * 4 + 3], 0)
+        # replacing or deleting the i record stops it being asked about
+        self.ae(parse_full_response(send_command(s, 'a=e,i=1', 'x id=999999')).code, 'OK')
+        g.update_vector_pixels(1, 10, 10, pixels)
+        send_command(s, 'a=t,f=24,i=7,s=1,v=1', b'\xff\x00\x00')
+        self.assertIsNone(g.update_vector_pixels(1, 10, 10, pixels))
+
     def test_vector_image_damage(self):
         # A patch to a vector image draws only the part of it that changed.
         # The pixels kept up that way must be those of drawing all of it.
