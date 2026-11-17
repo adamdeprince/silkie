@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <math.h>
+#include <limits.h>
 
 #include <zlib.h>
 #include <structmember.h>
@@ -209,11 +210,33 @@ incref_texture_ref(TextureRef *ref) {
     return ref;
 }
 
+// For the tests: the allocations that can be made to fail with fail_next_graphics_allocation(), as when out of memory
+typedef enum {
+    ALLOCATION_NONE,
+    ALLOCATION_INFLATE,
+    ALLOCATION_IMAGE,
+    ALLOCATION_TEXTURE,
+    ALLOCATION_REF,
+    ALLOCATION_SORTED,
+    ALLOCATION_CLIENT_IDS,
+    ALLOCATION_RENDER_DATA,
+} Allocation;
+static const char *allocation_names[] = {"", "inflate", "image", "texture", "ref", "sorted", "client_ids", "render_data"};
+static Allocation failing_allocation = ALLOCATION_NONE;
+
+// Whether the tests made this allocation fail, which it does once
+static bool
+allocation_fails(Allocation which) {
+    if (failing_allocation != which) return false;
+    failing_allocation = ALLOCATION_NONE;
+    return true;
+}
+
+// NULL when out of memory
 static TextureRef *
 new_texture_ref(void) {
-    TextureRef *ans = calloc(1, sizeof(TextureRef));
-    if (!ans) fatal("Out of memory allocating a TextureRef");
-    ans->refcnt = 1;
+    TextureRef *ans = allocation_fails(ALLOCATION_TEXTURE) ? NULL : calloc(1, sizeof(TextureRef));
+    if (ans) ans->refcnt = 1;
     return ans;
 }
 
@@ -428,12 +451,24 @@ apply_storage_quota(GraphicsManager *self, size_t storage_limit, id_type current
     remove_images(self, trim_predicate, currently_added_image_internal_id);
     if (self->used_storage < storage_limit) return;
     size_t num_images = vt_size(&self->images_by_internal_id);
-    RAII_ALLOC(Image *, sorted, malloc(num_images * sizeof(Image *)));
-    if (!sorted) fatal("Out of memory");
-    Image **p = sorted;
-    iter_images(self) { *p++ = i.data->val; }
 #define transient_or_older_first(a, b) \
     ((*a)->root_frame.transient != (*b)->root_frame.transient ? (*a)->root_frame.transient > (*b)->root_frame.transient : (*a)->atime < (*b)->atime)
+    RAII_ALLOC(Image *, sorted, allocation_fails(ALLOCATION_SORTED) || num_images > SIZE_MAX / sizeof(Image *) ? NULL : malloc(num_images * sizeof(Image *)));
+    if (!sorted) {
+        // Out of memory: remove the images in the same order, finding the first that is left each time
+        while (self->used_storage > storage_limit && vt_size(&self->images_by_internal_id)) {
+            Image *first = NULL;
+            iter_images(self) {
+                Image *img = i.data->val;
+                if (!first || transient_or_older_first(&img, &first)) first = img;
+            }
+            remove_image(self, first);
+        }
+        if (!vt_size(&self->images_by_internal_id)) self->used_storage = 0; // sanity check
+        return;
+    }
+    Image **p = sorted;
+    iter_images(self) { *p++ = i.data->val; }
     QSORT(Image *, sorted, num_images, transient_or_older_first);
 #undef transient_or_older_first
 
@@ -577,30 +612,47 @@ zlib_strerror(int ret) {
 #undef Z
 }
 
+// Decompresses the image data into a buffer of exactly the expected size, data_sz. zlib counts the bytes of one call
+// in a uInt, so the input and output are given to it in parts that each fit in one, for data of any size. Fails the
+// command, never aborts, when out of memory.
 static bool
 inflate_zlib(LoadData *load_data, uint8_t *buf, size_t bufsz) {
-    bool ok = false;
-    z_stream z;
-    uint8_t *decompressed = malloc(load_data->data_sz);
-    if (decompressed == NULL) fatal("Out of memory allocating decompression buffer");
-    z.zalloc = Z_NULL;
-    z.zfree = Z_NULL;
-    z.opaque = Z_NULL;
-    z.avail_in = bufsz;
-    z.next_in = (Bytef *)buf;
-    z.avail_out = load_data->data_sz;
-    z.next_out = decompressed;
+    bool ok = false, initialized = false;
+    z_stream z = {.zalloc = Z_NULL, .zfree = Z_NULL, .opaque = Z_NULL};
+    const size_t expected = load_data->data_sz;
+    // malloc(0) may return NULL, which is not a failure
+    uint8_t *decompressed = allocation_fails(ALLOCATION_INFLATE) ? NULL : malloc(MAX(expected, (size_t)1));
+    if (decompressed == NULL) ABRT(ENOMEM, "Out of memory allocating %zu bytes for the decompressed image data", expected);
     int ret;
     if ((ret = inflateInit(&z)) != Z_OK) ABRT(ENOMEM, "Failed to initialize inflate with error: %s", zlib_strerror(ret));
-    if ((ret = inflate(&z, Z_FINISH)) != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
-    if (z.avail_out) ABRT(EINVAL, "Image data size post inflation does not match expected size");
+    initialized = true;
+    size_t consumed = 0, produced = 0;
+    do {
+        if (!z.avail_in && consumed < bufsz) {
+            const size_t part = MIN(bufsz - consumed, (size_t)UINT_MAX);
+            z.next_in = (Bytef *)buf + consumed;
+            z.avail_in = (uInt)part;
+            consumed += part;
+        }
+        const uInt room = (uInt)MIN(expected - produced, (size_t)UINT_MAX);
+        z.next_out = decompressed + produced;
+        z.avail_out = room;
+        ret = inflate(&z, Z_NO_FLUSH);
+        produced += room - z.avail_out;
+        // Z_BUF_ERROR: no progress is possible, either the output is full before the end of the stream or the input
+        // ended before it
+        if (ret == Z_BUF_ERROR && produced == expected) ABRT(EINVAL, "Image data size post inflation does not match expected size");
+        if (ret == Z_MEM_ERROR) ABRT(ENOMEM, "Out of memory inflating image data");
+    } while (ret == Z_OK);
+    if (ret != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
+    if (produced != expected) ABRT(EINVAL, "Image data size post inflation does not match expected size");
     free_load_data(load_data);
-    load_data->buf_capacity = load_data->data_sz;
+    load_data->buf_capacity = expected;
     load_data->buf = decompressed;
-    load_data->buf_used = load_data->data_sz;
+    load_data->buf_used = expected;
     ok = true;
 err:
-    inflateEnd(&z);
+    if (initialized) inflateEnd(&z);
     if (!ok) free(decompressed);
     return ok;
 }
@@ -686,8 +738,9 @@ static void
 print_png_read_error(png_read_data *d, const char *code, const char *msg) {
     if (d->error.used >= d->error.capacity) {
         size_t cap = MAX(2 * d->error.capacity, 1024 + d->error.used);
-        d->error.buf = realloc(d->error.buf, cap);
-        if (!d->error.buf) return;
+        char *buf = realloc(d->error.buf, cap);
+        if (!buf) return;  // the message is lost, the earlier ones are kept
+        d->error.buf = buf;
         d->error.capacity = cap;
     }
     d->error.used += snprintf(d->error.buf + d->error.used, d->error.capacity - d->error.used, "%s: %s ", code, msg);
@@ -795,6 +848,7 @@ image_path_to_bitmap(const char *path, uint8_t **data, unsigned int *width, unsi
 }
 
 static Image *
+// The image with the client id, or a new one, NULL when out of memory
 find_or_create_image(GraphicsManager *self, uint32_t id, bool *existing) {
     if (id) {
         Image *img = img_by_client_id(self, id);
@@ -804,22 +858,32 @@ find_or_create_image(GraphicsManager *self, uint32_t id, bool *existing) {
         }
     }
     *existing = false;
-    Image *ans = calloc(1, sizeof(Image));
-    if (!ans) fatal("Out of memory allocating Image object");
+    Image *ans = allocation_fails(ALLOCATION_IMAGE) ? NULL : calloc(1, sizeof(Image));
+    if (!ans) return NULL;
+    if (!(ans->texture = new_texture_ref())) {
+        free(ans);
+        return NULL;
+    }
     ans->internal_id = next_id(&self->image_id_counter);
-    ans->texture = new_texture_ref();
     vt_init(&ans->refs_by_internal_id);
     vt_init(&ans->refs_by_client_id);
-    if (vt_is_end(vt_insert(&self->images_by_internal_id, ans->internal_id, ans))) fatal("Out of memory");
+    if (vt_is_end(vt_insert(&self->images_by_internal_id, ans->internal_id, ans))) {
+        clear_texture_ref(&ans->texture);
+        vt_cleanup(&ans->refs_by_internal_id);
+        vt_cleanup(&ans->refs_by_client_id);
+        free(ans);
+        return NULL;
+    }
     return ans;
 }
 
+// Zero, which is no client id, when out of memory
 static uint32_t
 get_free_client_id(const GraphicsManager *self) {
     size_t num_images = vt_size(&((GraphicsManager *)self)->images_by_internal_id);
     if (!num_images) return 1;
-    RAII_ALLOC(uint32_t, client_ids, malloc(num_images * sizeof(uint32_t)));
-    if (!client_ids) fatal("Out of memory");
+    RAII_ALLOC(uint32_t, client_ids, allocation_fails(ALLOCATION_CLIENT_IDS) || num_images > SIZE_MAX / sizeof(uint32_t) ? NULL : malloc(num_images * sizeof(uint32_t)));
+    if (!client_ids) return 0;
     size_t count = 0;
     iter_images((GraphicsManager *)self) {
         Image *img = i.data->val;
@@ -1575,13 +1639,23 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
     if (tt == 'd' && self->currently_loading.loading_for.image_id) init_img = false;
     if (init_img) {
         self->currently_loading.loading_for = (const ImageAndFrame){0};
+        // the response to a failure before the load data is initialized goes to this command, not an earlier one
+        self->currently_loading.start_command = *g;
+        self->currently_loading.start_command.id = iid;
         if (g->data_width > MAX_IMAGE_DIMENSION || g->data_height > MAX_IMAGE_DIMENSION)
             ABRT("EINVAL", "Image too large, width or height greater than %u", MAX_IMAGE_DIMENSION);
         remove_images(self, add_trim_predicate, 0);
         img = find_or_create_image(self, iid, &existing);
+        if (!img) ABRT("ENOMEM", "Out of memory creating an image");
         if (existing) {
             free_image_resources(self, img);
-            img->texture = new_texture_ref();
+            if (!(img->texture = new_texture_ref())) {
+                // its pixels and placements are gone already, as they would be on success
+                remove_image(self, img);
+                *is_dirty = true;
+                set_layers_dirty(self);
+                ABRT("ENOMEM", "Out of memory creating the texture of an image");
+            }
             img->root_frame_data_loaded = false;
             img->indexed_px_sz = 0;
             img->transfer = TRANSFER_SRGB;
@@ -1599,7 +1673,10 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             img->client_id = iid;
             img->client_number = g->image_number;
             if (!img->client_id && img->client_number) {
-                img->client_id = get_free_client_id(self);
+                if (!(img->client_id = get_free_client_id(self))) {
+                    remove_image(self, img);
+                    ABRT("ENOMEM", "Out of memory finding a free image id");
+                }
                 iid = img->client_id;
             }
         }
@@ -1947,13 +2024,17 @@ typedef struct {
 } ImageFraction;
 static void update_vector_texture(GraphicsManager *self, Image *img, double width, double height, ImageFraction shown, double view_width, double view_height);
 
+// NULL when out of memory
 static ImageRef *
 create_ref(Image *img, ImageRef *clone_from) {
-    ImageRef *ans = calloc(1, sizeof(ImageRef));
-    if (!ans) fatal("Out of memory creating ImageRef");
+    ImageRef *ans = allocation_fails(ALLOCATION_REF) ? NULL : calloc(1, sizeof(ImageRef));
+    if (!ans) return NULL;
     if (clone_from) *ans = *clone_from;
     ans->internal_id = next_id(&img->ref_id_counter);
-    if (vt_is_end(vt_insert(&img->refs_by_internal_id, ans->internal_id, ans))) fatal("Out of memory");
+    if (vt_is_end(vt_insert(&img->refs_by_internal_id, ans->internal_id, ans))) {
+        free(ans);
+        return NULL;
+    }
     return ans;
 }
 
@@ -2123,6 +2204,10 @@ grman_put_cell_image(
 
     // Create a real ref.
     ImageRef *real_ref = create_ref(img, &ref);
+    if (!real_ref) {
+        log_error("Out of memory placing an image for a Unicode placeholder, it is not shown");
+        return;
+    }
 
     img->atime = monotonic();
     set_layers_dirty(self);
@@ -2226,7 +2311,10 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
             }
         }
     }
-    if (ref == NULL) ref = create_ref(img, NULL);
+    if (ref == NULL && !(ref = create_ref(img, NULL))) {
+        set_command_failed_response("ENOMEM", "Out of memory creating a placement");
+        return g->id;
+    }
 
     *is_dirty = true;
     set_layers_dirty(self);
@@ -2330,6 +2418,20 @@ resolve_parent_offset(const GraphicsManager *self, const ImageRef *ref, int32_t 
     return true;
 }
 
+// Room for one more item in the render data, false when out of memory
+static bool
+ensure_render_data_space(GraphicsManager *self) {
+    if (self->render_data.count < self->render_data.capacity) return true;
+    const size_t old = self->render_data.capacity, item_sz = sizeof(self->render_data.item[0]);
+    if (old > SIZE_MAX / 2 / item_sz) return false;
+    const size_t cap = old ? 2 * old : 64;
+    ImageRenderData *items = allocation_fails(ALLOCATION_RENDER_DATA) ? NULL : realloc(self->render_data.item, cap * item_sz);
+    if (!items) return false;
+    memset(items + old, 0, (cap - old) * item_sz);
+    self->render_data.item = items;
+    self->render_data.capacity = cap;
+    return true;
+}
 
 bool
 grman_update_layers(
@@ -2435,10 +2537,15 @@ grman_update_layers(
                 }
             }
 
+            if (!ensure_render_data_space(self)) {
+                log_error("Out of memory for the render data of images, a placement is not drawn");
+                self->layers_dirty = true;  // try again for the next frame
+                refitr = vt_next(refitr);
+                continue;
+            }
             if (ref->z_index < ((int32_t)INT32_MIN / 2)) self->num_of_below_refs++;
             else if (ref->z_index < 0) self->num_of_negative_refs++;
             else self->num_of_positive_refs++;
-            ensure_space_for(&(self->render_data), item, ImageRenderData, self->render_data.count + 1, capacity, 64, true);
             ImageRenderData *rd = self->render_data.item + self->render_data.count;
             zero_at_ptr(rd);
             rd->dest_rect = r;
@@ -4921,8 +5028,23 @@ py_iosurface_held_count(PyObject *self UNUSED, PyObject *args UNUSED) {
 }
 #endif
 
+// For the tests: make the next allocation of the named kind fail, as when out of memory, see Allocation
+static PyObject *
+pyfail_next_graphics_allocation(PyObject *self UNUSED, PyObject *args) {
+    const char *name;
+    if (!PyArg_ParseTuple(args, "s", &name)) return NULL;
+    for (size_t i = 1; i < arraysz(allocation_names); i++) {
+        if (strcmp(name, allocation_names[i]) == 0) {
+            failing_allocation = (Allocation)i;
+            Py_RETURN_NONE;
+        }
+    }
+    PyErr_Format(PyExc_KeyError, "Unknown allocation: %s", name);
+    return NULL;
+}
+
 static PyMethodDef module_methods[] = {
-    M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS),
+    M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS), M(fail_next_graphics_allocation, METH_VARARGS),
 #ifdef __linux__
     {"dmabuf_parse_spec", py_dmabuf_parse_spec, METH_VARARGS, ""}, {"dmabuf_take_fds", py_dmabuf_take_fds, METH_VARARGS, ""},
 #endif

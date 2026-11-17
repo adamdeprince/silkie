@@ -874,6 +874,7 @@ def dmabuf_parse_spec(spec: bytes) -> tuple[int, str, int, tuple[tuple[int, int,
 def dmabuf_take_fds(spec: bytes, session_of: int) -> tuple[int, ...]: ...  # Linux only
 def iosurface_create_for_tests(width: int, height: int) -> tuple[int, object]: ...  # macOS only
 def iosurface_held_count() -> int: ...  # macOS only
+def fail_next_graphics_allocation(which: str) -> None: ...
 def os_window_font_size(os_window_id: int, new_sz: float = -1.0, force: bool = False) -> float:
     pass
 
