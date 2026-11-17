@@ -3047,10 +3047,11 @@ colorspace_for(int color_space, bool float_surface) {
 // dynamic range being asked for, so that the system shows nothing above SDR white. It has twice the memory and
 // bandwidth of an 8 bit one. The system says how deep a screen is only through NSWindowDepth, which is 8 bits per
 // sample even on panels with 10 (a MacBook Pro's XDR display, for one), so a screen that supports extended dynamic
-// range, which needs more than 8 bits, counts as deep too. The application switches the framebuffer as the window
-// moves between screens, see glfwCocoaSetWindowFloatSurface(), so a window starts with what the screen it opens on
-// can show. A window in the native color space of the display, DEFAULT_COLORSPACE, passes its values on unmanaged,
-// which a linear framebuffer cannot do, so it gets one only for HDR
+// range, which needs more than 8 bits, counts as deep too; that decides how finely the application dithers. A window
+// asked to have deep color has the framebuffer on every screen. Otherwise it has one only for HDR, and the
+// application switches it as the window moves between screens, see glfwCocoaSetWindowFloatSurface(). A window in the
+// native color space of the display, DEFAULT_COLORSPACE, passes its values on unmanaged, which a linear framebuffer
+// cannot do, so it gets one only for HDR
 static bool
 screen_is_deep(NSScreen *screen) {
     return NSBitsPerSampleFromDepth([screen depth]) > 8 || [screen maximumPotentialExtendedDynamicRangeColorComponentValue] > 1.0;
@@ -3058,9 +3059,7 @@ screen_is_deep(NSScreen *screen) {
 
 static bool
 wants_deep_color(int deep_color, int color_space) {
-    if (deep_color != GLFW_DEEP_COLOR_ALWAYS || color_space == DEFAULT_COLORSPACE) return false;
-    NSScreen *screen = [NSScreen mainScreen];
-    return screen && screen_is_deep(screen);
+    return deep_color == GLFW_DEEP_COLOR_ALWAYS && color_space != DEFAULT_COLORSPACE;
 }
 
 bool

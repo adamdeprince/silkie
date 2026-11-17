@@ -2907,18 +2907,18 @@ more. Its alpha has at most 2 bits, so a transparent window gets a floating
 point surface on Wayland, where the graphics driver has one, and stays 8 bit
 otherwise. On X11 it needs a visual of depth 30. On macOS it is a floating
 point surface with 16 bits per channel, twice the memory and bandwidth of an
-8 bit one, so Silkie uses it only while the window is on a screen that can
-show it, one that supports extended dynamic range or reports more than 8 bits
-per sample, and switches to an 8 bit surface, like a resize, when the window
-is moved to another screen. With :opt:`macos_colorspace` set to
-:code:`default` the colors are passed to the display unmanaged, which a
-floating point surface cannot do, so that window stays 8 bit.
+8 bit one, on every screen; on a screen not known to show more than 8 bits it
+is dithered to 8 bit steps. Set :code:`never` to save that bandwidth. With
+:opt:`macos_colorspace` set to :code:`default` the colors are passed to the
+display unmanaged, which a floating point surface cannot do, so that window
+stays 8 bit.
 
 HDR needs a floating point surface too: while :opt:`hdr` is in use for a
 window, which with the default :code:`detect` is whenever it is on an HDR
 capable screen, such as a MacBook Pro's, the window has one even with
-:code:`never`. Set :opt:`hdr` to :code:`no` as well to keep every window 8
-bits deep.
+:code:`never`, and on macOS switches to and from it, like a resize, as it is
+moved between screens. Set :opt:`hdr` to :code:`no` as well to keep every
+window 8 bits deep.
 
 The surface Silkie actually got, and how it dithers, is reported by the
 :doc:`/display-protocol` as :code:`output_bits`, :code:`output_type` and

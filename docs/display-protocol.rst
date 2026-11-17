@@ -277,9 +277,9 @@ once it has been drawn, ``0`` and ``unknown`` before that, and are not
 affected by :opt:`display_info`. Which surface a window gets is chosen with
 :opt:`deep_color`, and whether and to which steps it is dithered with
 :opt:`output_dither`. They change, with an event, when the window is moved to
-a display of another depth: on macOS the surface itself changes between
-floating point and 8 bits, and everywhere the steps dithered to follow the
-display. A move is acted on once it has lasted a moment, so a window dragged
+a display of another depth: the steps dithered to follow the display, and on
+macOS a window that has a floating point surface only for HDR, with
+:opt:`deep_color` set to :code:`never`, switches between it and an 8 bit one. A move is acted on once it has lasted a moment, so a window dragged
 across the boundary between two displays does not flip back and forth.
 
 On macOS the system reports 8 bits per sample even for a MacBook Pro's 10 bit

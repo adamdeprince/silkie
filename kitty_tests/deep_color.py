@@ -91,7 +91,8 @@ class TestDeepColor(BaseTest):
         return [(s['display_deep'], s['output_type'], s['output_bits'], s['output_dither'], s['switched']) for s in states]
 
     def test_switchable_surface_follows_the_display(self):
-        # macOS: floating point on a deep screen, 8 bits on another, once the move has lasted
+        # macOS with deep color: floating point on every screen, dithered to 8 bit steps on one not known to be deep,
+        # the change acted on once the move has lasted
         self.set_options({'deep_color': 'always', 'hdr': 'no', 'macos_colorspace': 'srgb'})
         ticks = [
             (0, True, False),     # opens on a deep screen: acted on at once
@@ -103,16 +104,18 @@ class TestDeepColor(BaseTest):
             (700, True, False),   # and back
             (1100, True, False),
         ]
-        float_deep = (True, 'float', 16, 0)
-        fixed_8 = (False, 'fixed', 8, 8)
-        expected = [
-            float_deep + (True,), float_deep + (False,), float_deep + (False,), float_deep + (False,), float_deep + (False,),
-            fixed_8 + (True,), fixed_8 + (False,), float_deep + (True,)]
+        float_deep = (True, 'float', 16, 0, False)
+        float_8 = (False, 'float', 16, 8, False)
+        expected = [float_deep[:4] + (True,)] + [float_deep] * 4 + [float_8, float_8, float_deep]
         states = simulate_output_depth_changes(8, 8, 8, False, True, ticks)
         self.ae(self.summary(states), expected)
-        # the layers follow the surface, floating point for a linear one
-        self.ae([s['layers_float'] for s in states], [s['linear'] for s in states])
-        # a window whose colors are not color managed cannot have a floating point surface
+        # dithering into a floating point surface goes through the layers, which are floating point for it
+        self.ae([s['needs_layers'] for s in states], [False] * 5 + [True, True, False])
+        self.assertTrue(all(s['layers_float'] for s in states))
+        # a window opened on an 8 bit screen is floating point there too
+        states = simulate_output_depth_changes(8, 8, 8, False, True, [(0, False, False), (400, True, False), (800, True, False)])
+        self.ae(self.summary(states), [(False, 'float', 16, 8, True), (False, 'float', 16, 8, False), (True, 'float', 16, 0, False)])
+        # a window whose colors are not color managed cannot have a floating point surface for deep color
         self.set_options({'deep_color': 'always', 'hdr': 'no', 'macos_colorspace': 'default'})
         states = simulate_output_depth_changes(8, 8, 8, False, True, ticks)
         self.assertTrue(all(s['output_type'] == 'fixed' and not s['switched'] for s in states))

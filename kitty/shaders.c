@@ -262,15 +262,16 @@ update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wa
     return true;
 }
 
-// Whether a window whose surface can be switched, on macOS, should have a floating point one, which has twice the
-// memory and bandwidth of an 8 bit one: while it is on a display that shows more than 8 bits, for HDR while that is
-// active and for deep color. Every display with HDR is one, and the change from one display to the other is acted on
-// once it has lasted, see update_output_depth(), for both. A window whose colors are passed to the display unmanaged
-// cannot have one for deep color, see wants_deep_color() in cocoa_window.m
+// Whether a window whose surface can be switched, on macOS, should have a floating point one. For deep color it has
+// one on every display: one that is not known to show more than 8 bits gets dithered to the steps of 8 bits instead,
+// see output_dither_levels(). With deep color off, or for a window whose colors are passed to the display unmanaged,
+// which cannot have one for deep color, see wants_deep_color() in cocoa_window.m, it has one only for HDR while that is
+// active, which needs a display that shows more than 8 bits, as every display with HDR does. The change from one
+// display to another is acted on once it has lasted, see update_output_depth().
 bool
 os_window_wants_float_surface(const OSWindow *w) {
-    if (!w->output.display_deep) return false;
-    return hdr_should_be_active(w) || (OPT(deep_color) == DEEP_COLOR_ALWAYS && OPT(macos_colorspace) != 0);
+    if (OPT(deep_color) == DEEP_COLOR_ALWAYS && OPT(macos_colorspace) != 0) return true;
+    return w->output.display_deep && hdr_should_be_active(w);
 }
 
 // The window has a new surface, with a new OpenGL context that shares all objects with the old one, except those that
