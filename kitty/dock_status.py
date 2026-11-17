@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class DockStatus(NamedTuple):
     label: str = ''  # the text of the badge on macOS, empty for none
     count: int = 0  # the number of windows in the most urgent state, 0 for none
-    urgent: bool = False  # a window is blocked on the user
+    urgent: bool = False  # a window is blocked on the user or its program failed
     # the ids of the windows that are blocked on the user, including the one the user is looking at
     blocked: frozenset[int] = frozenset()
 
@@ -36,7 +36,8 @@ def dock_status(windows: Iterable['Window'], looking_at: 'Window | None' = None)
     """
     The most urgent of: windows blocked on the user, shown as their number; windows whose program failed,
     shown as a cross; windows whose program finished, shown as a check mark, both with the number of windows
-    if more than one. Working and idle windows are not shown: they need nothing from the user.
+    if more than one. Working and idle windows are not shown: they need nothing from the user. Blocked and
+    failed windows make the status urgent, which launchers on Linux show.
     """
     from .program_status import State
     blocked: set[int] = set()
@@ -59,7 +60,7 @@ def dock_status(windows: Iterable['Window'], looking_at: 'Window | None' = None)
         return DockStatus(str(num_blocked), num_blocked, True, frozenset(blocked))
     for n, sym in ((error, '\u2715'), (done, '\u2713')):
         if n:
-            return DockStatus(f'{n}{sym}' if n > 1 else sym, n, blocked=frozenset(blocked))
+            return DockStatus(f'{n}{sym}' if n > 1 else sym, n, urgent=bool(error), blocked=frozenset(blocked))
     return DockStatus(blocked=frozenset(blocked))
 
 

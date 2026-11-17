@@ -26,15 +26,16 @@ class TestDockStatus(BaseTest):
     def test_dock_status_summary(self) -> None:
         self.ae(dock_status([]), NO_STATUS)
         self.ae(dock_status([window(1), window(2, 'state=idle'), window(3, 'state=working:progress=50')]), NO_STATUS)
-        self.ae(dock_status([window(1, 'state=done')]), DockStatus('✓', 1))
-        self.ae(dock_status([window(1, 'state=done'), window(2, 'state=done')]), DockStatus('2✓', 2))
-        self.ae(dock_status([window(1, 'state=done'), window(2, 'state=error')]), DockStatus('✕', 1))
-        self.ae(dock_status([window(1, 'state=error'), window(2, 'state=error'), window(3, 'state=done')]), DockStatus('2✕', 2))
+        # failed windows are urgent, finished ones are not
+        self.ae(dock_status([window(1, 'state=done')]), DockStatus('\u2713', 1))
+        self.ae(dock_status([window(1, 'state=done'), window(2, 'state=done')]), DockStatus('2\u2713', 2))
+        self.ae(dock_status([window(1, 'state=done'), window(2, 'state=error')]), DockStatus('\u2715', 1, True))
+        self.ae(dock_status([window(1, 'state=error'), window(2, 'state=error'), window(3, 'state=done')]), DockStatus('2\u2715', 2, True))
         a, b, c = window(1, 'state=blocked:kind=question'), window(2, 'state=blocked'), window(3, 'state=error')
         self.ae(dock_status([a, b, c]), DockStatus('2', 2, True, frozenset((1, 2))))
         # the window the user is looking at does not count, but is still known to be blocked
         self.ae(dock_status([a, b, c], looking_at=a), DockStatus('1', 1, True, frozenset((1, 2))))
-        self.ae(dock_status([a, c], looking_at=a), DockStatus('✕', 1, False, frozenset((1,))))
+        self.ae(dock_status([a, c], looking_at=a), DockStatus('\u2715', 1, True, frozenset((1,))))
         self.ae(dock_status([a], looking_at=a), DockStatus(blocked=frozenset((1,))))
         # a blocked record in a window counts that window once, whatever else is in it
         self.ae(dock_status([window(1, 'state=working', 'state=blocked:id=x', 'state=done:id=y')]), DockStatus('1', 1, True, frozenset((1,))))
@@ -92,7 +93,7 @@ class TestDockStatusController(BaseTest):
         # a program in another window finishes while the user looks at a
         report(b, 'state=done')
         self.c.update()
-        self.ae([s.label for s in self.shown], ['✓'])
+        self.ae([s.label for s in self.shown], ['\u2713'])
         self.c.update()
         self.ae(len(self.shown), 1, 'the same status is not sent again')
 
@@ -118,19 +119,19 @@ class TestDockStatusController(BaseTest):
         report(b, 'state=working')
         self.windows.remove(b)
         self.c.update()
-        self.ae(self.shown[-1][:3], ('✕', 1, False))
+        self.ae(self.shown[-1][:3], ('\u2715', 1, True), 'failed windows are urgent too')
         self.ae(self.attention, [], 'attention is not requested unless asked for')
 
     def test_dock_status_option(self) -> None:
         self.windows = [window(1, 'state=error')]
         self.c.update()
-        self.ae(self.shown[-1].label, '✕')
+        self.ae(self.shown[-1].label, '\u2715')
         self.opts.dock_status_badge = False
         self.c.update()
         self.ae(self.shown[-1][:3], ('', 0, False))
         self.opts.dock_status_badge = True
         self.c.update()
-        self.ae(self.shown[-1].label, '✕')
+        self.ae(self.shown[-1].label, '\u2715')
 
     def test_dock_attention_on_blocked(self) -> None:
         self.opts.dock_attention_on_blocked = True

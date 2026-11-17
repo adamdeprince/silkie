@@ -2329,8 +2329,8 @@ otherwise a cross for windows whose program failed or a check mark for windows
 whose program finished, with their number if more than one. The window you are
 looking at is left out, as its status is in plain sight, and finished or failed
 programs no longer count once you have seen their window. On macOS this is the
-badge of the icon in the Dock. On Linux it is the count, and for blocked windows
-the urgent state, of the Unity launcher entry API, shown by Ubuntu Dock, Dash to
+badge of the icon in the Dock. On Linux it is the count, and for blocked or failed
+windows the urgent state, of the Unity launcher entry API, shown by Ubuntu Dock, Dash to
 Dock and KDE Plasma for a Silkie started from its :file:`silkie.desktop` file.
 """,
 )
