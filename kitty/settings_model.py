@@ -153,7 +153,8 @@ BOOL_PARSERS = {'to_bool'}
 COLOR_PARSERS = {'to_color', 'to_color_or_none', 'macos_titlebar_color', 'titlebar_color', 'scrollbar_color', 'cursor_text_color'}
 INT_PARSERS = {'int', 'positive_int', 'scrollback_lines', 'tab_bar_min_tabs'}
 FLOAT_PARSERS = {'float', 'positive_float', 'unit_float', 'signed_unit_float', 'to_font_size',
-                 'spatial_angle', 'spatial_divergence', 'spatial_scale', 'spatial_phase_limit', 'spatial_exponent', 'hdr_multiplier'}
+                 'spatial_angle', 'spatial_divergence', 'spatial_scale', 'spatial_phase_limit', 'spatial_exponent', 'hdr_multiplier',
+                 'minimum_contrast'}
 FONT_PARSERS = {'parse_font_spec'}
 # Options whose docs say a reload does not change them
 NEEDS_RESTART_PAT = re.compile(r'(reloading\s+the\s+config\s+is\s+not\s+supported|restart\s+\w+\s+after\s+changing|has\s+no\s+effect\s+(on|when)\s+(reload|reloading))', re.I)
@@ -236,6 +237,8 @@ def numeric_domain(opt: Option) -> dict[str, Any]:
         low, high = 0, 180
     if parser == 'spatial_exponent':
         low, high = -6, 6
+    if parser == 'minimum_contrast':  # a percentage
+        low, high, step = 0, 100, 5
     if opt.name.endswith('_opacity'):
         low, high, step = 0, 1, .05
     if opt.name in ('background_blur', 'update_check_interval'):
@@ -311,6 +314,8 @@ def field_for_option(opt: Option, value_layers: tuple[Layer, ...], scope: str) -
         if opt.name in layer:
             value = layer[opt.name][-1]
     kind = field_kind(opt)
+    if parser_name(opt) == 'minimum_contrast':  # the native number controls do not take the optional % sign
+        default, value = default.strip().removesuffix('%').strip(), value.strip().removesuffix('%').strip()
     if kind == 'font':
         default, value = font_family_from_spec(default), font_family_from_spec(value)
     elif kind == 'color':

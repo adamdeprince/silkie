@@ -37,7 +37,9 @@ public struct CellRenderData {
     public uint columns, lines, sprites_xnum, sprites_ynum, cursor_shape, cell_width, cell_height;
     public uint cursor_x1, cursor_x2, cursor_y1, cursor_y2;
     public float cursor_opacity, inactive_text_alpha, fg_override_threshold, row_offset, dim_opacity, blink_opacity, hdr_headroom;
-    public uint output_gamut;
+    // The gamut the window draws in, see gamut.slang, and how the text
+    // foreground is adjusted for contrast, FG_OVERRIDE_* in cell.slang
+    public uint output_gamut, fg_override_algo;
 
     // must have unique entries with 0 being default_bg and unset being UINT32_MAX
     public uint bg_colors0, bg_colors1, bg_colors2, bg_colors3, bg_colors4, bg_colors5, bg_colors6, bg_colors7;
@@ -290,6 +292,10 @@ public struct BackgroundOutput {
     public uint text_attrs;
     public uint is_reversed;
     public CellData cell_data;
+    // The HDR gains: of foreground, of bg and of background_rgb. The last is one where
+    // the selection or the block cursor replaced the cell color, and in between while
+    // the cursor fades. Contrast is measured on the colors without these gains.
+    public float fg_gain, bg_gain, background_gain;
 };
 
 public BackgroundOutput
@@ -415,6 +421,8 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     bg_alpha = if_one_then(cell_data.has_block_cursor, effective_cursor_opacity, bg_alpha);
     bg = if_one_then(float(is_selected & BIT_MASK), if_one_then(crd.use_cell_for_selection_bg, fg_vec, crd.highlight_bg_lin.rgb), bg);
     float3 background_rgb = if_one_then(cell_data.has_block_cursor, lerp(bg, cell_data.cursor.bg, crd.cursor_opacity), bg);
+    float background_gain = if_one_then(float(is_selected & BIT_MASK), 1.f, bg_gain);
+    background_gain = if_one_then(cell_data.has_block_cursor, lerp(background_gain, 1.f, crd.cursor_opacity), background_gain);
     // }}}
 
     bo.background_rgb = background_rgb;
@@ -427,6 +435,9 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     bo.text_attrs = text_attrs;
     bo.is_reversed = is_reversed;
     bo.cell_data = cell_data;
+    bo.fg_gain = fg_gain;
+    bo.bg_gain = bg_gain;
+    bo.background_gain = background_gain;
     return bo;
 }
 

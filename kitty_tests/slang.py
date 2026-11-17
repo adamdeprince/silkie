@@ -743,9 +743,12 @@ static float NOT_CONST = 3.0;
         self.assertFalse(text_contrast_is_identity('2 0'))
         self.ae(text_contrast_is_identity('platform'), sys.platform != 'darwin')
         variants = cell_variations()
-        self.ae(len(variants), 27)
-        self.ae(sum(v['TEXT_NEW_GAMMA'] == 'false' for v in variants), 9)
-        self.ae(sum(v['TEXT_CONTRAST_IDENTITY'] == 'true' for v in variants), 9)
+        # three render modes times three gamma variants, the foreground contrast
+        # adjustment is a uniform, see minimum_contrast
+        self.ae(len(variants), 9)
+        self.ae(sum(v['TEXT_NEW_GAMMA'] == 'false' for v in variants), 3)
+        self.ae(sum(v['TEXT_CONTRAST_IDENTITY'] == 'true' for v in variants), 3)
+        self.assertNotIn('FG_OVERRIDE_ALGO', variants[0])
         for v in variants:
             if v['TEXT_NEW_GAMMA'] == 'false':
                 self.ae(v['TEXT_CONTRAST_IDENTITY'], 'false')

@@ -1005,6 +1005,18 @@ def tab_title_wrap(x: str) -> int:
     return positive_int(x)
 
 
+def minimum_contrast(x: str) -> float:
+    ' A percentage from 0 to 100, the % sign is optional '
+    q = x.strip().removesuffix('%').strip()
+    try:
+        val = float(q)
+    except ValueError:
+        raise ValueError(f'Not a percentage: {x!r}') from None
+    if not 0 <= val <= 100:  # also rejects NaN
+        raise ValueError(f'The minimum contrast must be a percentage from 0 to 100, not: {x!r}')
+    return val
+
+
 def text_fg_override_threshold(x: str) -> tuple[float, Literal['%', 'ratio']]:
     val, unit = number_with_unit(x, '%', 'ratio')
     return val, cast(Literal['%', 'ratio'], unit)

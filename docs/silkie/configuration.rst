@@ -130,6 +130,27 @@ override that leaves the color scheme unchanged. These declarations apply to
 all windows in the Silkie process, so toggle the mode when moving between an
 ordinary monitor and an e-paper monitor.
 
+Minimum contrast
+----------------
+
+``minimum_contrast`` works like iTerm2's Minimum contrast: it makes text that is
+too close to its background readable, such as the dark ANSI blue of ``ls`` on a
+machine reached over ssh, on a black background. It is a percentage from 0
+(off) to 100: the smallest difference in lightness allowed between text and its
+background. Closer text keeps its hue and becomes lighter or darker, colors
+that already stand out are not changed, and 100 leaves only black and white
+text::
+
+    minimum_contrast 40
+
+It can differ per terminal: set it in a profile, for a tab in a session file
+with ``minimum_contrast 40``, for a window with ``launch --minimum-contrast 40``,
+or at runtime with ``kitten @ set-minimum-contrast 40`` (``--match-tab`` for a
+whole tab, ``default`` to remove the setting). A window's own setting wins over
+its tab's, then its profile's, then the option. Block elements, shades and
+Powerline separators are left alone, since programs draw pictures with them.
+On e-paper and grayscale displays it is what keeps colored text visible.
+
 Display channel precision
 -------------------------
 

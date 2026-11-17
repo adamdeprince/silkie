@@ -324,6 +324,12 @@ typedef struct {
     } frame_feedback;
     bool has_activity_since_last_focus;
     bool track_activity;
+    // minimum_contrast as a percentage, set for this window by its profile, tab or
+    // itself, see Window.set_minimum_contrast(). When not set the global options apply.
+    struct {
+        double value;
+        bool is_set;
+    } minimum_contrast;
     hyperlink_id_type active_hyperlink_id;
     HYPERLINK_POOL_HANDLE hyperlink_pool;
     ANSIBuf as_ansi_buf;

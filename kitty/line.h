@@ -23,8 +23,12 @@ typedef union CellAttrs {
         uint32_t hdr_bg : 6;
         uint32_t gamut_fg : 2;
         uint32_t gamut_bg : 2;
+        // Set by render_line() for characters that draw pictures from the
+        // foreground and background colors, such as block elements, which
+        // minimum_contrast leaves alone. Follows the character, not the SGR state.
+        uint32_t area_graphic : 1;
         // named so that initializers zero it, see CPUCell
-        uint32_t padding : 5;
+        uint32_t padding : 4;
     };
     uint32_t val;
 } CellAttrs;
@@ -34,7 +38,7 @@ static_assert(sizeof(CellAttrs) == sizeof(uint32_t), "Fix the ordering of CellAt
 #define DECORATION_MASK (7u)
 #define HDR_MASK (63u)
 #define GAMUT_MASK (3u)
-#define SGR_MASK (~(((CellAttrs){.mark = MARK_MASK}).val))
+#define SGR_MASK (~(((CellAttrs){.mark = MARK_MASK, .area_graphic = 1}).val))
 #define MAX_NUM_CODEPOINTS_PER_CELL 24u
 // Text presentation selector
 #define VS15 0xfe0e

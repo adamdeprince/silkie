@@ -73,6 +73,7 @@ class Tab:
         self.layout_state: dict[str, Any] | None = None
         self.cwd: str | None = None
         self.next_title: str | None = None
+        self.minimum_contrast: float | None = None
 
     @property
     def has_non_background_processes(self) -> bool:
@@ -110,6 +111,11 @@ class Session:
         if self.tabs and not self.tabs[-1].windows:
             del self.tabs[-1]
         self.tabs.append(Tab(opts, name))
+
+    def set_minimum_contrast(self, val: str) -> None:
+        from .options.utils import minimum_contrast
+
+        self.tabs[-1].minimum_contrast = minimum_contrast(val)
 
     def set_next_title(self, title: str) -> None:
         self.tabs[-1].next_title = title.strip()
@@ -274,6 +280,8 @@ def parse_session(
                 ans.focus_os_window = True
             elif cmd == 'enabled_layouts':
                 ans.set_enabled_layouts(rest)
+            elif cmd == 'minimum_contrast':
+                ans.set_minimum_contrast(rest)
             elif cmd == 'cd':
                 ans.set_cwd(rest, session_base_dir)
             elif cmd == 'title':

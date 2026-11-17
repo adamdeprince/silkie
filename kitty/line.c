@@ -520,6 +520,18 @@ line_as_unicode(Line *self, bool skip_zero_cells, ANSIBuf *buf) {
 }
 
 static PyObject *
+gpu_attrs_at(Line *self, PyObject *x) {
+#define gpu_attrs_at_doc "[x] -> The attributes of the specified cell as sent to the GPU, the bits are BOLD, ITALIC, ..., AREA_GRAPHIC"
+    unsigned long xval = PyLong_AsUnsignedLong(x);
+    if (PyErr_Occurred()) return NULL;
+    if (xval >= self->xnum) {
+        PyErr_SetString(PyExc_IndexError, "Column number out of bounds");
+        return NULL;
+    }
+    return PyLong_FromUnsignedLong(self->gpu_cells[xval].attrs.val);
+}
+
+static PyObject *
 sprite_at(Line *self, PyObject *x) {
 #define sprite_at_doc "[x] -> Return the sprite in the specified cell"
     unsigned long xval = PyLong_AsUnsignedLong(x);
@@ -1302,6 +1314,7 @@ static PyMethodDef methods[] = {
         METHOD(clear_text, METH_VARARGS) METHOD(copy_char, METH_VARARGS) METHOD(set_char, METH_VARARGS) METHOD(set_attribute, METH_VARARGS)
             METHOD(as_ansi, METH_NOARGS) METHOD(last_char_has_wrapped_flag, METH_NOARGS) METHODB(set_wrapped_flag, METH_O),
     METHOD(hyperlink_ids, METH_NOARGS) METHOD(width, METH_O) METHOD(url_start_at, METH_O) METHOD(url_end_at, METH_VARARGS) METHOD(sprite_at, METH_O)
+            METHOD(gpu_attrs_at, METH_O)
 
         {NULL} /* Sentinel */
 };

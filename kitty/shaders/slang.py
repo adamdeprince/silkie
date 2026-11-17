@@ -20,11 +20,12 @@ from enum import StrEnum, auto
 from functools import lru_cache, partial
 from itertools import chain, product
 from types import MappingProxyType
-from typing import Any, Callable, Iterable, Iterator, Literal, NamedTuple, Sequence, TypedDict, TypeGuard
+from typing import Any, Callable, Iterable, Iterator, NamedTuple, Sequence, TypedDict, TypeGuard
 
 from kitty.constants import config_dir, read_kitty_resource, shaders_dir, slangc
 from kitty.fast_data_types import (
     ANIMATION_SAMPLE_WAIT,
+    AREA_GRAPHIC,
     BGIMAGE_PROGRAM,
     BG_ALPHA_MASK,
     BG_ALPHA_SHIFT,
@@ -169,20 +170,10 @@ def text_contrast_is_identity(strategy: str) -> bool:
 
 
 def cell_variant(opts: Options = defaults, program: int = CELL_PROGRAM) -> dict[str, str]:
-    text_fg_override_threshold: float = opts.text_fg_override_threshold[0]
-    algo = '0'
-    match opts.text_fg_override_threshold[1]:
-        case '%':
-            text_fg_override_threshold = max(0, min(text_fg_override_threshold, 100.0)) * 0.01
-            algo = '1'
-        case 'ratio':
-            text_fg_override_threshold = max(0, min(text_fg_override_threshold, 21.0))
-            algo = '2'
-    if not text_fg_override_threshold:
-        algo = '0'
+    # The contrast adjustment of the foreground is not a variant: it is chosen per
+    # window by a uniform, see override_foreground_color() in cell.slang
     render_mode = (CELL_PROGRAM, CELL_BG_PROGRAM, CELL_FG_PROGRAM).index(program)
     return {
-        'FG_OVERRIDE_ALGO': algo,
         'TEXT_NEW_GAMMA': 'false' if opts.text_composition_strategy == 'legacy' else 'true',
         'TEXT_CONTRAST_IDENTITY': 'true' if text_contrast_is_identity(opts.text_composition_strategy) else 'false',
         'RENDER_MODE': str(render_mode),
@@ -191,7 +182,7 @@ def cell_variant(opts: Options = defaults, program: int = CELL_PROGRAM) -> dict[
 
 @lru_cache(maxsize=2)
 def cell_variations() -> tuple[MappingProxyType[str, str], ...]:
-    variations = {'FG_OVERRIDE_ALGO': ('0', '1', '2'), 'RENDER_MODE': ('0', '1', '2')}
+    variations = {'RENDER_MODE': ('0', '1', '2')}
     bool_variations = 'false', 'true'
     # TEXT_CONTRAST_IDENTITY is only read when TEXT_NEW_GAMMA is true.
     base_keys = [k for k in cell_variant() if k != 'TEXT_CONTRAST_IDENTITY']
@@ -226,7 +217,6 @@ def glsl_shaders(name: str, variant_name: str = '') -> tuple[str, str]:
 
 
 class LoadShaderPrograms:
-    text_fg_override_threshold: tuple[float, Literal['%', 'ratio']] = 0, '%'
     text_old_gamma: bool = False
     text_contrast_identity: bool = text_contrast_is_identity('platform')
     custom_shaders: tuple[str, ...] = ()
@@ -255,9 +245,7 @@ class LoadShaderPrograms:
     def needs_recompile(self) -> bool:
         opts = self.get_options()
         return (
-            bool(opts.text_fg_override_threshold[0]) != bool(self.text_fg_override_threshold[0])
-            or opts.text_fg_override_threshold[1] != self.text_fg_override_threshold[1]
-            or (opts.text_composition_strategy == 'legacy') != self.text_old_gamma
+            (opts.text_composition_strategy == 'legacy') != self.text_old_gamma
             or text_contrast_is_identity(opts.text_composition_strategy) != self.text_contrast_identity
         )
 
@@ -278,7 +266,6 @@ class LoadShaderPrograms:
         opts = self.get_options()
         self.text_old_gamma = opts.text_composition_strategy == 'legacy'
         self.text_contrast_identity = text_contrast_is_identity(opts.text_composition_strategy)
-        self.text_fg_override_threshold = opts.text_fg_override_threshold
         metadata = load_glsl_metadata()
 
         def cell(prog: int) -> None:
@@ -797,6 +784,7 @@ class SlangFile(NamedTuple):
                 ans['GAMUT_FG_SHIFT'] = str(GAMUT_FG)
                 ans['GAMUT_BG_SHIFT'] = str(GAMUT_BG)
                 ans['GAMUT_MASK'] = str(GAMUT_MASK)
+                ans['AREA_GRAPHIC_SHIFT'] = str(AREA_GRAPHIC)
                 ans['COLOR_TYPE_MASK'] = str(COLOR_TYPE_MASK)
                 ans['DEEP_COLOR_TYPE'] = str(DEEP_COLOR_TYPE)
                 ans['BG_ALPHA_SHIFT'] = str(BG_ALPHA_SHIFT)

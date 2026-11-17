@@ -160,6 +160,8 @@ class TabDict(TypedDict):
     windows: list[WindowDict]
     groups: list[dict[str, Any]]
     active_window_history: list[int]
+    minimum_contrast: float
+    minimum_contrast_override: float | None
 
 
 class SpecialWindowInstance(NamedTuple):
@@ -319,6 +321,8 @@ class Tab:  # {{{
         self.enabled_layouts = [
             x.lower() for x in getattr(session_tab, 'enabled_layouts', None) or parsed_options(tab_manager.profile).get('enabled_layouts') or get_options().enabled_layouts
         ]
+        # minimum_contrast set for this tab, None to follow its profile. A session's minimum_contrast.
+        self.minimum_contrast_override: float | None = getattr(session_tab, 'minimum_contrast', None)
         self.borders = Borders(self.os_window_id, self.id)
         self.windows: WindowList = WindowList(self, tab_manager.os_window_docks)
         self._last_used_layout: str | None = None
@@ -342,6 +346,34 @@ class Tab:  # {{{
             l0 = session_tab.layout
             self._set_current_layout(l0)
             self.startup(session_tab)
+
+    # minimum_contrast {{{
+    @property
+    def minimum_contrast_setting(self) -> float | None:
+        ''' The minimum contrast set for this tab, by itself or its profile, None
+        when only the global option applies '''
+        if self.minimum_contrast_override is not None:
+            return self.minimum_contrast_override
+        return parsed_options(self.profile).get('minimum_contrast')
+
+    @property
+    def minimum_contrast(self) -> float:
+        ' The minimum contrast of new windows in this tab, as a percentage, see the minimum_contrast option '
+        ans = self.minimum_contrast_setting
+        return get_options().minimum_contrast if ans is None else ans
+
+    def set_minimum_contrast(self, value: float | str | None) -> None:
+        ''' Set the minimum contrast of this tab, a percentage from 0 to 100, as a
+        number or a string like 40 or 40%, None to go back to the profile or
+        options. It applies to all windows of the tab, the minimum contrast
+        they had set for themselves is removed, and to new windows in it. '''
+        from .window import parse_minimum_contrast_value
+
+        self.minimum_contrast_override = parse_minimum_contrast_value(value)
+        for w in self:
+            w.minimum_contrast_override = None
+            w.update_minimum_contrast()
+    # }}}
 
     def update_progress(self) -> None:
         self.num_of_windows_with_progress = 0
@@ -618,6 +650,7 @@ class Tab:  # {{{
             layout = self._current_layout_name
             if layout not in enabled_layouts:
                 enabled_layouts.append(layout)
+            mc = [] if self.minimum_contrast_override is None else [f'minimum_contrast {self.minimum_contrast_override:g}']
             return [
                 '',
                 f'new_tab {self.name}'.rstrip(),
@@ -625,8 +658,7 @@ class Tab:  # {{{
                 f'enabled_layouts {",".join(enabled_layouts)}',
                 f'set_layout_state {json.dumps(self.serialize_layout_state_for_session())}',
                 f'cd {most_common_cwd}',
-                '',
-            ] + launch_cmds
+            ] + mc + [''] + launch_cmds
         return []
 
     def serialize_layout_state_for_session(self) -> dict[str, Any]:
@@ -2127,6 +2159,8 @@ class TabManager:  # {{{
                         'windows': windows,
                         'groups': tab.list_groups(),
                         'active_window_history': list(tab.windows.active_window_history),
+                        'minimum_contrast': tab.minimum_contrast,
+                        'minimum_contrast_override': tab.minimum_contrast_override,
                     }
 
     def serialize_state(self) -> dict[str, Any]:

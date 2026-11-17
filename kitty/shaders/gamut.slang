@@ -55,6 +55,17 @@ luminance_in_gamut(float3 c, uint gamut) {
     return dot(gamut_to_xyz[min(gamut, GAMUT_REC2020)][1], c);
 }
 
+// A linear color in one of the gamuts colors are tagged with to CIE XYZ, and back
+public float3
+gamut_to_cie_xyz(float3 c, uint gamut) {
+    return mul(gamut_to_xyz[min(gamut, GAMUT_REC2020)], c);
+}
+
+public float3
+cie_xyz_to_gamut(float3 xyz, uint gamut) {
+    return mul(xyz_to_gamut[min(gamut, GAMUT_REC2020)], xyz);
+}
+
 // The last step for a window drawn in extended sRGB: a linear color in the
 // sRGB primaries becomes one in the gamut of the window, clipped to it. Any
 // other window is left as it is.

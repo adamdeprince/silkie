@@ -10,8 +10,8 @@ import hsluv;
 import alpha_blend;
 import linear2srgb;
 import background;
+import gamut;
 
-extern static const uint FG_OVERRIDE_ALGO;
 extern static const bool TEXT_NEW_GAMMA;
 extern static const bool TEXT_CONTRAST_IDENTITY;
 extern static const uint RENDER_MODE;
@@ -106,39 +106,108 @@ get_decorations_indices(uint2 sprite_idx, uint in_url /* [0, 1] */, uint text_at
 // }}}
 
 // Override foreground colors {{{
+// How the foreground is adjusted for contrast with the background, chosen per
+// window by crd.fg_override_algo: see minimum_contrast in shaders.c. A uniform
+// rather than a specialization constant so that every window can have its own,
+// all windows share the same programs and the branch is the same for every
+// vertex of a draw.
+static const uint FG_OVERRIDE_NONE = 0u;
+// text_fg_override_threshold with %: black or white below a luminance difference
+static const uint FG_OVERRIDE_LUMINANCE = 1u;
+// text_fg_override_threshold with ratio: a minimum WCAG contrast ratio
+static const uint FG_OVERRIDE_RATIO = 2u;
+// minimum_contrast: a minimum difference in lightness
+static const uint FG_OVERRIDE_LIGHTNESS = 3u;
+
+// Colors are converted to CIE XYZ from the colorspace the window draws in. A
+// window drawn in extended sRGB has its colors in the sRGB primaries and an
+// unmanaged one is taken to be sRGB. A color made here is clipped to the gamut
+// of the window.
 float3
-fg_override_luminance(float colored_sprite, float under_luminance, float over_lumininace, float3 under, float3 over) {
+working_to_xyz(float3 c) {
+    uint g = crd.output_gamut;
+    if ((g & GAMUT_EXTENDED) != 0u || g == GAMUT_UNMANAGED) g = GAMUT_SRGB;
+    return gamut_to_cie_xyz(c, g);
+}
+
+float3
+xyz_to_working(float3 xyz) {
+    uint g = crd.output_gamut;
+    if (g == GAMUT_UNMANAGED) return clamp(cie_xyz_to_gamut(xyz, GAMUT_SRGB), 0.0, 1.0);
+    if ((g & GAMUT_EXTENDED) == 0u) return clamp(cie_xyz_to_gamut(xyz, g), 0.0, 1.0);
+    float3 c = clamp(cie_xyz_to_gamut(xyz, g & 3u), 0.0, 1.0);
+    return cie_xyz_to_gamut(gamut_to_cie_xyz(c, g & 3u), GAMUT_SRGB);
+}
+
+// A color of the same HSLuv hue and saturation as the one whose XYZ is given, with this lightness
+float3
+with_lightness(float3 xyz, float lightness) {
+    float3 hsl = xyzToHsluv(xyz);
+    return xyz_to_working(hsluvToXyz(float3(hsl.x, hsl.y, lightness)));
+}
+
+float3
+fg_override_luminance(float colored_sprite, float under_luminance, float over_luminance, float3 over) {
     // If the difference in luminance is too small,
     // force the foreground color to be black or white.
-    float diff_luminance = abs(under_luminance - over_lumininace);
+    float diff_luminance = abs(under_luminance - over_luminance);
     float override_level = (1.f - colored_sprite) * step(diff_luminance, crd.fg_override_threshold);
-    float original_level = 1.f - override_level;
-    return original_level * over + override_level * float3(step(under_luminance, 0.5f));
+    return lerp(over, float3(step(under_luminance, 0.5f)), override_level);
 }
 
 float3
-fg_override_contrast(float under_luminance, float over_luminance, float3 under, float3 over) {
-    float ratio = contrast_ratio(under_luminance, over_luminance);
-    float3 diff = abs(under - over);
-    float3 over_hsluv = rgbToHsluv(over);
+fg_override_contrast(float under_luminance, float3 over_xyz, float3 under, float3 over) {
+    // The lightest or darkest color of the same hue and saturation that has the
+    // minimum contrast ratio, whichever has the higher ratio.
     const float min_contrast_ratio = crd.fg_override_threshold;
+    float3 diff = abs(under - over);
+    if (contrast_ratio(under_luminance, over_xyz.y) >= min_contrast_ratio || diff.x + diff.y + diff.z <= 0.001) return over;
     float target_lum_a = clamp((under_luminance + 0.05) * min_contrast_ratio - 0.05, 0.0, 1.0);
     float target_lum_b = clamp((under_luminance + 0.05) / min_contrast_ratio - 0.05, 0.0, 1.0);
-    float3 result_a = clamp(hsluvToRgb(float3(over_hsluv.x, over_hsluv.y, target_lum_a * 100.0)), 0.0, 1.0);
-    float3 result_b = clamp(hsluvToRgb(float3(over_hsluv.x, over_hsluv.y, target_lum_b * 100.0)), 0.0, 1.0);
-    float result_a_ratio = contrast_ratio(under_luminance, dot(result_a, Y));
-    float result_b_ratio = contrast_ratio(under_luminance, dot(result_b, Y));
-    float3 result = lerp(result_a, result_b, step(result_a_ratio, result_b_ratio));
-    float fallback_condition = max(step(diff.x + diff.y + diff.z, 0.001), step(min_contrast_ratio, ratio));
-    return lerp(result, over, fallback_condition);
+    float3 result_a = with_lightness(over_xyz, lightness_from_luminance(target_lum_a));
+    float3 result_b = with_lightness(over_xyz, lightness_from_luminance(target_lum_b));
+    float result_a_ratio = contrast_ratio(under_luminance, working_to_xyz(result_a).y);
+    float result_b_ratio = contrast_ratio(under_luminance, working_to_xyz(result_b).y);
+    return lerp(result_a, result_b, step(result_a_ratio, result_b_ratio));
 }
 
 float3
-override_foreground_color(float3 over, float3 under, float colored_sprite) {
-    float under_luminance = dot(under, Y);
-    float over_lumininace = dot(over.rgb, Y);
-    if (FG_OVERRIDE_ALGO == 1) return fg_override_luminance(colored_sprite, under_luminance, over_lumininace, under, over);
-    return fg_override_contrast(under_luminance, over_lumininace, under, over);
+fg_override_lightness(float under_luminance, float3 over_xyz, float3 over) {
+    // minimum_contrast: the lightness, CIE L* from 0 for black to 100 for white,
+    // of the foreground must differ from that of the background by at least the
+    // percentage. Otherwise the foreground keeps its hue and saturation and moves
+    // to the lightness that differs by that much, on its own side of the
+    // background if there is room there, else on the side with more room. At 100%
+    // that is black or white.
+    float wanted = crd.fg_override_threshold * 100.f;
+    float lb = lightness_from_luminance(under_luminance), lf = lightness_from_luminance(over_xyz.y);
+    if (abs(lf - lb) >= wanted) return over;
+    float room_above = 100.f - lb, room_below = lb;
+    // Text as light as its background goes to the side with more room
+    bool above = lf > lb || (lf == lb && room_above >= room_below);
+    float own_room = above ? room_above : room_below, other_room = above ? room_below : room_above;
+    if (own_room < wanted && other_room > own_room) above = !above;
+    float target = above ? min(lb + wanted, 100.f) : max(lb - wanted, 0.f);
+    return with_lightness(over_xyz, target);
+}
+
+// over and under are the colors as drawn, with their HDR gains. Contrast is
+// measured and changed on the SDR colors and the gain of the foreground is then
+// applied to the result, so an HDR brightness keeps its meaning and the
+// adjustment does not change as the headroom of the display does.
+float3
+override_foreground_color(float3 over, float over_gain, float3 under, float under_gain, float colored_sprite) {
+    float3 o = over / max(over_gain, 1e-6), u = under / max(under_gain, 1e-6);
+    float under_luminance = working_to_xyz(u).y;
+    float3 over_xyz = working_to_xyz(o);
+    float3 ans;
+    switch (crd.fg_override_algo) {
+        case FG_OVERRIDE_LUMINANCE: ans = fg_override_luminance(colored_sprite, under_luminance, over_xyz.y, o); break;
+        case FG_OVERRIDE_RATIO: ans = fg_override_contrast(under_luminance, over_xyz, u, o); break;
+        case FG_OVERRIDE_LIGHTNESS: ans = fg_override_lightness(under_luminance, over_xyz, o); break;
+        default: return over;
+    }
+    return ans * over_gain;
 }
 // }}}
 
@@ -172,6 +241,8 @@ vertex_main(
     uint text_attrs = bo.text_attrs;
     CellData cell_data = bo.cell_data;
     vo.spatial_antialias = spatial_pixel_size.x > 0.f ? 1.f : 0.f;
+    // the HDR gains of foreground and vo.decoration_fg, see override_foreground_color()
+    float fg_gain = bo.fg_gain, decoration_gain = 1.f;
 
     // Foreground {{{
     if (!ONLY_BACKGROUND) { // background does not depend on foreground
@@ -187,7 +258,9 @@ vertex_main(
             crd.inactive_text_alpha * if_one_then(has_dim, lerp(crd.dim_opacity, 1.0, undim), 1.0) * if_one_then(has_blink, crd.blink_opacity, 1.0);
         float in_url = float((is_selected >> 1) & BIT_MASK);
         // an unset decoration color is the foreground, in its gamut
-        float3 decoration_fg = if_one_then(float(one_if_equal_zero_otherwise(colors[2] & BYTE_MASK, 0u)), foreground, to_color(colors[2], fg_as_uint));
+        float decoration_is_fg = float(one_if_equal_zero_otherwise(colors[2] & BYTE_MASK, 0u));
+        float3 decoration_fg = if_one_then(decoration_is_fg, foreground, to_color(colors[2], fg_as_uint));
+        decoration_gain = if_one_then(in_url, 1.f, if_one_then(decoration_is_fg, fg_gain, 1.f));
         if (is_deep_color(colors[2])) {
             DeepColorValue d = load_deep_color(colors[2]);
             decoration_fg = convert_gamut(d.rgb, d.gamut);
@@ -198,6 +271,9 @@ vertex_main(
         selection_color = if_one_then(crd.use_cell_fg_for_selection_fg, foreground, selection_color);
         foreground = if_one_then(float(is_selected & BIT_MASK), selection_color, foreground);
         vo.decoration_fg = if_one_then(float(is_selected & BIT_MASK), selection_color, vo.decoration_fg);
+        float selection_gain = if_one_then(crd.use_cell_fg_for_selection_fg, fg_gain, if_one_then(crd.use_cell_bg_for_selection_fg, bo.bg_gain, 1.f));
+        fg_gain = if_one_then(float(is_selected & BIT_MASK), selection_gain, fg_gain);
+        decoration_gain = if_one_then(float(is_selected & BIT_MASK), selection_gain, decoration_gain);
         // Underline and strike through (rendered via sprites)
         uint2 decs = get_decorations_indices(sprite_idx, uint(in_url), text_attrs);
         vo.strike_pos = to_sprite_pos(cell_data.pos, decs[0]);
@@ -208,6 +284,8 @@ vertex_main(
         float3 final_cursor_text_color = lerp(foreground, cell_data.cursor.fg, crd.cursor_opacity);
         foreground = if_one_then(cell_data.has_block_cursor, final_cursor_text_color, foreground);
         vo.decoration_fg = if_one_then(cell_data.has_block_cursor, final_cursor_text_color, vo.decoration_fg);
+        fg_gain = if_one_then(cell_data.has_block_cursor, lerp(fg_gain, 1.f, crd.cursor_opacity), fg_gain);
+        decoration_gain = if_one_then(cell_data.has_block_cursor, lerp(decoration_gain, 1.f, crd.cursor_opacity), decoration_gain);
         uint cursor_sprite = cell_data.cursor_fg_sprite_idx * uint(cell_data.has_cursor);
         vo.cursor_pos = to_sprite_pos(cell_data.pos, cursor_sprite);
         vo.sprite_indices = uint4(sprite_idx[0] & SPRITE_INDEX_MASK, decs[1], cursor_sprite, decs[0]);
@@ -229,9 +307,12 @@ vertex_main(
 
     vo.background = background_rgb;
 
-    if (!ONLY_BACKGROUND && FG_OVERRIDE_ALGO > 0) {
-        vo.decoration_fg = override_foreground_color(vo.decoration_fg, background_rgb, vo.colored_sprite);
-        foreground = override_foreground_color(foreground, background_rgb, vo.colored_sprite);
+    // Block elements and the like, which draw pictures from foreground and
+    // background, are left alone by minimum_contrast, see render_line() in fonts.c
+    uint contrast_exempt = uint(crd.fg_override_algo == FG_OVERRIDE_LIGHTNESS) & ((text_attrs >> AREA_GRAPHIC_SHIFT) & BIT_MASK);
+    if (!ONLY_BACKGROUND && crd.fg_override_algo != FG_OVERRIDE_NONE && contrast_exempt == 0u) {
+        vo.decoration_fg = override_foreground_color(vo.decoration_fg, decoration_gain, background_rgb, bo.background_gain, vo.colored_sprite);
+        foreground = override_foreground_color(foreground, fg_gain, background_rgb, bo.background_gain, vo.colored_sprite);
     }
 
     if (!ONLY_FOREGROUND) {

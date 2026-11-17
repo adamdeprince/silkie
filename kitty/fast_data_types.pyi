@@ -331,6 +331,7 @@ HDR_BG: int
 HDR_MASK: int
 GAMUT_FG: int
 GAMUT_BG: int
+AREA_GRAPHIC: int
 GAMUT_MASK: int
 COLOR_TYPE_MASK: int
 DEEP_COLOR_TYPE: int
@@ -1155,6 +1156,7 @@ def parse_input_from_terminal(
 
 class Line:
     def sprite_at(self, cell: int) -> int: ...
+    def gpu_attrs_at(self, cell: int) -> int: ...
     def cursor_from(self, x: int, y: int = 0) -> Cursor: ...
 
 def test_shape(line: Line, path: Optional[str] = None, index: int = 0) -> List[Tuple[int, int, int, Tuple[int, ...]]]:
@@ -1896,3 +1898,6 @@ def vector_validate_color(color: str) -> None: ...
 def vector_shape(
     font: object, text: str, size: float, axes: dict[str, float], features: list[str], direction: str, language: str, script: str, shear: float
 ) -> dict[str, Any]: ...
+
+
+def contrast_adjustment_for(screen: Screen) -> tuple[float, int]: ...

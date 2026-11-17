@@ -389,6 +389,12 @@ documentation for them.
     specified options, see :doc:`layouts` for the available layouts and
     options.
 
+``minimum_contrast percentage``
+    Set the :opt:`minimum_contrast` of the current tab, for all its windows
+    that do not set their own with :option:`launch --minimum-contrast`. For
+    example, ``minimum_contrast 40`` for a tab that logs in to a machine whose
+    colors are too dark.
+
 ``new_os_window``
     Create a new OS Window. Any OS window related keywords specified before the
     first ``new_os_window`` will apply to the first OS Window.

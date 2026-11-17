@@ -20,7 +20,7 @@ from .options.utils import env as parse_env
 from .tabs import Tab, TabManager, tabs_for_title_match
 from .types import DockSpec, LayerShellConfig, OverlayType, dock_edges, parse_dock_spec, run_once
 from .utils import get_editor, log_error, resolve_custom_file, which
-from .window import CwdRequest, CwdRequestType, Watchers, Window
+from .window import CwdRequest, CwdRequestType, Watchers, Window, parse_minimum_contrast_value
 from .window_list import WindowGroup
 
 
@@ -477,6 +477,12 @@ Can be specified multiple times. Note that this is ignored for overlay windows a
 from the base window.
 
 
+--minimum-contrast
+Set the :opt:`minimum_contrast` of the newly created window, a percentage from
+0 to 100, for example :code:`--minimum-contrast 40`. It wins over the minimum
+contrast of the tab, its profile and the option.
+
+
 --watcher -w
 type=list
 completion=type:file ext:py relative:conf group:"Python scripts"
@@ -824,6 +830,8 @@ def _launch(
         'bias': None,
         'hold_after_ssh': False,
     }
+    # validated before anything is created
+    minimum_contrast = parse_minimum_contrast_value(opts.minimum_contrast) if opts.minimum_contrast else None
     spacing = {}
     if opts.spacing:
         from .rc.set_spacing import parse_spacing_settings, patch_window_edges
@@ -1011,6 +1019,8 @@ def _launch(
             tab.relayout()
         if opts.color:
             apply_colors(new_window, opts.color)
+        if minimum_contrast is not None:
+            new_window.set_minimum_contrast(minimum_contrast)
         if opts.keep_focus:
             if active:
                 boss.set_active_window(active, switch_os_window_if_needed=True, for_keep_focus=True)
@@ -1088,6 +1098,7 @@ def clone_safe_opts() -> frozenset[str]:
             'logo_position',
             'logo_alpha',
             'spacing',
+            'minimum_contrast',
             'next_to',
             'hold_after_ssh',
         )

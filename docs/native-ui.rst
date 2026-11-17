@@ -34,8 +34,9 @@ colors, font and shell for a production machine. It is a file in the
     profile_env DEPLOY_ENV=production
     background #4a0000
     font_size 18
+    minimum_contrast 40
 
-A profile holds what can differ between OS windows: colors, fonts and font size,
+A profile holds what can differ between OS windows: colors, :opt:`minimum_contrast`, fonts and font size,
 cursor shape, opacity, initial size, padding, layouts and scrollback, plus the
 command, directory, title and environment. Everything else is process wide and is set in the
 other pages of the Settings window. Open a profile from the :guilabel:`Profiles` menu or with

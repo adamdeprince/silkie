@@ -327,6 +327,8 @@ class WindowDict(TypedDict):
     needs_attention: bool
     has_activity_since_last_focus: bool
     program_status: list[dict[str, Any]]
+    minimum_contrast: float
+    minimum_contrast_override: float | None
 
 
 class PipeData(TypedDict):
@@ -805,6 +807,24 @@ class GlobalWatchers:
 global_watchers = GlobalWatchers()
 
 
+def parse_minimum_contrast_value(value: float | str | None) -> float | None:
+    ' A minimum contrast given as a number or as text like 40 or 40%, None stays None '
+    if value is None:
+        return None
+    if isinstance(value, str):
+        from .options.utils import minimum_contrast
+
+        return minimum_contrast(value)
+    return minimum_contrast_from_number(value)
+
+
+def minimum_contrast_from_number(value: float) -> float:
+    ans = float(value)
+    if not 0 <= ans <= 100:  # also rejects NaN
+        raise ValueError(f'The minimum contrast must be a percentage from 0 to 100, not: {value!r}')
+    return ans
+
+
 class Window:
     window_custom_type: str = ''
     is_resize_overlay: bool = False
@@ -891,6 +911,8 @@ class Window:
         self.clipboard_request_manager = ClipboardRequestManager(self.id)
         self.margin = EdgeWidths()
         self.padding = EdgeWidths()
+        # minimum_contrast set for this window itself, None to follow its tab
+        self.minimum_contrast_override: float | None = None
         self.kitten_result: dict[str, Any] | None = None
         self.tab_id = tab.id
         self.os_window_id = tab.os_window_id
@@ -908,6 +930,7 @@ class Window:
         self.screen: Screen = Screen(self, 24, 80, scrollback_lines, cell_width, cell_height, self.id)
         if profile is not None:
             apply_to_window(self, profile)
+        self.update_minimum_contrast()
         self.screen.track_activity = bool(opts.tab_activity_symbol)
         self.session_color_schemes = SessionColorSchemes()
         if copy_colors_from is not None:
@@ -940,6 +963,7 @@ class Window:
         self.tab_id = tab.id
         self.os_window_id = tab.os_window_id
         self.tabref = weakref.ref(tab)
+        self.update_minimum_contrast()  # the new tab can have another profile
 
     def effective_margin(self, edge: EdgeLiteral) -> int:
         q = getattr(self.margin, edge)
@@ -1004,6 +1028,35 @@ class Window:
         self.screen.color_profile.reload_from_opts()
         if (tab := self.tabref()) is not None:
             apply_to_window(self, tab.profile)
+        self.update_minimum_contrast()
+
+    # minimum_contrast {{{
+    @property
+    def minimum_contrast_setting(self) -> float | None:
+        ''' The minimum contrast set for this window, by itself, its tab or the
+        profile of its tab, in that order, None when only the global option applies '''
+        if self.minimum_contrast_override is not None:
+            return self.minimum_contrast_override
+        tab = self.tabref()
+        return getattr(tab, "minimum_contrast_setting", None)
+
+    @property
+    def minimum_contrast(self) -> float:
+        ' The minimum contrast of this window, as a percentage, see the minimum_contrast option '
+        ans = self.minimum_contrast_setting
+        return get_options().minimum_contrast if ans is None else ans
+
+    def set_minimum_contrast(self, value: float | str | None) -> None:
+        ''' Set the minimum contrast of this window, a percentage from 0 to 100,
+        as a number or a string like 40 or 40%. None goes back to the setting of
+        the tab, profile or options. A window's own setting wins over those. '''
+        self.minimum_contrast_override = parse_minimum_contrast_value(value)
+        self.update_minimum_contrast()
+
+    def update_minimum_contrast(self) -> None:
+        ' Send the minimum contrast to the renderer, after any of the settings it comes from changed '
+        self.screen.minimum_contrast = self.minimum_contrast_setting
+    # }}}
 
     @property
     def title(self) -> str:
@@ -2641,6 +2694,8 @@ class Window:
             'needs_attention': self.needs_attention,
             'has_activity_since_last_focus': self.has_activity_since_last_focus,
             'program_status': self.program_status.as_list(),
+            'minimum_contrast': self.minimum_contrast,
+            'minimum_contrast_override': self.minimum_contrast_override,
         }
 
     def serialize_state(self) -> dict[str, Any]:
@@ -2707,6 +2762,8 @@ class Window:
             if self.creation_spec.hold_after_ssh:
                 ans.append('--hold-after-ssh')
         ans.extend(f'--var={k}={v}' for k, v in self.user_vars.items())
+        if self.minimum_contrast_override is not None:
+            ans.append(f'--minimum-contrast={self.minimum_contrast_override:g}')
         ans.extend(self.padding.as_launch_args())
         ans.extend(self.margin.as_launch_args('margin'))
         if self.override_title:

@@ -30,6 +30,13 @@ typedef enum { REPEAT_MIRROR, REPEAT_CLAMP, REPEAT_DEFAULT } RepeatStrategy;
 typedef enum { WINDOW_NORMAL, WINDOW_FULLSCREEN, WINDOW_MAXIMIZED, WINDOW_MINIMIZED, WINDOW_HIDDEN } WindowState;
 typedef enum { HDR_OFF, HDR_AUTO, HDR_ALWAYS, HDR_DETECT } HDRMode;
 typedef enum { DEEP_COLOR_NEVER, DEEP_COLOR_ALWAYS } DeepColorMode;
+// How the text foreground is adjusted for contrast with the background, the
+// same numbers as FG_OVERRIDE_* in cell.slang
+typedef enum { FG_OVERRIDE_NONE, FG_OVERRIDE_LUMINANCE, FG_OVERRIDE_RATIO, FG_OVERRIDE_LIGHTNESS } FgOverrideAlgorithm;
+typedef struct ContrastAdjustment {
+    float threshold; // a fraction for LUMINANCE and LIGHTNESS, a ratio for RATIO
+    FgOverrideAlgorithm algorithm;
+} ContrastAdjustment;
 
 typedef struct UrlPrefix {
     char_type string[16];
@@ -220,7 +227,8 @@ typedef struct Options {
     int drag_threshold;
     /* 0 means no limit. See silkie.conf "Input limits". */
     unsigned long csi_limit, escape_limit, vector_depth_limit, vector_dash_limit, vector_raster_limit, vector_curve_limit;
-    float text_fg_override_threshold;
+    ContrastAdjustment text_fg_override_threshold;
+    float minimum_contrast; // a percentage
 } Options;
 
 typedef struct WindowLogoRenderData {
