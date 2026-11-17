@@ -1390,8 +1390,18 @@ render_bar_text(
         bar->needs_render = true;
     }
     if (bar->last_drawn_title_object_id != title || bar->needs_render) {
-        static char titlebuf[2048] = {0};
-        snprintf(titlebuf, arraysz(titlebuf), fit_to_text ? " %s " : " %s", PyUnicode_AsUTF8(title));
+        // The whole title is passed on, draw_window_title() clips it to the width of the bar
+        Py_ssize_t title_len;
+        const char *utf8 = PyUnicode_AsUTF8AndSize(title, &title_len);
+        if (!utf8) {
+            PyErr_Print();
+            return false;
+        }
+        // title_len is at most PY_SSIZE_T_MAX, so adding the padding cannot overflow
+        const size_t titlebuf_sz = (size_t)title_len + sizeof("  ");
+        RAII_ALLOC(char, titlebuf, malloc(titlebuf_sz));
+        if (!titlebuf) return false;
+        snprintf(titlebuf, titlebuf_sz, fit_to_text ? " %s " : " %s", utf8);
         size_t actual_width = max_width;
         if (!draw_window_title(
                 ui->os_window->fonts_data->font_sz_in_pts,
