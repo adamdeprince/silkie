@@ -4781,6 +4781,12 @@ class TestScreen(BaseTest):
         s.reset()
         parse_bytes(s, b'\x1b]7;file://host/a/c\x07')
         self.ae(c.cwd_changes, [b'file://host/a/b', b'file://host/a/c', b'file://host/a/c'])
+        # the ConEmu OSC 9;9 cwd report is a change too
+        parse_bytes(s, b'\x1b]9;9;/x/y\x07')
+        self.ae(c.cwd_changes[-1], b'kitty-shell-cwd:///x/y')
+        n = len(c.cwd_changes)
+        parse_bytes(s, b'\x1b]9;9;"/x/y"\x07')
+        self.ae(len(c.cwd_changes), n)
 
         delivered = []
 

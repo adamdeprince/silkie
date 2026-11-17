@@ -1784,3 +1784,11 @@ class TestWindowHelpers(BaseTest):
         boss.desktop_session_ending = True
         self.ae(ev(f.QUIT_CAUSE_SIGNAL)['cause'], 'logout')
         self.ae(ev(f.QUIT_CAUSE_FATAL_ERROR)['cause'], 'fatal_error')
+        # Silkie watches the desktop session portal on Linux, a session that is ending, or about to, is a logout
+        from kitty.logout_session import DESKTOP_SESSION_QUERY_END, DESKTOP_SESSION_RUNNING
+
+        boss.snapshot_saved_for_logout = ''
+        boss.save_session_at_logout = lambda: ''
+        for state, ending in ((DESKTOP_SESSION_QUERY_END, True), (DESKTOP_SESSION_RUNNING, False)):
+            Boss.on_desktop_session_state_changed(boss, state)  # type: ignore
+            self.ae(boss.desktop_session_ending, ending)
