@@ -1280,6 +1280,23 @@ typedef struct GLFWTabletPadEvent {
  *  Framebuffer double buffering [hint](@ref GLFW_DOUBLEBUFFER).
  */
 #define GLFW_DOUBLEBUFFER 0x00021010
+/*! @brief Framebuffer deep color hint.
+ *
+ *  Whether to give the window a framebuffer with more than 8 bits per color
+ *  channel, one of the GLFW_DEEP_COLOR_* values. With GLFW_DEEP_COLOR_AUTO the
+ *  platform decides from what the system says about the display: an EDR
+ *  capable or deeper than 8 bit screen on macOS and a root window of depth 30
+ *  or more on X11. Nothing on Wayland says how deep the display is, so there
+ *  only GLFW_DEEP_COLOR_ALWAYS asks for a 10 bit surface. A deep framebuffer
+ *  is a wish: where there is none to be had the window gets an ordinary one.
+ *  Query what it got with glGetFramebufferAttachmentParameteriv(). A window
+ *  with a transparent framebuffer needs more than 2 bits of alpha, so it gets
+ *  a deep framebuffer only where that is a floating point one (macOS).
+ */
+#define GLFW_DEEP_COLOR 0x00021011
+#define GLFW_DEEP_COLOR_NEVER 0
+#define GLFW_DEEP_COLOR_AUTO 1
+#define GLFW_DEEP_COLOR_ALWAYS 2
 
 /*! @brief Context client API hint and attribute.
  *

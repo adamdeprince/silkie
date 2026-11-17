@@ -7,6 +7,7 @@ import alpha_blend;
 import utils;
 import linear2srgb;
 import gamut;
+import dither;
 
 struct VSOutput {
     float2 texcoord : TEXCOORD;
@@ -35,7 +36,8 @@ uniform Sampler2D image;
 
 [shader("fragment")]
 float4
-fragment_main(float2 texcoord: TEXCOORD, uniform float encode_srgb, uniform uint output_gamut, uniform float spatial_anaglyph)
+fragment_main(float2 texcoord: TEXCOORD, float4 frag_coord: SV_Position, uniform float encode_srgb, uniform uint output_gamut,
+    uniform float spatial_anaglyph, uniform float3 dither_levels)
     : SV_Target {
     // The one place the layers of a window become what its surface holds. They are linear sRGB, which in a window
     // in a wide gamut reaches beyond zero and one, see gamut.slang. An HDR window has a linear float backbuffer: its
@@ -47,5 +49,8 @@ fragment_main(float2 texcoord: TEXCOORD, uniform float encode_srgb, uniform uint
         color_premul.rgb = spatial_anaglyph == 1.f ? float3(luminance, 0.f, 0.f) : float3(0.f, 0.f, luminance);
     }
     if (encode_srgb == 0.0f) return float4(linear_output_from_extended(color_premul.rgb, output_gamut), color_premul.a);
+    // A surface with 8 bits or fewer per channel is dithered to its steps, dither_levels, which are zero for any other
+    if (dither_levels.x > 0.f && color_premul.a > 0.f)
+        return dither_premultiplied(linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut)), color_premul.a, frag_coord.xy, dither_levels);
     return vec4_premul(linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut)), color_premul.a);
 }

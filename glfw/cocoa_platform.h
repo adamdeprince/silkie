@@ -139,6 +139,9 @@ typedef struct _GLFWwindowNS {
 
     bool maximized;
     bool retina, hdr;
+    // The window has a floating point framebuffer holding linear values, in an extended linear color space. HDR needs
+    // one, and a window gets one for deep color too, see GLFW_DEEP_COLOR
+    bool float_surface;
     bool in_traditional_fullscreen;
     bool in_fullscreen_transition;
     bool suppress_frame_constraints;

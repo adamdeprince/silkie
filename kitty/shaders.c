@@ -174,6 +174,51 @@ backbuffer_is_float(void) {
     return component_type == GL_FLOAT;
 }
 
+static void
+set_os_window_output(OSWindow *w, int r, int g, int b, bool is_float) {
+    w->linear_output = is_float;
+    w->output.is_float = is_float;
+    w->output.red_bits = MAX(0, r);
+    w->output.green_bits = MAX(0, g);
+    w->output.blue_bits = MAX(0, b);
+    const int shallowest = MIN(w->output.red_bits, MIN(w->output.green_bits, w->output.blue_bits));
+    w->output.encode_in_shader = !w->output.is_float && shallowest > 8;
+    w->linear_output_checked = true;
+}
+
+// Reads what the surface of the window, whose context is current, holds. A floating point one holds linear values: it
+// is the surface of an HDR window or of a deep color one on macOS. Any other one holds sRGB encoded values, encoded by
+// OpenGL when it is 8 bits deep and by the final blit otherwise, as there are no sRGB formats deeper than that
+void
+check_os_window_output(OSWindow *w) {
+    GLint bound = 0, type = 0, r = 0, g = 0, b = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &bound);
+    if (bound) glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE, &type);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &r);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, &g);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &b);
+    if (bound) glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)bound);
+    set_os_window_output(w, r, g, b, type == GL_FLOAT);
+    debug_rendering("The surface of the window %llu has %d:%d:%d bits of %s color%s\n", w->id, w->output.red_bits, w->output.green_bits,
+        w->output.blue_bits, w->output.is_float ? "floating point" : "normalized", w->output.encode_in_shader ? ", encoded to sRGB in the shader" : "");
+}
+
+// Whether what is drawn into the window is dithered to the steps its surface has, and if so how many steps each channel
+// has above zero. Only a surface of normalized integers 8 bits deep or less is: a deeper one shows smooth gradients as
+// they are and a floating point one is quantized by the system, not here
+bool
+output_dither_levels(const OSWindow *w, float levels[3]) {
+    const int r = w->output.red_bits, g = w->output.green_bits, b = w->output.blue_bits;
+    if (!OPT(output_dither) || w->output.is_float || r <= 0 || g <= 0 || b <= 0 || r > 8 || g > 8 || b > 8) return false;
+    if (levels) {
+        levels[0] = (float)((1u << r) - 1u);
+        levels[1] = (float)((1u << g) - 1u);
+        levels[2] = (float)((1u << b) - 1u);
+    }
+    return true;
+}
+
 float
 effective_hdr_headroom(const OSWindow *w) {
     if (OPT(hdr) == HDR_OFF || (OPT(hdr) == HDR_DETECT && !w->hdr_enabled_by_default)) return 1.f;
@@ -3256,6 +3301,9 @@ stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, m
             glUniform4f(program_uniform_location(BLIT_PROGRAM, "src_rect"), 0, sy, sx, 0);
             glUniform4f(program_uniform_location(BLIT_PROGRAM, "dest_rect"), -1, 1, 1, -1);
             glUniform1f(program_uniform_location(BLIT_PROGRAM, "encode_srgb"), os_window->linear_output ? 0.f : 1.f);
+            float dither_levels[3] = {0};
+            output_dither_levels(os_window, dither_levels);
+            glUniform3fv(program_uniform_location(BLIT_PROGRAM, "dither_levels"), 1, dither_levels);
             restore_viewport();
             if (os_window->spatial.mode) {
                 const bool red_blue = os_window->spatial.red_blue;
@@ -3319,21 +3367,30 @@ take_screenshot_of_rectangular_region(OSWindow *os_window, Region region, unsign
     unsigned src_width = region.right - region.left;
     const bool is_float = backbuffer_is_float();
 
-    if (is_float && global_state.debug_rendering) {
-        // A screenshot holds nothing brighter than SDR white, so say what the frame it is taken of holds
-        const size_t count = (size_t)src_width * src_height * 4;
-        float *buf = malloc(count * sizeof(float));
+    if (global_state.debug_rendering && src_width && src_height) {
+        // A screenshot holds 8 bits per channel and nothing brighter than SDR white, so say what the frame it is
+        // taken of holds: how bright it gets and how many of its color values lie between the steps of 8 bits,
+        // after the sRGB encoding a floating point frame does not have yet
+        const bool fits = (size_t)src_width <= SIZE_MAX / (4 * sizeof(float)) / src_height;
+        const size_t count = fits ? (size_t)src_width * src_height * 4 : 0;
+        float *buf = fits ? malloc(count * sizeof(float)) : NULL;
         if (buf) {
             float peak = 0;
+            size_t between = 0;
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels((GLint)region.left, (GLint)(vh - region.bottom), (GLsizei)src_width, (GLsizei)src_height, GL_RGBA, GL_FLOAT, buf);
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
             for (size_t i = 0; i < count; i++) {
-                if (i % 4 != 3 && buf[i] > peak) peak = buf[i];
+                if (i % 4 == 3) continue;
+                if (buf[i] > peak) peak = buf[i];
+                float v = MAX(0.f, MIN(buf[i], 1.f));
+                if (is_float) v = v <= 0.0031308f ? 12.92f * v : 1.055f * powf(v, 1.f / 2.4f) - 0.055f;
+                if (fabsf(v * 255.f - roundf(v * 255.f)) > 1.f / 16.f) between++;
             }
             free(buf);
-            debug_rendering("Screenshot of a floating point frame, the brightest value in it is %g times SDR white\n", peak);
-        }
+            if (is_float) debug_rendering("Screenshot of a floating point frame, the brightest value in it is %g times SDR white\n", peak);
+            debug_rendering("Screenshot: %zu of the %zu color values of the frame lie between the steps of 8 bits\n", between, count / 4 * 3);
+        } else debug_rendering("Screenshot: no memory to read the frame back at full precision\n");
     }
 
     if (no_scaling) {
@@ -3724,6 +3781,23 @@ pysimulate_hdr_render_ticks(PyObject *self UNUSED, PyObject *states) {
     return Py_NewRef(ans);
 }
 
+// test only: what is done with, and reported about, a window surface with the given bits per channel
+static PyObject *
+pysimulate_os_window_output(PyObject *self UNUSED, PyObject *args) {
+    int r, g, b, is_float;
+    if (!PyArg_ParseTuple(args, "iiip", &r, &g, &b, &is_float)) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    set_os_window_output(w, r, g, b, is_float);
+    float levels[3] = {0};
+    const bool dither = output_dither_levels(w, levels);
+    DisplayInfo d;
+    os_window_display_info(w, &d);
+    return Py_BuildValue("{sOsOsOs(fff)sisssO}", "linear", w->linear_output ? Py_True : Py_False, "encode_in_shader",
+        w->output.encode_in_shader ? Py_True : Py_False, "dither", dither ? Py_True : Py_False, "levels", levels[0], levels[1], levels[2],
+        "output_bits", d.output_bits, "output_type", d.output_type, "output_dither", d.output_dither ? Py_True : Py_False);
+}
+
 // test only wrapper for decorations_map_new_size
 static PyObject *
 pydecorations_map_new_size(PyObject *self UNUSED, PyObject *args) {
@@ -3869,6 +3943,7 @@ static PyMethodDef module_methods[] = {
     MW(decorations_map_new_size, METH_VARARGS),
     MW(simulate_custom_shader_render_ticks, METH_VARARGS),
     MW(simulate_hdr_render_ticks, METH_O),
+    MW(simulate_os_window_output, METH_VARARGS),
 
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

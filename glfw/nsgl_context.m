@@ -192,7 +192,7 @@ _glfwCreateContextNSGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, con
         // macOS needs non-zero color size, so set reasonable values
         if (colorBits == 0) colorBits = 24;
         else if (colorBits < 15) colorBits = 15;
-        if (window->ns.hdr) {
+        if (window->ns.float_surface) {
             addAttrib(NSOpenGLPFAColorFloat);
             colorBits = 64;
         }

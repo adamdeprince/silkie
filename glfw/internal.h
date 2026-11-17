@@ -377,6 +377,7 @@ struct _GLFWfbconfig {
     int samples;
     bool sRGB;
     bool floatColor;  // 16 bit floating point color components, EGL only
+    int deepColor;    // GLFW_DEEP_COLOR_*: whether more than 8 bits per color channel are wanted
     bool doublebuffer;
     bool transparent;
     uintptr_t handle;

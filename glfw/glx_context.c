@@ -487,6 +487,32 @@ _glfwCreateContextGLX(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, cons
 
 #undef setAttrib
 
+// Gives deep the framebuffer config of a window with at least 10 bits per color channel that is otherwise like fbconfig
+// and returns whether the server has one, with a visual of depth 30 or more, as the one chooseGLXFBConfig() picks
+// for it. There is no sRGB encoding in formats this deep, so the application encodes what it draws itself. Their alpha
+// has 2 bits, if any, too few for a transparent window
+//
+bool
+_glfwDeepColorConfigGLX(const _GLFWfbconfig *fbconfig, _GLFWfbconfig *deep) {
+    if (fbconfig->transparent) return false;
+    *deep = *fbconfig;
+    deep->redBits = deep->greenBits = deep->blueBits = 10;
+    deep->alphaBits = GLFW_DONT_CARE;
+    deep->sRGB = false;
+    int count = 0;
+    bool found = false;
+    GLXFBConfig *configs = choose_fb_config(deep, true, &count, false);
+    if (configs && count > 0) {
+        XVisualInfo *vi = glXGetVisualFromFBConfig(_glfw.x11.display, configs[0]);
+        if (vi) {
+            found = vi->depth >= 30;
+            XFree(vi);
+        }
+    }
+    if (configs) XFree(configs);
+    return found;
+}
+
 // Returns the Visual and depth of the chosen GLXFBConfig
 //
 bool

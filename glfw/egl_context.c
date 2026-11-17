@@ -72,10 +72,12 @@ getEGLConfigAttrib(EGLConfig config, int attrib) {
 
 // Return the EGLConfig most closely matching the specified hints
 //
+// A floating point or deep color framebuffer is a wish, see _glfwCreateContextEGL(), and finding none is not an error
+//
 static bool
-chooseEGLConfig(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *desired, EGLConfig *result) {
-    EGLConfig configs[512];
-    int i = 0, nativeCount = 0, ans_idx = 0;
+chooseEGLConfig(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *desired, EGLConfig *result, bool wish) {
+    int i = 0, nativeCount = 0, ans_idx = -1;
+    // Room for every attribute set below, each set at most once
     EGLint attributes[64];
 #define ATTR(k, v)           \
     {                        \
@@ -106,14 +108,24 @@ chooseEGLConfig(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *desired, E
     }
     ATTR(EGL_NONE, EGL_NONE);
 #undef ATTR
-    // Few drivers have floating point window surfaces, so finding none is not an error
-    if (!eglChooseConfig(_glfw.egl.display, attributes, configs, sizeof(configs) / sizeof(configs[0]), &nativeCount)) {
-        if (!desired->floatColor) _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: eglChooseConfig failed");
+    wish = wish || desired->floatColor;
+    // Every matching config is looked at, as many as the driver has
+    if (!eglChooseConfig(_glfw.egl.display, attributes, NULL, 0, &nativeCount)) {
+        if (!wish) _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: eglChooseConfig failed");
         return false;
     }
-
-    if (!nativeCount) {
-        if (!desired->floatColor) _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: No EGLConfigs returned");
+    if (nativeCount <= 0) {
+        if (!wish) _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: No EGLConfigs returned");
+        return false;
+    }
+    EGLConfig *configs = calloc((size_t)nativeCount, sizeof(EGLConfig));
+    if (!configs) {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, "EGL: Out of memory choosing an EGLConfig");
+        return false;
+    }
+    if (!eglChooseConfig(_glfw.egl.display, attributes, configs, nativeCount, &nativeCount) || nativeCount <= 0) {
+        free(configs);
+        if (!wish) _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: No EGLConfigs returned");
         return false;
     }
 
@@ -142,7 +154,9 @@ chooseEGLConfig(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *desired, E
         ans_idx = i;
         break;
     }
-    *result = configs[ans_idx];
+    // Where no config passed the checks above the first one is used, as before
+    *result = configs[ans_idx < 0 ? 0 : ans_idx];
+    free(configs);
     return true;
 }
 
@@ -392,7 +406,7 @@ createContextEGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GL
 
     if (ctxconfig->share) share = ctxconfig->share->context.egl.handle;
 
-    if (!chooseEGLConfig(ctxconfig, fbconfig, &config)) {
+    if (!chooseEGLConfig(ctxconfig, fbconfig, &config, false)) {
         _glfwInputError(GLFW_FORMAT_UNAVAILABLE, "EGL: Failed to find a suitable EGLConfig");
         return false;
     }
@@ -583,7 +597,26 @@ _glfwHasFloatColorEGL(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbco
     _GLFWfbconfig wanted = *fbconfig;
     wanted.floatColor = true;
     EGLConfig config;
-    return chooseEGLConfig(ctxconfig, &wanted, &config);
+    return chooseEGLConfig(ctxconfig, &wanted, &config, true);
+}
+
+// Makes the context of the window with at least 10 bits per color channel when the driver has such window surfaces for
+// a framebuffer otherwise like fbconfig, and returns whether it did. There is no sRGB encoding in formats this deep, so
+// the application encodes what it draws itself. Their alpha has 2 bits, if any, too few for a transparent window. On
+// failure the window has no context and an ordinary one can be made
+//
+bool
+_glfwCreateDeepColorContextEGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig) {
+    if (!_glfw.egl.display || fbconfig->transparent || fbconfig->floatColor) return false;
+    _GLFWfbconfig deep = *fbconfig;
+    deep.redBits = deep.greenBits = deep.blueBits = 10;
+    deep.alphaBits = 0;
+    deep.sRGB = false;
+    EGLConfig config;
+    if (!chooseEGLConfig(ctxconfig, &deep, &config, true)) return false;
+    if (createContextEGL(window, ctxconfig, &deep)) return true;
+    destroyContextEGL(window);
+    return false;
 }
 
 // Create the OpenGL or OpenGL ES context
@@ -615,7 +648,7 @@ _glfwChooseVisualEGL(const _GLFWwndconfig *wndconfig UNUSED, const _GLFWctxconfi
     EGLint visualID = 0, count = 0;
     const long vimask = VisualScreenMask | VisualIDMask;
 
-    if (!chooseEGLConfig(ctxconfig, fbconfig, &native)) {
+    if (!chooseEGLConfig(ctxconfig, fbconfig, &native, false)) {
         _glfwInputError(GLFW_FORMAT_UNAVAILABLE, "EGL: Failed to find a suitable EGLConfig");
         return false;
     }

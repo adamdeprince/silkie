@@ -2817,6 +2817,7 @@ _glfwPlatformCreateWindow(
     _GLFWwindow *window, const _GLFWwndconfig *wndconfig, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig, const GLFWLayerShellConfig *lsc) {
     Visual *visual = NULL;
     int depth;
+    _GLFWfbconfig deep_fbconfig;
     if (lsc) {
         window->x11.layer_shell.is_active = true;
         window->x11.layer_shell.config = *lsc;
@@ -2825,6 +2826,10 @@ _glfwPlatformCreateWindow(
     if (ctxconfig->client != GLFW_NO_API) {
         if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API) {
             if (!_glfwInitGLX()) return false;
+            // A server whose screen is 30 bits deep says that is what the display shows
+            const bool deep = fbconfig->deepColor == GLFW_DEEP_COLOR_ALWAYS ||
+                              (fbconfig->deepColor == GLFW_DEEP_COLOR_AUTO && DefaultDepth(_glfw.x11.display, _glfw.x11.screen) >= 30);
+            if (deep && _glfwDeepColorConfigGLX(fbconfig, &deep_fbconfig)) fbconfig = &deep_fbconfig;
             if (!_glfwChooseVisualGLX(wndconfig, ctxconfig, fbconfig, &visual, &depth)) return false;
         } else if (ctxconfig->source == GLFW_EGL_CONTEXT_API) {
             if (!_glfwInitEGL()) return false;

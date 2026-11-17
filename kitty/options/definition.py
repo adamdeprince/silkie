@@ -2888,6 +2888,51 @@ see :doc:`/hdr-protocol`.
 )
 
 opt(
+    'deep_color',
+    'auto',
+    choices=('auto', 'always', 'never'),
+    ctype='deep_color',
+    long_text="""
+Draw into a window surface with more than 8 bits per color channel, so that
+smooth gradients, in images with 16 bits per channel for example, do not band
+on displays that show more than 256 levels. This does not make anything
+brighter: unlike :opt:`hdr` it changes only how finely colors are stored.
+With the default, :code:`auto`, a deep surface is used where the system says
+the display can show it: on macOS where any screen supports extended dynamic
+range or reports more than 8 bits per sample (MacBook Pro and other XDR and
+P3 displays) and :opt:`macos_colorspace` is not :code:`default`, and on X11
+when the screen has a depth of 30 bits or more. Nothing on Wayland says how
+deep the display is and a compositor showing a deep surface on an 8 bit
+display rounds it without dithering, so there :code:`auto` keeps an 8 bit
+surface. :code:`always` asks for a deep surface wherever the system has one:
+a floating point one on macOS, the one HDR uses, and one with 10 bits per
+channel on Wayland and X11, there only for windows that are not transparent,
+as such surfaces have at most two bits of alpha. :code:`never` keeps an 8 bit
+surface, except for a window that needs a floating point one for :opt:`hdr`.
+The precision Silkie actually got is reported by the :doc:`/display-protocol`
+as :code:`output_bits`. Takes effect for newly created OS windows.
+""",
+)
+
+opt(
+    'output_dither',
+    'yes',
+    option_type='to_bool',
+    ctype='bool',
+    long_text="""
+When the window surface has 8 bits or fewer per color channel, add a faint
+ordered dither, below half a step of the surface, to the colors Silkie
+computes with more precision than the surface holds, such as gradients in
+images with 16 bits per channel, scaled images and the edges of text, instead
+of rounding them to the nearest step, which shows as bands. Colors that the
+surface holds exactly, solid text and backgrounds among them, are left exactly
+as they are. A deep surface, see :opt:`deep_color`, is not dithered.
+Dithering draws a window through an intermediate image, which costs one more
+pass over the window for every frame.
+""",
+)
+
+opt(
     'hdr_max_headroom',
     '4.0',
     option_type='hdr_multiplier',

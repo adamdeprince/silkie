@@ -172,5 +172,6 @@ typedef struct _GLFWlibraryGLX {
 bool _glfwInitGLX(void);
 void _glfwTerminateGLX(void);
 bool _glfwCreateContextGLX(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig);
+bool _glfwDeepColorConfigGLX(const _GLFWfbconfig *fbconfig, _GLFWfbconfig *deep);
 void _glfwDestroyContextGLX(_GLFWwindow *window);
 bool _glfwChooseVisualGLX(const _GLFWwndconfig *wndconfig, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig, Visual **visual, int *depth);

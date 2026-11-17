@@ -948,6 +948,7 @@ def background_opacity_of(os_window_id: int) -> Optional[float]:
 def hdr_headroom_of(os_window_id: int) -> Optional[float]:
     pass
 
+def simulate_os_window_output(red_bits: int, green_bits: int, blue_bits: int, is_float: bool) -> dict[str, Any]: ...
 def simulate_hdr_render_ticks(states: Sequence[tuple[bool, float, bool]]) -> list[tuple[bool, float]]:
     pass
 

@@ -1563,7 +1563,15 @@ attach_opengl_context_to_window(_GLFWwindow *window, const _GLFWctxconfig *ctxco
                 debug("No HDR for window %llu: no floating point EGL window surfaces\n", window->id);
             } else wanted.floatColor = describe_hdr_window(window, 1.f);
         }
-        if (!_glfwCreateContextEGL(window, ctxconfig, &wanted)) return false;
+        // A window that is not HDR gets 10 bits per channel only when asked to always. Nothing in the protocols
+        // says how deep the display is, and a compositor that puts a deep surface on an 8 bit display rounds it
+        // without the dithering that an 8 bit surface gets from the application
+        bool deep = false;
+        if (!wanted.floatColor && fbconfig->deepColor == GLFW_DEEP_COLOR_ALWAYS) {
+            deep = _glfwCreateDeepColorContextEGL(window, ctxconfig, &wanted);
+            debug("Window %llu %s\n", window->id, deep ? "has a 10 bit surface for deep color" : "has no deep color: no such EGL window surfaces");
+        }
+        if (!deep && !_glfwCreateContextEGL(window, ctxconfig, &wanted)) return false;
         window->wl.hdr.enabled = window->context.egl.floatColor;
         if (window->wl.hdr.described && !window->wl.hdr.enabled) {
             _glfwPlatformSetWindowColorDescription(window, NULL, GLFW_COLOR_INTENT_PERCEPTUAL);
