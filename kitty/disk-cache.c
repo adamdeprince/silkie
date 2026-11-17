@@ -924,6 +924,66 @@ end:
     return data;
 }
 
+// Copies count rows of row_sz bytes from an entry into dest, one after the
+// other: the first row at offset, each later one stride bytes after the one
+// before. This reads a part of an image, the pixels of one tile of it, without
+// reading all of an entry that can be larger than the memory there is.
+bool
+read_rows_from_disk_cache(PyObject *self_, const void *key, size_t key_sz, size_t offset, size_t row_sz, size_t stride, size_t count, void *dest_) {
+    DiskCache *self = (DiskCache *)self_;
+    uint8_t *dest = dest_;
+    if (!count || !row_sz) return true;
+    if (!ensure_state(self)) return false;
+    if (key_sz > MAX_KEY_SIZE) {
+        PyErr_SetString(PyExc_KeyError, "cache key is too long");
+        return false;
+    }
+    CacheKey k = {.hash_key = (void *)key, .hash_keylen = key_sz};
+    bool ok = false;
+    mutex(lock);
+    cache_map_itr i = vt_get(&self->map, k);
+    if (vt_is_end(i)) {
+        PyErr_SetString(PyExc_KeyError, "No cached entry with specified key found");
+        goto end;
+    }
+    CacheValue *s = i.data->val;
+    // the last row ends at offset + (count - 1) * stride + row_sz, which must be within the entry
+    size_t last_start;
+    if ((count - 1) > SIZE_MAX / (stride ? stride : 1) || __builtin_add_overflow(offset, (count - 1) * stride, &last_start) || row_sz > s->data_sz ||
+        last_start > s->data_sz - row_sz) {
+        PyErr_SetString(PyExc_IndexError, "Rows out of the bounds of the cache entry");
+        goto end;
+    }
+    const uint8_t *in_ram = s->data;
+    if (!in_ram && self->currently_writing.val.data && self->currently_writing.key.hash_key && keys_are_equal(self->currently_writing.key, k) &&
+        s->generation == self->currently_writing.val.generation)
+        in_ram = self->currently_writing.val.data;
+    if (in_ram) {
+        for (size_t r = 0; r < count; r++) memcpy(dest + r * row_sz, in_ram + offset + r * stride, row_sz);
+        ok = true;
+        goto end;
+    }
+    if (s->pos_in_cache_file < 0) {
+        PyErr_SetString(PyExc_OSError, "Cache entry was not written, could not read from it");
+        goto end;
+    }
+    for (size_t r = 0; r < count; r++) {
+        const size_t at = offset + r * stride;
+        read_from_cache_file(self, s->pos_in_cache_file + (off_t)at, row_sz, dest + r * row_sz);
+        if (PyErr_Occurred()) goto end;
+        if (s->uses_encryption) {
+            // the key is applied from the start of the entry, every 64 bytes
+            uint8_t rotated[64];
+            for (unsigned b = 0; b < 64; b++) rotated[b] = s->encryption_key[(at + b) & 63];
+            xor_data64(rotated, dest + r * row_sz, row_sz);
+        }
+    }
+    ok = true;
+end:
+    mutex(unlock);
+    return ok;
+}
+
 static size_t
 disk_cache_clear_from_ram(PyObject *self_, bool(matches)(void *, void *key, unsigned keysz), void *data) {
     DiskCache *self = (DiskCache *)self_;
