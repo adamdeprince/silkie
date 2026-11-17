@@ -212,15 +212,15 @@ operating system is in dark mode. Uses the same syntax as
 and :opt:`kitten-ssh.color_scheme_no_preference` for light mode and when the
 operating system has no preference. When the operating system switches between
 modes, the colors of the remote session switch accordingly, just as for
-:ref:`automatic color themes <auto_color_scheme>` in kitty itself. For a mode
+:ref:`automatic color themes <auto_color_scheme>` in Silkie itself. For a mode
 with no color scheme specified, :opt:`kitten-ssh.color_scheme` is used, and if
-that is also not specified, the colors from kitty for that mode are used. For
+that is also not specified, the colors from Silkie for that mode are used. For
 example::
 
     color_scheme_dark Solarized Dark
     color_scheme_light Solarized Light
 
-Requires the ssh kitten to be run in kitty, outside of terminal multiplexers
+Requires the ssh kitten to be run in Silkie, outside of terminal multiplexers
 such as tmux. Otherwise, only :opt:`kitten-ssh.color_scheme` is used.
 """,
 )
