@@ -322,14 +322,22 @@ each sample to make a round trip to the application.</p>
 <a class="reference internal" href="gpu-surface-protocol.html"><span class="doc">GPU surfaces</span></a></p>
 <p>Send one-, two-, four-, or eight-bit grayscale pixels and RGB565 without
 requiring compression; <a class="reference internal" href="packed-image-protocol.html"><span class="doc">Packed image formats</span></a> describes the compact
-wire encodings, independent of the display’s color model.</p>
+wire encodings, independent of the display’s color model.
+<a class="reference internal" href="palette-image-protocol.html"><span class="doc">Palette images</span></a> adds images of one- to eight-bit indices into a
+palette of RGBA colors that can be replaced without resending the pixels. Send
+16-bit gray, RGB10A2 and 16-bit RGBA at their full precision, encoded with
+sRGB, linear, PQ or HLG, so that HDR10 frames go to the GPU as they are; see
+<a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a>. Images of any size are drawn, from tiles when they
+are larger than a GPU texture, with mipmaps when shown smaller than they are,
+and stay without a storage quota; see <a class="reference internal" href="image-tiling.html"><span class="doc">Large images and image storage</span></a>.</p>
 </section>
 <section id="color-beyond-ordinary-sdr">
 <h3>Color beyond ordinary SDR<a class="headerlink" href="#color-beyond-ordinary-sdr" title="Link to this heading">¶</a></h3>
-<p>Use wider color spaces and request brightness above SDR white on supported
-displays. Query the available headroom and control transparency at the cell level.</p>
+<p>Use wider color spaces, request brightness above SDR white on supported
+displays, and give text colors with sixteen bits per channel. Query the
+available headroom and control transparency at the cell level.</p>
 <p><a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR</span></a> · <a class="reference internal" href="wide-gamut-protocol.html"><span class="doc">Wide gamut</span></a> ·
-<a class="reference internal" href="cell-alpha-protocol.html"><span class="doc">Cell alpha</span></a></p>
+<a class="reference internal" href="deep-color-protocol.html"><span class="doc">Deep colors</span></a> · <a class="reference internal" href="cell-alpha-protocol.html"><span class="doc">Cell alpha</span></a></p>
 </section>
 <section id="display-and-presentation-feedback">
 <h3>Display and presentation feedback<a class="headerlink" href="#display-and-presentation-feedback" title="Link to this heading">¶</a></h3>

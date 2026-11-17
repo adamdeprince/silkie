@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -352,11 +357,22 @@
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">id</span></code> 是程序自行选择的非负 31 位整数，回复会原样返回，以便匹配查询。终端回答：:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">caps</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">caps</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">ext</span><span class="o">=</span><span class="n">caps</span><span class="mf">.1</span><span class="p">,</span><span class="n">frame</span><span class="mf">.1</span><span class="p">,</span><span class="n">gesture</span><span class="mf">.1</span> <span class="p">:</span> <span class="n">media</span><span class="o">=</span><span class="n">d</span><span class="p">,</span><span class="n">f</span><span class="p">,</span><span class="n">t</span><span class="p">,</span><span class="n">s</span> <span class="p">:</span> <span class="nb">format</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">100</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">caps</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">caps</span><span class="o">=</span><span class="mi">3</span> <span class="p">:</span> <span class="n">ext</span><span class="o">=</span><span class="n">caps</span><span class="mf">.1</span><span class="p">,</span><span class="n">frame</span><span class="mf">.1</span><span class="p">,</span><span class="n">gesture</span><span class="mf">.1</span> <span class="p">:</span> <span class="n">sgr</span><span class="o">=</span><span class="n">deep</span><span class="p">,</span><span class="n">gamut</span><span class="p">,</span><span class="n">hdr</span> <span class="p">:</span> <span class="n">media</span><span class="o">=</span><span class="n">d</span><span class="p">,</span><span class="n">f</span><span class="p">,</span><span class="n">t</span><span class="p">,</span><span class="n">s</span> <span class="p">:</span> <span class="nb">format</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">100</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">caps</span></code> 是该选择器支持能力的位集合：<code class="docutils literal notranslate"><span class="pre">1</span></code> 表示列举功能，<code class="docutils literal notranslate"><span class="pre">2</span></code> 表示下述重置请求。<code class="docutils literal notranslate"><span class="pre">ext</span></code> 以逗号分隔、顺序不定，列出终端接受的全部选择器，每项后接句点和该选择器支持的最高协议版本。其中始终包含 <code class="docutils literal notranslate"><span class="pre">caps.1</span></code>。列表只表示终端认识该选择器；当前显示器和输入设备实际能做什么，仍需通过该选择器自己的 <code class="docutils literal notranslate"><span class="pre">query</span></code> 查询。程序现在只需查询自己打算使用的选择器；由于回复按顺序到达，这些查询可与本查询在同一次写入中发送。</p>
 <p>同一终端的全部窗口得到相同答案，且终端运行期间不会变化，因此程序只需查询一次。不支持本协议的终端会忽略查询；程序必须设置超时，随后可回退为逐个探测所需选择器。</p>
+</section>
+<section id="sgr-extensions">
+<h2>SGR extensions<a class="headerlink" href="#sgr-extensions" title="链接到此标题。">¶</a></h2>
+<p>The same reply lists, in <code class="docutils literal notranslate"><span class="pre">sgr</span></code>, the extensions of the SGR attributes that
+the terminal understands, which a program cannot otherwise detect since a
+terminal that does not know them ignores them: <code class="docutils literal notranslate"><span class="pre">alpha</span></code>, the cell background
+alpha of <a class="reference internal" href="cell-alpha-protocol.html"><span class="doc">字符单元背景透明度</span></a>; <code class="docutils literal notranslate"><span class="pre">deep</span></code>, the sixteen bit colors of
+<a class="reference internal" href="deep-color-protocol.html"><span class="doc">Deep colors</span></a>; <code class="docutils literal notranslate"><span class="pre">gamut</span></code>, the color space id of
+<a class="reference internal" href="wide-gamut-protocol.html"><span class="doc">广色域颜色</span></a>; and <code class="docutils literal notranslate"><span class="pre">hdr</span></code>, the brightness of <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>.
+The order is not significant and a program ignores names it does not know. A
+terminal that understands none of them omits the field.</p>
 </section>
 <section id="graphics-media-and-formats">
 <h2>图形传输介质与格式<a class="headerlink" href="#graphics-media-and-formats" title="链接到此标题。">¶</a></h2>
@@ -365,10 +381,12 @@
 lists the values of the <code class="docutils literal notranslate"><span class="pre">t</span></code> key: <code class="docutils literal notranslate"><span class="pre">d</span></code> direct, <code class="docutils literal notranslate"><span class="pre">f</span></code> a file, <code class="docutils literal notranslate"><span class="pre">t</span></code> a
 temporary file, <code class="docutils literal notranslate"><span class="pre">s</span></code> shared memory, and any medium an extension adds, such
 as <code class="docutils literal notranslate"><span class="pre">g</span></code> for a GPU surface. <code class="docutils literal notranslate"><span class="pre">format</span></code> lists the values of the <code class="docutils literal notranslate"><span class="pre">f</span></code> key:
-<code class="docutils literal notranslate"><span class="pre">1</span></code>, <code class="docutils literal notranslate"><span class="pre">2</span></code>, <code class="docutils literal notranslate"><span class="pre">4</span></code> and <code class="docutils literal notranslate"><span class="pre">8</span></code> grayscale, <code class="docutils literal notranslate"><span class="pre">16</span></code> RGB565 (see
-<a class="reference internal" href="packed-image-protocol.html"><span class="doc">Packed image formats</span></a>), <code class="docutils literal notranslate"><span class="pre">24</span></code> RGB, <code class="docutils literal notranslate"><span class="pre">32</span></code> RGBA, <code class="docutils literal notranslate"><span class="pre">100</span></code> PNG, and any
-format an extension adds, such as <code class="docutils literal notranslate"><span class="pre">64</span></code> for HDR images and <code class="docutils literal notranslate"><span class="pre">200</span></code> for vector
-images. Both describe what the
+<code class="docutils literal notranslate"><span class="pre">24</span></code> RGB, <code class="docutils literal notranslate"><span class="pre">32</span></code> RGBA, <code class="docutils literal notranslate"><span class="pre">100</span></code> PNG, <code class="docutils literal notranslate"><span class="pre">8</span></code> and <code class="docutils literal notranslate"><span class="pre">16</span></code> indexed color (where
+supported), and any format an extension adds, such as <code class="docutils literal notranslate"><span class="pre">64</span></code> for HDR images, <code class="docutils literal notranslate"><span class="pre">200</span></code> for vector images, <code class="docutils literal notranslate"><span class="pre">301</span></code>, <code class="docutils literal notranslate"><span class="pre">302</span></code>,
+<code class="docutils literal notranslate"><span class="pre">304</span></code> and <code class="docutils literal notranslate"><span class="pre">308</span></code> grayscale and <code class="docutils literal notranslate"><span class="pre">516</span></code> RGB565 (see
+<a class="reference internal" href="packed-image-protocol.html"><span class="doc">Packed image formats</span></a>), <code class="docutils literal notranslate"><span class="pre">401</span></code>, <code class="docutils literal notranslate"><span class="pre">402</span></code>, <code class="docutils literal notranslate"><span class="pre">404</span></code> and <code class="docutils literal notranslate"><span class="pre">408</span></code>
+palette images (see <a class="reference internal" href="palette-image-protocol.html"><span class="doc">Palette images</span></a>) and <code class="docutils literal notranslate"><span class="pre">316</span></code> 16-bit gray,
+<code class="docutils literal notranslate"><span class="pre">632</span></code> RGB10A2 and <code class="docutils literal notranslate"><span class="pre">664</span></code> 16-bit RGBA (see <a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a>). Both describe what the
 terminal accepts, not what is wise over a given connection, and the graphics
 protocol's own query action (<code class="docutils literal notranslate"><span class="pre">a=q</span></code>) remains the check for one particular
 image. A relay answers with what it can carry to the terminal behind it:
@@ -465,6 +483,7 @@ output capabilities rather than restricting input.</p>
 <li><a class="reference internal" href="#">扩展能力协议</a><ul>
 <li><a class="reference internal" href="#framing">消息封装</a></li>
 <li><a class="reference internal" href="#listing-the-extensions">列出扩展</a></li>
+<li><a class="reference internal" href="#sgr-extensions">SGR extensions</a></li>
 <li><a class="reference internal" href="#graphics-media-and-formats">图形传输介质与格式</a></li>
 <li><a class="reference internal" href="#reading-a-mode">读取模式</a></li>
 <li><a class="reference internal" href="#turning-every-mode-off">关闭全部模式</a></li>

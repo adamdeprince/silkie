@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -340,7 +345,11 @@ and receive the notification ID and selected button. The <a class="reference ext
 <h2>OSC 9 and AI completion alerts<a class="headerlink" href="#osc-9-and-ai-completion-alerts" title="链接到此标题。">¶</a></h2>
 <p>Silkie also accepts the iTerm2-style <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">message</span> <span class="pre">ST</span></code> notification,
 terminated by either BEL or <code class="docutils literal notranslate"><span class="pre">ESC</span> <span class="pre">\\</span></code>. The entire message, including any
-semicolons, becomes the notification title. Clicking it focuses the originating
+semicolons, becomes the notification title, unless it starts with a ConEmu
+sub-command number from 1 to 12 followed by <code class="docutils literal notranslate"><span class="pre">;</span></code> or the end of the message.
+<code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">2</span> <span class="pre">;</span> <span class="pre">text</span> <span class="pre">ST</span></code> shows a notification titled <em>text</em>, with one pair of
+surrounding double quotes removed. The other ConEmu sub-commands are described
+in <a class="reference internal" href="#conemu-osc9"><span class="std std-ref">ConEmu OSC 9 sub-commands</span></a>. Clicking a notification focuses the originating
 terminal without sending input to the application. See the <a class="reference external" href="https://iterm2.com/documentation-escape-codes.html">iTerm2 escape-code
 manual</a> for the wire format.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">4</span> <span class="pre">;</span> <span class="pre">state</span> <span class="pre">;</span> <span class="pre">percent</span> <span class="pre">ST</span></code> form reports progress instead. Clearing
@@ -354,11 +363,82 @@ abbreviated <code class="docutils literal notranslate"><span class="pre">OSC</sp
 check System Settings → Notifications → Silkie, banner settings, and Focus.
 Notification permission failures are logged to Silkie's standard error.
 Configured notification filters also apply to OSC 9.</p>
+<section id="conemu-osc-9-sub-commands">
+<span id="conemu-osc9"></span><h3>ConEmu OSC 9 sub-commands<a class="headerlink" href="#conemu-osc-9-sub-commands" title="链接到此标题。">¶</a></h3>
+<p><a class="reference external" href="https://conemu.github.io/en/AnsiEscapeCodes.html">ConEmu</a> uses OSC 9 for
+numbered sub-commands, <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">number</span> <span class="pre">;</span> <span class="pre">arguments</span> <span class="pre">ST</span></code>. An OSC 9 payload is a
+ConEmu sub-command when it starts with a number from 1 to 12 followed by <code class="docutils literal notranslate"><span class="pre">;</span></code>
+or the end of the payload; any other payload, including <code class="docutils literal notranslate"><span class="pre">13;text</span></code>, is shown as
+an iTerm2 style notification. Text arguments may be enclosed in double quotes,
+which are removed.</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Number</p></th>
+<th class="head"><p>ConEmu</p></th>
+<th class="head"><p>Silkie</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Sleep for some milliseconds</p></td>
+<td><p>Not implemented</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Show a message box</p></td>
+<td><p>Shows a desktop notification with the text as its title</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Set the tab title</p></td>
+<td><p>Sets the tab title, empty text restores the default title</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Set the progress state</p></td>
+<td><p>Shows progress, as <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">9</span> <span class="pre">;</span> <span class="pre">4</span></code> above</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Wait for a key press</p></td>
+<td><p>Not implemented</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Run a GuiMacro</p></td>
+<td><p>Not implemented</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Run a process</p></td>
+<td><p>Not implemented</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Print an environment variable</p></td>
+<td><p>Not implemented</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Report the working directory</p></td>
+<td><p>Records the directory, like OSC 7</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Control xterm emulation</p></td>
+<td><p>Not implemented</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>Comment</p></td>
+<td><p>Ignored</p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>Mark the start of a prompt</p></td>
+<td><p>Marks the prompt exactly as <code class="docutils literal notranslate"><span class="pre">OSC</span> <span class="pre">133</span> <span class="pre">;</span> <span class="pre">A</span></code> does</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Sub-commands that are not implemented are ignored, and logged only when Silkie
+is run with <code class="docutils literal notranslate"><span class="pre">--dump-commands</span></code>.</p>
 <p>Claude Code must emit a notification sequence for Silkie to display one.
 If automatic terminal detection does not select a compatible protocol, set
 <code class="docutils literal notranslate"><span class="pre">&quot;preferredNotifChannel&quot;:</span> <span class="pre">&quot;iterm2&quot;</span></code> for OSC 9 or <code class="docutils literal notranslate"><span class="pre">&quot;kitty&quot;</span></code> for OSC 99 in
 <code class="docutils literal notranslate"><span class="pre">~/.claude/settings.json</span></code>. See <a class="reference external" href="https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification">Claude Code's terminal notification setup</a>
 for notification timing and multiplexer configuration.</p>
+</section>
 </section>
 <section id="return-paths-through-multiplexers">
 <h2>Return paths through multiplexers<a class="headerlink" href="#return-paths-through-multiplexers" title="链接到此标题。">¶</a></h2>
@@ -485,7 +565,10 @@ that state, including through nested Odin Seat sessions.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Desktop notification routing</a><ul>
-<li><a class="reference internal" href="#osc-9-and-ai-completion-alerts">OSC 9 and AI completion alerts</a></li>
+<li><a class="reference internal" href="#osc-9-and-ai-completion-alerts">OSC 9 and AI completion alerts</a><ul>
+<li><a class="reference internal" href="#conemu-osc-9-sub-commands">ConEmu OSC 9 sub-commands</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#return-paths-through-multiplexers">Return paths through multiplexers</a></li>
 <li><a class="reference internal" href="#odin-seat-convention">Odin Seat convention</a></li>
 <li><a class="reference internal" href="#codex-configuration">Codex configuration</a></li>
