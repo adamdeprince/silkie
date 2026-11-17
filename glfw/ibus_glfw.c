@@ -518,7 +518,7 @@ key_event_processed(DBusMessage *msg, const DBusError *err, void *data) {
     uint32_t handled = 0;
     _GLFWIBUSKeyEvent *ev = (_GLFWIBUSKeyEvent *)data;
     // Restore key's text from the text embedded in the structure.
-    ev->glfw_ev.text = ev->__embedded_text;
+    ev->glfw_ev.text = ev->embedded_text;
     bool is_release = ev->glfw_ev.action == GLFW_RELEASE;
     bool failed = false;
     if (err) {
@@ -535,11 +535,19 @@ key_event_processed(DBusMessage *msg, const DBusError *err, void *data) {
 bool
 ibus_process_key(const _GLFWIBUSKeyEvent *ev_, _GLFWIBUSData *ibus) {
     if (!check_connection(ibus)) return false;
-    _GLFWIBUSKeyEvent *ev = calloc(1, sizeof(_GLFWIBUSKeyEvent));
-    if (!ev) return false;
+    // The key's text is only valid during this call, so copy it, whatever its length, into the event's allocation.
+    const size_t text_len = ev_->glfw_ev.text ? strlen(ev_->glfw_ev.text) : 0;
+    size_t sz;
+    if (__builtin_add_overflow(sizeof(_GLFWIBUSKeyEvent), text_len, &sz) || __builtin_add_overflow(sz, (size_t)1, &sz)) return false;
+    _GLFWIBUSKeyEvent *ev = calloc(1, sz);
+    if (!ev) {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, "IBUS: Out of memory sending a key event with %zu bytes of text to IBUS", text_len);
+        return false;
+    }
     memcpy(ev, ev_, sizeof(_GLFWIBUSKeyEvent));
-    // Put the key's text in a field IN the structure, for proper serialization.
-    if (ev->glfw_ev.text) strncpy(ev->__embedded_text, ev->glfw_ev.text, sizeof(ev->__embedded_text) - 1);
+    ev->embedded_text = (char *)(ev + 1);
+    if (text_len) memcpy(ev->embedded_text, ev_->glfw_ev.text, text_len);
+    ev->embedded_text[text_len] = 0;
     ev->glfw_ev.text = NULL;
     uint32_t state = ibus_key_state_from_glfw(ev->glfw_ev.mods, ev->glfw_ev.action);
     if (!glfw_dbus_call_method_with_reply(

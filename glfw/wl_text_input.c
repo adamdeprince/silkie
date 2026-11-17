@@ -69,6 +69,7 @@ text_input_preedit_string(void *data UNUSED, struct zwp_text_input_v3 *txt_input
     debug("text-input: preedit_string event: text: %s cursor_begin: %d cursor_end: %d\n", text, cursor_begin, cursor_end);
     free(pending_pre_edit);
     pending_pre_edit = text ? _glfw_strdup(text) : NULL;
+    if (text && !pending_pre_edit) _glfwInputError(GLFW_OUT_OF_MEMORY, "Wayland: Out of memory storing %zu bytes of pre-edit text, dropping it", strlen(text));
 }
 
 static void
@@ -76,6 +77,7 @@ text_input_commit_string(void *data UNUSED, struct zwp_text_input_v3 *txt_input 
     debug("text-input: commit_string event: text: %s\n", text);
     free(pending_commit);
     pending_commit = text ? _glfw_strdup(text) : NULL;
+    if (text && !pending_commit) _glfwInputError(GLFW_OUT_OF_MEMORY, "Wayland: Out of memory storing %zu bytes of committed text, dropping it", strlen(text));
 }
 
 static void
