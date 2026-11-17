@@ -68,7 +68,7 @@ typedef struct {
 
 typedef struct {
     Screen *screen;
-    bool needs_removal, child_died;
+    bool needs_removal, child_died, close_requested;
     int fd;
     unsigned long id;
     pid_t pid;
@@ -648,6 +648,7 @@ mark_child_for_close(ChildMonitor *self, id_type window_id) {
     for (size_t i = 0; i < self->count; i++) {
         if (children[i].id == window_id) {
             children[i].needs_removal = true;
+            children[i].close_requested = true;
             found = true;
             break;
         }
@@ -656,6 +657,7 @@ mark_child_for_close(ChildMonitor *self, id_type window_id) {
         for (size_t i = 0; i < add_queue_count; i++) {
             if (add_queue[i].id == window_id) {
                 add_queue[i].needs_removal = true;
+                add_queue[i].close_requested = true;
                 found = true;
                 break;
             }
