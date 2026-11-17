@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from kitty.boss import Boss
-from kitty.colors import ThemeColors, color_scheme_spec
+from kitty.colors import AutoTheme, SessionColorSchemes, ThemeColors, color_scheme_spec
 from kitty.config import load_config
 from kitty.fast_data_types import Color, get_options, set_options
 from kitty.options.types import Options
@@ -37,11 +37,9 @@ class TestColorSchemes(BaseTest):
 
     def test_eink_startup_and_reload(self):
         themes = ThemeColors()
-        themes.dark_mtime = 0
-        themes.dark_spec = {'foreground': 0x123456, 'background': 0x654321}
-        themes.dark_tbc = ()
-        themes.dark_background_image_options = {}
-        with patch('kitty.colors.glfw_get_system_color_theme', return_value='dark'):
+        themes.themes['dark'] = AutoTheme(0, {'foreground': 0x123456, 'background': 0x654321}, (), {})
+        # refresh() would forget the theme, as there is no such file
+        with patch('kitty.colors.glfw_get_system_color_theme', return_value='dark'), patch.object(themes, 'refresh', return_value=False):
             for _ in range(32):
                 opts = load_config(overrides=['eink_mode yes'])
                 themes.patch_opts(opts)
@@ -64,6 +62,7 @@ class TestColorSchemes(BaseTest):
         window.screen = screen
         window.id = 7
         window.refresh = Mock()
+        window.session_color_schemes = SessionColorSchemes()
         boss = SimpleNamespace(
             all_windows=[window],
             all_tab_managers=[],
@@ -89,7 +88,7 @@ class TestColorSchemes(BaseTest):
                 self.ae(screen.callbacks.wtcbuf, f'\x1b[?997;{report}n'.encode())
                 # Configured colors also reach newly created windows.
                 self.ae(int(opts.background), bg)
-                self.ae(screen.color_profile.as_dict()['cursor'], fg)
+                self.ae(int(screen.color_profile.cursor_color), fg)
             Boss.set_color_scheme(boss, 'auto')
             self.ae(int(screen.color_profile.default_fg), 0x0C2238)
             self.ae(int(screen.color_profile.default_bg), 0x141E28)
