@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 
 from kitty.constants import is_macos, read_kitty_resource
 from kitty.fast_data_types import (
+    AREA_GRAPHIC,
     DECAWM,
     ParsedFontFeature,
     Screen,
@@ -440,6 +441,23 @@ class Rendering(FontBaseTest):
         line = s.line(0)
         test_render_line(line)
         self.assertEqual(len(self.sprites) - prerendered, len(box_chars))
+
+    def test_area_graphic_cells(self):
+        # minimum_contrast leaves the characters that draw pictures from the
+        # foreground and background colors alone, see is_area_graphic()
+        text = 'a\u2580\u2591\u2588\u25e2\ue0b0\U0001fb00\u2500b\u00e9'
+        s = self.create_screen(cols=len(text) + 1, lines=1, scrollback=0)
+        s.draw(text)
+        line = s.line(0)
+        test_render_line(line)
+        flags = [bool(line.gpu_attrs_at(x) & (1 << AREA_GRAPHIC)) for x in range(len(text))]
+        self.ae(flags, [False, True, True, True, True, True, True, False, False, False])
+        # it follows the character, not the SGR state, and is not reported as SGR
+        s.cursor.x = 1
+        s.draw('x')
+        test_render_line(line)
+        self.assertFalse(line.gpu_attrs_at(1) & (1 << AREA_GRAPHIC))
+        self.assertNotIn('\x1b[', str(line.as_ansi()))
 
     def test_line_thickness_scales_with_font_size(self):
         from kitty.fast_data_types import create_test_font_group, render_box_char

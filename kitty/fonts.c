@@ -2281,6 +2281,29 @@ is_non_emoji_dingbat(char_type ch, CharProps cp) {
     return false;
 }
 
+// Characters that programs use to draw pictures with the foreground and the
+// background colors together, where the two being alike is the point: block
+// elements and shades, the legacy computing mosaics, solid triangles and the
+// Powerline separators. minimum_contrast leaves the foreground of these alone,
+// changing it would break the picture. Box drawing lines are not among them,
+// they are drawn in the foreground on their own like text.
+static bool
+is_area_graphic(char_type ch) {
+    switch (ch) {
+        START_ALLOW_CASE_RANGE
+        case 0x2580 ... 0x259f:   // Block Elements
+        case 0x25e2 ... 0x25e5:   // black triangles in the corners
+        case 0x25f8 ... 0x25fa:   // triangles in the corners
+        case 0x25ff:
+        case 0xe0b0 ... 0xe0d7:   // Powerline and Powerline Extra separators
+        case 0x1cd00 ... 0x1cde5: // octants
+        case 0x1fb00 ... 0x1fb9f: // sextants, wedges, eighth blocks, shades and checkerboards
+            return true;
+        END_ALLOW_CASE_RANGE
+    }
+    return false;
+}
+
 static unsigned int
 cell_cap_for_codepoint(const char_type cp) {
     unsigned int ans = UINT_MAX;
@@ -2333,6 +2356,10 @@ render_line(FONTS_DATA_HANDLE fg_, Line *line, index_type lnum, Cursor *cursor, 
     bool center_glyph = false;
     bool disable_ligature_at_cursor = cursor != NULL && disable_ligature_strategy == DISABLE_LIGATURES_CURSOR;
     index_type first_cell_in_run, i;
+    for (i = 0; i < line->xnum; i++) {
+        const CPUCell *c = line->cpu_cells + i;
+        line->gpu_cells[i].attrs.area_graphic = !c->ch_is_idx && is_area_graphic(c->ch_or_idx);
+    }
     for (i = 0, first_cell_in_run = 0; i < line->xnum; i++) {
         cell_font = basic_font;
         CPUCell *cpu_cell = line->cpu_cells + i;

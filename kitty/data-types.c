@@ -1019,6 +1019,7 @@ PyInit_fast_data_types(void) {
     s(HDR_BG, hdr_bg);
     s(GAMUT_FG, gamut_fg);
     s(GAMUT_BG, gamut_bg);
+    s(AREA_GRAPHIC, area_graphic);
 #undef s
     PyModule_AddIntConstant(m, "MARK_MASK", MARK_MASK);
     PyModule_AddIntConstant(m, "NUM_INDEXED_IMAGE_SPECIAL_COLORS", NUM_INDEXED_IMAGE_SPECIAL_COLORS);

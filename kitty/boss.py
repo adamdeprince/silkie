@@ -1990,6 +1990,35 @@ class Boss:
             fin_opacity = float(opacity)
         self._set_os_window_background_opacity(os_window_id, fin_opacity)
 
+    @ac(
+        'win',
+        """
+        Set the :opt:`minimum_contrast` of the active window, a percentage from 0 to 100
+
+        A value starting with + or - changes the current minimum contrast by that much and
+        :code:`default` removes the setting of the window, so that it follows its tab, profile
+        and the option again. For example::
+
+            map f1 set_minimum_contrast 40
+            map f2 set_minimum_contrast +10
+            map f3 set_minimum_contrast default
+        """,
+    )
+    def set_minimum_contrast(self, value: str = 'default') -> None:
+        window = self.window_for_dispatch or self.active_window
+        if window is None:
+            return
+        value = value.strip()
+        try:
+            if value == 'default':
+                window.set_minimum_contrast(None)
+            elif value[:1] in '+-' and value[1:]:
+                window.set_minimum_contrast(max(0., min(window.minimum_contrast + float(value.removesuffix('%')), 100.)))
+            else:
+                window.set_minimum_contrast(value)
+        except ValueError as e:
+            self.show_error(_('Invalid minimum contrast'), str(e))
+
     @property
     def active_tab_manager(self) -> TabManager | None:
         os_window_id = current_focused_os_window_id()

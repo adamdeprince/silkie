@@ -1784,6 +1784,22 @@ dynamic_color_for_gpu(const ColorProfile *cp, color_type val) {
     return colorprofile_to_color(cp, dc, zero).rgb;
 }
 
+// The minimum_contrast of the window, from itself, its tab or its profile, else
+// from the options. The kitty option text_fg_override_threshold applies only
+// where no minimum_contrast is set at all, not even 0. minimum_contrast is for
+// what programs draw, the tab bar and window title bars, in the colors chosen
+// for them in the options, are left as they are.
+static ContrastAdjustment
+contrast_adjustment_for_screen(const Screen *screen, bool is_own_ui) {
+    const float mc = screen->minimum_contrast.is_set ? (float)screen->minimum_contrast.value : OPT(minimum_contrast);
+    if (mc > 0) {
+        if (is_own_ui) return (ContrastAdjustment){0};
+        return (ContrastAdjustment){.threshold = mc / 100.f, .algorithm = FG_OVERRIDE_LIGHTNESS};
+    }
+    if (screen->minimum_contrast.is_set) return (ContrastAdjustment){0};
+    return OPT(text_fg_override_threshold);
+}
+
 static color_type
 cell_update_uniform_block(
     ssize_t vao_idx,
@@ -1793,7 +1809,8 @@ cell_update_uniform_block(
     const CursorRenderInfo *cursor,
     OSWindow *os_window,
     float inactive_text_alpha,
-    float bg_alpha) {
+    float bg_alpha,
+    bool is_own_ui) {
     struct GPUCellRenderData {
         // Colors that are constant for the whole draw, pre-converted to linear
         // space so the vertex shader does not do a gamma LUT lookup for them
@@ -1810,7 +1827,7 @@ cell_update_uniform_block(
         GLuint columns, lines, sprites_xnum, sprites_ynum, cursor_shape, cell_width, cell_height;
         GLuint cursor_x1, cursor_x2, cursor_y1, cursor_y2;
         GLfloat cursor_opacity, inactive_text_alpha, fg_override_threshold, row_offset, dim_opacity, blink_opacity, hdr_headroom;
-        GLuint output_gamut;
+        GLuint output_gamut, fg_override_algo;
 
         GLuint bg_colors0, bg_colors1, bg_colors2, bg_colors3, bg_colors4, bg_colors5, bg_colors6, bg_colors7;
         GLfloat bg_opacities0, bg_opacities1, bg_opacities2, bg_opacities3, bg_opacities4, bg_opacities5, bg_opacities6, bg_opacities7;
@@ -1847,7 +1864,9 @@ cell_update_uniform_block(
     rd->main_cursor_is_special = IS_SPECIAL_COLOR(cursor_color);
     rd->bg_colors0 = COLOR(default_bg);
     rd->bg_opacities0 = bg_alpha;
-    rd->fg_override_threshold = OPT(text_fg_override_threshold);
+    const ContrastAdjustment contrast = contrast_adjustment_for_screen(screen, is_own_ui);
+    rd->fg_override_threshold = contrast.threshold;
+    rd->fg_override_algo = contrast.algorithm;
     rd->row_offset = row_offset_for_screen(screen);
 #define SETBG(which) \
     { colorprofile_to_transparent_color(cp, which - 1, &rd->bg_colors##which, &rd->bg_opacities##which); }
@@ -3292,7 +3311,8 @@ draw_cells(
     float bg_alpha = effective_os_window_alpha(os_window);
 
     color_type default_bg = cell_update_uniform_block(
-        srd->vao_idx, screen, uniform_buffer, color_table_buffer, &screen->cursor_render_info, os_window, current_inactive_text_alpha, bg_alpha);
+        srd->vao_idx, screen, uniform_buffer, color_table_buffer, &screen->cursor_render_info, os_window, current_inactive_text_alpha, bg_alpha,
+        is_tab_bar || title_bar_of != NULL);
     set_cell_uniforms(screen->reload_all_gpu_data);
     bind_deep_colors(screen);
     WindowLogoRenderData *wl;
@@ -5204,7 +5224,21 @@ pyspatial_pose(PyObject *self UNUSED, PyObject *args) {
     Py_RETURN_TRUE;
 }
 
+// For the tests: how the cell shader is told to adjust the foreground of a
+// screen, as (threshold, algorithm) with the numbers of FG_OVERRIDE_*
+static PyObject *
+pycontrast_adjustment_for(PyObject UNUSED *self, PyObject *screen) {
+    extern PyTypeObject Screen_Type;
+    if (!PyObject_TypeCheck(screen, &Screen_Type)) {
+        PyErr_SetString(PyExc_TypeError, "A Screen is required");
+        return NULL;
+    }
+    const ContrastAdjustment c = contrast_adjustment_for_screen((Screen *)screen, false);
+    return Py_BuildValue("fI", c.threshold, (unsigned)c.algorithm);
+}
+
 static PyMethodDef module_methods[] = {
+    MW(contrast_adjustment_for, METH_O),
     MW(spatial_configure, METH_VARARGS),
     MW(spatial_pose, METH_VARARGS),
     M(compile_program, METH_VARARGS),

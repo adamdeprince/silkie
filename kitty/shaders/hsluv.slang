@@ -235,3 +235,32 @@ float3
 luvToRgb(float3 tuple) {
     return xyzToRgb(luvToXyz(tuple));
 }
+
+// HSLuv of a color given in CIE XYZ, rather than in gamma encoded sRGB, so that
+// colors of any gamut, linear as the cell shader has them, can be converted.
+// Black and white have no hue and saturation, they come out as zero rather than
+// as the NaN the chroma bound degenerates to at those two lightnesses.
+public float3
+xyzToHsluv(float3 xyz) {
+    float3 lch = luvToLch(xyzToLuv(xyz));
+    if (lch.x < 1e-4 || lch.x > 99.9999) return float3(0, 0, clamp(lch.x, 0.0, 100.0));
+    return lchToHsluv(lch);
+}
+
+public float3
+hsluvToXyz(float3 hsluv) {
+    float L = clamp(hsluv.z, 0.0, 100.0);
+    if (L < 1e-4 || L > 99.9999) return float3(0.95047, 1.0, 1.08883) * hsluv_lToY(L); // the D65 white point at that luminance
+    return luvToXyz(lchToLuv(hsluvToLch(float3(hsluv.xy, L))));
+}
+
+// CIE lightness L*, 0 to 100, of a relative luminance Y, 0 to 1, and back
+public float
+lightness_from_luminance(float Y) {
+    return hsluv_yToL(Y);
+}
+
+public float
+luminance_from_lightness(float L) {
+    return hsluv_lToY(L);
+}

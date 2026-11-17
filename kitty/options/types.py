@@ -441,6 +441,7 @@ option_names = (
     'mark3_background',
     'mark3_foreground',
     'menu_map',
+    'minimum_contrast',
     'modify_font',
     'momentum_scroll',
     'mouse_hide_wait',
@@ -701,6 +702,7 @@ class Options:
     mark2_foreground: Color = Color(0, 0, 0)
     mark3_background: Color = Color(242, 116, 188)
     mark3_foreground: Color = Color(0, 0, 0)
+    minimum_contrast: float = 0.0
     momentum_scroll: float = 0.96
     mouse_hide_wait: MouseHideWait = MouseHideWait(hide_wait=0.0, show_wait=0.0, show_threshold=40, scroll_show=True) if is_macos else MouseHideWait(hide_wait=3.0, show_wait=0.0, show_threshold=40, scroll_show=True)
     native_tab_status_badge: bool = True

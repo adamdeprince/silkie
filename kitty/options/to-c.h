@@ -49,14 +49,23 @@ parse_ms_long_to_monotonic_t(PyObject *val) {
     return ms_to_monotonic_t(PyLong_AsUnsignedLong(val));
 }
 
-static inline float
+static inline ContrastAdjustment
 text_fg_override_threshold(PyObject *val) {
     double ans = PyFloat_AsDouble(PyTuple_GET_ITEM(val, 0));
+    FgOverrideAlgorithm algorithm;
     switch (PyUnicode_AsUTF8(PyTuple_GET_ITEM(val, 1))[0]) {
-        case '%': ans = MAX(0, MIN(ans, 100)) * 0.01; break;
-        default: ans = MAX(0, MIN(ans, 21)); break;
+        case '%': ans = MAX(0, MIN(ans, 100)) * 0.01; algorithm = FG_OVERRIDE_LUMINANCE; break;
+        default: ans = MAX(0, MIN(ans, 21)); algorithm = FG_OVERRIDE_RATIO; break;
     }
-    return (float)ans;
+    // a ratio of one or less is met by every pair of colors
+    if (ans <= 0 || (algorithm == FG_OVERRIDE_RATIO && ans <= 1)) return (ContrastAdjustment){0};
+    return (ContrastAdjustment){.threshold = (float)ans, .algorithm = algorithm};
+}
+
+static inline float
+minimum_contrast(PyObject *val) {
+    double ans = PyFloat_AsDouble(val);
+    return (float)MAX(0, MIN(ans, 100));
 }
 
 static inline WindowTitleIn

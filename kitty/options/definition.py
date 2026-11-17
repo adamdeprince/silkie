@@ -383,9 +383,11 @@ opt(
     option_type='text_fg_override_threshold',
     ctype='text_fg_override_threshold',
     long_text="""
-A setting to prevent low contrast between foreground and background colors.
-Useful when working with applications that use colors that do not contrast
-well with your preferred color scheme. The default value is :code:`0`, which means no color overriding is performed.
+The setting of kitty for low contrast between foreground and background colors,
+kept for existing configurations. Prefer :opt:`minimum_contrast`, which works like
+iTerm2's, can differ per terminal and takes precedence: this one applies only where
+no minimum contrast is set, by the option, a profile, a tab or a window.
+The default value is :code:`0`, which means no color overriding is performed.
 There are two modes of operation:
 
 A value with the suffix :code:`ratio` represents the minimum accepted contrast ratio between the foreground and background color.
@@ -2794,6 +2796,63 @@ Switch at runtime with :code:`set_color_scheme light`, :code:`dark`,
 :code:`ctrl+shift+f12`. Changes apply to all windows, including new windows,
 until the configuration is reloaded. Applications that subscribe to kitty's
 color preference notifications are notified.
+""",
+)
+
+opt(
+    'minimum_contrast',
+    '0',
+    option_type='minimum_contrast',
+    ctype='minimum_contrast',
+    long_text="""
+Make text that is too close in color to its background readable, the way the
+Minimum contrast setting of iTerm2 does. A percentage from :code:`0` to
+:code:`100`, the :code:`%` sign is optional. :code:`0` turns it off.
+
+The classic case is logging in to a Linux machine over ssh: :program:`ls` shows
+directories in the dark ANSI blue, which is close to invisible on a black
+background. With :code:`minimum_contrast 40` that blue is drawn lighter, still
+blue, while text that already stands out is left exactly as it is.
+
+The percentage is the smallest difference in lightness allowed between text and
+its background, on a scale where black is 0 and white is 100 (CIE L*, which
+follows how light colors look to the eye). Where text is closer to its
+background than that, its lightness is moved away from the background until the
+difference is reached, keeping its hue and saturation: lighter on a dark
+background, darker on a light one, or to the other side when there is not
+enough room. Higher values change more colors, and :code:`100` leaves only
+black and white text. Values between :code:`30` and :code:`50` make dim colors
+readable without changing well designed color schemes much.
+
+What is compared is the text and background as drawn: after reverse video,
+selection and the block cursor, and for wide gamut (:code:`38:2:<id>:...`) and
+16 bit (:code:`38:0:...`) colors at their full precision, in the gamut of the
+window. Contrast is measured on the colors before the brightness of HDR text and
+backgrounds (SGR :code:`56` and :code:`57`) is applied, and the brightness of the
+text then applies to the adjusted color, so it does not change as the HDR headroom
+of the display does. Underline and
+strikethrough colors are adjusted the same way. Emoji and other colored glyphs,
+images and backgrounds are never changed, nor are the tab bar and window title
+bars, which are drawn in the colors set for them. On an e-paper or grayscale display,
+where only lightness can be seen, this is what keeps colored text visible.
+
+Block elements, shades, the legacy computing mosaics and Powerline separators
+are left alone: programs draw pictures with them by putting the foreground and
+background colors side by side, and a picture can need the two to be alike.
+Other characters used for graphics can still be changed, so if a program's
+graphics show stripes, dots or wrong colors, try :code:`0` to see whether this
+setting is the cause.
+
+The setting can differ per terminal. It can be set in a :ref:`profile
+<profiles>`, for a tab in a session file with :code:`minimum_contrast 40`, for a
+window with :option:`launch --minimum-contrast`, and at runtime with
+:ref:`kitten @ set-minimum-contrast <at-set-minimum-contrast>` or the
+:ac:`set_minimum_contrast` action, for example :code:`map f5 set_minimum_contrast +10`. A window's own
+setting wins over its tab's, which wins over its profile's, which wins over this
+option.
+
+When this is :code:`0` and no profile, tab or window sets a minimum contrast,
+the older :opt:`text_fg_override_threshold` applies, if set.
 """,
 )
 

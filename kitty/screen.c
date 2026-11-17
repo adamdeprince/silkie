@@ -6568,6 +6568,39 @@ disable_ligatures_set(Screen *self, PyObject *val, void UNUSED *closure) {
     return 0;
 }
 
+// The minimum_contrast of this window as a percentage, None when the global
+// options apply, see Window.set_minimum_contrast()
+static PyObject *
+minimum_contrast_get(Screen *self, void UNUSED *closure) {
+    if (!self->minimum_contrast.is_set) Py_RETURN_NONE;
+    return PyFloat_FromDouble(self->minimum_contrast.value);
+}
+
+static int
+minimum_contrast_set(Screen *self, PyObject *val, void UNUSED *closure) {
+    if (val == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete attribute");
+        return -1;
+    }
+    bool is_set = val != Py_None;
+    double value = 0;
+    if (is_set) {
+        double pct = PyFloat_AsDouble(val);
+        if (PyErr_Occurred()) return -1;
+        if (isnan(pct) || pct < 0 || pct > 100) {
+            PyErr_SetString(PyExc_ValueError, "minimum_contrast must be a percentage from 0 to 100");
+            return -1;
+        }
+        value = pct;
+    }
+    if (is_set != self->minimum_contrast.is_set || value != self->minimum_contrast.value) {
+        self->minimum_contrast.is_set = is_set;
+        self->minimum_contrast.value = value;
+        self->is_dirty = true;
+    }
+    return 0;
+}
+
 static PyObject *
 render_unfocused_cursor_get(Screen *self, void UNUSED *closure) {
     if (self->cursor_render_info.render_even_when_unfocused) Py_RETURN_TRUE;
@@ -8174,7 +8207,7 @@ static PyMethodDef methods[] = {
 static PyGetSetDef getsetters[] = {
     GETSET(in_bracketed_paste_mode) GETSET(color_preference_notification) GETSET(auto_repeat_enabled) GETSET(focus_tracking_enabled)
         GETSET(in_band_resize_notification) GETSET(paste_events) GETSET(cursor_visible) GETSET(cursor_key_mode) GETSET(disable_ligatures)
-            GETSET(render_unfocused_cursor){NULL} /* Sentinel */
+            GETSET(render_unfocused_cursor) GETSET(minimum_contrast){NULL} /* Sentinel */
 };
 
 #if UINT_MAX == UINT32_MAX
