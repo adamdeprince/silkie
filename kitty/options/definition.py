@@ -2303,6 +2303,22 @@ reloading the config is not supported.
 )
 
 opt(
+    'native_tab_status_badge',
+    'yes',
+    option_type='to_bool',
+    long_text="""
+Show the most urgent status that programs in a tab report with the
+:ref:`program status protocol <program_status>` as a badge on its native tab:
+a spinner while working, with the percentage if reported, a check mark when
+done, an error mark when failed and an attention mark when blocked on you,
+followed by the number of windows in that status, if more than one. Hover over
+the badge for the details the program reported. The title of the window is not
+changed. Has no effect when :opt:`native_tabs` are not in use, there
+:code:`{tab.program_status}` in :opt:`tab_title_template` shows the status.
+""",
+)
+
+opt(
     'default_profile',
     'default',
     long_text="""

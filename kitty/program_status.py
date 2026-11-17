@@ -286,13 +286,30 @@ def status_symbol(record: Record | None, num: int = 1) -> str:
     return ans
 
 
-def combined_status_symbol(statuses: Iterable[ProgramStatus]) -> str:
+class CombinedStatus(NamedTuple):
+    "The most urgent status of several windows"
+
+    record: Record
+    app: str  # the app of record, inherited from its ancestors if it has none
+    count: int  # the number of windows whose most urgent record has the state of record
+
+
+def combined_status(statuses: Iterable[ProgramStatus]) -> CombinedStatus | None:
     """
     The most urgent status of several windows, along with the number of
-    windows in that status. Ties are broken by the most recently updated record.
+    windows in that status. Ties are broken by the most recently updated
+    record. None if no window has a status other than idle.
     """
-    items = [(r, ps.rank(r)) for ps in statuses if (r := ps.most_urgent()) is not None]
+    items = [(r, ps, ps.rank(r)) for ps in statuses if (r := ps.most_urgent()) is not None]
     if not items:
-        return ''
-    best = max(items, key=lambda x: x[1])[0]
-    return status_symbol(best, sum(1 for r, _ in items if r.state is best.state))
+        return None
+    best, ps, _ = max(items, key=lambda x: x[2])
+    if best.state is State.idle:
+        return None
+    return CombinedStatus(best, ps.app_for(best), sum(1 for r, _, _ in items if r.state is best.state))
+
+
+def combined_status_symbol(statuses: Iterable[ProgramStatus]) -> str:
+    "A short indicator for the most urgent status of several windows, see combined_status()"
+    c = combined_status(statuses)
+    return '' if c is None else status_symbol(c.record, c.count)

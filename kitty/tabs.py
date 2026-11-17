@@ -18,7 +18,7 @@ from .borders import Border, Borders
 from .child import Child
 from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .constants import app_class, app_display_name, is_wayland
-from .native_ui import native_tabs_active
+from .native_ui import native_tabs_active, update_native_tab_status
 from .profiles import Profile, apply_to_os_window, command_of, directory_of, environment_of, parsed_options, profile_for_new_os_window
 from .fast_data_types import (
     native_tabs_members,
@@ -1618,6 +1618,8 @@ class TabManager:  # {{{
     drag_hover_delay: float = 0.6
     tab_drag_focus_before_hover: int = 0
     tab_drag_history_before_hover: tuple[int, ...] = ()
+    # The program status badge last sent to the native tab of this tab manager, see update_native_tab_status()
+    native_tab_status_shown: dict[str, Any] | None = None
 
     def __init__(
         self,
@@ -1860,6 +1862,9 @@ class TabManager:  # {{{
     def mark_tab_bar_dirty(self) -> None:
         should_be_shown = not self.tab_bar_hidden and self.tab_bar_should_be_visible
         mark_tab_bar_dirty(self.os_window_id, should_be_shown)
+        if self.native_tabs:
+            # The native tab bar is not drawn by the terminal, its program status badge is updated here instead
+            update_native_tab_status(self)
         w = self.active_window or self.any_window
         if w is not None:
             data = {'tab_manager': self}
@@ -2781,6 +2786,8 @@ class TabManager:  # {{{
             tab.apply_options(at is tab)
         self.tab_bar_hidden = self.native_tabs or get_options().tab_bar_style == 'hidden'
         self.tab_bar.apply_options()
+        if self.native_tabs:
+            update_native_tab_status(self)
         self.update_tab_bar_data()
         self.layout_tab_bar()
 

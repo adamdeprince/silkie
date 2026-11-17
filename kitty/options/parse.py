@@ -1257,6 +1257,9 @@ class Parser:
         for k, v in narrow_symbols(val):
             ans["narrow_symbols"][k] = v
 
+    def native_tab_status_badge(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['native_tab_status_badge'] = to_bool(val)
+
     def native_tabs(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['native_tabs'] = to_bool(val)
 

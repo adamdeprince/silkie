@@ -11,7 +11,16 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from .constants import is_macos
-from .fast_data_types import add_timer, get_boss, get_options, native_settings_show, native_settings_update, native_tabs_supported, remove_timer
+from .fast_data_types import (
+    add_timer,
+    get_boss,
+    get_options,
+    native_settings_show,
+    native_settings_update,
+    native_tab_status,
+    native_tabs_supported,
+    remove_timer,
+)
 from .profiles import (
     DEFAULT_PROFILE_ID,
     create_profile,
@@ -34,12 +43,72 @@ from .settings_model import (
 )
 
 if TYPE_CHECKING:
+    from .program_status import CombinedStatus
+    from .tabs import TabManager
     from .types import SingleKey
 
 
 def native_tabs_active() -> bool:
     ' True when tabs are shown by the operating system. Fixed at startup, like the choice of window system. '
     return bool(get_options().native_tabs and native_tabs_supported())
+
+
+# Program status badge of native tabs {{{
+def program_status_description(c: 'CombinedStatus') -> str:
+    ' What the most urgent status of a tab is, in words '
+    from .program_status import Kind, State
+    r = c.record
+    if r.state is State.blocked:
+        kinds = {Kind.permission: 'Waiting for permission', Kind.question: 'Waiting for an answer', Kind.auth: 'Waiting for authentication'}
+        ans = kinds[r.kind] if r.kind else 'Waiting for you'
+    else:
+        ans = {State.working: 'Working', State.done: 'Done', State.error: 'Failed'}.get(r.state, r.state.value.capitalize())
+    if r.progress is not None:
+        ans += f', {r.progress}%'
+    return ans
+
+
+def native_tab_status_model(c: 'CombinedStatus | None') -> dict[str, Any] | None:
+    """
+    The badge of a native tab for the most urgent program status of its windows, None for no badge. The
+    platform code shows state (working, done, error or blocked, with kind for blocked) as an indicator,
+    with text beside it, tooltip on hover and accessibility as the label for screen readers.
+    """
+    if c is None:
+        return None
+    from .program_status import State
+    r = c.record
+    progress = r.progress if r.state is State.working and r.progress is not None else -1
+    text = []
+    if progress > -1:
+        text.append(f'{progress}%')
+    if c.count > 1:
+        text.append(f'\u00d7{c.count}')
+    description = program_status_description(c)
+    if c.count > 1:
+        description += f' ({c.count} windows)'
+    heading = ' \u2014 '.join(x for x in (c.app, r.title) if x)
+    tooltip = '\n'.join(x for x in (heading, description, r.msg) if x)
+    accessibility = f'{c.app}: {description}' if c.app else f'Program status: {description}'
+    return {
+        'state': r.state.value, 'kind': r.kind.value if r.kind else '', 'progress': progress, 'count': c.count,
+        'text': ' '.join(text), 'tooltip': tooltip, 'accessibility': accessibility,
+    }
+
+
+def update_native_tab_status(tm: 'TabManager') -> None:
+    ' Show the most urgent program status of the windows of the native tab of tm on that tab, if it changed '
+    from .program_status import combined_status
+    tabs = getattr(tm, 'tabs', None)
+    if tabs is None:  # being destroyed
+        return
+    model = None
+    if get_options().native_tab_status_badge:
+        model = native_tab_status_model(combined_status(w.program_status for t in tabs for w in t))
+    if model != tm.native_tab_status_shown:
+        tm.native_tab_status_shown = model
+        native_tab_status(tm.os_window_id, model)
+# }}}
 
 
 # Menus {{{

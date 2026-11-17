@@ -39,6 +39,9 @@ typedef struct NativeUIBackend {
     // of members, which can exceed cap in which case the caller retries with more space.
     size_t (*tab_members)(struct OSWindow *w, unsigned long long *ids, size_t cap);
     void (*title_changed)(struct OSWindow *w, const char *title);
+    // The program status badge of the native tab of w: a dict made by update_native_tab_status() in
+    // kitty/native_ui.py, None to remove the badge. Called on the main thread with the GIL held.
+    void (*tab_status)(struct OSWindow *w, PyObject *status);
     void (*window_op)(struct OSWindow *w, enum NativeWindowOp op);
     bool (*window_query)(struct OSWindow *w, enum NativeWindowQuery q);
     int (*saved_height_adjustment)(struct OSWindow *w);
@@ -49,6 +52,8 @@ typedef struct NativeUIBackend {
     void (*update_menu)(PyObject *model);
     // For tests: draw the Settings window, as it is now, to a PNG file. Works without any screen capture permission.
     bool (*snapshot_settings)(const char *path);
+    // For tests: draw the native window holding w, with its tab bar, to a PNG file.
+    bool (*snapshot_tab)(struct OSWindow *w, const char *path);
 } NativeUIBackend;
 
 // What a module loaded at runtime can use. It cannot link against the symbols of fast_data_types.

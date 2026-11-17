@@ -214,12 +214,21 @@ typedef struct HostWindow {
     struct Page *shown_page; // Wayland: the page whose terminal is mapped
 } HostWindow;
 
+// The program status badge of a tab, see update_native_tab_status() in kitty/native_ui.py. Kept with the
+// page as the widgets of its tab are made again whenever it moves to another window.
+typedef struct Badge {
+    char *state, *kind, *text, *tooltip, *accessibility; // state is NULL when there is no badge
+} Badge;
+
 typedef struct Page {
     unsigned long long id; // not a pointer, OS windows move in memory when others are added or removed
     Window xid;
     HostWindow *hw;
     GtkWidget *area, *label, *tab;
     int last_width, last_height;
+    Badge badge;
+    GtkWidget *badge_box, *badge_indicator, *badge_label;
+    char *badge_indicator_for; // the state and kind that badge_indicator shows
 } Page;
 
 static struct OSWindow *
@@ -461,6 +470,141 @@ destroy_host_window(HostWindow *hw) {
     g_free(hw);
 }
 
+// Program status badge {{{
+static void
+free_badge(Badge *b) {
+    g_free(b->state); g_free(b->kind); g_free(b->text); g_free(b->tooltip); g_free(b->accessibility);
+    *b = (Badge){0};
+}
+
+static void
+ensure_badge_style(void) {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    // The colors are those the theme names for success, warning and error. The fallbacks, from Adwaita, are for themes
+    // that do not name them: a provider of lower priority than the theme is only asked for colors the theme lacks.
+    GdkScreen *screen = gdk_screen_get_default();
+    if (!screen) return;
+    GtkCssProvider *fallback = gtk_css_provider_new(), *rules = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(fallback,
+        "@define-color success_color #26a269;\n@define-color warning_color #c88800;\n@define-color error_color #e01b24;\n", -1, NULL);
+    gtk_css_provider_load_from_data(rules,
+        ".silkie-badge-done { color: @success_color; }\n"
+        ".silkie-badge-blocked { color: @warning_color; }\n"
+        ".silkie-badge-error { color: @error_color; }\n", -1, NULL);
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(fallback), GTK_STYLE_PROVIDER_PRIORITY_FALLBACK);
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(rules), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(fallback);
+    g_object_unref(rules);
+}
+
+static bool
+streq(const char *a, const char *b) {
+    return a && b && strcmp(a, b) == 0;
+}
+
+static const char *
+badge_icon_name(const Badge *b) {
+    const char *name = "dialog-warning-symbolic", *fallback = name;
+    if (streq(b->state, "done")) name = "emblem-ok-symbolic";
+    else if (streq(b->state, "error")) name = fallback = "dialog-error-symbolic";
+    else if (streq(b->kind, "permission")) name = "changes-prevent-symbolic";
+    else if (streq(b->kind, "question")) name = "dialog-question-symbolic";
+    else if (streq(b->kind, "auth")) name = "dialog-password-symbolic";
+    // Icon themes other than Adwaita do not all have every one of these
+    return gtk_icon_theme_has_icon(gtk_icon_theme_get_default(), name) ? name : fallback;
+}
+
+static void
+show_badge(Page *p) {
+    if (!p->tab) return; // not in a window at the moment, shown when it is
+    const Badge *b = &p->badge;
+    if (!b->state) {
+        if (p->badge_box) gtk_widget_destroy(p->badge_box);
+        p->badge_box = p->badge_indicator = p->badge_label = NULL;
+        g_clear_pointer(&p->badge_indicator_for, g_free);
+        return;
+    }
+    ensure_badge_style();
+    if (!p->badge_box) {
+        p->badge_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);
+        p->badge_label = gtk_label_new(NULL);
+        gtk_box_pack_end(GTK_BOX(p->badge_box), p->badge_label, FALSE, FALSE, 0);
+        // After the title: the notebook names the tab for assistive technology after the first label in it
+        gtk_box_pack_start(GTK_BOX(p->tab), p->badge_box, FALSE, FALSE, 0);
+        gtk_box_reorder_child(GTK_BOX(p->tab), p->badge_box, 1);
+    }
+    char *indicator_for = g_strconcat(b->state, ":", b->kind, NULL);
+    if (!streq(indicator_for, p->badge_indicator_for)) {
+        if (p->badge_indicator) gtk_widget_destroy(p->badge_indicator);
+        if (streq(b->state, "working")) {
+            p->badge_indicator = gtk_spinner_new();
+            gtk_spinner_start(GTK_SPINNER(p->badge_indicator));
+        } else {
+            p->badge_indicator = gtk_image_new_from_icon_name(badge_icon_name(b), GTK_ICON_SIZE_MENU);
+            char *cls = g_strconcat("silkie-badge-", b->state, NULL);
+            gtk_style_context_add_class(gtk_widget_get_style_context(p->badge_indicator), cls);
+            g_free(cls);
+        }
+        gtk_box_pack_start(GTK_BOX(p->badge_box), p->badge_indicator, FALSE, FALSE, 0);
+        gtk_box_reorder_child(GTK_BOX(p->badge_box), p->badge_indicator, 0);
+        g_free(p->badge_indicator_for);
+        p->badge_indicator_for = indicator_for;
+    } else g_free(indicator_for);
+    char *markup = g_markup_printf_escaped("<small>%s</small>", b->text);
+    gtk_label_set_markup(GTK_LABEL(p->badge_label), markup);
+    g_free(markup);
+    gtk_widget_set_tooltip_text(p->badge_box, b->tooltip);
+    gtk_widget_show_all(p->badge_box);
+    gtk_widget_set_visible(p->badge_label, b->text[0] != 0);
+}
+
+static void
+describe_page(Page *p) {
+    // The widgets of a tab are not in the accessibility tree, the page tab of the notebook stands for them. It
+    // keeps the title as its name, the status in words is its description.
+    if (!p->hw || !p->area) return;
+    AtkObject *nb = gtk_widget_get_accessible(p->hw->notebook);
+    const gint idx = gtk_notebook_page_num(GTK_NOTEBOOK(p->hw->notebook), p->area);
+    AtkObject *page = nb && idx >= 0 ? atk_object_ref_accessible_child(nb, idx) : NULL;
+    if (!page) return;
+    atk_object_set_description(page, p->badge.state ? p->badge.accessibility : "");
+    g_object_unref(page);
+}
+
+static void
+tab_status(struct OSWindow *w, PyObject *status) {
+    Page *p = page_of(w);
+    if (!p) return;
+    free_badge(&p->badge);
+    if (status != Py_None && str_item(status, "state")[0]) {
+        p->badge = (Badge){
+            .state = g_strdup(str_item(status, "state")), .kind = g_strdup(str_item(status, "kind")), .text = g_strdup(str_item(status, "text")),
+            .tooltip = g_strdup(str_item(status, "tooltip")), .accessibility = g_strdup(str_item(status, "accessibility")),
+        };
+    }
+    show_badge(p);
+    describe_page(p);
+}
+
+static bool
+snapshot_tab(struct OSWindow *w, const char *path) {
+    Page *p = page_of(w);
+    if (!p || !p->hw) return false;
+    // Only what GTK draws: on X11 the terminal is a window of its own inside the page and is left out
+    GtkWidget *win = p->hw->window;
+    const int width = gtk_widget_get_allocated_width(win), height = gtk_widget_get_allocated_height(win);
+    cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    cairo_t *cr = cairo_create(s);
+    gtk_widget_draw(win, cr);
+    cairo_destroy(cr);
+    const bool ok = cairo_surface_write_to_png(s, path) == CAIRO_STATUS_SUCCESS;
+    cairo_surface_destroy(s);
+    return ok;
+}
+// }}}
+
 static gint
 insert_position(HostWindow *hw, const char *location) {
     const gint n = gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook)), cur = gtk_notebook_get_current_page(GTK_NOTEBOOK(hw->notebook));
@@ -494,6 +638,7 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
     g_signal_connect(close, "clicked", G_CALLBACK(on_tab_close), p);
     gtk_box_pack_end(GTK_BOX(p->tab), close, FALSE, FALSE, 0);
     gtk_widget_show_all(p->tab);
+    show_badge(p);
 
     GtkNotebook *nb = GTK_NOTEBOOK(hw->notebook);
     const gint pos = gtk_notebook_insert_page(nb, p->area, p->tab, insert_position(hw, location));
@@ -503,6 +648,7 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
     apply_initial_size(hw);
     gtk_notebook_set_current_page(nb, pos);
     gtk_widget_realize(p->area);
+    describe_page(p);
 #ifdef GDK_WINDOWING_WAYLAND
     if (host->is_wayland) {
         host->wayland_embed(os_window_of_page(p), gdk_wayland_window_get_wl_surface(gtk_widget_get_window(hw->window)));
@@ -549,6 +695,9 @@ unembed_page(Page *p) {
     }
     gtk_notebook_remove_page(GTK_NOTEBOOK(hw->notebook), gtk_notebook_page_num(GTK_NOTEBOOK(hw->notebook), p->area));
     p->hw = NULL; p->area = NULL; p->label = NULL; p->tab = NULL;
+    // The badge went with the tab, it is made again from p->badge when the page is next embedded
+    p->badge_box = p->badge_indicator = p->badge_label = NULL;
+    g_clear_pointer(&p->badge_indicator_for, g_free);
     if (gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook)) == 0) destroy_host_window(hw);
     else {
         update_chrome(hw);
@@ -581,6 +730,7 @@ os_window_closing(struct OSWindow *w) {
     if (!p) return;
     unembed_page(p);
     g_hash_table_remove(pages, &p->id);
+    free_badge(&p->badge);
     g_free(p);
 }
 
@@ -1526,6 +1676,8 @@ native_ui_gtk_backend(const NativeUIHost *h) {
         .detach_tab = detach_tab,
         .tab_members = tab_members,
         .title_changed = title_changed,
+        .tab_status = tab_status,
+        .snapshot_tab = snapshot_tab,
         .window_op = window_op,
         .window_query = window_query,
         .saved_height_adjustment = saved_height_adjustment,

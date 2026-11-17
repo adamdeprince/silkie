@@ -14,6 +14,7 @@
 #include "glfw-wrapper.h"
 #include <Cocoa/Cocoa.h>
 #include <objc/runtime.h>
+#include <dlfcn.h>
 
 // Python to Foundation {{{
 static id
@@ -169,6 +170,144 @@ tab_members(OSWindow *w, id_type *ids, size_t cap) {
 static void
 new_window_for_tab(id self UNUSED, SEL _cmd UNUSED, id sender UNUSED) {
     set_cocoa_pending_action(NEW_TAB, NULL);
+}
+// }}}
+
+// Program status badge {{{
+// The accessory view of the NSWindowTab of a native tab: an indicator for the most urgent program status of
+// the windows of the tab, see update_native_tab_status() in kitty/native_ui.py, with the text that goes with it.
+static const CGFloat BADGE_ICON_SIZE = 14;
+
+@interface TabStatusView : NSStackView
+@property(nonatomic, copy) NSString *state;
+@property(nonatomic, copy) NSString *kind;
+@property(nonatomic) BOOL determinate;
+@property(nonatomic, retain) NSProgressIndicator *spinner;
+@property(nonatomic, retain) NSTextField *label;
+@end
+
+@implementation TabStatusView
+- (void)dealloc {
+    [_spinner stopAnimation:nil];
+    [_state release];
+    [_kind release];
+    [_spinner release];
+    [_label release];
+    [super dealloc];
+}
+@end
+
+static NSInteger
+int_of(NSDictionary *d, NSString *key, NSInteger defval) {
+    id v = d[key];
+    return [v isKindOfClass:[NSNumber class]] ? [v integerValue] : defval;
+}
+
+static NSView *
+badge_indicator(TabStatusView *v, NSString *state, NSString *kind, NSInteger progress) {
+    if ([state isEqualToString:@"working"]) {
+        NSProgressIndicator *p = [[[NSProgressIndicator alloc] init] autorelease];
+        p.style = NSProgressIndicatorStyleSpinning;
+        p.controlSize = NSControlSizeSmall;
+        p.displayedWhenStopped = YES;
+        p.indeterminate = progress < 0;
+        p.minValue = 0; p.maxValue = 100;
+        if (progress >= 0) p.doubleValue = progress;
+        else [p startAnimation:nil];
+        v.spinner = p;
+        v.determinate = progress >= 0;
+        return p;
+    }
+    NSString *name = @"exclamationmark.triangle.fill";
+    NSColor *color = [NSColor systemOrangeColor];
+    if ([state isEqualToString:@"done"]) { name = @"checkmark.circle.fill"; color = [NSColor systemGreenColor]; }
+    else if ([state isEqualToString:@"error"]) { name = @"xmark.octagon.fill"; color = [NSColor systemRedColor]; }
+    else if ([kind isEqualToString:@"permission"]) name = @"hand.raised.fill";
+    else if ([kind isEqualToString:@"question"]) name = @"questionmark.circle.fill";
+    else if ([kind isEqualToString:@"auth"]) name = @"key.fill";
+    NSImage *img = [NSImage imageWithSystemSymbolName:name accessibilityDescription:nil];
+    NSImageView *iv = [NSImageView imageViewWithImage:img ? img : [NSImage imageNamed:NSImageNameCaution]];
+    iv.symbolConfiguration = [NSImageSymbolConfiguration configurationWithPointSize:BADGE_ICON_SIZE - 2 weight:NSFontWeightSemibold];
+    iv.contentTintColor = color;
+    iv.imageScaling = NSImageScaleProportionallyDown;
+    return iv;
+}
+
+static TabStatusView *
+new_badge(NSString *state, NSString *kind, NSInteger progress) {
+    TabStatusView *v = [[[TabStatusView alloc] init] autorelease];
+    v.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    v.spacing = 3;
+    v.alignment = NSLayoutAttributeCenterY;
+    v.state = state;
+    v.kind = kind;
+    NSView *indicator = badge_indicator(v, state, kind, progress);
+    indicator.translatesAutoresizingMaskIntoConstraints = NO;
+    [indicator.widthAnchor constraintEqualToConstant:BADGE_ICON_SIZE].active = YES;
+    [indicator.heightAnchor constraintEqualToConstant:BADGE_ICON_SIZE].active = YES;
+    [indicator setAccessibilityElement:NO];
+    [v addArrangedSubview:indicator];
+    NSTextField *label = [NSTextField labelWithString:@""];
+    label.font = [NSFont monospacedDigitSystemFontOfSize:[NSFont smallSystemFontSize] weight:NSFontWeightRegular];
+    label.textColor = [NSColor secondaryLabelColor];
+    [label setAccessibilityElement:NO];
+    [v addArrangedSubview:label];
+    v.label = label;
+    // A narrow tab shortens its title rather than the badge
+    [label setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [v setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    // The badge is one element for assistive technology, labelled with the status in words
+    [v setAccessibilityElement:YES];
+    [v setAccessibilityRole:NSAccessibilityImageRole];
+    return v;
+}
+
+static void
+tab_status(OSWindow *w, PyObject *status) {
+    @autoreleasepool {
+        NSWindow *nw = ns_window(w);
+        if (!nw) return;
+        NSWindowTab *tab = nw.tab;
+        if (status == Py_None) {
+            tab.accessoryView = nil;
+            return;
+        }
+        NSDictionary *d = ns_from_python(status);
+        NSString *state = str_of(d, @"state"), *kind = str_of(d, @"kind"), *text = str_of(d, @"text");
+        const NSInteger progress = int_of(d, @"progress", -1);
+        TabStatusView *v = [tab.accessoryView isKindOfClass:[TabStatusView class]] ? (TabStatusView *)tab.accessoryView : nil;
+        // Progress reports come often, they update the badge in place to keep the spinner turning smoothly
+        if (!v || ![v.state isEqualToString:state] || ![v.kind isEqualToString:kind] || (v.spinner && v.determinate != (progress >= 0))) {
+            v = new_badge(state, kind, progress);
+            tab.accessoryView = v;
+        } else if (v.spinner && progress >= 0) v.spinner.doubleValue = progress;
+        v.label.stringValue = text;
+        v.label.hidden = text.length == 0;
+        v.toolTip = str_of(d, @"tooltip");
+        [v setAccessibilityLabel:str_of(d, @"accessibility")];
+    }
+}
+
+static bool
+snapshot_tab(OSWindow *w, const char *path) {
+    @autoreleasepool {
+        NSWindow *nw = ns_window(w);
+        if (!nw) return false;
+        // Only the selected window of a tab group is on screen, the others have no image
+        if (nw.tabGroup.selectedWindow) nw = nw.tabGroup.selectedWindow;
+        // Drawing the views of the window does not draw its title bar, where the tab bar is: that is composited
+        // by the window server. The window server gives a process images of its own windows without the Screen
+        // Recording permission. The function is deprecated and absent from recent SDKs, hence the lookup.
+        typedef CGImageRef (*CreateImage)(CGRect, CGWindowListOption, CGWindowID, CGWindowImageOption);
+        CreateImage create = (CreateImage)dlsym(RTLD_DEFAULT, "CGWindowListCreateImage");
+        if (!create) return false;
+        CGImageRef img = create(CGRectNull, kCGWindowListOptionIncludingWindow, (CGWindowID)nw.windowNumber, kCGWindowImageBoundsIgnoreFraming);
+        if (!img) return false;
+        NSBitmapImageRep *rep = [[[NSBitmapImageRep alloc] initWithCGImage:img] autorelease];
+        CGImageRelease(img);
+        NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+        return [png writeToFile:@(path) atomically:YES];
+    }
 }
 // }}}
 
@@ -1094,6 +1233,8 @@ native_ui_cocoa_backend(void) {
         .move_tab = move_tab,
         .detach_tab = detach_tab,
         .tab_members = tab_members,
+        .tab_status = tab_status,
+        .snapshot_tab = snapshot_tab,
         .show_settings = show_settings,
         .update_settings = update_settings,
         .update_menu = update_menu,
