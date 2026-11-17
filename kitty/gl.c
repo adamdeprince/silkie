@@ -8,6 +8,7 @@
 #include "gl.h"
 #include <string.h>
 #include <stddef.h>
+#include <limits.h>
 #include "glfw-wrapper.h"
 #include "state.h"
 #include "png-reader.h"
@@ -505,47 +506,103 @@ typedef struct {
     GLenum usage;
 } Buffer;
 
+// Buffers and VAOs are referred to by their index in these tables, which therefore grow, keeping the index of every
+// entry, and reuse the entries of those that are deleted, which have an id of zero
+static struct {
+    Buffer *items;
+    size_t capacity;
+} buffers = {0};
 
-static Buffer buffers[MAX_CHILDREN * 6 + 4] = {{0}};
+// Makes room for at least one more entry than capacity in a table of entries of size bytes, the new ones zeroed.
+// Returns false, changing nothing, when that cannot be had.
+static bool
+grow_table(void **items, size_t *capacity, size_t size) {
+    const size_t new_capacity = *capacity ? *capacity * 2 : 64;
+    if (new_capacity < *capacity || new_capacity > SIZE_MAX / size || new_capacity > (size_t)SSIZE_MAX) return false;
+    void *grown = realloc(*items, new_capacity * size);
+    if (!grown) return false;
+    memset((char *)grown + *capacity * size, 0, (new_capacity - *capacity) * size);
+    *items = grown;
+    *capacity = new_capacity;
+    return true;
+}
 
+// The index of an unused entry in a table whose entries of size bytes start with their GLuint id, zero when unused,
+// growing the table when all are used, or -1 when it cannot grow
 static ssize_t
-create_buffer(GLenum usage) {
-    GLuint buffer_id;
-    glGenBuffers(1, &buffer_id);
-    for (size_t i = 0; i < sizeof(buffers) / sizeof(buffers[0]); i++) {
-        if (buffers[i].id == 0) {
-            buffers[i].id = buffer_id;
-            buffers[i].size = 0;
-            buffers[i].usage = usage;
-            return i;
+free_slot(void **items, size_t *capacity, size_t size) {
+    size_t i = 0;
+    while (i < *capacity && *(const GLuint *)((const char *)*items + i * size)) i++;
+    if (i >= *capacity && !grow_table(items, capacity, size)) return -1;
+    return (ssize_t)i;
+}
+
+// test only: takes count entries of a table like those of buffers and VAOs, freeing every free_every-th one after it is
+// taken when free_every is not zero, and returns whether each got the index expected of reuse and growth, with
+// the capacity the table ended with. Also checks that growth that would overflow is refused.
+bool
+gl_test_slot_table(size_t count, size_t free_every, size_t *final_capacity) {
+    struct { GLuint id; int payload; } *items = NULL;
+    size_t capacity = 0, expected = 0;
+    bool ok = true;
+    for (size_t n = 0; n < count && ok; n++) {
+        ssize_t i = free_slot((void **)&items, &capacity, sizeof(*items));
+        if (i < 0 || (size_t)i != expected) ok = false;
+        else {
+            items[i].id = 1;
+            items[i].payload = (int)n;
+            if (free_every && (n + 1) % free_every == 0) items[i].id = 0;  // the next take reuses it
+            else expected++;
         }
     }
-    glDeleteBuffers(1, &buffer_id);
-    fatal("Too many buffers");
-    return -1;
+    // the entries taken keep their index and contents as the table grows
+    for (size_t i = 0; i < expected && ok; i++) {
+        if (items[i].id != 1 || (i && items[i].payload <= items[i - 1].payload)) ok = false;
+    }
+    *final_capacity = capacity;
+    free(items);
+    void *huge = NULL;
+    size_t huge_capacity = SIZE_MAX / 2;
+    if (grow_table(&huge, &huge_capacity, 16) || huge || huge_capacity != SIZE_MAX / 2) ok = false;
+    return ok;
+}
+
+// The index of a new buffer, or -1 when there is no memory for it
+static ssize_t
+create_buffer(GLenum usage) {
+    const ssize_t idx = free_slot((void **)&buffers.items, &buffers.capacity, sizeof(Buffer));
+    if (idx < 0) {
+        log_error("Out of memory creating an OpenGL buffer");
+        return -1;
+    }
+    const size_t i = (size_t)idx;
+    GLuint buffer_id = 0;
+    glGenBuffers(1, &buffer_id);
+    buffers.items[i] = (Buffer){.id = buffer_id, .size = 0, .usage = usage};
+    return (ssize_t)i;
 }
 
 static void
 delete_buffer(ssize_t buf_idx) {
-    glDeleteBuffers(1, &(buffers[buf_idx].id));
-    buffers[buf_idx].id = 0;
-    buffers[buf_idx].size = 0;
+    glDeleteBuffers(1, &(buffers.items[buf_idx].id));
+    buffers.items[buf_idx].id = 0;
+    buffers.items[buf_idx].size = 0;
 }
 
 static GLuint
 bind_buffer(ssize_t buf_idx) {
-    glBindBuffer(buffers[buf_idx].usage, buffers[buf_idx].id);
-    return buffers[buf_idx].id;
+    glBindBuffer(buffers.items[buf_idx].usage, buffers.items[buf_idx].id);
+    return buffers.items[buf_idx].id;
 }
 
 static void
 unbind_buffer(ssize_t buf_idx) {
-    glBindBuffer(buffers[buf_idx].usage, 0);
+    glBindBuffer(buffers.items[buf_idx].usage, 0);
 }
 
 static void
 alloc_buffer(ssize_t idx, GLsizeiptr size, GLenum usage) {
-    Buffer *b = buffers + idx;
+    Buffer *b = buffers.items + idx;
     if (b->size == size) return;
     b->size = size;
     glBufferData(b->usage, size, NULL, usage);
@@ -553,19 +610,19 @@ alloc_buffer(ssize_t idx, GLsizeiptr size, GLenum usage) {
 
 static void *
 map_buffer(ssize_t idx, GLenum access) {
-    void *ans = glMapBuffer(buffers[idx].usage, access);
+    void *ans = glMapBuffer(buffers.items[idx].usage, access);
     return ans;
 }
 
 static void *
 map_buffer_range(ssize_t idx, GLbitfield access, int offset, unsigned size) {
-    return glMapBufferRange(buffers[idx].usage, offset, size, access);
+    return glMapBufferRange(buffers.items[idx].usage, offset, size, access);
 }
 
 
 static void
 unmap_buffer(ssize_t idx) {
-    glUnmapBuffer(buffers[idx].usage);
+    glUnmapBuffer(buffers.items[idx].usage);
 }
 
 // }}}
@@ -575,35 +632,43 @@ unmap_buffer(ssize_t idx) {
 typedef struct {
     GLuint id;
     size_t num_buffers;
+    // Each kind of VAO made in shaders.c has a fixed number of buffers, the cell VAO the most, six
     ssize_t buffers[10];
 } VAO;
 
-static VAO vaos[4 * MAX_CHILDREN + 10] = {{0}};
+static struct {
+    VAO *items;
+    size_t capacity;
+} vao_table = {0};
+#define vaos vao_table.items
 
+// The index of a new VAO, bound, or -1 when there is no memory for it, which callers take as the window or thing
+// that needed it not being drawn until one can be made
 ssize_t
 create_vao(void) {
-    GLuint vao_id;
-    glGenVertexArrays(1, &vao_id);
-    for (size_t i = 0; i < sizeof(vaos) / sizeof(vaos[0]); i++) {
-        if (!vaos[i].id) {
-            vaos[i].id = vao_id;
-            vaos[i].num_buffers = 0;
-            glBindVertexArray(vao_id);
-            return i;
-        }
+    const ssize_t idx = free_slot((void **)&vao_table.items, &vao_table.capacity, sizeof(VAO));
+    if (idx < 0) {
+        log_error("Out of memory creating an OpenGL vertex array object");
+        return -1;
     }
-    glDeleteVertexArrays(1, &vao_id);
-    fatal("Too many VAOs");
-    return -1;
+    const size_t i = (size_t)idx;
+    GLuint vao_id = 0;
+    glGenVertexArrays(1, &vao_id);
+    vaos[i].id = vao_id;
+    vaos[i].num_buffers = 0;
+    glBindVertexArray(vao_id);
+    return (ssize_t)i;
 }
 
-size_t
+// The number of the new buffer in the VAO, or -1 when there is no memory for it
+ssize_t
 add_buffer_to_vao(ssize_t vao_idx, GLenum usage) {
     VAO *vao = vaos + vao_idx;
     if (vao->num_buffers >= sizeof(vao->buffers) / sizeof(vao->buffers[0])) { fatal("Too many buffers in a single VAO"); }
     ssize_t buf = create_buffer(usage);
+    if (buf < 0) return -1;
     vao->buffers[vao->num_buffers++] = buf;
-    return vao->num_buffers - 1;
+    return (ssize_t)vao->num_buffers - 1;
 }
 
 static void
@@ -656,6 +721,7 @@ set_vao_attribute(ssize_t vao_idx, size_t buffer_idx, int location, GLint size, 
 
 void
 remove_vao(ssize_t vao_idx) {
+    if (vao_idx < 0 || (size_t)vao_idx >= vao_table.capacity) return;
     VAO *vao = vaos + vao_idx;
     while (vao->num_buffers) {
         vao->num_buffers--;
@@ -667,7 +733,7 @@ remove_vao(ssize_t vao_idx) {
 
 void
 bind_vertex_array(ssize_t vao_idx) {
-    glBindVertexArray(vaos[vao_idx].id);
+    glBindVertexArray(vao_idx >= 0 && (size_t)vao_idx < vao_table.capacity ? vaos[vao_idx].id : 0);
 }
 
 void
@@ -699,7 +765,7 @@ alloc_and_map_vao_buffer(ssize_t vao_idx, GLsizeiptr size, size_t bufnum, bool f
 void
 bind_vao_uniform_buffer(ssize_t vao_idx, size_t bufnum, GLuint block_index) {
     ssize_t buf_idx = vaos[vao_idx].buffers[bufnum];
-    glBindBufferBase(GL_UNIFORM_BUFFER, block_index, buffers[buf_idx].id);
+    glBindBufferBase(GL_UNIFORM_BUFFER, block_index, buffers.items[buf_idx].id);
 }
 
 void
@@ -713,8 +779,8 @@ void
 copy_vao_buffer_region(ssize_t vao_idx, size_t src_bufnum, GLintptr src_off, size_t dst_bufnum, GLintptr dst_off, GLsizeiptr size) {
     ssize_t src_buf = vaos[vao_idx].buffers[src_bufnum];
     ssize_t dst_buf = vaos[vao_idx].buffers[dst_bufnum];
-    glBindBuffer(GL_COPY_READ_BUFFER, buffers[src_buf].id);
-    glBindBuffer(GL_COPY_WRITE_BUFFER, buffers[dst_buf].id);
+    glBindBuffer(GL_COPY_READ_BUFFER, buffers.items[src_buf].id);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, buffers.items[dst_buf].id);
     glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, src_off, dst_off, size);
     glBindBuffer(GL_COPY_READ_BUFFER, 0);
     glBindBuffer(GL_COPY_WRITE_BUFFER, 0);

@@ -392,6 +392,28 @@ enum { BORDER_COLORS_GLOBAL_BUFFER };
 static ssize_t shader_globals_vao_idx = -1;
 static ssize_t custom_end_vao_idx = -1;
 
+// A VAO with one uniform buffer of size bytes, or -1 when there is no memory for it
+static ssize_t
+create_uniform_vao(GLsizeiptr size, GLenum usage) {
+    ssize_t vao_idx = create_vao();
+    if (vao_idx < 0) return -1;
+    ssize_t bufnum = add_buffer_to_vao(vao_idx, GL_UNIFORM_BUFFER);
+    if (bufnum < 0) {
+        remove_vao(vao_idx);
+        return -1;
+    }
+    alloc_vao_buffer(vao_idx, size, (size_t)bufnum, usage);
+    return vao_idx;
+}
+
+// The border colors change on every draw, but are shared amongst all border VAOs (only one is ever drawn at a time).
+// Returns whether the VAO that holds them exists, made now if it did not, as when there was no memory for it before
+static bool
+ensure_shader_globals_vao(void) {
+    if (shader_globals_vao_idx < 0) shader_globals_vao_idx = create_uniform_vao(program_uniform_block(BORDERS_PROGRAM, "Colors").size, GL_STREAM_DRAW);
+    return shader_globals_vao_idx >= 0;
+}
+
 typedef enum { CUSTOM_SHADER_TEXTURE_DEFAULT, CUSTOM_SHADER_TEXTURE_A, CUSTOM_SHADER_TEXTURE_B, CUSTOM_SHADER_TEXTURE_PERSIST } NamedTexture;
 
 typedef struct CustomShaderGroup {
@@ -500,12 +522,7 @@ init_cell_program(void) {
     C(is_selected, 2);
 #undef C
 
-    if (shader_globals_vao_idx == -1) {
-        shader_globals_vao_idx = create_vao();
-        add_buffer_to_vao(shader_globals_vao_idx, GL_UNIFORM_BUFFER);
-        // The border colors change on every draw, but are shared amongst all border VAOs (only one is ever drawn at a time)
-        alloc_vao_buffer(shader_globals_vao_idx, border_colors.size, BORDER_COLORS_GLOBAL_BUFFER, GL_STREAM_DRAW);
-    }
+    ensure_shader_globals_vao();
     upload_gamma_lut();
     bind_shader_globals_to_current_context();
 }
@@ -560,11 +577,8 @@ init_custom_programs(void) {
                 }
                 UniformBlock ubd = program_uniform_block(i, "KittyCustomShaderData");
                 glUniformBlockBinding(program_id(i), ubd.index, CUSTOM_END_DATA_BINDING_POINT);
-                if (custom_end_vao_idx == -1) {
-                    custom_end_vao_idx = create_vao();
-                    add_buffer_to_vao(custom_end_vao_idx, GL_UNIFORM_BUFFER);
-                    alloc_vao_buffer(custom_end_vao_idx, ubd.size, 0, GL_STREAM_DRAW);
-                }
+                // Without memory for it the custom end shader is not run, see stop_os_window_rendering()
+                if (custom_end_vao_idx < 0) custom_end_vao_idx = create_uniform_vao(ubd.size, GL_STREAM_DRAW);
             }
         }
     }
@@ -768,33 +782,44 @@ bind_shader_globals_to_current_context(void) {
 
 #define CELL_BUFFERS enum { cell_data_buffer, selection_buffer, uniform_buffer, color_table_buffer, padding_cell_data_buffer, padding_selection_buffer };
 
+// The VAO of the cells of a screen, or -1 when there is no memory for it, which leaves the screen undrawn until there
+// is, see ensure_cell_vao()
 ssize_t
 create_cell_vao(void) {
     ssize_t vao_idx = create_vao();
+    if (vao_idx < 0) return -1;
 #define A(name, size, dtype, offset, stride) \
     add_attribute_to_vao(                    \
         vao_idx, program_attribute_location(CELL_PROGRAM, name), /*size=*/size, /*dtype=*/dtype, /*stride=*/stride, /*offset=*/offset, /*divisor=*/1);
 #define A1(name, size, dtype, offset) A(name, size, dtype, (void *)(offsetof(GPUCell, offset)), sizeof(GPUCell))
+#define B(usage, var)                    \
+    var = add_buffer_to_vao(vao_idx, usage); \
+    if (var < 0) goto fail;
 
-    add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER);
+    ssize_t bufnum, ctbufnum, other;
+    B(GL_ARRAY_BUFFER, other);
     A1("sprite_idx", 2, GL_UNSIGNED_INT, sprite_idx);
     A1("colors", 3, GL_UNSIGNED_INT, fg);
 
-    add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER);
+    B(GL_ARRAY_BUFFER, other);
     A("is_selected", 1, GL_UNSIGNED_BYTE, NULL, 0);
 
-    size_t bufnum = add_buffer_to_vao(vao_idx, GL_UNIFORM_BUFFER);
-    alloc_vao_buffer(vao_idx, program_uniform_block(CELL_PROGRAM, "CellRenderData").size, bufnum, GL_STREAM_DRAW);
+    B(GL_UNIFORM_BUFFER, bufnum);
+    alloc_vao_buffer(vao_idx, program_uniform_block(CELL_PROGRAM, "CellRenderData").size, (size_t)bufnum, GL_STREAM_DRAW);
 
-    size_t ctbufnum = add_buffer_to_vao(vao_idx, GL_UNIFORM_BUFFER);
-    alloc_vao_buffer(vao_idx, program_uniform_block(CELL_PROGRAM, "ColorTable").size, ctbufnum, GL_STATIC_DRAW);
+    B(GL_UNIFORM_BUFFER, ctbufnum);
+    alloc_vao_buffer(vao_idx, program_uniform_block(CELL_PROGRAM, "ColorTable").size, (size_t)ctbufnum, GL_STATIC_DRAW);
 
-    add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER); // padding_cell_data_buffer (slot 4)
-    add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER); // padding_selection_buffer  (slot 5)
+    B(GL_ARRAY_BUFFER, other); // padding_cell_data_buffer (slot 4)
+    B(GL_ARRAY_BUFFER, other); // padding_selection_buffer  (slot 5)
 
     return vao_idx;
+fail:
+    remove_vao(vao_idx);
+    return -1;
 #undef A
 #undef A1
+#undef B
 }
 
 #define IS_SPECIAL_COLOR(name)                                          \
@@ -2144,6 +2169,7 @@ blank_canvas(float background_opacity, color_type color_in_srgb, bool for_final_
 bool
 send_cell_data_to_gpu(ssize_t vao_idx, Screen *screen, OSWindow *os_window) {
     bool changed = false;
+    if (vao_idx < 0) return false;  // see ensure_cell_vao()
     if (os_window->fonts_data) {
         if (cell_prepare_to_render(vao_idx, screen, os_window->fonts_data)) changed = true;
     }
@@ -2162,6 +2188,7 @@ draw_cells(
     monotonic_t now) {
     Screen *screen = srd->screen;
     CELL_BUFFERS;
+    if (srd->vao_idx < 0) return;  // see ensure_cell_vao()
     bind_vertex_array(srd->vao_idx);
     // When inactive_text_alpha is negative, its absolute value is used as the
     // opacity and fading is based only on whether the current window is active.
@@ -2247,8 +2274,11 @@ populate_border_colors(GLuint colors[9], color_type active_window_bg, unsigned i
 ssize_t
 create_border_vao(void) {
     ssize_t vao_idx = create_vao();
-
-    add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER);
+    if (vao_idx < 0) return -1;
+    if (add_buffer_to_vao(vao_idx, GL_ARRAY_BUFFER) < 0) {
+        remove_vao(vao_idx);
+        return -1;
+    }
     add_attribute_to_vao(
         vao_idx,
         program_attribute_location(BORDERS_PROGRAM, "rect"),
@@ -2280,7 +2310,8 @@ draw_borders(
     bool all_windows_have_same_bg,
     OSWindow *w) {
     float background_opacity = effective_os_window_alpha(w);
-    if (!num_border_rects) return;
+    // Without memory for their VAOs the borders are not drawn this time
+    if (!num_border_rects || vao_idx < 0 || !ensure_shader_globals_vao()) return;
     bind_program(BORDERS_PROGRAM);
     bind_vertex_array(vao_idx);
     const bool has_background_image = has_bgimage(w);
@@ -2308,7 +2339,7 @@ draw_borders(
 
 void
 draw_rounded_borders(BorderRects *br, color_type active_window_bg, unsigned int num_visible_windows, bool all_windows_have_same_bg, OSWindow *w) {
-    if (!br->num_rounded_rects) return;
+    if (!br->num_rounded_rects || br->vao_idx < 0 || !ensure_shader_globals_vao()) return;
     GLuint colors[9];
     populate_border_colors(colors, active_window_bg, num_visible_windows, all_windows_have_same_bg, w);
     // The corner regions between the rounded outline and its bounding rect
@@ -2366,7 +2397,8 @@ draw_cursor_trail(CursorTrail *trail, Window *active_window) {
 static void
 draw_bg_image(OSWindow *os_window, Tab *tab) {
     BackgroundImage *bg = background_image_for_os_window(os_window);
-    if (!bg) return;
+    // the VAO of the borders is what is bound for drawing it, see below; without one it is not drawn this time
+    if (!bg || tab->border_rects.vao_idx < 0) return;
     BackgroundImageLayout layout = os_window->background_image.has_layout ? os_window->background_image.layout : OPT(background_image_layout);
     BackgroundImageRenderSettings s = {
         .os_window.width = os_window->viewport_width,
@@ -2967,7 +2999,7 @@ stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, m
     if (os_window->needs_layers) {
         float sx = global_state.layers_render_texture.width > 0 ? (float)os_window->viewport_width / (float)global_state.layers_render_texture.width : 1.f;
         float sy = global_state.layers_render_texture.height > 0 ? (float)os_window->viewport_height / (float)global_state.layers_render_texture.height : 1.f;
-        if (custom_shaders.end.active && os_window->shader_anim.has_active_shaders) {
+        if (custom_shaders.end.active && os_window->shader_anim.has_active_shaders && custom_end_vao_idx >= 0) {
             // debug_rendering("Custom end shader running (groups=%zu)\n", custom_shaders.end.num_groups);
             restore_viewport();
             if (os_window->live_resize.in_progress)
@@ -3352,10 +3384,20 @@ compile_program(PyObject UNUSED *self, PyObject *args) {
 ONE_INT(bind_program)
 NO_ARG(unbind_program)
 
+// test only, see gl_test_slot_table()
+static PyObject *
+pytest_vao_slot_table(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long count, free_every;
+    if (!PyArg_ParseTuple(args, "KK", &count, &free_every)) return NULL;
+    size_t capacity = 0;
+    const bool ok = gl_test_slot_table((size_t)count, (size_t)free_every, &capacity);
+    return Py_BuildValue("OK", ok ? Py_True : Py_False, (unsigned long long)capacity);
+}
+
 PYWRAP0(create_vao) {
-    int ans = create_vao();
-    if (ans < 0) return NULL;
-    return Py_BuildValue("i", ans);
+    ssize_t ans = create_vao();
+    if (ans < 0) return PyErr_NoMemory();
+    return PyLong_FromSsize_t(ans);
 }
 
 ONE_INT(bind_vertex_array)
@@ -3427,6 +3469,7 @@ static PyMethodDef module_methods[] = {
     M(compile_program, METH_VARARGS),
     M(sprite_map_set_limits, METH_VARARGS),
     MW(create_vao, METH_NOARGS),
+    {"test_vao_slot_table", (PyCFunction)pytest_vao_slot_table, METH_VARARGS, NULL},
     MW(gpu_driver_version_string, METH_NOARGS),
     MW(bind_vertex_array, METH_O),
     MW(unbind_vertex_array, METH_NOARGS),
@@ -3446,7 +3489,22 @@ initialize_gpu(void) {
 
 void
 free_vao(ssize_t vao_idx) {
-    remove_vao(vao_idx);
+    if (vao_idx >= 0) remove_vao(vao_idx);
+}
+
+// Gives a window, tab bar or title bar whose VAO could not be made for want of memory another try, before it is drawn.
+// Returns whether it has one. A window that has no GPU resources on purpose, while it is being moved between OS windows,
+// has no screen to draw and is not asked for one
+bool
+ensure_cell_vao(ssize_t *vao_idx) {
+    if (*vao_idx < 0) *vao_idx = create_cell_vao();
+    return *vao_idx >= 0;
+}
+
+bool
+ensure_border_vao(ssize_t *vao_idx) {
+    if (*vao_idx < 0) *vao_idx = create_border_vao();
+    return *vao_idx >= 0;
 }
 
 void

@@ -739,6 +739,8 @@ void draw_borders(ssize_t vao_idx, unsigned int num_border_rects, BorderRect *re
 void draw_rounded_borders(BorderRects *, color_type, unsigned int, bool, OSWindow *);
 ssize_t create_cell_vao(void);
 ssize_t create_border_vao(void);
+bool ensure_cell_vao(ssize_t *vao_idx);
+bool ensure_border_vao(ssize_t *vao_idx);
 void bind_shader_globals_to_current_context(void);
 void upload_gamma_lut(void);
 bool send_cell_data_to_gpu(ssize_t, Screen *, OSWindow *);

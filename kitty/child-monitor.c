@@ -818,6 +818,16 @@ change_menubar_title(PyObject *title UNUSED) {
 #endif
 }
 
+// A screen whose VAO could not be made for want of memory gets another try each time it is about to be drawn, and
+// all of its data is sent to the GPU once it has one. Returns whether it has one.
+static bool
+retry_cell_vao(ssize_t *vao_idx, Screen *screen) {
+    if (*vao_idx >= 0) return true;
+    if (!ensure_cell_vao(vao_idx)) return false;
+    screen->reload_all_gpu_data = true;
+    return true;
+}
+
 static bool
 prepare_to_render_os_window(
     OSWindow *os_window,
@@ -844,7 +854,7 @@ prepare_to_render_os_window(
         zero_at_ptr(cri);
         cri->x = TD.screen->cursor->x;
         cri->y = TD.screen->cursor->y;
-        if (send_cell_data_to_gpu(TD.vao_idx, TD.screen, os_window)) needs_render = true;
+        if (retry_cell_vao(&TD.vao_idx, TD.screen) && send_cell_data_to_gpu(TD.vao_idx, TD.screen, os_window)) needs_render = true;
         os_window->needs_layers = os_window->needs_layers || screen_needs_rendering_in_layers(os_window, NULL, TD.screen);
     }
     if (OPT(mouse_hide.hide_wait) > 0 && !is_mouse_hidden(os_window)) {
@@ -930,7 +940,7 @@ prepare_to_render_os_window(
                     set_maximum_wait(min_gap);
                 }
             }
-            if (send_cell_data_to_gpu(WD.vao_idx, WD.screen, os_window)) needs_render = true;
+            if (retry_cell_vao(&WD.vao_idx, WD.screen) && send_cell_data_to_gpu(WD.vao_idx, WD.screen, os_window)) needs_render = true;
             if (WD.screen->start_visual_bell_at | WD.screen->start_drag_overlay_at) needs_render = true;
             if (OPT(progress_bar) != PROGRESS_BAR_HIDDEN && WD.screen->progress_state == PROGRESS_STATE_INDETERMINATE) needs_render = true;
             if (WD.screen->start_visual_bell_at && WD.screen->start_visual_bell_at > os_window->last_rendered_at) {
@@ -941,7 +951,7 @@ prepare_to_render_os_window(
             WindowRenderData *trd = &w->window_title_render_data;
             if (trd->screen && trd->geometry.bottom > trd->geometry.top && trd->geometry.right > trd->geometry.left) {
                 trd->screen->cursor_render_info.is_visible = false;
-                if (send_cell_data_to_gpu(trd->vao_idx, trd->screen, os_window)) needs_render = true;
+                if (retry_cell_vao(&trd->vao_idx, trd->screen) && send_cell_data_to_gpu(trd->vao_idx, trd->screen, os_window)) needs_render = true;
             }
         }
     }
@@ -1031,6 +1041,8 @@ render_prepared_os_window(
     Tab *tab = os_window->tabs + os_window->active_tab;
     setup_os_window_for_rendering(os_window, tab, NULL, true, now);
     BorderRects *br = &tab->border_rects;
+    // A tab whose VAO could not be made for want of memory gets another try, its borders are drawn once it has one
+    if (br->vao_idx < 0 && ensure_border_vao(&br->vao_idx)) br->is_dirty = true;
     draw_borders(br->vao_idx, br->num_border_rects, br->rect_buf, br->is_dirty, active_window_bg, num_visible_windows, all_windows_have_same_bg, os_window);
     br->is_dirty = false;
     if (TD.screen && os_window->num_tabs && !os_window->has_too_few_tabs) draw_cells(&TD, os_window, true, true, false, NULL, NULL, now);
