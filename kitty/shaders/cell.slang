@@ -271,6 +271,9 @@ vertex_main(
         selection_color = if_one_then(crd.use_cell_fg_for_selection_fg, foreground, selection_color);
         foreground = if_one_then(float(is_selected & BIT_MASK), selection_color, foreground);
         vo.decoration_fg = if_one_then(float(is_selected & BIT_MASK), selection_color, vo.decoration_fg);
+        // Find
+        foreground = if_one_then(bo.in_find_match, bo.find_match_fg, foreground);
+        vo.decoration_fg = if_one_then(bo.in_find_match, bo.find_match_fg, vo.decoration_fg);
         float selection_gain = if_one_then(crd.use_cell_fg_for_selection_fg, fg_gain, if_one_then(crd.use_cell_bg_for_selection_fg, bo.bg_gain, 1.f));
         fg_gain = if_one_then(float(is_selected & BIT_MASK), selection_gain, fg_gain);
         decoration_gain = if_one_then(float(is_selected & BIT_MASK), selection_gain, decoration_gain);

@@ -1475,6 +1475,58 @@ convert_from_opts_hdr_max_headroom(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_find_match_foreground(PyObject *val, Options *opts) {
+    opts->find_match_foreground = color_as_int(val);
+}
+
+static void
+convert_from_opts_find_match_foreground(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "find_match_foreground");
+    if (ret == NULL) return;
+    convert_from_python_find_match_foreground(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_find_match_background(PyObject *val, Options *opts) {
+    opts->find_match_background = color_as_int(val);
+}
+
+static void
+convert_from_opts_find_match_background(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "find_match_background");
+    if (ret == NULL) return;
+    convert_from_python_find_match_background(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_find_current_foreground(PyObject *val, Options *opts) {
+    opts->find_current_foreground = color_as_int(val);
+}
+
+static void
+convert_from_opts_find_current_foreground(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "find_current_foreground");
+    if (ret == NULL) return;
+    convert_from_python_find_current_foreground(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_find_current_background(PyObject *val, Options *opts) {
+    opts->find_current_background = color_as_int(val);
+}
+
+static void
+convert_from_opts_find_current_background(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "find_current_background");
+    if (ret == NULL) return;
+    convert_from_python_find_current_background(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_close_on_child_death(PyObject *val, Options *opts) {
     opts->close_on_child_death = PyObject_IsTrue(val);
 }
@@ -2078,6 +2130,14 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_output_dither(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_hdr_max_headroom(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_find_match_foreground(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_find_match_background(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_find_current_foreground(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_find_current_background(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_close_on_child_death(py_opts, opts);
     if (PyErr_Occurred()) return false;

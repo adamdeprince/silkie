@@ -59,6 +59,10 @@ typedef struct NativeUIBackend {
     bool (*snapshot_settings)(const char *path);
     // For tests: draw the native window holding w, with its tab bar, to a PNG file.
     bool (*snapshot_tab)(struct OSWindow *w, const char *path);
+    // The find bar of w: show it as model says, a dict made by FindBar.model() in kitty/find.py, or hide it when
+    // model is None, giving the keyboard back to the terminal. callback(verb, value) reports what the user did, see
+    // FindBar.on_native_event(). Returns false when the bar cannot be shown for w, then a bar is drawn in the window.
+    bool (*find_bar)(struct OSWindow *w, PyObject *model, PyObject *callback);
 } NativeUIBackend;
 
 // What a module loaded at runtime can use. It cannot link against the symbols of fast_data_types.

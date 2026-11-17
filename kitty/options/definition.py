@@ -1042,6 +1042,31 @@ and touchscreens. Changes to this setting only take effect after a kitty restart
 egr()  # }}}
 
 
+# find {{{
+agr('find', 'Find')
+
+opt(
+    'find_keys_to_terminal',
+    'no',
+    option_type='to_bool',
+    long_text="""
+Whether the keys of Find are sent to the terminal, that is to the program running
+in it, instead of opening Find. With the default, :code:`no`, Silkie keeps the
+keys it binds to Find by default, :kbd:`⌘+F`, :kbd:`⌘+G`,
+:kbd:`⇧+⌘+G` and :kbd:`⌘+E` on macOS and :sc:`find`,
+:sc:`find_next`, :sc:`find_previous` and :sc:`find_selection` everywhere. With
+:code:`yes` those keys go to the program as ordinary key presses, for programs
+that use them themselves. The Find items of the Edit menu work either way, and
+keys you map to the find actions yourself always work. This can be set for a
+window, a tab or a profile too, see :option:`launch --find-keys-to-terminal`,
+the :code:`find_keys_to_terminal` command of sessions and :program:`kitten @
+set-find-keys-to-terminal`. A window's own setting wins over that of its tab,
+which wins over its profile, which wins over this option.
+""",
+)
+egr()  # }}}
+
+
 # mouse {{{
 agr('mouse', 'Mouse')
 
@@ -3394,6 +3419,42 @@ opt('mark3_foreground', 'black', option_type='to_color', long_text='Color for ma
 
 opt('mark3_background', '#f274bc', option_type='to_color', long_text='Color for marks of type 3 (violet)')
 
+opt(
+    'find_match_foreground',
+    'black',
+    option_type='to_color',
+    ctype='color_as_int',
+    long_text='The text color of the matches of Find, see :ac:`find`',
+)
+
+opt(
+    'find_match_background',
+    '#ffff00',
+    option_type='to_color',
+    ctype='color_as_int',
+    long_text='The background color of the matches of Find (yellow)',
+)
+
+opt(
+    'find_current_foreground',
+    'black',
+    option_type='to_color',
+    ctype='color_as_int',
+    long_text='The text color of the current match of Find, the one that :ac:`find_next` and :ac:`find_previous` moved to',
+)
+
+opt(
+    'find_current_background',
+    '#ff9632',
+    option_type='to_color',
+    ctype='color_as_int',
+    long_text="""
+The background color of the current match of Find (orange). Selected text keeps
+the selection colors. The text of matches is adjusted for
+:opt:`minimum_contrast` like all other text.
+""",
+)
+
 for i in range(16, 256):
     opt(f'color{i}', 'none', option_type='to_color_or_none', documented=False)
 egr()  # }}}
@@ -4888,7 +4949,29 @@ For more sophisticated control, such as using the current selection, use :ac:`re
 """,
 )
 
-map('Search the scrollback within a pager', 'search_scrollback --allow-fallback=shifted,ascii cmd+f search_scrollback', only='macos')
+
+egr()  # }}}
+
+
+# shortcuts.find {{{
+agr('shortcuts.find', 'Find', '''
+Find highlights every match of a text or a regular expression in the screen and
+the scrollback, and moves between them, see :ac:`find`. The Find items of the
+Edit menu do the same. These keys go to the program instead of opening Find when
+:opt:`find_keys_to_terminal` is set.
+''')
+
+map('Find', 'find --allow-fallback=shifted,ascii kitty_mod+alt+f find')
+map('Find', 'find --allow-fallback=shifted,ascii cmd+f find', only='macos')
+
+map('Find next', 'find_next --allow-fallback=shifted,ascii kitty_mod+alt+g find_next')
+map('Find next', 'find_next --allow-fallback=shifted,ascii cmd+g find_next', only='macos')
+
+map('Find previous', 'find_previous --allow-fallback=shifted,ascii kitty_mod+alt+h find_previous')
+map('Find previous', 'find_previous --allow-fallback=shifted,ascii shift+cmd+g find_previous', only='macos')
+
+map('Use the selection for Find', 'find_selection --allow-fallback=shifted,ascii kitty_mod+alt+e find_selection')
+map('Use the selection for Find', 'find_selection --allow-fallback=shifted,ascii cmd+e find_selection', only='macos')
 
 
 egr()  # }}}

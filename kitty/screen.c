@@ -824,6 +824,8 @@ screen_resize(Screen *self, unsigned int lines, unsigned int columns) {
         // The positions of the contacts no longer mean what they did. The held buttons of a pad are not at any position
         screen_pointer_cancel(self, POINTER_PEN);
         screen_pointer_cancel(self, POINTER_TOUCH);
+        // the lines are rewrapped, the matches are found again
+        screen_search_invalidate(self->search);
     }
 
     bool is_main = self->linebuf == self->main_linebuf;
@@ -966,6 +968,8 @@ reset_callbacks(Screen *self, PyObject *a UNUSED) {
 
 static void
 dealloc(Screen *self) {
+    screen_search_free(self->search);
+    self->search = NULL;
     pthread_mutex_destroy(&self->write_buf_lock);
     free_vt_parser(self->vt_parser);
     self->vt_parser = NULL;
@@ -5155,6 +5159,7 @@ screen_apply_selection(Screen *self, void *address_, size_t size) {
         apply_selection(self, address, s, 2, offset, scrolled_by);
     }
     sel->last_rendered_count = sel->count;
+    if (self->search) screen_search_apply_highlights(self, address, size, offset, scrolled_by);
     address += (size_t)offset * self->columns;
     size -= (size_t)offset * self->columns;
     ExtraCursors *ec = self->paused_rendering.expires_at ? &self->paused_rendering.extra_cursors : &self->extra_cursors;
@@ -7061,6 +7066,7 @@ screen_is_selection_dirty(Screen *self) {
     IterationData q;
     if (self->paused_rendering.expires_at) return false;
     if (self->scrolled_by != self->last_rendered.scrolled_by) return true;
+    if (self->search && screen_search_render_dirty(self)) return true;
     if (self->selections.last_rendered_count != self->selections.count || self->url_ranges.last_rendered_count != self->url_ranges.count ||
         self->extra_cursors.dirty)
         return true;
@@ -8256,6 +8262,7 @@ test_ch_and_idx(PyObject *self UNUSED, PyObject *val) {
 }
 
 static PyMethodDef methods[] = {
+    SCREEN_SEARCH_METHODS
     METHODB(test_create_write_buffer, METH_NOARGS),
     METHODB(test_commit_write_buffer, METH_VARARGS),
     METHODB(test_parse_written_data, METH_VARARGS),

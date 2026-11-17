@@ -174,6 +174,8 @@ def plain_text(rst: str) -> str:
 def humanize(name: str) -> str:
     if name == 'spatial_divergence_exponent':
         return 'Divergence multiplier (2^X)'
+    if name == 'find_keys_to_terminal':
+        return 'Send Find shortcuts to the terminal'
     words = name.split('_')
     if len(words) > 1 and words[0] in ('macos', 'linux', 'wayland', 'x11'):
         words = words[1:]
@@ -362,7 +364,7 @@ def field_for_multi_option(opt: MultiOption, value_layers: tuple[Layer, ...], sc
 PAGE_OF_GROUP = {
     'experimental': 'experimental',
     'spatial': 'spatial',
-    'advanced': 'general', 'bell': 'general', 'scrollback': 'general',
+    'advanced': 'general', 'bell': 'general', 'scrollback': 'general', 'find': 'general',
     'fonts': 'appearance', 'cursor': 'appearance', 'window': 'appearance', 'tabbar': 'appearance', 'colors': 'appearance',
     'mouse': 'pointer',
     'shortcuts': 'keys',

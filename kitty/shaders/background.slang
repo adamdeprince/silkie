@@ -27,6 +27,8 @@ public struct CellRenderData {
     // The COLOR_IS_RGB/COLOR_IS_INDEX value for the extra cursor colors, zero
     // for the other color types which do not use it.
     public float4 extra_cursor_fg_lin, extra_cursor_bg_lin;
+    // The colors of the matches of Find and of its current match, see kitty/search.c
+    public float4 find_match_fg_lin, find_match_bg_lin, find_current_fg_lin, find_current_bg_lin;
 
     public float use_cell_bg_for_selection_fg, use_cell_fg_for_selection_fg, use_cell_for_selection_bg;
 
@@ -288,6 +290,8 @@ public struct BackgroundOutput {
     public float cell_alpha; // per cell background alpha, 1 unless translucent and not a special cell
     public float3 bg;         // original background color, pre selection/cursor (used for selection fg)
     public float3 foreground; // resolved foreground color, pre selection/override
+    public float in_find_match;  // 1 when the cell is in a match of Find and not selected
+    public float3 find_match_fg; // the text color of that match
     public uint fg_as_uint;
     public uint text_attrs;
     public uint is_reversed;
@@ -410,7 +414,12 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     // we use max so that opacity of the block cursor cell background goes from bg_alpha to 1
     float effective_cursor_opacity = max(crd.cursor_opacity, bg_alpha);
     // is_special_cell is either 0 or 1
-    float is_special_cell = cell_data.has_block_cursor + float(is_selected & BIT_MASK);
+    // A match of Find, SEARCH_MATCH_MASK and SEARCH_CURRENT_MASK in kitty/search.h. The selection wins over it.
+    float is_selected_cell = float(is_selected & BIT_MASK);
+    float in_find_match = float(step(0.5f, float((is_selected >> 5) & 3u))) * (1.f - is_selected_cell);
+    float is_find_current = float((is_selected >> 6) & BIT_MASK);
+    float3 find_bg = if_one_then(is_find_current, crd.find_current_bg_lin.rgb, crd.find_match_bg_lin.rgb);
+    float is_special_cell = cell_data.has_block_cursor + is_selected_cell + in_find_match;
     is_special_cell += float(is_reversed); // reverse video cells should be opaque as well
     is_special_cell = zero_or_one(is_special_cell);
     cell_has_default_bg = if_one_then(is_special_cell, 0., cell_has_default_bg);
@@ -420,8 +429,9 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     // Selection and cursor
     bg_alpha = if_one_then(cell_data.has_block_cursor, effective_cursor_opacity, bg_alpha);
     bg = if_one_then(float(is_selected & BIT_MASK), if_one_then(crd.use_cell_for_selection_bg, fg_vec, crd.highlight_bg_lin.rgb), bg);
+    bg = if_one_then(in_find_match, find_bg, bg);
     float3 background_rgb = if_one_then(cell_data.has_block_cursor, lerp(bg, cell_data.cursor.bg, crd.cursor_opacity), bg);
-    float background_gain = if_one_then(float(is_selected & BIT_MASK), 1.f, bg_gain);
+    float background_gain = if_one_then(max(float(is_selected & BIT_MASK), in_find_match), 1.f, bg_gain);
     background_gain = if_one_then(cell_data.has_block_cursor, lerp(background_gain, 1.f, crd.cursor_opacity), background_gain);
     // }}}
 
@@ -431,6 +441,8 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     bo.cell_alpha = if_one_then(is_special_cell, 1.f, cell_alpha);
     bo.bg = cell_bg;
     bo.foreground = foreground;
+    bo.in_find_match = in_find_match;
+    bo.find_match_fg = if_one_then(is_find_current, crd.find_current_fg_lin.rgb, crd.find_match_fg_lin.rgb);
     bo.fg_as_uint = fg_as_uint;
     bo.text_attrs = text_attrs;
     bo.is_reversed = is_reversed;

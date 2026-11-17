@@ -97,6 +97,10 @@ def parse_contrast(text: str) -> float | None:
     return parse_minimum_contrast_value(text)
 
 
+def find_keys_text(value: bool | None) -> str:
+    return 'default' if value is None else ('yes' if value else 'no')
+
+
 def section(title: str) -> dict[str, Any]:
     return {'name': '', 'title': title, 'kind': 'section'}
 
@@ -130,6 +134,12 @@ def tab_settings_model(tm: 'TabManager') -> dict[str, Any]:
              'choices': [[x, x] for x in CONTRAST_SUGGESTIONS], 'placeholder': contrast_text(tab.minimum_contrast),
              'help': f'Make text at least this much more legible against its background, from 0% to 100%. {DEFAULT_CONTRAST} follows the profile of '
              'this tab or the minimum_contrast option.'},
+            section('Find'),
+            {'name': 'find_keys_to_terminal', 'title': 'Send Find shortcuts to the terminal', 'kind': 'choice',
+             'value': find_keys_text(tab.find_keys_to_terminal_override),
+             'choices': [['default', f'{DEFAULT_CONTRAST} ({"yes" if tab.find_keys_to_terminal else "no"})'], ['yes', 'Yes'], ['no', 'No']],
+             'help': 'Send the keys of Find, such as Cmd+F, to the programs of this tab instead of opening Find. The Find items of the Edit menu '
+             f'work either way. {DEFAULT_CONTRAST} follows the profile of this tab or the find_keys_to_terminal option.'},
         ]
     return {'title': 'Tab Settings', 'fields': fields}
 
@@ -191,6 +201,13 @@ class TabSettingsController:
             return f'Enter a percentage from 0% to 100% or {DEFAULT_CONTRAST}'
         if (tab := tm.active_tab) is not None:
             tab.set_minimum_contrast(contrast)
+        return ''
+
+    def set_find_keys_to_terminal(self, tm: 'TabManager', value: str) -> str:
+        if value not in ('default', 'yes', 'no'):
+            return 'Choose Default, Yes or No'
+        if (tab := tm.active_tab) is not None:
+            tab.set_find_keys_to_terminal(None if value == 'default' else value == 'yes')
         return ''
 
 

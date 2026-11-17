@@ -331,6 +331,8 @@ class WindowDict(TypedDict):
     program_status: list[dict[str, Any]]
     minimum_contrast: float
     minimum_contrast_override: float | None
+    find_keys_to_terminal: bool
+    find_keys_to_terminal_override: bool | None
 
 
 class PipeData(TypedDict):
@@ -820,6 +822,17 @@ def parse_minimum_contrast_value(value: float | str | None) -> float | None:
     return minimum_contrast_from_number(value)
 
 
+def parse_find_keys_to_terminal_value(value: bool | str | None) -> bool | None:
+    ' find_keys_to_terminal as a bool or text such as yes or no, None stays None '
+    if value is None or isinstance(value, bool):
+        return value
+    from .conf.utils import to_bool
+    v = str(value).strip().lower()
+    if v not in ('y', 'yes', 'true', 'on', 'n', 'no', 'false', 'off'):
+        raise ValueError(f'Not yes or no: {value!r}')
+    return to_bool(v)
+
+
 def minimum_contrast_from_number(value: float) -> float:
     ans = float(value)
     if not 0 <= ans <= 100:  # also rejects NaN
@@ -915,6 +928,10 @@ class Window:
         self.padding = EdgeWidths()
         # minimum_contrast set for this window itself, None to follow its tab
         self.minimum_contrast_override: float | None = None
+        # find_keys_to_terminal set for this window itself, None to follow its tab
+        self.find_keys_to_terminal_override: bool | None = None
+        # the find bar drawn in place of the title bar when there is no native one, see kitty/find.py
+        self.find_prompt: str | None = None
         self.kitten_result: dict[str, Any] | None = None
         self.tab_id = tab.id
         self.os_window_id = tab.os_window_id
@@ -1107,6 +1124,96 @@ class Window:
         self.screen.minimum_contrast = self.minimum_contrast_setting
     # }}}
 
+    # Find {{{
+    @property
+    def find_keys_to_terminal_setting(self) -> bool | None:
+        ''' Whether the keys of Find go to the program, as set for this window, by
+        itself, its tab or the profile of its tab, None when only the option applies '''
+        if self.find_keys_to_terminal_override is not None:
+            return self.find_keys_to_terminal_override
+        tab = self.tabref()
+        return getattr(tab, 'find_keys_to_terminal_setting', None)
+
+    @property
+    def find_keys_to_terminal(self) -> bool:
+        ''' Whether the keys Silkie binds to Find by default are sent to the program in
+        this window instead of opening Find, see the find_keys_to_terminal option '''
+        ans = self.find_keys_to_terminal_setting
+        return get_options().find_keys_to_terminal if ans is None else ans
+
+    @property
+    def find_enabled(self) -> bool:
+        ' Whether the keys of Find open Find in this window, the opposite of find_keys_to_terminal '
+        return not self.find_keys_to_terminal
+
+    def set_find_keys_to_terminal(self, value: bool | str | None) -> None:
+        ''' Send the keys of Find to the program in this window (True), keep them for
+        Find (False) or follow the tab, profile and option (None). A window's own
+        setting wins over those. The Find items of the menus work either way. '''
+        self.find_keys_to_terminal_override = parse_find_keys_to_terminal_value(value)
+        self.find_keys_to_terminal_changed()
+
+    def set_find_enabled(self, value: bool | None) -> None:
+        ' Keep the keys of Find for Find in this window (True) or send them to the program (False), None to follow the tab '
+        self.set_find_keys_to_terminal(None if value is None else not value)
+
+    def find_keys_to_terminal_changed(self) -> None:
+        if self.is_focused:
+            from .find import sync_menu_shortcuts
+            sync_menu_shortcuts(self)
+
+    def on_search_status_changed(self) -> None:
+        ' Called by the screen while it searches for Find '
+        from .find import on_search_status_changed
+        on_search_status_changed(self)
+
+    def set_find_prompt(self, text: str | None) -> None:
+        ' Show the find bar drawn by Silkie in place of the title bar of this window, None to remove it '
+        had = self.find_prompt is not None
+        self.find_prompt = text
+        if had != (text is not None):
+            # the title bar takes a line of the window, or gives it back
+            self.needs_layout = True
+            if (tab := self.tabref()) is not None:
+                tab.relayout()
+        else:
+            tab = self.tabref()
+            self.update_title_bar(tab is not None and tab.active_window is self)
+
+    @ac('sc', '''
+        Open Find, which highlights every match of a text or a regular expression in the
+        screen and the scrollback of the window as you type, and moves between them. If
+        Find is open, give it the keyboard. It is a bar at the top of the window: native
+        on macOS, and on Linux when tabs are native, otherwise a line drawn in the window.
+        See :opt:`find_match_background` for the colors.
+        ''')
+    def find(self) -> None:
+        from .find import open_find_bar
+        open_find_bar(self)
+
+    @ac('sc', 'Move to the next match of Find, up the screen to older output, as in iTerm2. Opens Find when there is nothing to find.')
+    def find_next(self) -> None:
+        from .find import find_next
+        find_next(self, -1)
+
+    @ac('sc', 'Move to the previous match of Find, down the screen to newer output. Opens Find when there is nothing to find.')
+    def find_previous(self) -> None:
+        from .find import find_next
+        find_next(self, 1)
+
+    @ac('sc', 'Find the selected text: it becomes what Find searches for')
+    def find_selection(self) -> bool | None:
+        from .find import use_selection_for_find
+        if not use_selection_for_find(self):
+            return True  # nothing selected, the key goes to the program
+        return None
+
+    @ac('sc', 'Close Find and remove its highlights')
+    def find_close(self) -> None:
+        from .find import close_find_bar
+        close_find_bar(self.os_window_id)
+    # }}}
+
     @property
     def title(self) -> str:
         return self.override_title or self.child_title
@@ -1292,7 +1399,7 @@ class Window:
         # Determine if we need a title bar and compute adjusted dimensions
         opts = get_options()
         position = opts.window_title_bar
-        show_tb = self.show_title_bar and new_geometry.ynum > 1
+        show_tb = (self.show_title_bar or self.find_prompt is not None) and new_geometry.ynum > 1
 
         if show_tb:
             render_ynum = new_geometry.ynum - 1
@@ -1393,6 +1500,11 @@ class Window:
 
     def update_title_bar(self, is_active: bool = False) -> None:
         if (pts := self._title_bar_screen) is None:
+            return
+        if self.find_prompt is not None:
+            pts.render_find_prompt(self.find_prompt)
+            g = pts.geometry
+            set_window_title_bar_render_data(self.os_window_id, self.tab_id, self.id, pts.screen, g.left, g.top, g.right, g.bottom)
             return
         from .progress import ProgressState
         from .window_title_bar import WindowTitleData
@@ -1823,6 +1935,9 @@ class Window:
         # What the user is looking at is left out of the status on the Dock icon
         schedule_dock_status_update()
         if focused:
+            from .find import on_window_focused, sync_menu_shortcuts
+            sync_menu_shortcuts(self)
+            on_window_focused(self)
             self.last_focused_at = monotonic()
             update_ime_position_for_window(self.id, False, 1)
             self.program_status_seen_by_user()
@@ -2578,6 +2693,9 @@ class Window:
         return True
 
     def paste_with_actions(self, text: str, from_drop: bool = False, is_uri_list: bool = False) -> None:
+        from .find import paste_into_prompt
+        if not from_drop and paste_into_prompt(self, text):
+            return
         if self.destroyed or not text:
             return
         opts = get_options()
@@ -2743,6 +2861,8 @@ class Window:
             'program_status': self.program_status.as_list(),
             'minimum_contrast': self.minimum_contrast,
             'minimum_contrast_override': self.minimum_contrast_override,
+            'find_keys_to_terminal': self.find_keys_to_terminal,
+            'find_keys_to_terminal_override': self.find_keys_to_terminal_override,
         }
 
     def serialize_state(self) -> dict[str, Any]:
@@ -2811,6 +2931,8 @@ class Window:
         ans.extend(f'--var={k}={v}' for k, v in self.user_vars.items())
         if self.minimum_contrast_override is not None:
             ans.append(f'--minimum-contrast={self.minimum_contrast_override:g}')
+        if self.find_keys_to_terminal_override is not None:
+            ans.append(f'--find-keys-to-terminal={"yes" if self.find_keys_to_terminal_override else "no"}')
         ans.extend(self.padding.as_launch_args())
         ans.extend(self.margin.as_launch_args('margin'))
         if self.override_title:

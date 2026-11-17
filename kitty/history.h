@@ -40,6 +40,9 @@ typedef struct {
     // sequence number the next line pushed will get; line numbers count back
     // from the newest line, which has sequence number next_seq - 1
     uint64_t next_seq;
+    // changed whenever lines other than the oldest leave the buffer or the
+    // sequence numbers are reused (clear, delete, pop), see kitty/search.c
+    uint64_t generation;
     // The uncompressed lines, oldest first, in blocks of block_lines lines:
     // the first num_pending blocks are being compressed, the rest are the hot tail.
     LineBlock **blocks;

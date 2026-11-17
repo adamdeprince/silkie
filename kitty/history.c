@@ -2613,6 +2613,7 @@ historybuf_set_line_has_image_placeholders(HistoryBuf *self, index_type y, bool 
 
 void
 historybuf_clear(HistoryBuf *self) {
+    self->generation++;
     pagerhist_clear(self);
     free_all_storage(self);
     self->next_seq = 0;
@@ -2701,6 +2702,7 @@ historybuf_add_line(HistoryBuf *self, const Line *line, ANSIBuf *as_ansi_buf) {
 bool
 historybuf_pop_line(HistoryBuf *self, Line *line) {
     if (self->count <= 0) return false;
+    self->generation++;
     drop_empty_back_blocks(self);
     while (self->num_blocks <= self->num_pending && have_compressed(self)) restore_newest(self);
     if (self->num_blocks <= self->num_pending) return false;
@@ -2727,6 +2729,7 @@ historybuf_pop_line(HistoryBuf *self, Line *line) {
 void
 historybuf_delete_newest_lines(HistoryBuf *self, index_type count) {
     if (!count) return;
+    self->generation++;
     count = MIN(self->count, count);
     truncate_newest(self, count - 1);
     if (!self->count) return;
@@ -2773,6 +2776,7 @@ historybuf_delete_lines(HistoryBuf *self, index_type num_newer, index_type count
     // them, i.e. the lines with line numbers [num_newer, num_newer + count),
     // moving the num_newer lines up to take their place.
     if (!count || num_newer >= self->count) return;
+    self->generation++;
     count = MIN(count, self->count - num_newer);
     const index_type oldest_deleted = num_newer + count - 1, xnum = self->xnum;
     // The newer lines are copied out, the lines from the oldest deleted one on

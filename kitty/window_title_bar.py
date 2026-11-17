@@ -131,6 +131,20 @@ class WindowTitleBarScreen:
         self.screen.resize(1, ncells)
         self.geometry = geometry
 
+    def render_find_prompt(self, text: str) -> None:
+        ' Draw the find bar of kitty/find.py, in the colors of the active window title '
+        opts = get_options()
+        s = self.screen
+        fg_color = _resolve_color(opts.window_title_bar_active_foreground, opts.active_tab_foreground)
+        bg_color = _resolve_color(opts.window_title_bar_active_background, opts.active_tab_background)
+        s.color_profile.default_fg = fg_color
+        s.color_profile.default_bg = bg_color
+        s.cursor.fg = (color_as_int(fg_color) << 8) | 2
+        s.cursor.bg = (color_as_int(bg_color) << 8) | 2
+        s.cursor.x = 0
+        s.erase_in_line(2, False)
+        draw_attributed_string(text, s)
+
     def render(self, data: WindowTitleData, progress_percent: str) -> str:
         opts = get_options()
         s = self.screen

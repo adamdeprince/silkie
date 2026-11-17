@@ -2037,6 +2037,31 @@ class Boss:
         except ValueError as e:
             self.show_error(_('Invalid minimum contrast'), str(e))
 
+    @ac(
+        'misc',
+        '''
+        Set whether the keys of Find go to the program of the active window instead of opening
+        Find, see :opt:`find_keys_to_terminal`: :code:`yes`, :code:`no`, :code:`toggle`, or
+        :code:`default` to remove the setting of the window. For example::
+
+            map f1 set_find_keys_to_terminal toggle
+        ''',
+    )
+    def set_find_keys_to_terminal(self, value: str = 'toggle') -> None:
+        window = self.window_for_dispatch or self.active_window
+        if window is None:
+            return
+        value = value.strip().lower()
+        try:
+            if value == 'default':
+                window.set_find_keys_to_terminal(None)
+            elif value == 'toggle':
+                window.set_find_keys_to_terminal(not window.find_keys_to_terminal)
+            else:
+                window.set_find_keys_to_terminal(value)
+        except ValueError as e:
+            self.show_error(_('Invalid value'), str(e))
+
     @property
     def active_tab_manager(self) -> TabManager | None:
         os_window_id = current_focused_os_window_id()
@@ -2102,6 +2127,9 @@ class Boss:
         if (w := self.active_window) is not None and w.program_status and not is_modifier_key(ev.key):
             # the user pressing a key in the window means they have seen its finished or failed programs
             w.program_status_seen_by_user()
+        from .find import find_bars, handle_key
+        if find_bars and handle_key(w, ev):
+            return True
         return self.mappings.dispatch_possible_special_key(ev)
 
     def on_shortcut_key_release(self, ev: KeyEvent) -> bool:

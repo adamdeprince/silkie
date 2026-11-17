@@ -293,6 +293,17 @@ PENDING(quit, QUIT)
 PENDING(paste_from_clipboard, PASTE_FROM_CLIPBOARD)
 PENDING(copy_or_noop, COPY_OR_NOOP)
 
+#define USER_ACTION(selector)                                     \
+    -(void)selector : (id)sender {                                \
+        (void)sender;                                             \
+        set_cocoa_pending_action(USER_MENU_ACTION, #selector);    \
+    }
+USER_ACTION(find)
+USER_ACTION(find_next)
+USER_ACTION(find_previous)
+USER_ACTION(find_selection)
+#undef USER_ACTION
+
 - (void)split_pane_vertically:(id)sender {
     (void)sender;
     set_cocoa_pending_action(USER_MENU_ACTION, "split_pane_vertically");
@@ -375,6 +386,7 @@ typedef struct {
     GlobalShortcut hide_macos_app, hide_macos_other_apps, minimize_macos_window, quit, search_scrollback;
     GlobalShortcut macos_cycle_through_os_windows, macos_cycle_through_os_windows_backwards;
     GlobalShortcut paste_from_clipboard, copy_or_noop;
+    GlobalShortcut find, find_next, find_previous, find_selection;
 } GlobalShortcuts;
 static GlobalShortcuts global_shortcuts;
 
@@ -401,6 +413,7 @@ cocoa_set_global_shortcut(PyObject *self UNUSED, PyObject *args) {
     else Q(quit); else Q(search_scrollback);
     else Q(macos_cycle_through_os_windows); else Q(macos_cycle_through_os_windows_backwards);
     else Q(paste_from_clipboard); else Q(copy_or_noop);
+    else Q(find); else Q(find_next); else Q(find_previous); else Q(find_selection);
 #undef Q
     if (gs == NULL) {
         PyErr_SetString(PyExc_KeyError, "Unknown shortcut name");
@@ -862,14 +875,48 @@ global_shortcut_for_action(GlobalShortcuts *shortcuts, SEL action) {
     Q(hide_macos_app); Q(hide_macos_other_apps); Q(minimize_macos_window); Q(quit); Q(search_scrollback);
     Q(macos_cycle_through_os_windows); Q(macos_cycle_through_os_windows_backwards);
     Q(paste_from_clipboard); Q(copy_or_noop);
+    Q(find); Q(find_next); Q(find_previous); Q(find_selection);
 #undef Q
     return NULL;
 }
+
+
 
 // The menu items we create that have global shortcuts and the shortcuts
 // that were applied to them.
 static NSMutableArray<NSMenuItem*> *global_shortcut_menu_items = nil;
 static GlobalShortcuts applied_global_shortcuts;
+
+// The items of the Find menu show and take their keys only while the focused window does not send them to its
+// program, see find_keys_to_terminal. A key equivalent of a menu item never reaches the terminal, as the menu bar
+// gets keys first, see the key down monitor in glfw/cocoa_init.m. The items work when clicked either way.
+static bool find_shortcuts_active = true;
+
+static bool
+is_find_action(SEL action) {
+    return action == @selector(find:) || action == @selector(find_next:) || action == @selector(find_previous:) || action == @selector(find_selection:);
+}
+
+static void
+apply_find_shortcuts_state(void) {
+    for (NSMenuItem *item in global_shortcut_menu_items) {
+        if (!is_find_action(item.action)) continue;
+        GlobalShortcut *gs = global_shortcut_for_action(&global_shortcuts, item.action);
+        if (!gs) continue;
+        [item setKeyEquivalent:find_shortcuts_active ? @(gs->key) : @""];
+        [item setKeyEquivalentModifierMask:find_shortcuts_active ? gs->mods : 0];
+    }
+}
+
+static PyObject *
+cocoa_set_find_shortcuts_active(PyObject *self UNUSED, PyObject *active) {
+    const bool val = PyObject_IsTrue(active);
+    if (val != find_shortcuts_active) {
+        find_shortcuts_active = val;
+        apply_find_shortcuts_state();
+    }
+    Py_RETURN_NONE;
+}
 
 static bool
 menu_item_has_shortcut(NSMenuItem *item, const GlobalShortcut *gs) {
@@ -897,6 +944,7 @@ update_global_shortcuts_in_menu(void) {
         [target_item setKeyEquivalentModifierMask:gs->mods];
     }
     applied_global_shortcuts = global_shortcuts;
+    apply_find_shortcuts_state();
 }
 
 static void
@@ -967,7 +1015,18 @@ cocoa_create_global_menu(void) {
     MENU_ITEM(editMenu, @"Clear Scrollback", clear_scrollback);
     MENU_ITEM(editMenu, @"Clear Screen", clear_screen);
     MENU_ITEM(editMenu, @"Clear Last Command", clear_last_command);
-    MENU_ITEM(editMenu, @"Find", search_scrollback);
+    [editMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *findMenuItem = [editMenu addItemWithTitle:@"Find" action:NULL keyEquivalent:@""];
+    NSMenu *findMenu = [[NSMenu alloc] initWithTitle:@"Find"];
+    [findMenuItem setSubmenu:findMenu];
+    MENU_ITEM(findMenu, @"Find…", find);
+    MENU_ITEM(findMenu, @"Find Next", find_next);
+    MENU_ITEM(findMenu, @"Find Previous", find_previous);
+    MENU_ITEM(findMenu, @"Use Selection for Find", find_selection);
+    [findMenu addItem:[NSMenuItem separatorItem]];
+    MENU_ITEM(findMenu, @"Search Scrollback in Pager", search_scrollback);
+    [findMenu release];
+    apply_find_shortcuts_state();
     [editMenu addItem:[NSMenuItem separatorItem]];
     MENU_ITEM(editMenu, @"Copy", copy_or_noop);
     MENU_ITEM(editMenu, @"Paste", paste_from_clipboard);
@@ -1842,6 +1901,7 @@ static PyMethodDef module_methods[] = {
     {"cocoa_get_machine_id", (PyCFunction)cocoa_get_machine_id, METH_NOARGS, ""},
     {"cocoa_is_secure_input_enabled", (PyCFunction)cocoa_is_secure_input_enabled, METH_NOARGS, ""},
     {"cocoa_set_global_shortcut", (PyCFunction)cocoa_set_global_shortcut, METH_VARARGS, ""},
+    {"cocoa_set_find_shortcuts_active", (PyCFunction)cocoa_set_find_shortcuts_active, METH_O, ""},
     {"cocoa_send_notification", (PyCFunction)(void (*)(void))cocoa_send_notification, METH_VARARGS | METH_KEYWORDS, ""},
     {"cocoa_remove_delivered_notification", (PyCFunction)cocoa_remove_delivered_notification, METH_O, ""},
     {"cocoa_live_delivered_notifications", (PyCFunction)cocoa_live_delivered_notifications, METH_NOARGS, ""},

@@ -294,6 +294,23 @@ native_tab_status(PyObject *self UNUSED, PyObject *args) {
 }
 
 static PyObject *
+native_find_bar(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    PyObject *model, *callback;
+    if (!PyArg_ParseTuple(args, "KOO", &id, &model, &callback)) return NULL;
+    if (model != Py_None && !PyDict_Check(model)) {
+        PyErr_SetString(PyExc_TypeError, "model must be a dict or None");
+        return NULL;
+    }
+    const NativeUIBackend *b = native_ui_backend();
+    OSWindow *w = os_window_for_id(id);
+    if (!w || !b || !b->find_bar) Py_RETURN_FALSE;
+    const bool ans = b->find_bar(w, model, callback);
+    if (PyErr_Occurred()) return NULL;
+    return Py_NewRef(ans ? Py_True : Py_False);
+}
+
+static PyObject *
 native_tab_settings_button(PyObject *self UNUSED, PyObject *args) {
     unsigned long long id;
     int show;
@@ -383,6 +400,7 @@ static PyMethodDef methods[] = {
     {"native_tabs_move", native_tabs_move, METH_VARARGS, ""},
     {"native_tabs_members", native_tabs_members, METH_O, ""},
     {"native_tab_status", native_tab_status, METH_VARARGS, ""},
+    {"native_find_bar", native_find_bar, METH_VARARGS, ""},
     {"native_tab_snapshot", native_tab_snapshot, METH_VARARGS, ""},
     {"native_tab_settings_button", native_tab_settings_button, METH_VARARGS, ""},
     {"native_tab_settings_show", native_tab_settings_show, METH_VARARGS, ""},

@@ -23,6 +23,7 @@ from .fast_data_types import (
     set_ignore_os_keyboard_processing,
 )
 from .options.types import Options
+from .find import key_goes_to_terminal
 from .options.utils import KeyboardMode, KeyDefinition, KeyFallbackType, KeyMap, KeyMapOptions
 from .typing_compat import ScreenType
 
@@ -225,6 +226,9 @@ class Mappings:
                     for action in global_key_action:
                         if action.definition == 'copy_or_noop' and not w.screen.has_selection():
                             return False
+                        # a key of Find whose menu item does not have it, as it goes to the program
+                        if key_goes_to_terminal(w, self.global_trigger_of(action), action.definition):
+                            return False
                 return True
         if key_action is None:
             if is_modifier_key(ev.key):
@@ -279,6 +283,9 @@ class Mappings:
                             mode.keymap[fa.rest[0]].append(fa.shift_sequence_and_copy())
                     return True
                 final_action = final_actions[0]
+                if is_root_mode and key_goes_to_terminal(self.get_active_window(), final_action.trigger, final_action.definition):
+                    self.debug_print('\n\x1b[35mKeyPress\x1b[m sent to the terminal, see find_keys_to_terminal', end='')
+                    return False
                 consumed = self.combine(final_action.definition)
                 if consumed and not is_root_mode and mode.on_action == 'end':
                     if mode_pos < len(self.keyboard_mode_stack) and self.keyboard_mode_stack[mode_pos] is mode:
@@ -290,6 +297,10 @@ class Mappings:
                     self._start_mode_timeout(mode)
                 return consumed
         return False
+
+    def global_trigger_of(self, action: KeyDefinition) -> Any:
+        ' The key of a menu bar shortcut '
+        return self.global_shortcuts.get(action.definition)
 
     # System integration {{{
     def get_active_window(self) -> Optional['Window']:

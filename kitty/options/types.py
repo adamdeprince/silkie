@@ -390,6 +390,11 @@ option_names = (
     'experimental_xreal_1s',
     'file_transfer_confirmation_bypass',
     'filter_notification',
+    'find_current_background',
+    'find_current_foreground',
+    'find_keys_to_terminal',
+    'find_match_background',
+    'find_match_foreground',
     'focus_follows_mouse',
     'font_family',
     'font_features',
@@ -659,6 +664,11 @@ class Options:
     escape_limit: int = 0
     experimental_xreal_1s: bool = False
     file_transfer_confirmation_bypass: str = ''
+    find_current_background: Color = Color(255, 150, 50)
+    find_current_foreground: Color = Color(0, 0, 0)
+    find_keys_to_terminal: bool = False
+    find_match_background: Color = Color(255, 255, 0)
+    find_match_foreground: Color = Color(0, 0, 0)
     focus_follows_mouse: choices_for_focus_follows_mouse = 'no'
     font_family: FontSpec = FontSpec(family='Iosevka', style='Extended', postscript_name=None, full_name=None, system=None, axes=(), variable_name=None, features=(), created_from_string='family=Iosevka style=Extended')
     font_size: float = 11.0
@@ -1025,6 +1035,14 @@ defaults.map = [
     KeyDefinition(trigger=SingleKey(mods=256, key=103), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='show_last_command_output'),
     # search_scrollback
     KeyDefinition(trigger=SingleKey(mods=256, key=47), definition='search_scrollback'),
+    # find
+    KeyDefinition(trigger=SingleKey(mods=258, key=102), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find'),
+    # find_next
+    KeyDefinition(trigger=SingleKey(mods=258, key=103), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find_next'),
+    # find_previous
+    KeyDefinition(trigger=SingleKey(mods=258, key=104), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find_previous'),
+    # find_selection
+    KeyDefinition(trigger=SingleKey(mods=258, key=101), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find_selection'),
     # new_window
     KeyDefinition(trigger=SingleKey(mods=256, key=57345), definition='new_window'),
     # new_os_window
@@ -1164,7 +1182,10 @@ if is_macos:
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=57355), definition='scroll_page_down'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=57356), definition='scroll_home'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=57357), definition='scroll_end'))
-    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=102), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='search_scrollback'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=102), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=103), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find_next'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=103), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find_previous'))
+    defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=101), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='find_selection'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=57345), definition='new_window'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=8, key=110), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='new_os_window'))
     defaults.map.append(KeyDefinition(trigger=SingleKey(mods=9, key=100), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='close_window'))
@@ -1586,6 +1607,10 @@ all_colors = frozenset({
     'mark2_background',
     'mark3_foreground',
     'mark3_background',
+    'find_match_foreground',
+    'find_match_background',
+    'find_current_foreground',
+    'find_current_background',
     'color16',
     'color17',
     'color18',

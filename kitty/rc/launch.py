@@ -51,6 +51,7 @@ class Launch(RemoteCommand):
     stdin_add_line_wrap_markers/bool: Boolean indicating whether to add line wrap markers to stdin
     spacing/list.str: A list of spacing specifications, see the docs for the set-spacing command
     minimum_contrast/str: The minimum contrast of the new window, a percentage from 0 to 100, see the set-minimum-contrast command
+    find_keys_to_terminal/choices.default.yes.no: Whether the keys of Find go to the program of the new window, see the set-find-keys-to-terminal command
     marker/str: Specification for marker for new window, for example: "text 1 ERROR"
     logo/str: Path to window logo
     logo_position/str: Window logo position as string or empty string to use default

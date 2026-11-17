@@ -20,7 +20,7 @@ from .options.utils import env as parse_env
 from .tabs import Tab, TabManager, tabs_for_title_match
 from .types import DockSpec, LayerShellConfig, OverlayType, dock_edges, parse_dock_spec, run_once
 from .utils import get_editor, log_error, resolve_custom_file, which
-from .window import CwdRequest, CwdRequestType, Watchers, Window, parse_minimum_contrast_value
+from .window import CwdRequest, CwdRequestType, Watchers, Window, parse_find_keys_to_terminal_value, parse_minimum_contrast_value
 from .window_list import WindowGroup
 
 
@@ -496,6 +496,14 @@ Set the :opt:`minimum_contrast` of the newly created window, a percentage from
 contrast of the tab, its profile and the option.
 
 
+--find-keys-to-terminal
+choices=default,yes,no
+default=default
+Whether the keys of Find go to the program of the newly created window instead
+of opening Find, see :opt:`find_keys_to_terminal`. It wins over the setting of
+the tab, its profile and the option. The Find items of the menus work either way.
+
+
 --watcher -w
 type=list
 completion=type:file ext:py relative:conf group:"Python scripts"
@@ -845,6 +853,8 @@ def _launch(
     }
     # validated before anything is created
     minimum_contrast = parse_minimum_contrast_value(opts.minimum_contrast) if opts.minimum_contrast else None
+    fktt = getattr(opts, 'find_keys_to_terminal', 'default') or 'default'
+    find_keys_to_terminal = None if fktt == 'default' else parse_find_keys_to_terminal_value(fktt)
     spacing = {}
     if opts.spacing:
         from .rc.set_spacing import parse_spacing_settings, patch_window_edges
@@ -1040,6 +1050,8 @@ def _launch(
             apply_colors(new_window, opts.color)
         if minimum_contrast is not None:
             new_window.set_minimum_contrast(minimum_contrast)
+        if find_keys_to_terminal is not None:
+            new_window.set_find_keys_to_terminal(find_keys_to_terminal)
         if opts.keep_focus:
             if active:
                 boss.set_active_window(active, switch_os_window_if_needed=True, for_keep_focus=True)
@@ -1118,6 +1130,7 @@ def clone_safe_opts() -> frozenset[str]:
             'logo_alpha',
             'spacing',
             'minimum_contrast',
+            'find_keys_to_terminal',
             'next_to',
             'hold_after_ssh',
         )

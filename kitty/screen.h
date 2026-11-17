@@ -11,6 +11,7 @@
 #include "monotonic.h"
 #include "line-buf.h"
 #include "history.h"
+#include "search.h"
 
 typedef enum ScrollTypes { SCROLL_LINE = -999999, SCROLL_PAGE, SCROLL_FULL } ScrollType;
 
@@ -320,6 +321,8 @@ typedef struct {
 
     DisableLigature disable_ligatures;
     PyObject *marker;
+    // Find: the search of this screen and its matches, NULL until the first search, see search.c
+    ScreenSearch *search;
     bool has_focus;
     uint8_t visibility_state; // 0 = unknown, 1 = potentially visible, 2 = not visible
     bool display_events; // display protocol mode, see docs/display-protocol.rst
@@ -547,6 +550,9 @@ void select_graphic_rendition(Screen *self, int *params, unsigned int count, boo
 void report_device_status(Screen *self, unsigned int which, bool UNUSED);
 void report_mode_status(Screen *self, unsigned int which, bool);
 void screen_apply_selection(Screen *self, void *address, size_t size);
+// Find: set the match bits of the cells of the rows shown, see search.c
+void screen_search_apply_highlights(Screen *self, uint8_t *data, size_t size, int extra_leading_rows, unsigned scrolled_by);
+bool screen_search_render_dirty(Screen *self);
 bool screen_update_graphics_layers(Screen *self);
 void screen_scrollbar_geometry(const Screen *self, float *handle_position, float *visible_fraction);
 bool screen_has_scrollbar(const Screen *self, bool is_hovering);

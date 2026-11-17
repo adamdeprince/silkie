@@ -1950,6 +1950,9 @@ process_global_state(void *data) {
     if (parse_input(self)) input_read = true;
     // take in what the scrollback compressor thread has finished
     historybuf_retire_all();
+    // Find: search the scrollback a slice at a time, see search.c
+    const monotonic_t search_wait = screen_search_tick_all(now, ms_to_monotonic_t(8));
+    if (search_wait >= 0) set_maximum_wait(search_wait);
     render(now, input_read);
 #ifdef __APPLE__
     if (has_cocoa_pending_actions) {

@@ -164,6 +164,8 @@ class TabDict(TypedDict):
     active_window_history: list[int]
     minimum_contrast: float
     minimum_contrast_override: float | None
+    find_keys_to_terminal: bool
+    find_keys_to_terminal_override: bool | None
 
 
 class SpecialWindowInstance(NamedTuple):
@@ -327,6 +329,8 @@ class Tab:  # {{{
         ]
         # minimum_contrast set for this tab, None to follow its profile. A session's minimum_contrast.
         self.minimum_contrast_override: float | None = getattr(session_tab, 'minimum_contrast', None)
+        # find_keys_to_terminal set for this tab, None to follow its profile. A session's find_keys_to_terminal.
+        self.find_keys_to_terminal_override: bool | None = getattr(session_tab, 'find_keys_to_terminal', None)
         self.borders = Borders(self.os_window_id, self.id)
         self.windows: WindowList = WindowList(self, tab_manager.os_window_docks)
         self._last_used_layout: str | None = None
@@ -377,6 +381,41 @@ class Tab:  # {{{
         for w in self:
             w.minimum_contrast_override = None
             w.update_minimum_contrast()
+    # }}}
+
+    # find_keys_to_terminal {{{
+    @property
+    def find_keys_to_terminal_setting(self) -> bool | None:
+        ''' Whether the keys of Find go to the program, as set for this tab, by itself or
+        its profile, None when only the global option applies '''
+        if self.find_keys_to_terminal_override is not None:
+            return self.find_keys_to_terminal_override
+        return parsed_options(self.profile).get('find_keys_to_terminal')
+
+    @property
+    def find_keys_to_terminal(self) -> bool:
+        ' Whether the keys of Find go to the programs of new windows in this tab, see the find_keys_to_terminal option '
+        ans = self.find_keys_to_terminal_setting
+        return get_options().find_keys_to_terminal if ans is None else ans
+
+    @property
+    def find_enabled(self) -> bool:
+        return not self.find_keys_to_terminal
+
+    def set_find_keys_to_terminal(self, value: bool | str | None) -> None:
+        ''' Send the keys of Find to the programs of this tab (True), keep them for Find
+        (False) or follow the profile and option (None). It applies to all windows of the
+        tab, the setting they had for themselves is removed, and to new windows in it. '''
+        from .window import parse_find_keys_to_terminal_value
+
+        self.find_keys_to_terminal_override = parse_find_keys_to_terminal_value(value)
+        for w in self:
+            w.find_keys_to_terminal_override = None
+            w.find_keys_to_terminal_changed()
+
+    def set_find_enabled(self, value: bool | None) -> None:
+        ' Keep the keys of Find for Find in this tab (True) or send them to the programs (False), None to follow the profile '
+        self.set_find_keys_to_terminal(None if value is None else not value)
     # }}}
 
     def update_progress(self) -> None:
@@ -665,6 +704,8 @@ class Tab:  # {{{
             if layout not in enabled_layouts:
                 enabled_layouts.append(layout)
             mc = [] if self.minimum_contrast_override is None else [f'minimum_contrast {self.minimum_contrast_override:g}']
+            if self.find_keys_to_terminal_override is not None:
+                mc.append(f'find_keys_to_terminal {"yes" if self.find_keys_to_terminal_override else "no"}')
             return [
                 '',
                 f'new_tab {self.name}'.rstrip(),
@@ -2178,6 +2219,8 @@ class TabManager:  # {{{
                         'active_window_history': list(tab.windows.active_window_history),
                         'minimum_contrast': tab.minimum_contrast,
                         'minimum_contrast_override': tab.minimum_contrast_override,
+                        'find_keys_to_terminal': tab.find_keys_to_terminal,
+                        'find_keys_to_terminal_override': tab.find_keys_to_terminal_override,
                     }
 
     def serialize_state(self) -> dict[str, Any]:

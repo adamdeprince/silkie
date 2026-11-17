@@ -74,6 +74,7 @@ class Tab:
         self.cwd: str | None = None
         self.next_title: str | None = None
         self.minimum_contrast: float | None = None
+        self.find_keys_to_terminal: bool | None = None
 
     @property
     def has_non_background_processes(self) -> bool:
@@ -116,6 +117,11 @@ class Session:
         from .options.utils import minimum_contrast
 
         self.tabs[-1].minimum_contrast = minimum_contrast(val)
+
+    def set_find_keys_to_terminal(self, val: str) -> None:
+        from .window import parse_find_keys_to_terminal_value
+
+        self.tabs[-1].find_keys_to_terminal = parse_find_keys_to_terminal_value(val)
 
     def set_next_title(self, title: str) -> None:
         self.tabs[-1].next_title = title.strip()
@@ -282,6 +288,8 @@ def parse_session(
                 ans.set_enabled_layouts(rest)
             elif cmd == 'minimum_contrast':
                 ans.set_minimum_contrast(rest)
+            elif cmd == 'find_keys_to_terminal':
+                ans.set_find_keys_to_terminal(rest)
             elif cmd == 'cd':
                 ans.set_cwd(rest, session_base_dir)
             elif cmd == 'title':
