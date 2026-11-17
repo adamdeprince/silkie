@@ -39,8 +39,10 @@ scene is scaled to fit the cells. For example, a red square on a white page::
 
 Transmitting again with the same image id replaces the whole scene, as it
 does for any image. With ``o=z`` the uncompressed size need not be given. The
+records, after decompression, can take up to the 400 MB any image data can. The
 terminal answers ``OK`` or, for a scene it cannot parse, ``EINVAL`` with the
-line number and the problem, and nothing of such a transmission is kept.
+line number and the problem, and nothing of such a transmission is kept. A
+scene the terminal does not have the memory for is answered with ``ENOMEM``.
 
 Editing a vector image
 -------------------------
@@ -104,12 +106,12 @@ Replacing an element keeps its place in that order.
     ``rule`` is the fill rule, nonzero by default. ``w``, ``cap``, ``join``,
     ``ml`` (``4`` by default) and ``dash`` have their SVG meanings, with the
     stroke geometry computed in the element's own coordinate system, so a
-    stroke transformed non-uniformly is stretched like the path. The stroke
-    of one path is cut into at most 262144 dashes: a subpath whose dashes
-    would take the count past that is stroked solid, as are the subpaths
-    after it that would too. A pattern that fine against a path that long
-    costs far more than it can show, and this keeps it from stalling the
-    terminal.
+    stroke transformed non-uniformly is stretched like the path. Dashes are
+    cut only where they can be seen, so a path of any length costs the dashes
+    shown of it. A pattern that repeats more often than 16 times a pixel,
+    which the rasterizer cannot sample, is drawn as the solid stroke shaded by
+    the part of it the dashes and their caps cover, which is what the dashes
+    average to over a pixel.
 
 ``s`` *symbol*
     ``s id= d=<path>``
@@ -202,6 +204,28 @@ drawing everything:
 A program that animates should therefore keep what changes small and in
 elements of its own. Kitty keeps no rasterized copy of a scene other than the
 texture it is drawn from, so nothing but the elements counts toward the quota.
+
+What drawing costs depends on what is shown, not on the numbers in the
+records. Curves are flattened to within a quarter of a device pixel, and only
+the parts of a curve, circle or dash pattern that can reach the pixels being
+drawn are flattened or cut that finely; the rest is replaced by coarse pieces
+that stay out of those pixels and leave the fill, its winding included,
+exactly as it was. So a circle a million million pixels across, a line whose
+ends are far off the image or a transform that magnifies a tiny curve
+enormously costs about what the part of it that can be seen does, and that
+part is drawn as an equivalent scene of ordinary size would draw it. A stroke
+more than four million pixels wide is flattened to within a millionth of its
+width rather than a quarter of a pixel. Geometry whose coordinates overflow a
+double after the transforms are applied is not drawn.
+
+The texture holds the part of the image that is on screen, at the size it is
+shown at, with a quarter of the window more on each side so that scrolling a
+little does not draw it again, or all of the image when that is no larger. So
+its size is bounded by the window, however large the placement or however
+much a source rectangle magnifies the image. When several placements show
+parts of one image at different magnifications that would together take more
+than four windows of pixels at the largest, the image is drawn smaller until
+they fit.
 
 Rendering a PDF
 ------------------

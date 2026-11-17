@@ -2219,50 +2219,254 @@ class TestGraphics(BaseTest):
         self.ae(g.render_vector_image(1, 10, 10), bytes(10 * 10 * 4))
 
     def test_vector_dash_limit(self):
-        # A dash pattern far finer than its path is long would cut it into more dashes than memory or time allow
+        # A dash pattern far finer than its path is long must not cut it into more dashes than memory or time allow,
+        # nor may a path far longer than the image, and neither may change what the dashes look like.
         import signal
         s = self.create_screen()
         g = s.grman
 
-        def draw(payload, image_id):
+        def draw(payload, image_id, size=20):
             # the default action of the alarm ends the process, so a hang fails the run instead of stalling it
             signal.signal(signal.SIGALRM, signal.SIG_DFL)
             signal.alarm(60)
             try:
                 start = time.monotonic()
-                res = parse_full_response(send_command(s, f'a=T,f=200,s=20,v=20,i={image_id}', payload))
-                return res, time.monotonic() - start
+                res = parse_full_response(send_command(s, f'a=T,f=200,s={size},v={size},i={image_id}', payload))
+                self.ae((res.code, res.msg), ('OK', ''))
+                pixels = g.render_vector_image(image_id, size, size)
+                self.assertLess(time.monotonic() - start, 10, payload)
+                return pixels
             finally:
                 signal.alarm(0)
 
-        def pixel(img, x, y):
-            o = (y * img['width'] + x) * 4
-            return tuple(img['data'][o:o + 4])
+        def alpha(pixels, x, y, size=20):
+            return pixels[(y * size + x) * 4 + 3]
 
-        # Beyond the budget the stroke is solid: a pattern of a millionth of a unit along a line of a million units
-        res, took = draw('p id=1 d=M0,10L1000000,10 stroke=#000000 w=4 fill=none dash=0.000001,0.000001', 1)
-        self.ae((res.code, res.msg), ('OK', ''))
-        self.assertLess(took, 10)
-        img = g.image_for_client_id(1)
-        self.ae([pixel(img, x, 10)[3] for x in (0, 7, 13, 19)], [255] * 4)
-        # the step of the dashes vanishing against the position along the path
-        res, took = draw('p id=1 d=M1e15,10L-1e15,10 stroke=#000000 w=4 fill=none dash=1,1', 2)
-        self.ae((res.code, res.msg), ('OK', ''))
-        self.assertLess(took, 10)
-        # a budget for the whole path, not for each subpath: the first two of these are dashed, the rest is solid
+        # A pattern finer than the rasterizer samples, a millionth of a unit along a line of a million units, is
+        # drawn at the part of the line the dashes cover
+        px = draw('p id=1 d=M0,10L1000000,10 stroke=#000000 w=4 fill=none dash=0.000001,0.000001', 1)
+        self.assertTrue(all(120 < alpha(px, x, 10) < 136 for x in (0, 7, 13, 19)), [alpha(px, x, 10) for x in range(20)])
+        self.ae(alpha(px, 5, 4), 0)
+        # with caps that close the gaps the dashes are solid, with a third of them covered a third
+        px = draw('p id=1 d=M0,10L20,10 stroke=#000000 w=4 fill=none dash=0.001,0.001 cap=square', 2)
+        self.ae([alpha(px, x, 10) for x in (0, 7, 13, 19)], [255] * 4)
+        px = draw('p id=1 d=M0,10L20,10 stroke=#000000 w=4 fill=none dash=0.001,0.002', 3)
+        self.assertTrue(all(80 < alpha(px, x, 10) < 90 for x in (0, 7, 13, 19)), [alpha(px, x, 10) for x in range(20)])
+        # every subpath of a path is drawn the same way, there is no budget for the whole path
         many = ''.join(f'M0,{y}.5L1000,{y}.5' for y in range(0, 20, 2))
-        res, took = draw(f'p id=1 d={many} stroke=#000000 w=1 fill=none dash=0.01,0.01', 3)
-        self.ae((res.code, res.msg), ('OK', ''))
-        self.assertLess(took, 10)
-        img = g.image_for_client_id(3)
-        coverage = [pixel(img, 10, y)[3] for y in range(0, 20, 2)]
-        self.assertTrue(all(100 < a < 156 for a in coverage[:2]), coverage)
-        self.ae(coverage[2:], [255] * 8)
-        # below the budget the dashes are drawn as before
-        res, took = draw('p id=1 d=M0,10L20,10 stroke=#000000 w=4 fill=none dash=4,4 cap=butt', 4)
-        self.ae((res.code, res.msg), ('OK', ''))
-        img = g.image_for_client_id(4)
-        self.ae([pixel(img, x, 10)[3] for x in (1, 5, 9, 13)], [255, 0, 255, 0])
+        px = draw(f'p id=1 d={many} stroke=#000000 w=1 fill=none dash=0.01,0.01', 4)
+        coverage = [alpha(px, 10, y) for y in range(0, 20, 2)]
+        self.assertTrue(all(120 < a < 136 for a in coverage), coverage)
+        # dashes that can be drawn are drawn as before
+        px = draw('p id=1 d=M0,10L20,10 stroke=#000000 w=4 fill=none dash=4,4 cap=butt', 5)
+        self.ae([alpha(px, x, 10) for x in (1, 5, 9, 13)], [255, 0, 255, 0])
+        # The dashes of a line two million million units long, of which twenty are seen, are those of the twenty:
+        # 2**40 keeps every position along it a whole number, so the two must come out the same to the bit
+        sane = draw('p id=1 d=M0,10L20,10 stroke=#000000 w=4 fill=none dash=1,1 cap=butt', 6)
+        self.ae(draw(f'p id=1 d=M-{2**40},10L{2**40},10 stroke=#000000 w=4 fill=none dash=1,1 cap=butt', 7), sane)
+        sane = draw('p id=1 d=M-4,10L28,10 stroke=#000000 w=1.5 fill=none dash=1,3 cap=round', 8)
+        self.ae(draw(f'p id=1 d=M-{2**40},10L{2**40},10 stroke=#000000 w=1.5 fill=none dash=1,3 cap=round', 9), sane)
+        # a line whose length is all rounding, which no number of steps along it could reach the end of
+        draw('p id=1 d=M1e15,10L-1e15,10 stroke=#000000 w=4 fill=none dash=1,1', 10)
+        draw('p id=1 d=M1e300,10L-1e300,10 stroke=#000000 w=4 fill=none dash=1e-300,1', 11)
+        # A stroke ten thousand million units wide is dashed across the image like one a hundred wide, and with
+        # round caps that overlap its gaps are closed
+        sane = draw('p id=1 d=M-2,10L22,10 stroke=#000000 w=100 dash=1,1 cap=butt fill=none', 12)
+        self.ae(draw('p id=1 d=M-1e9,10L1e9,10 stroke=#000000 w=1e10 dash=1,1 cap=butt fill=none', 13), sane)
+        px = draw('p id=1 d=M-1e9,10L1e9,10 stroke=#000000 w=1e10 dash=1,1 cap=round fill=none', 14)
+        self.ae(set(px[3::4]), {255})
+        # a corner in the middle of a dash keeps its join: here only the tip of a miter reaches the image
+        sane = draw('p id=1 d=M-106,0L-6,10L-106,20 stroke=#000000 w=8 dash=1000,1 join=miter ml=20 fill=none', 15)
+        self.assertIn(255, sane[3::4])
+        huge = f'M-{6 + 10 * 2**40},{10 - 2**40}L-6,10L-{6 + 10 * 2**40},{10 + 2**40}'
+        self.ae(draw(f'p id=1 d={huge} stroke=#000000 w=8 dash={2**45},1 join=miter ml=20 fill=none', 16), sane)
+
+    def test_vector_huge_geometry(self):
+        # Coordinates, radii, widths and transforms of any size, or that overflow, take time in proportion to what
+        # can be seen, and what can be seen is drawn as it would be by an equivalent drawing of sensible size.
+        import signal
+        s = self.create_screen()
+        g = s.grman
+        ids = iter(range(1, 1000))
+
+        def draw(payload, size=20):
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.alarm(60)
+            try:
+                i = next(ids)
+                start = time.monotonic()
+                res = parse_full_response(send_command(s, f'a=T,f=200,s={size},v={size},i={i}', payload))
+                self.ae((res.code, res.msg), ('OK', ''), payload)
+                pixels = g.render_vector_image(i, size, size)
+                self.assertLess(time.monotonic() - start, 10, payload)
+                return pixels
+            finally:
+                signal.alarm(0)
+
+        def alphas(pixels):
+            return set(pixels[3::4])
+
+        nothing = bytes(20 * 20 * 4)
+        red = b'\xff\x00\x00\xff' * 400
+        top_half = draw('p id=1 d=M0,0L20,0L20,10L0,10Z fill=#ff0000')
+        # a circle a hundred thousand million million pixels across, as a pen point, a round cap and a round join
+        self.ae(draw('k id=1 pts=10,10,2e17 fill=#ff0000'), red)
+        self.ae(draw('p id=1 d=M10,10L10,10 stroke=#ff0000 w=2e17 cap=round fill=none'), red)
+        self.ae(draw('p id=1 d=M0,0L1e17,0L0,1e17 stroke=#ff0000 w=1e17 join=round fill=none'), red)
+        self.ae(draw('k id=1 pts=1e17,1e17,1e16 fill=#ff0000'), nothing)
+        # its edge through the image is where it is: 2**50 is the radius, the center is a whole number from it
+        px = draw(f'k id=1 pts={2**50 + 10},10,{2**51} fill=#ff0000')
+        for y in range(20):
+            row = [px[(y * 20 + x) * 4 + 3] for x in range(20)]
+            self.ae(row[:9], [0] * 9)
+            self.ae(row[11:], [255] * 9)
+        # a curve a hundred thousand million million pixels across that closes across the image, which keeps
+        # its winding for the parts of it far outside
+        self.ae(draw('p id=1 d=M-1e17,10C-1e17,-1e17,1e17,-1e17,1e17,10Z fill=#ff0000'), top_half)
+        self.ae(draw('p id=1 d=M-1e17,10C-1e17,-1e17,1e17,-1e17,1e17,10Z fill=#ff0000 rule=eo'), top_half)
+        self.ae(draw('p id=1 d=M-1e17,10Q0,-1e17,1e17,10Z fill=#ff0000'), top_half)
+        self.ae(draw('p id=1 d=M-1e17,10C-1e17,-1e17,1e17,-1e17,1e17,10Z stroke=#00ff00 w=4 fill=#ff0000'),
+                draw('p id=1 d=M-30,10L-30,-30L50,-30L50,10Z stroke=#00ff00 w=4 fill=#ff0000'))
+        self.ae(draw('s id=1 d=M-1e17,10C-1e17,-1e17,1e17,-1e17,1e17,10Z\nu id=2 s=1 fill=#ff0000'), top_half)
+        self.ae(draw('p id=1 d=M-1e17,10C-1e17,-1e17,1e17,-1e17,1e17,10Z\ng id=2 clip=1\np id=3 g=2 d=M0,0L20,0L20,20L0,20Z fill=#ff0000'), top_half)
+        # the same with the size in the transform
+        self.ae(draw('g id=1 t=1e16,0,0,1e16,0,0\np id=2 g=1 d=M-10,0.000000000000001C-10,-10,10,-10,10,0.000000000000001Z fill=#ff0000'), top_half)
+        # a stroke that is tiny across one way and vast along the other is flattened for the size it is drawn at
+        px = draw('g id=1 t=1e-12,0,0,1,0,0\np id=2 g=1 d=M0,5C1e13,5,1e13,15,2e13,15 stroke=#ff0000 w=1 fill=none')
+        self.assertGreater(max(alphas(px)), 200)
+        # what overflows a double draws nothing and takes no time
+        self.ae(draw('g id=1 t=1e300,0,0,1e300,0,0\np id=2 g=1 d=M0,0L1e10,0L1e10,1e10Z fill=#ff0000 stroke=#00ff00 w=3'), nothing)
+        self.ae(draw('g id=1 t=10,0,0,10,0,0\np id=2 g=1 d=M0,0L1,1 stroke=#ff0000 w=1e308 cap=round fill=none'), nothing)
+        self.ae(draw('g id=1 t=10,0,0,10,0,0\nk id=2 g=1 pts=1,1,1e308 fill=#ff0000'), nothing)
+        draw('p id=1 d=M1e308,1e308C-1e308,1e308,-1e308,-1e308,1e308,-1e308Z fill=#ff0000 stroke=#ff0000 w=1e308')
+        # A stroke whose width dwarfs the image, along a curve all of which it reaches: the band of the curve
+        # around the image that the stroke edge passes through can be as long as the stroke is wide
+        self.ae(alphas(draw('p id=1 d=M-1e9,10C-1e9,-5.5e8,-5.5e8,-1e9,10,-1e9 stroke=#000000 w=2.0000002e9 fill=none')), {255})
+        draw('p id=1 d=M-1e15,10C-1e15,-5.5e14,-5.5e14,-1e15,10,-1e15 stroke=#000000 w=2e15 fill=none join=bevel dash=1,1')
+        # what is drawn of part of an image is what is drawn of all of it, whatever its coordinates
+        doc = '\n'.join((
+            f'k id=1 pts={2**50 + 10},10,{2**51} fill=#ff000080',
+            'p id=2 d=M-1e17,10C-1e17,-1e17,1e17,-1e17,1e17,13Z fill=#00ff0080',
+            'p id=3 d=M-1e12,-1e12L7,4L1e12,-1e12 stroke=#0000ff w=3 join=round dash=2,1 cap=round fill=none',
+        ))
+        i = next(ids)
+        self.ae(parse_full_response(send_command(s, f'a=T,f=200,s=20,v=20,i={i}', doc)).code, 'OK')
+        full = g.render_vector_image(i, 37, 29)
+        part = bytearray()
+        g.update_vector_pixels(i, 37, 29, part)
+        self.ae(parse_full_response(send_command(s, f'a=e,i={i}', 'k id=4 pts=12,12,3 fill=#ffffff')).code, 'OK')
+        rect = g.update_vector_pixels(i, 37, 29, part)
+        self.assertLess(rect[2] * rect[3], 37 * 29 / 4)
+        self.ae(bytes(part), g.render_vector_image(i, 37, 29))
+        self.assertNotEqual(bytes(part), full)
+
+    def test_vector_render_view(self):
+        # The raster of a vector image is that of the part of it that is shown, so its size has nothing to do with
+        # how large the image is shown, and an allocation too large fails rather than wrapping around.
+        s = self.create_screen()
+        g = s.grman
+        doc = 'p id=1 d=M2,2L18,3L10,18Z fill=#ff8000c0 stroke=#0000ff w=1.5\nk id=2 pts=3,15,2,15,4,3 fill=#00ff0080\n'
+        self.ae(parse_full_response(send_command(s, 'a=T,f=200,s=20,v=20,i=1', doc)).code, 'OK')
+        W, H = 200, 160
+        full = g.render_vector_image(1, W, H)
+        # a part comes out as that part of all of it, to within the rounding of where it starts
+        x, y, cols, rows = 53, 31, 70, 45
+        part = g.render_vector_view(1, W, H, x, y, cols, rows)
+        crop = b''.join(full[((y + r) * W + x) * 4:((y + r) * W + x + cols) * 4] for r in range(rows))
+        self.ae(len(part), len(crop))
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(part, crop)), 1)
+        # an image shown at a thousand million pixels across takes no longer to draw a part of than a small one
+        start = time.monotonic()
+        part = g.render_vector_view(1, 1e9, 8e8, 5e8, 1.5e8, 64, 64)
+        self.assertLess(time.monotonic() - start, 5)
+        self.ae(len(part), 64 * 64 * 4)
+        self.ae(set(part[3::4]), {192})  # inside the triangle, far from its edges
+        # sizes that cannot be allocated, or held in the types they are counted in, fail
+        for args in ((W, H, 0, 0, 2**31 - 1, 2**31 - 1), (W, H, 0, 0, 2**31, 1), (W, H, 0.5, 0, 10, 10), (float('inf'), H, 0, 0, 10, 10)):
+            with self.assertRaises(RuntimeError, msg=str(args)):
+                g.render_vector_view(1, *args)
+        with self.assertRaises(RuntimeError):
+            g.render_vector_image(1, 2**31 - 1, 2**31 - 1)
+
+        # Which part is rasterized: all of an image no bigger than the window, the part on screen of one that is,
+        # and the part already drawn while it still holds what is on screen
+        view = g.choose_vector_view
+        self.ae(view(300, 200, (0, 0, 1, 1), 800, 600), (300, 200, 0, 0, 300, 200))
+        self.ae(view(300.4, 200.6, (0.2, 0.2, 0.3, 0.3), 800, 600), (300, 201, 0, 0, 300, 201))
+        W, H, x, y, cols, rows = v = view(1e9, 1e9, (0.5, 0.5, 0.5000008, 0.5000006), 800, 600)
+        self.ae((W, H), (1e9, 1e9))
+        self.assertLessEqual(x, 5e8 - 2)
+        self.assertGreaterEqual(x + cols, 5e8 + 800 + 2)
+        self.assertLessEqual(y, 5e8 - 2)
+        self.assertGreaterEqual(y + rows, 5e8 + 600 + 2)
+        self.assertLessEqual(cols * rows, 3 * 800 * 600)
+        # to the pixel: the quarter window of margin, the 2 pixels of filtering and nothing more
+        self.ae((x, y, x + cols, y + rows), (5e8 - 202, 5e8 - 152, 5e8 + 1002, 5e8 + 752))
+        self.ae(view(1e9, 1e9, (0.50000001, 0.5, 0.50000081, 0.5000006), 800, 600, v), v)
+        self.assertNotEqual(view(1e9, 1e9, (0.6, 0.5, 0.6000008, 0.5000006), 800, 600, v), v)
+        # placements that show far apart parts of one image at the largest magnification are drawn smaller
+        W, H, x, y, cols, rows = view(1e6, 1e6, (0, 0, 1, 1), 800, 600)
+        self.assertLess(W, 1e6)
+        self.assertLessEqual(cols * rows, 4 * 800 * 600 * 1.6)
+        # an image shown larger than doubles count pixels exactly is shown at that size
+        W, H, x, y, cols, rows = view(1e300, 1e300, (0.5, 0.5, 0.5, 0.5), 800, 600)
+        self.assertLessEqual(W, 2**53)
+        self.assertLessEqual(cols * rows, 3 * 800 * 600)
+
+    def test_vector_amplification(self):
+        # Work and memory for a vector command are in proportion to its size and to what it changes, not to that
+        # times the size of the document, and not many times that in memory.
+        import signal
+        s = self.create_screen()
+        g = s.grman
+
+        def command(records, action='t', image=1):
+            # in chunks, as clients send large payloads
+            from kitty.fast_data_types import VT_PARSER_MAX_ESCAPE_CODE_SIZE
+            records = records.encode()
+            step = (VT_PARSER_MAX_ESCAPE_CODE_SIZE - 64) // 4 * 3
+            chunks = [records[i:i + step] for i in range(0, len(records), step)]
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.alarm(120)
+            try:
+                start = time.monotonic()
+                for k, chunk in enumerate(chunks):
+                    more = int(k + 1 < len(chunks))
+                    keys = f'a={action},f=200,s=10,v=10,i={image}' if k == 0 else (f'i={image}' if action == 'e' else '')
+                    res = send_command(s, ','.join(x for x in (keys, f'm={more}') if x), chunk)
+                res = parse_full_response(res)
+                self.ae(res.code, 'OK', res.msg)
+                return time.monotonic() - start
+            finally:
+                signal.alarm(0)
+
+        n = 40000
+        paths = ''.join(f'p id={i} d=M1,1L9,1L9,9Z fill=#ff0000\n' for i in range(1, n + 1))
+        # with a clip group every path replaced asks whether it is a clip path
+        command(paths + f'p id={n + 1} d=M0,0L10,0L10,10Z\ng id={n + 2} clip={n + 1}\n')
+        self.assertLess(command(paths, 'e'), 10)
+        # deleting groups looks at what is under them, not at the whole document
+        self.assertLess(command(''.join(f'x g={i}\n' for i in range(n + 10, 2 * n + 10)), 'e'), 10)
+        self.ae(g.image_for_client_id(1)['vector_elements'], n + 2)
+        groups = ''.join(f'g id={i} p={i - 1}\n' for i in range(n + 3, n + 3 + 2000))
+        self.assertLess(command(groups + ''.join(f'p id={i} g={n + 2002} d=M1,1L2,2 stroke=#00ff00\n' for i in range(1, 4000)), 'e'), 10)
+        command('x g=0', 'e')
+        self.ae(g.image_for_client_id(1)['vector_elements'], 0)
+        # a nested chain of groups, with elements added deep inside it one record at a time
+        chain = ''.join(f'g id={i} p={i - 1}\n' for i in range(1, n + 1))
+        command(chain, image=2)
+        self.assertLess(command(''.join(f'p id={n + i} g={n} d=M1,1L9,9 stroke=#ff0000\n' for i in range(1, n + 1)), 'e', 2), 10)
+        self.ae(g.render_vector_image(2, 10, 10)[(5 * 10 + 5) * 4 + 3], 255)
+        self.assertLess(command(f'x g={n // 2}\n', 'e', 2), 10)
+        self.ae(g.image_for_client_id(2)['vector_elements'], n // 2 - 1)
+        # a million deletes of a few bytes each are not held as a million elements while they are parsed
+        self.assertLess(command('x id=1\n' * 1000000, 'e', 2), 30)
+        # gradients of very many stops are looked up, not searched, at every pixel
+        stops = ','.join(f'{i / 200000:.6f},#{i % 256:02x}0000' for i in range(200000))
+        self.assertLess(command(f'l id=1 x1=0 y1=0 x2=10 y2=0 stops={stops}\np id=2 d=M0,0L10,0L10,10L0,10Z fill=@1\n', image=3), 10)
+        start = time.monotonic()
+        g.render_vector_image(3, 300, 300)
+        self.assertLess(time.monotonic() - start, 10)
 
     def test_vector_image_damage(self):
         # A patch to a vector image draws only the part of it that changed.

@@ -503,14 +503,19 @@ err:
     return ok;
 }
 
-// Inflates data of unknown size, for text formats
+// Inflates data of unknown size, for text formats. The buffer grows as the
+// data comes out, rather than being sized from the compressed data, and
+// running out of memory fails the command, not the terminal.
 static bool
 inflate_zlib_unbounded(LoadData *load_data, uint8_t *buf, size_t bufsz) {
     bool ok = false;
     z_stream z = {.avail_in = bufsz, .next_in = (Bytef *)buf};
-    size_t cap = MAX(4 * bufsz, (size_t)4096), used = 0;
+    size_t cap = 4096, used = 0;
     uint8_t *decompressed = malloc(cap);
-    if (decompressed == NULL) fatal("Out of memory allocating decompression buffer");
+    if (decompressed == NULL) {
+        set_command_failed_response("ENOMEM", "Out of memory allocating decompression buffer");
+        return false;
+    }
     int ret;
     if ((ret = inflateInit(&z)) != Z_OK) ABRT(ENOMEM, "Failed to initialize inflate with error: %s", zlib_strerror(ret));
     do {
@@ -518,7 +523,7 @@ inflate_zlib_unbounded(LoadData *load_data, uint8_t *buf, size_t bufsz) {
             if (cap >= MAX_DATA_SZ) ABRT(EFBIG, "Too much data");
             cap = MIN(2 * cap, (size_t)MAX_DATA_SZ);
             uint8_t *n = realloc(decompressed, cap);
-            if (n == NULL) fatal("Out of memory allocating decompression buffer");
+            if (n == NULL) ABRT(ENOMEM, "Out of memory allocating decompression buffer");
             decompressed = n;
         }
         z.avail_out = cap - used;
@@ -816,13 +821,15 @@ load_image_data(
         case 'd': // direct
             if (load_data->buf_capacity - load_data->buf_used < g->payload_sz) {
                 if (load_data->buf_used + g->payload_sz > MAX_DATA_SZ || (data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
-                load_data->buf_capacity = MAX(MIN(2 * load_data->buf_capacity, MAX_DATA_SZ), load_data->buf_used + g->payload_sz);
-                load_data->buf = realloc(load_data->buf, load_data->buf_capacity);
-                if (load_data->buf == NULL) {
-                    load_data->buf_capacity = 0;
-                    load_data->buf_used = 0;
+                const size_t capacity = MAX(MIN(2 * load_data->buf_capacity, MAX_DATA_SZ), load_data->buf_used + g->payload_sz);
+                void *next = realloc(load_data->buf, capacity);
+                if (next == NULL) {
+                    // what was loaded so far is of no use without the rest, and is a lot of memory to hold on to
+                    free_load_data(load_data);
                     ABRT("ENOMEM", "Out of memory");
                 }
+                load_data->buf = next;
+                load_data->buf_capacity = capacity;
             }
             memcpy(load_data->buf + load_data->buf_used, payload, g->payload_sz);
             load_data->buf_used += g->payload_sz;
@@ -1180,7 +1187,11 @@ update_dest_rect(ImageRef *ref, uint32_t num_cols, uint32_t num_rows, CellPixelS
     ref->effective_num_cols = num_cols;
 }
 
-static void update_vector_texture(GraphicsManager *self, Image *img, double width, double height);
+// A part of an image, as fractions of its width and height: in doubles, as a part of a large image is a tiny fraction of it
+typedef struct {
+    double left, top, right, bottom;
+} ImageFraction;
+static void update_vector_texture(GraphicsManager *self, Image *img, double width, double height, ImageFraction shown, double view_width, double view_height);
 
 static ImageRef *
 create_ref(Image *img, ImageRef *clone_from) {
@@ -1602,6 +1613,7 @@ grman_update_layers(
         bool was_drawn = img->is_drawn, ref_removed = false;
         img->is_drawn = false;
         double vector_width = 0, vector_height = 0;  // the largest size the image is shown at
+        ImageFraction vector_shown = {.left = 1, .top = 1, .right = 0, .bottom = 0};  // the parts of it on screen
         const size_t first_render_item = self->render_data.count;
 
         for (ref_map_itr refitr = vt_first(&img->refs_by_internal_id); !vt_is_end(refitr);) {
@@ -1646,10 +1658,25 @@ grman_update_layers(
                 continue;
             } // not visible
             if (img->vector) {
-                double w = ((double)r.right - r.left) / screen_width * screen_width_px * img->width / ref->src_width;
-                double h = ((double)r.top - r.bottom) / screen_height * screen_height_px * img->height / ref->src_height;
+                const double rw = (double)r.right - r.left, rh = (double)r.top - r.bottom;
+                double w = rw / screen_width * screen_width_px * img->width / ref->src_width;
+                double h = rh / screen_height * screen_height_px * img->height / ref->src_height;
                 vector_width = MAX(vector_width, w);
                 vector_height = MAX(vector_height, h);
+                if (rw > 0 && rh > 0) {
+                    // the part of the placement on screen, and so of the image, in doubles since a part of a
+                    // large image is a tiny fraction of it
+                    const double fx0 = (MAX((double)r.left, (double)screen_left) - r.left) / rw;
+                    const double fx1 = (MIN((double)r.right, (double)screen_left + screen_width) - r.left) / rw;
+                    const double fy0 = ((double)r.top - MIN((double)r.top, (double)screen_top)) / rh;
+                    const double fy1 = ((double)r.top - MAX((double)r.bottom, (double)screen_bottom)) / rh;
+                    if (fx0 < fx1 && fy0 < fy1) {
+                        vector_shown.left = MIN(vector_shown.left, (ref->src_x + fx0 * ref->src_width) / img->width);
+                        vector_shown.right = MAX(vector_shown.right, (ref->src_x + fx1 * ref->src_width) / img->width);
+                        vector_shown.top = MIN(vector_shown.top, (ref->src_y + fy0 * ref->src_height) / img->height);
+                        vector_shown.bottom = MAX(vector_shown.bottom, (ref->src_y + fy1 * ref->src_height) / img->height);
+                    }
+                }
             }
 
             if (ref->z_index < ((int32_t)INT32_MIN / 2)) self->num_of_below_refs++;
@@ -1673,8 +1700,22 @@ grman_update_layers(
             continue;
         }
         if (img->vector && img->is_drawn) {
-            update_vector_texture(self, img, vector_width, vector_height);
-            for (size_t k = first_render_item; k < self->render_data.count; k++) self->render_data.item[k].texture_id = texture_id_for_img(img);
+            update_vector_texture(self, img, vector_width, vector_height, vector_shown, screen_width_px, screen_height_px);
+            const VectorView v = img->vector_view;
+            for (size_t k = first_render_item; k < self->render_data.count; k++) {
+                ImageRenderData *rd = self->render_data.item + k;
+                rd->texture_id = texture_id_for_img(img);
+                if (!v.cols || !v.rows) continue;
+                // The texture holds a part of the image, the coordinates of what to show are of all of it
+                ref_map_itr ri = vt_get(&img->refs_by_internal_id, rd->ref_id);
+                if (vt_is_end(ri)) continue;
+                const ImageRef *ref = ri.data->val;
+                const double sx = v.width / img->width, sy = v.height / img->height;
+                rd->src_rect.left = (float)((ref->src_x * sx - v.x) / v.cols);
+                rd->src_rect.right = (float)(((ref->src_x + ref->src_width) * sx - v.x) / v.cols);
+                rd->src_rect.top = (float)((ref->src_y * sy - v.y) / v.rows);
+                rd->src_rect.bottom = (float)(((ref->src_y + ref->src_height) * sy - v.y) / v.rows);
+            }
         }
         if (img->is_drawn && !was_drawn && img->animation_state != ANIMATION_STOPPED && img->extra_framecnt && img->animation_duration) {
             self->has_images_needing_animation = true;
@@ -1947,28 +1988,80 @@ render_vector_damage(GraphicsManager *self, Image *img, unsigned width, unsigned
     return ans;
 }
 
-#define MAX_VECTOR_PIXELS (16u * 1024u * 1024u)
+// The part of a vector image to rasterize, for the image shown at width x height
+// pixels with the fractions of it in shown on screen, in a window view_width x
+// view_height pixels. current is the part held now, kept while it will do.
+//
+// A raster bigger than the window is never needed in full: only what is on
+// screen can be seen, in physical pixels, at the size it is shown. Rasterizing
+// the whole image instead would take memory in proportion to the size it is
+// shown at, which a placement much larger than the window, or one showing a
+// small part of the image magnified, makes as large as anyone likes. So the
+// part on screen is rasterized, with a quarter of the window more all round,
+// so that scrolling a little does not draw it again, or the whole image when
+// that is no bigger. The size the image is drawn at stays that of the largest
+// placement, unless several placements show different parts of it at
+// different magnifications that would together take more than four windows'
+// worth of pixels at the largest: then it is reduced until they fit. Doubles
+// count pixels exactly up to 2^53, and an image shown larger than that is
+// reduced to it.
+static VectorView
+choose_vector_view(double width, double height, ImageFraction shown, double view_width, double view_height, const VectorView *current) {
+    const double exact = 9007199254740992.0;
+    view_width = MAX(1., view_width), view_height = MAX(1., view_height);
+    if (width > exact || height > exact) {
+        const double s = exact / MAX(width, height);
+        width *= s, height *= s;
+    }
+    double W = MAX(1., round(width)), H = MAX(1., round(height)), nx0, ny0, nx1, ny1;
+    for (int pass = 0; pass < 2; pass++) {
+        // what is on screen in pixels of the raster, with two more for the filtering at its edges
+        nx0 = MAX(0., floor(shown.left * W) - 2), nx1 = MIN(W, ceil(shown.right * W) + 2);
+        ny0 = MAX(0., floor(shown.top * H) - 2), ny1 = MIN(H, ceil(shown.bottom * H) + 2);
+        if (!(nx0 < nx1)) nx0 = 0, nx1 = MIN(W, 1.);
+        if (!(ny0 < ny1)) ny0 = 0, ny1 = MIN(H, 1.);
+        const double budget = 4 * view_width * view_height, area = (nx1 - nx0) * (ny1 - ny0);
+        if (area <= budget || pass) break;
+        const double s = sqrt(budget / area);
+        W = MAX(1., round(W * s)), H = MAX(1., round(H * s));
+    }
+    const double mx = ceil(view_width / 4), my = ceil(view_height / 4);
+    if (W * H <= (nx1 - nx0 + 2 * mx) * (ny1 - ny0 + 2 * my) && W <= INT32_MAX && H <= INT32_MAX) return (VectorView){W, H, 0, 0, (unsigned)W, (unsigned)H};
+    if (current && current->width == W && current->height == H && current->x <= nx0 && current->y <= ny0 && current->x + current->cols >= nx1 &&
+        current->y + current->rows >= ny1)
+        return *current;
+    const double x0 = MAX(0., nx0 - mx), y0 = MAX(0., ny0 - my), x1 = MIN(W, nx1 + mx), y1 = MIN(H, ny1 + my);
+    return (VectorView){W, H, x0, y0, (unsigned)(x1 - x0), (unsigned)(y1 - y0)};
+}
 
-// Brings the texture of a vector image up to date, at the size the image is
-// shown at. A change of that size draws all of it, a change to the document
-// only the rectangle that change reaches.
+// Brings the texture of a vector image up to date, see choose_vector_view() for
+// what it holds. A change to that draws all of it again, a change to the
+// document only the rectangle that change reaches.
 static void
-update_vector_texture(GraphicsManager *self, Image *img, double width, double height) {
-    if (!self->window_id || width < 1 || height < 1) return;
-    double scale = sqrt(MAX_VECTOR_PIXELS / (width * height));
-    if (scale < 1) width *= scale, height *= scale;
-    uint32_t w = (uint32_t)lround(width), h = (uint32_t)lround(height);
-    const bool has_pixels = img->texture && img->texture->id && w == img->vector_tex_width && h == img->vector_tex_height;
-    VectorRect rect;
-    uint8_t *data = render_vector_damage(self, img, w, h, !has_pixels, &rect);
-    if (!data) return;
+update_vector_texture(GraphicsManager *self, Image *img, double width, double height, ImageFraction shown, double view_width, double view_height) {
+    if (!self->window_id || !(width >= 1) || !(height >= 1)) return;
+    const VectorView view = choose_vector_view(width, height, shown, view_width, view_height, &img->vector_view);
+    const VectorView *held = &img->vector_view;
+    const bool has_pixels = img->texture && img->texture->id && held->width == view.width && held->height == view.height && held->x == view.x &&
+                            held->y == view.y && held->cols == view.cols && held->rows == view.rows;
+    VectorRect rect = {0, 0, view.cols, view.rows};
+    if (has_pixels && !vector_doc_damage_view(img->vector, view, &rect)) {
+        vector_doc_clear_damage(img->vector);  // it was all outside the part held
+        return;
+    }
+    uint8_t *data = vector_doc_render_view(img->vector, view, rect, vector_lookup, self);
+    if (!data) {
+        // out of memory, most likely: the image stays as it was until something about it changes
+        log_error("Failed to rasterize %ux%u pixels of a vector image", rect.width, rect.height);
+        return;
+    }
+    vector_doc_clear_damage(img->vector);
     if (img->texture) {
-        if (rect.width == w && rect.height == h) send_image_to_gpu(&img->texture->id, data, w, h, false, true, true, REPEAT_CLAMP);
+        if (!has_pixels) send_image_to_gpu(&img->texture->id, data, view.cols, view.rows, false, true, true, REPEAT_CLAMP);
         else update_image_on_gpu(img->texture->id, data, rect.x, rect.y, rect.width, rect.height);
     }
     free(data);
-    img->vector_tex_width = w;
-    img->vector_tex_height = h;
+    img->vector_view = view;
 }
 
 // Terminal-side ink, see docs/ink-protocol.rst. The terminal applies to a
@@ -3289,6 +3382,34 @@ W(update_vector_pixels) {
     return Py_BuildValue("IIII", rect.x, rect.y, rect.width, rect.height);
 }
 
+// For tests: a part of a vector image drawn at a size, see VectorView
+W(render_vector_view) {
+    unsigned long id;
+    VectorView v;
+    PA("kddddII", &id, &v.width, &v.height, &v.x, &v.y, &v.cols, &v.rows);
+    Image *img = vector_image_for_tests(self, id);
+    if (!img) return NULL;
+    uint8_t *data = vector_doc_render_view(img->vector, v, (VectorRect){0, 0, v.cols, v.rows}, vector_lookup, self);
+    if (!data) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to rasterize the vector image");
+        return NULL;
+    }
+    PyObject *ans = PyBytes_FromStringAndSize((const char *)data, (Py_ssize_t)v.cols * v.rows * 4);
+    free(data);
+    return ans;
+}
+
+// For tests: the part of a vector image update_vector_texture() rasterizes
+W(choose_vector_view) {
+    double width, height, view_width, view_height;
+    ImageFraction shown;
+    VectorView current = {0};
+    PA("dd(dddd)dd|(ddddII)", &width, &height, &shown.left, &shown.top, &shown.right, &shown.bottom, &view_width, &view_height, &current.width,
+        &current.height, &current.x, &current.y, &current.cols, &current.rows);
+    const VectorView v = choose_vector_view(width, height, shown, view_width, view_height, &current);
+    return Py_BuildValue("ddddII", v.width, v.height, v.x, v.y, v.cols, v.rows);
+}
+
 #define M(x, va) {#x, (PyCFunction)py##x, va, ""}
 
 static PyMethodDef methods[] = {
@@ -3297,6 +3418,8 @@ static PyMethodDef methods[] = {
     M(update_layers, METH_VARARGS),
     M(render_vector_image, METH_VARARGS),
     M(update_vector_pixels, METH_VARARGS),
+    M(render_vector_view, METH_VARARGS),
+    M(choose_vector_view, METH_VARARGS),
     {NULL} /* Sentinel */
 };
 
