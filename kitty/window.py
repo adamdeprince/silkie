@@ -176,9 +176,20 @@ class CwdRequest:
         window = self.window
         if not window:
             return ''
-        reported_cwd = path_from_osc7_url(window.screen.last_reported_cwd) if window.screen.last_reported_cwd else ''
+        reported_cwd = self.usable_reported_cwd(window)
         if reported_cwd and not window.child_is_remote and (self.request_type is CwdRequestType.last_reported or window.at_prompt):
             return reported_cwd
+        return self.cwd_of_process(window)
+
+    def usable_reported_cwd(self, window: 'Window') -> str:
+        reported_cwd = path_from_osc7_url(window.screen.last_reported_cwd) if window.screen.last_reported_cwd else ''
+        # For root, the reported cwd is only meaningful if it comes from the
+        # root process rather than from some other program it is running
+        if reported_cwd and (self.request_type is not CwdRequestType.root or window.root_in_foreground_processes):
+            return reported_cwd
+        return ''
+
+    def cwd_of_process(self, window: 'Window') -> str:
         if self.request_type is CwdRequestType.root:
             return window.get_cwd_of_root_child() or ''
         return window.get_cwd_of_child(oldest=self.request_type is CwdRequestType.oldest) or ''
@@ -187,8 +198,8 @@ class CwdRequest:
         window = self.window
         if not window:
             return ''
-        reported_cwd = path_from_osc7_url(window.screen.last_reported_cwd) if window.screen.last_reported_cwd else ''
-        if reported_cwd and (self.request_type is not CwdRequestType.root or window.root_in_foreground_processes):
+        reported_cwd = self.usable_reported_cwd(window)
+        if reported_cwd:
             ssh_kitten_cmdline = window.ssh_kitten_cmdline()
             if ssh_kitten_cmdline:
                 run_shell = argv[0] == resolved_shell(get_options())[0]
@@ -236,7 +247,7 @@ class CwdRequest:
                 return ''
             if not window.child_is_remote and (self.request_type is CwdRequestType.last_reported or window.at_prompt):
                 return reported_cwd
-        return window.get_cwd_of_child(oldest=self.request_type is CwdRequestType.oldest) or ''
+        return self.cwd_of_process(window)
 
 
 def process_title_from_child(title: memoryview, is_base64: bool, default_title: str) -> str:
@@ -1029,7 +1040,7 @@ class Window:
         if field in ('id', 'window_id'):
             return pat.pattern == str(self.id)
         if field == 'pid':
-            return pat.pattern == str(self.child.pid)
+            return pat.pattern == str(self.child.root_pid)
         if field == 'title':
             return pat.search(self.override_title or self.title) is not None
         if field in 'cwd':
@@ -2387,7 +2398,7 @@ class Window:
 
     @property
     def root_in_foreground_processes(self) -> bool:
-        q = self.child.pid
+        q = self.child.root_pid
         for p in self.child.foreground_processes:
             if p['pid'] == q:
                 return True
@@ -2585,7 +2596,7 @@ class Window:
             'is_active': is_active,
             'title': self.title,
             'title_overridden': self.override_title is not None,
-            'pid': self.child.pid,
+            'pid': self.child.root_pid,
             'cwd': self.child.current_cwd or self.child.cwd,
             'cmdline': self.child.cmdline,
             'last_reported_cmdline': self.last_cmd_cmdline,
@@ -2728,7 +2739,7 @@ class Window:
             elif not self.at_prompt:
                 if self.last_cmd_cmdline:
                     unserialize_data['cmd_at_shell_startup'] = self.last_cmd_cmdline
-                elif self.child.pid != (pid := self.child.pid_for_cwd) and pid is not None:
+                elif self.child.root_pid != (pid := self.child.pid_for_cwd) and pid is not None:
                     # we have a shell running some command
                     with suppress(Exception):
                         fcmd = self.child.cmdline_of_pid(pid)
