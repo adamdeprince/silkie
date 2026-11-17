@@ -769,7 +769,7 @@ _glfwPlatformTerminate(void) {
     if (_glfw.x11.display) {
         XCloseDisplay(_glfw.x11.display);
         _glfw.x11.display = NULL;
-        _glfw.x11.eventLoopData.fds[0].fd = -1;
+        if (_glfw.x11.eventLoopData.watches_count) _glfw.x11.eventLoopData.fds[0].fd = -1;
     }
 
     if (_glfw.x11.xcursor.handle) {

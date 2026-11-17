@@ -78,10 +78,11 @@ typedef struct {
     bool repeats;
 } TimerDispatch;
 
-#define MAX_NUM_OF_WATCHED_FDS 64
-
 typedef struct {
-    struct pollfd fds[MAX_NUM_OF_WATCHED_FDS];
+    // fds[i] is what is polled for watches[i]. Both arrays grow together as
+    // watches are added and always have watches_capacity entries. fds is
+    // passed to poll() as one block, and fds[0] is the display connection.
+    struct pollfd *fds;
 #ifdef HAS_EVENT_FD
     int wakeupFd;
 #else
@@ -94,7 +95,8 @@ typedef struct {
 #endif
     bool wakeup_data_read, wakeup_fd_ready, key_repeat_fd_ready;
     nfds_t watches_count, timers_count;
-    Watch watches[MAX_NUM_OF_WATCHED_FDS];
+    Watch *watches;
+    size_t watches_capacity;
     // Both arrays grow as timers are added and always have timers_capacity
     // entries, so that dispatchTimers() never allocates
     Timer *timers;

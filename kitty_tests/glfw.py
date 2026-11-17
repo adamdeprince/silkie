@@ -92,71 +92,32 @@ class TestGLFW(BaseTest):
         self.ae(utf_8_strndup(b'\xc3\xb6\xf0\x9f\x98\xb8', 4).value, b'\xc3\xb6')
 
     @unittest.skipIf(is_macos, 'glfw-cocoa.so is not built with backend_utils, see test_cocoa_timer_table_grows')
-    def test_timer_table_grows(self):
-        # The timer table of the Linux backends used to be a fixed array of 128 entries
+    def test_event_loop_tables_grow(self):
+        # The timer and watch tables of the Linux backends used to be fixed arrays of 128 and 64 entries
         import ctypes
+        import resource
 
         from kitty.constants import glfw_path
 
-        n = 1000
+        num_timers, num_watches = 1000, 500
+        # Each watch is a pipe and a callback adds half as many again
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        needed = 3 * num_watches + 256
+        if soft != resource.RLIM_INFINITY and soft < needed:
+            if hard != resource.RLIM_INFINITY and hard < needed:
+                self.skipTest(f'The limit on open files, {hard}, is too low for {num_watches} watched pipes')
+            resource.setrlimit(resource.RLIMIT_NOFILE, (needed, hard))
+            self.addCleanup(resource.setrlimit, resource.RLIMIT_NOFILE, (soft, hard))
         for module in ('x11', 'wayland'):
             path = glfw_path(module)
             if not os.path.exists(path):
                 continue
             with self.subTest(module=module):
-                lib = ctypes.CDLL(path)
-                cb_type = ctypes.CFUNCTYPE(None, ctypes.c_ulonglong, ctypes.c_void_p)
-                lib.addTimer.restype = ctypes.c_ulonglong
-                lib.addTimer.argtypes = (
-                    ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int64, ctypes.c_int, ctypes.c_bool, cb_type, ctypes.c_void_p, cb_type)
-                lib.dispatchTimers.restype = ctypes.c_size_t
-                lib.dispatchTimers.argtypes = (ctypes.c_void_p,)
-                lib.removeTimer.argtypes = (ctypes.c_void_p, ctypes.c_ulonglong)
-                lib.removeAllTimers.argtypes = (ctypes.c_void_p,)
-                # Zeroed storage for an EventLoopData, which is far smaller than this
-                eld = ctypes.create_string_buffer(1 << 20)
-                fired: list[int] = []
-                freed: list[int] = []
-                added_in_callback: list[int] = []
-
-                def on_timer(timer_id: int, data: int | None) -> None:
-                    fired.append(data or 0)
-                    if data == 1:
-                        # Grow the table from inside a callback, while timers are being dispatched
-                        added_in_callback.extend(add(n + 1 + i) for i in range(n // 2))
-
-                def on_free(timer_id: int, data: int | None) -> None:
-                    freed.append(data or 0)
-
-                cb, free_cb = cb_type(on_timer), cb_type(on_free)
-
-                def add(data: int, interval: int = 0, repeats: bool = False) -> int:
-                    return lib.addTimer(eld, b'test', interval, 1, repeats, cb, data, free_cb)
-
-                ids = [add(i + 1) for i in range(n)]
-                self.assertNotIn(0, ids)
-                self.ae(len(set(ids)), n)
-                self.ae(lib.dispatchTimers(eld), n)
-                self.ae(sorted(fired), list(range(1, n + 1)))
-                self.ae(sorted(freed), list(range(1, n + 1)))
-                self.ae(len(added_in_callback), n // 2)
-                self.assertNotIn(0, added_in_callback)
-                fired.clear(), freed.clear()
-                self.ae(lib.dispatchTimers(eld), n // 2)
-                self.ae(sorted(fired), list(range(n + 1, n + 1 + n // 2)))
-                self.ae(sorted(freed), sorted(fired))
-                # Timers that are not due are kept, and can be removed one at a time or all at once
-                fired.clear(), freed.clear()
-                one_hour = 3600 * 10**9
-                ids = [add(i + 1, one_hour, True) for i in range(n)]
-                self.assertNotIn(0, ids)
-                self.ae(lib.dispatchTimers(eld), 0)
-                for timer_id in ids[: n // 2]:
-                    lib.removeTimer(eld, timer_id)
-                self.ae(sorted(freed), list(range(1, n // 2 + 1)))
-                lib.removeAllTimers(eld)
-                self.ae(sorted(freed), list(range(1, n + 1)))
-                self.ae(fired, [])
+                f = ctypes.CDLL(path)._glfwTestEventLoopTables
+                f.restype = ctypes.c_char_p
+                f.argtypes = (ctypes.c_size_t, ctypes.c_size_t)
+                err = f(num_timers, num_watches)
+                self.assertIsNone(err, (err or b'').decode())
 
     @unittest.skipUnless(is_macos, 'macOS only')
     def test_cocoa_timer_table_grows(self):
