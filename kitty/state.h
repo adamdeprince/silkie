@@ -31,6 +31,15 @@ typedef enum { WINDOW_NORMAL, WINDOW_FULLSCREEN, WINDOW_MAXIMIZED, WINDOW_MINIMI
 typedef enum { HDR_OFF, HDR_AUTO, HDR_ALWAYS, HDR_DETECT } HDRMode;
 typedef enum { DEEP_COLOR_NEVER, DEEP_COLOR_ALWAYS } DeepColorMode;
 
+// A property of the display a window is on, acted on once a change of it has lasted, see debounce_display_change()
+typedef struct DisplayChange {
+    unsigned acted, seen;
+    monotonic_t seen_at;
+    bool known;
+} DisplayChange;
+
+enum { EINK_REFRESH = 1, EINK_GRAY = 2 };
+
 typedef struct UrlPrefix {
     char_type string[16];
     size_t len;
@@ -113,6 +122,11 @@ typedef struct Options {
     char *default_window_logo;
     char *display_info;
     bool eink_mode;
+    // The monitor_info option: for each monitor selected by matches[i], the key=value pairs specs[i]
+    struct {
+        char **matches, **specs;
+        size_t count;
+    } monitor_info;
     struct {
         char **paths;
         size_t count;
@@ -678,8 +692,7 @@ typedef struct OSWindow {
         bool encode_in_shader;
         // Whether the system says the display the window is on shows more than 8 bits, see update_output_depth(),
         // which applies a change once it has lasted, like a resize, so a drag across displays does not thrash
-        bool display_deep, display_deep_seen, display_depth_known;
-        monotonic_t display_deep_seen_at;
+        DisplayChange depth;
         // A switch of the surface the system refused, 1 for to 8 bits and 2 for to floating point, not tried again
         // until something else is wanted
         int refused_switch;
@@ -734,6 +747,17 @@ typedef struct OSWindow {
     ShaderAnimState shader_anim;
     DisplayInfo display_info;
     monotonic_t display_info_at;
+    // What Silkie does for the display the window is on, see update_eink_state(): EINK_REFRESH for e-paper, no
+    // blinking, animation or dithering, and EINK_GRAY for one that shows only gray, black on white. Changes are acted
+    // on once they have lasted, as for the depth of the display.
+    DisplayChange eink;
+    const struct MonitorIdentity *logged_monitor;  // the monitor last logged with --debug-rendering
+    // The colors of the OS window itself, outside the terminal windows, while it is on a display that shows only gray,
+    // set by Python with the colors it forces in its terminal windows, see os_window_background()
+    struct {
+        bool active;
+        color_type foreground, background, tab_bar_background, tab_bar_margin_color;
+    } eink_chrome;
     struct {
         // POINTER_MAP_SIZE x POINTER_MAP_SIZE (x, y) pairs, rows from the bottom up, in viewport UV
         float *data;
@@ -878,6 +902,8 @@ void run_with_activation_token_in_os_window(OSWindow *w, PyObject *callback);
 void set_os_window_title(OSWindow *w, const char *title);
 OSWindow *os_window_for_kitty_window(id_type);
 void os_window_display_info(OSWindow *w, DisplayInfo *d);
+void log_window_monitor(OSWindow *w, const DisplayInfo *d);
+void update_display_info(OSWindow *os_window, monotonic_t now, bool explicit);
 unsigned os_window_refresh_period_us(OSWindow *w);
 OSWindow *os_window_for_id(id_type);
 void spatial_map_pointer(OSWindow *, double *, double *);
@@ -910,6 +936,21 @@ void check_os_window_output(OSWindow *w);
 bool output_dither_levels(const OSWindow *w, float levels[3]);
 int output_dither_bits(const OSWindow *w);
 bool update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wait);
+bool debounce_display_change(DisplayChange *c, unsigned now_value, monotonic_t now, monotonic_t *wait);
+bool update_eink_state(OSWindow *w, const DisplayInfo *d, bool explicit, monotonic_t now, monotonic_t *wait);
+static inline bool os_window_is_eink(const OSWindow *w) { return w && (w->eink.acted & EINK_REFRESH); }
+static inline bool os_window_is_gray(const OSWindow *w) { return w && (w->eink.acted & EINK_GRAY); }
+// Animation ghosts on e-paper, so there the cursor trail is not drawn
+static inline bool os_window_has_cursor_trail(const OSWindow *w) { return OPT(cursor_trail) && !os_window_is_eink(w); }
+// The colors of the options that color an OS window outside its terminal windows, those forced on gray displays instead
+static inline color_type os_window_background(const OSWindow *w) { return w && w->eink_chrome.active ? w->eink_chrome.background : OPT(background); }
+static inline color_type os_window_foreground(const OSWindow *w) { return w && w->eink_chrome.active ? w->eink_chrome.foreground : OPT(foreground); }
+static inline color_type os_window_tab_bar_background(const OSWindow *w) {
+    return w && w->eink_chrome.active ? w->eink_chrome.tab_bar_background : OPT(tab_bar_background);
+}
+static inline color_type os_window_tab_bar_margin_color(const OSWindow *w) {
+    return w && w->eink_chrome.active ? w->eink_chrome.tab_bar_margin_color : OPT(tab_bar_margin_color);
+}
 bool os_window_wants_float_surface(const OSWindow *w);
 void os_window_surface_switched(OSWindow *w);
 void scale_output_to_hdr_white_level(const OSWindow *w);

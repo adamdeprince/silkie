@@ -52,7 +52,11 @@ The fields of the reply are:
 ``kind``
     One of ``lcd``, ``oled``, ``eink`` and ``unknown``. On e-ink, updates are
     slow and leave ghosts, so a program avoids animation and smooth scrolling
-    and redraws in large, infrequent steps.
+    and redraws in large, infrequent steps. It also avoids dithering, whose
+    fine pattern shows as grain and ghosts as it changes, and reduces colors to
+    the levels of the panel by taking the nearest. ``kind`` says nothing of
+    color: there is color e-paper, and ``color`` is what says whether a display
+    shows only gray.
 
 ``color``
     One of ``rgb`` (independent red, green and blue channels), ``gray``
@@ -78,7 +82,8 @@ The fields of the reply are:
 ``precision``
     Where the channel widths came from: ``framebuffer`` for the system's
     display mode or window visual, ``configured`` for a user's declaration,
-    or ``unknown``. A framebuffer width does not establish the physical
+    ``model`` for what the terminal knows of the model of the monitor, or
+    ``unknown``. A program treats a value it does not know as ``unknown``. A framebuffer width does not establish the physical
     panel's precision: the compositor, display link, panel, or dithering may
     change what is finally shown. These fields describe available color
     representation, not a measurement of calibration or color error.
@@ -137,6 +142,36 @@ applies equally to its active channels.
     Physical pixels per inch: how many of the pixels a program draws in fit
     in an inch of the screen, so that it can draw at a true size. ``0`` when
     unknown.
+
+The monitor the window is on, where the terminal knows it, which a program
+can use to recognize a monitor whose properties it knows better than the
+system, or to show the user which monitor the window is on. Each of these
+fields is left out when it is not known:
+
+``mfg``, ``product``
+    The manufacturer ID and the product code of the monitor's EDID: three
+    capital letters, such as ``OBX``, and a number from ``0`` to ``65535``.
+    ``product`` is sent only with ``mfg``.
+
+``make``, ``model``
+    The manufacturer and the model as the system gives them, else from the
+    EDID, its manufacturer ID and its name descriptor, such as ``MIRA253``.
+
+No serial number is sent: it would tell whose monitor it is, and the program
+asking may be running on another machine.
+
+``connector``
+    The system's name for the connection the monitor is on, such as ``DP-7``.
+
+``description``
+    A description of the monitor meant for people, as the system gives it.
+
+These four are strings, UTF-8 without control characters encoded as base64
+with padding, as the other extensions of this terminal send strings. For
+example a monitor reported as ``mfg=OBX : product=17 : make=T0JY :
+model=TUlSQTI1Mw== : connector=RFAtNw==`` is an ONYX BOOX Mira Pro, make
+``OBX`` and model ``MIRA253``, on ``DP-7``. A move to another monitor is a
+change, and sends an event even when every other field is the same.
 
 Values the terminal cannot determine are ``unknown`` or ``0``, never guessed.
 A terminal that knows nothing about its display, a multiplexer that is not
@@ -225,15 +260,43 @@ Configuration
 ----------------
 
 The operating system reports most of these values, but not all. Nothing tells
-a terminal that it is on e-ink. In Silkie, :opt:`eink_mode` declares an e-paper
-display and selects black text on white unless a light or dark color scheme
-was explicitly chosen. It takes precedence over detected display kind and
-over ``display_info kind=...``. Runtime changes with ``set_eink_mode`` notify
-display subscribers immediately. The :opt:`display_info` option declares
-individual properties that the OS cannot, overriding detection; using only
-``display_info kind=eink`` changes the report without changing colors. Neither
-setting guesses whether an e-paper panel is grayscale or color. Currently, Silkie reports
-``kind`` only on macOS, and ``gamut`` on macOS and on Wayland compositors that
+a terminal that it is on e-ink: e-paper monitors say in their EDID that they
+are RGB color displays, and operating systems pass that on. Silkie therefore
+goes by which monitor the window is on, as the system identifies it:
+
+* On Wayland, the make and model of ``wl_output`` and the name and description
+  of ``wl_output`` (version 4) or ``xdg_output``. No Wayland protocol gives the
+  EDID. Mutter, for example, gives an ONYX BOOX Mira Pro as make ``OBX``, model
+  ``MIRA253``, name ``DP-7`` and description ``OBX 25"``. On Linux Silkie also
+  reads the EDID of the connector with that name from
+  :file:`/sys/class/drm`, for the product code, but only when exactly one
+  connector has the name and its EDID has the model the compositor gave, so
+  that a nested or remote compositor never gets the EDID of another monitor.
+* On X11, the name of the RandR output and its ``EDID`` property.
+* On macOS, the name of the screen, as model, and the EDID manufacturer and
+  product codes that Core Graphics gives as its vendor and model numbers.
+
+Silkie has a table of e-paper monitors, matched on these, which says what each
+is: e-paper, and whether it shows only gray, and with how many levels where
+that is known. The :opt:`monitor_info` option declares the properties of a
+monitor, overriding the table and the OS. A window on e-paper (``kind=eink``)
+avoids what ghosts: blinking, animation and dithering, so ``output_dither`` is
+``0`` there. For now custom shaders, the visual bell, pixel scrolling and the
+repaint timing are as on any display, and Silkie does not reduce images to the
+levels of gray of the panel: the monitor does that. A window on a display that shows only gray (``color=gray`` or
+``mono``) gets black text on white, or white on black with an explicit dark
+color scheme. The two are independent. All of this follows the window from
+monitor to monitor, once a move has lasted a moment, as for the depth of the
+display below, and programs with the mode on get an event. :opt:`eink_mode`
+treats every display as e-paper, taking a display whose colors nothing declares
+to show gray, and takes precedence over ``kind=...`` in the options. Runtime
+changes with ``set_eink_mode`` notify display subscribers immediately. The
+:opt:`display_info` option declares individual properties of every display,
+overriding the rest, but only in what programs are told: using only
+``display_info kind=eink`` changes the report without changing what Silkie
+does. Nothing guesses whether an e-paper panel is grayscale or color. Silkie
+reports ``kind`` on macOS for built-in displays, as ``lcd``, and for the
+monitors it knows, and ``gamut`` on macOS and on Wayland compositors that
 implement the color management protocol. There the compositor gives the
 primaries of the display, and ``gamut`` is the widest of the three whose area
 in the CIE 1931 chromaticity diagram the display covers at least nine tenths
@@ -274,7 +337,8 @@ are unchanged.
 
 The ``output`` fields are what OpenGL says about the surface of the window
 once it has been drawn, ``0`` and ``unknown`` before that, and are not
-affected by :opt:`display_info`. Which surface a window gets is chosen with
+affected by :opt:`display_info`. On e-paper nothing is dithered, whatever
+:opt:`output_dither` says, and ``output_dither`` is ``0``. Which surface a window gets is chosen with
 :opt:`deep_color`, and whether and to which steps it is dithered with
 :opt:`output_dither`. They change, with an event, when the window is moved to
 a display of another depth: the steps dithered to follow the display, and on

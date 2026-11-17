@@ -1115,6 +1115,57 @@ def custom_shader_var(val: str, current_val: dict[str, str]) -> Iterable[tuple[s
     yield m.group(1), ' '.join(m.group(2).split())
 
 
+display_info_words = {
+    'kind': ('lcd', 'oled', 'eink', 'unknown'),
+    'color': ('rgb', 'gray', 'mono'),
+    'gamut': ('srgb', 'p3', 'rec2020', 'unknown'),
+}
+display_info_integers = frozenset(('bits', 'red_bits', 'green_bits', 'blue_bits', 'gray_bits', 'period'))
+display_info_numbers = frozenset(('headroom', 'scale', 'ppi'))
+
+
+def monitor_info(val: str, current_val: dict[str, str]) -> Iterable[tuple[str, str]]:
+    # A match, quoted when it has spaces, then the key=value pairs of display_info. A later line for the same match
+    # adds to the earlier ones, and a key it repeats wins, as the C side takes the last value of each key.
+    val = val.strip()
+    if not val:
+        return
+    if val[0] in '"\'':
+        end = val.find(val[0], 1)
+        if end < 0:
+            raise ValueError(f'The monitor in {val!r} has no closing quote')
+        match, rest = val[1:end], val[end + 1:]
+    else:
+        match, _, rest = val.partition(' ')
+    match = match.strip()
+    if not match:
+        raise ValueError(f'{val!r} does not say which monitor it is for')
+    pairs = []
+    for tok in rest.split():
+        k, sep, v = tok.partition('=')
+        if not sep or not v:
+            raise ValueError(f'{tok!r} in monitor_info is not a key=value pair')
+        if k in display_info_words:
+            if v not in display_info_words[k]:
+                raise ValueError(f'{v!r} is not a valid {k} in monitor_info, use one of: {", ".join(display_info_words[k])}')
+        elif k in display_info_integers:
+            if not v.isdigit() or not v.isascii():
+                raise ValueError(f'The {k} in monitor_info must be a non-negative integer, not {v!r}')
+        elif k in display_info_numbers:
+            try:
+                if float(v) < 0:
+                    raise ValueError()
+            except ValueError:
+                raise ValueError(f'The {k} in monitor_info must be a non-negative number, not {v!r}') from None
+        else:
+            raise ValueError(f'{k!r} is not a key of monitor_info')
+        pairs.append(tok)
+    if not pairs:
+        raise ValueError(f'{val!r} declares nothing about the monitor')
+    previous = current_val.get(match)
+    yield match, ' '.join(([previous] if previous else []) + pairs)
+
+
 def allow_hyperlinks(x: str) -> int:
     if x == 'ask':
         return 0b11

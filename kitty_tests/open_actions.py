@@ -414,8 +414,8 @@ action two
         from types import SimpleNamespace
         from unittest.mock import patch
 
-        from kitty.colors import SessionColorSchemes, ThemeColors
-        from kitty.fast_data_types import COLOR_LAYER_WINDOW, patch_color_profiles
+        from kitty.colors import SessionColorSchemes, ThemeColors, sync_eink_colors
+        from kitty.fast_data_types import COLOR_LAYER_WINDOW, patch_color_profiles, set_eink_mode
 
         builtin_bg = 0xF6F4EF
         s = self.create_screen()
@@ -461,18 +461,22 @@ action two
             self.ae(int(cp.default_bg), builtin_bg)
             self.ae((int(cp.default_fg), cp.as_dict()['color1']), (0x020202, 0x010101))
             self.assertTrue(notified, 'the program was not told its colors changed')
-            # e-ink mode is black on white over every layer
-            opts.eink_mode = True
-            tc.apply_color_scheme()
-            self.ae((int(cp.default_fg), int(cp.default_bg), tc.applied_theme), (0, 0xFFFFFF, ''))
+            # e-ink mode is black on white over every layer, as a layer of its own above them
+            set_eink_mode(True)
+            sync_eink_colors()
+            self.ae((int(cp.default_fg), int(cp.default_bg), tc.applied_theme), (0, 0xFFFFFF, 'light'))
             # it forces the colors it names, the palette is left alone
             self.ae(cp.as_dict()['color1'], 0x010101)
-            self.assertFalse(tc.on_system_color_scheme_change('dark'))
+            # the theme still follows the system, under it
+            system_scheme[0] = 'dark'
+            self.assertTrue(tc.on_system_color_scheme_change('dark'))
+            self.ae(int(cp.default_bg), 0xFFFFFF)
+            system_scheme[0] = 'light'
+            self.assertTrue(tc.on_system_color_scheme_change('light'))
             self.ae(int(cp.default_bg), 0xFFFFFF)
             # and when it is turned off the theme and the session colors come back
-            opts.eink_mode = False
-            system_scheme[0] = 'light'
-            tc.apply_color_scheme()
+            set_eink_mode(False)
+            sync_eink_colors()
             self.ae((int(cp.default_fg), int(cp.default_bg)), (0x020202, builtin_bg))
 
     def test_mime_cache(self):

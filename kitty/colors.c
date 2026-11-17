@@ -372,14 +372,15 @@ colorprofile_resolve(ColorProfile *self, PyObject *opts, bool configured_changed
     bool semantic, dynamic = palette_generation_is_dynamic(opts ? opts : global_state.options_object, &semantic);
     if (configured_changed) {
         const ColorLayer *layers[] = {&self->session_layer, &self->window_layer};
-#define S(name)                                                     \
-    self->configured.name = self->global_layer.dynamic_colors.name; \
-    for (unsigned l = 0; l < arraysz(layers); l++) {                \
-        if (layers[l]->dynamic_colors.name.type != COLOR_NOT_SET) { \
-            self->configured.name = layers[l]->dynamic_colors.name; \
-            break;                                                  \
-        }                                                           \
-    }
+#define S(name)                                                         \
+    self->configured.name = self->global_layer.dynamic_colors.name;     \
+    for (unsigned l = 0; l < arraysz(layers); l++) {                    \
+        if (layers[l]->dynamic_colors.name.type != COLOR_NOT_SET) {     \
+            self->configured.name = layers[l]->dynamic_colors.name;     \
+            break;                                                      \
+        }                                                               \
+    }                                                                   \
+    if (self->eink_active && self->eink_colors.name.type != COLOR_NOT_SET) self->configured.name = self->eink_colors.name;
         S(default_fg) S(default_bg) S(cursor_color) S(cursor_text_color) S(highlight_fg) S(highlight_bg) S(visual_bell_color);
 #undef S
         const TransparentDynamicColor *transparent_colors = self->global_layer.transparent_colors;
@@ -499,6 +500,9 @@ copy_color_profile(ColorProfile *dest, ColorProfile *src) {
     memcpy(dest->overriden_transparent_colors, src->overriden_transparent_colors, sizeof(dest->overriden_transparent_colors));
     memcpy(dest->configured_transparent_colors, src->configured_transparent_colors, sizeof(dest->configured_transparent_colors));
     dest->overridden_mark_colors = src->overridden_mark_colors;
+    dest->eink_colors = src->eink_colors;
+    dest->eink_saved_overridden = src->eink_saved_overridden;
+    dest->eink_active = src->eink_active;
     resolve_mark_colors(dest);
 }
 
@@ -779,7 +783,8 @@ as_dict(ColorProfile *self, PyObject *args UNUSED) {
 #define D(attr, name)                                                                                                      \
     {                                                                                                                      \
         if (self->overridden.attr.type != COLOR_NOT_SET || self->window_layer.dynamic_colors.attr.type != COLOR_NOT_SET || \
-            self->session_layer.dynamic_colors.attr.type != COLOR_NOT_SET) {                                               \
+            self->session_layer.dynamic_colors.attr.type != COLOR_NOT_SET ||                                               \
+            (self->eink_active && self->eink_colors.attr.type != COLOR_NOT_SET)) {                                         \
             int ret;                                                                                                       \
             PyObject *val;                                                                                                 \
             DynamicColor c = colorprofile_to_color(self, self->overridden.attr, self->configured.attr);                    \
@@ -1144,6 +1149,61 @@ reset_layer(ColorProfile *self, PyObject *which) {
     Py_RETURN_NONE;
 }
 
+// Forces the colors of the spec, a dict as for patch_color_profiles() with the keys foreground, background, cursor,
+// cursor_text_color, selection_foreground and selection_background, over every layer and over the colors set by the
+// program, or with None stops doing so. Unlike patching the layers, this loses nothing: the colors under it come back.
+// Returns whether the colors changed.
+static PyObject *
+set_eink_colors(ColorProfile *self, PyObject *spec) {
+    if (spec != Py_None && !PyDict_Check(spec)) {
+        PyErr_SetString(PyExc_TypeError, "spec must be a dict or None");
+        return NULL;
+    }
+    const DynamicColors configured_before = self->configured, overridden_before = self->overridden;
+    if (spec == Py_None) {
+        if (!self->eink_active) Py_RETURN_FALSE;
+        self->eink_active = false;
+        // What the program set before comes back, unless it has set something else since
+#define R(name) if (self->overridden.name.type == COLOR_NOT_SET) self->overridden.name = self->eink_saved_overridden.name;
+        R(default_fg) R(default_bg) R(cursor_color) R(cursor_text_color) R(highlight_fg) R(highlight_bg) R(visual_bell_color);
+#undef R
+        zero_at_ptr(&self->eink_saved_overridden);
+    } else {
+        DynamicColors forced = {0};
+#define F(key, name)                                                                         \
+    {                                                                                        \
+        PyObject *v = PyDict_GetItemString(spec, key);                                       \
+        if (v && PyLong_Check(v)) {                                                          \
+            forced.name.rgb = PyLong_AsUnsignedLong(v) & 0xffffff;                           \
+            forced.name.type = COLOR_IS_RGB;                                                 \
+        }                                                                                    \
+    }
+        F("foreground", default_fg) F("background", default_bg) F("cursor", cursor_color) F("cursor_text_color", cursor_text_color);
+        F("selection_foreground", highlight_fg) F("selection_background", highlight_bg);
+#undef F
+        if (PyErr_Occurred()) return NULL;
+        if (!self->eink_active) {
+            self->eink_saved_overridden = self->overridden;
+            self->eink_active = true;
+        }
+        self->eink_colors = forced;
+#define C(name) if (forced.name.type != COLOR_NOT_SET) self->overridden.name.val = 0;
+        C(default_fg) C(default_bg) C(cursor_color) C(cursor_text_color) C(highlight_fg) C(highlight_bg);
+#undef C
+    }
+    colorprofile_resolve(self, NULL, true);
+    self->dirty = true;
+    if (memcmp(&configured_before, &self->configured, sizeof(DynamicColors)) == 0 &&
+        memcmp(&overridden_before, &self->overridden, sizeof(DynamicColors)) == 0)
+        Py_RETURN_FALSE;
+    Py_RETURN_TRUE;
+}
+
+static PyObject *
+eink_colors_active(ColorProfile *self, PyObject *a UNUSED) {
+    return Py_NewRef(self->eink_active ? Py_True : Py_False);
+}
+
 static PyObject *
 color_stack_depth(ColorProfile *self, PyObject *a UNUSED) {
     return PyLong_FromUnsignedLong(self->color_stack_idx);
@@ -1220,6 +1280,8 @@ static PyMethodDef cp_methods[] = {
         METHOD(as_color, METH_O) METHOD(reset_color, METH_O) METHOD(set_color, METH_VARARGS) METHODB(palette_color_is_generated, METH_O),
     METHODB(get_transparent_background_color, METH_O),
     METHODB(reset_layer, METH_O),
+    METHODB(set_eink_colors, METH_O),
+    METHODB(eink_colors_active, METH_NOARGS),
     METHODB(color_stack_depth, METH_NOARGS),
     METHODB(test_mark_colors, METH_NOARGS),
     {"reload_from_opts", (PyCFunction)(void (*)(void))(reload_from_opts), METH_VARARGS | METH_KEYWORDS, NULL},

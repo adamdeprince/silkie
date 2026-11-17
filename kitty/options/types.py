@@ -443,6 +443,7 @@ option_names = (
     'menu_map',
     'modify_font',
     'momentum_scroll',
+    'monitor_info',
     'mouse_hide_wait',
     'mouse_map',
     'narrow_symbols',
@@ -841,6 +842,7 @@ class Options:
     kitten_alias: dict[str, str] = {}
     menu_map: dict[tuple[str, ...], str] = {}
     modify_font: dict[str, kitty.fonts.FontModification] = {}
+    monitor_info: dict[str, str] = {}
     narrow_symbols: dict[tuple[int, int], int] = {}
     remote_control_password: dict[str, collections.abc.Sequence[str]] = {}
     symbol_map: dict[tuple[int, int], str] = {}
@@ -974,6 +976,7 @@ defaults.font_role = {'sans': FontSpec(family='Iosevka', style='Extended', posts
 defaults.kitten_alias = {}
 defaults.menu_map = {}
 defaults.modify_font = {}
+defaults.monitor_info = {}
 defaults.narrow_symbols = {}
 defaults.remote_control_password = {}
 defaults.symbol_map = {}

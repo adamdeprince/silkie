@@ -108,6 +108,7 @@ from .fast_data_types import (
     add_timer,
     apply_options_update,
     background_opacity_of,
+    os_window_monitor_info,
     change_background_opacity,
     change_drag_thumbnail,
     cocoa_hide_app,
@@ -248,6 +249,8 @@ class OSWindowDict(TypedDict):
     wm_class: str
     wm_name: str
     background_opacity: float
+    # The monitor the OS window is on and what is known and done for it, see os_window_monitor_info()
+    display: dict[str, Any] | None
 
 
 class Atexit:
@@ -697,6 +700,7 @@ class Boss:
                         'wm_class': tm.wm_class,
                         'wm_name': tm.wm_name,
                         'background_opacity': bo,
+                        'display': os_window_monitor_info(os_window_id),
                     }
 
     def serialize_state_as_session(self, session_path: str = '', ser_opts: SaveAsSessionOptions | None = None) -> Iterator[str]:
@@ -3919,11 +3923,15 @@ class Boss:
                         self.show_error(_('Spatial display'), str(error))
             update_native_menus()
         # Update colors
-        from .colors import color_scheme_spec, colors_forced_by_eink, patch_colors
+        from .colors import color_scheme_spec, patch_colors, sync_eink_colors
+        from .fast_data_types import refresh_display_info
 
         if (spec := color_scheme_spec(opts)) is not None:
-            patch_colors(spec, None, True, notify_on_bg_change=False, replace_window_colors=colors_forced_by_eink(opts))
+            patch_colors(spec, None, True, notify_on_bg_change=False)
         theme_colors.on_config_reload(opts_already_patched=True)
+        # eink_mode, monitor_info and display_info can say something else of the display of each OS window now
+        refresh_display_info()
+        sync_eink_colors()
         for w in self.all_windows:
             if w.screen.color_profile.default_bg != bg_colors_before.get(w.id):
                 self.default_bg_changed_for(w.id)
@@ -4104,6 +4112,7 @@ class Boss:
 
     @ac('misc', 'Declare an e-paper display in all windows: yes, no, or toggle')
     def set_eink_mode(self, mode: str = 'toggle') -> None:
+        from .colors import sync_eink_colors
         from .fast_data_types import set_eink_mode
 
         opts = get_options()
@@ -4113,8 +4122,9 @@ class Boss:
         previous = opts.eink_mode
         enabled = not previous if mode == 'toggle' else mode == 'yes'
         colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in self.all_windows}
+        # Each OS window takes the change in at once, see on_os_window_eink_change()
         set_eink_mode(enabled)
-        theme_colors.apply_color_scheme()
+        sync_eink_colors()
         if previous != enabled:
             for w in self.all_windows:
                 # Palette changes already notified; explicit light/dark can keep it unchanged.
@@ -4585,6 +4595,16 @@ class Boss:
         for w in self.all_windows:
             if w.session_color_schemes:
                 w.apply_session_color_scheme(appearance)
+
+    def on_os_window_eink_change(self, os_window_id: int, eink: bool, gray: bool) -> None:
+        # The OS window moved to or from e-paper, or to or from a display that shows only gray, see update_eink_state()
+        from .colors import sync_eink_colors
+        sync_eink_colors((os_window_id,))
+        if eink and (tm := self.os_window_map.get(os_window_id)) is not None:
+            # A scroll that is gliding lands now
+            for tab in tm:
+                for w in tab:
+                    w.finish_scroll_animation()
 
     def on_display_color_change(self, os_window_id: int) -> None:
         if (tm := self.os_window_map.get(os_window_id)) is not None:

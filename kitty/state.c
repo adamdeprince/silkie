@@ -1250,21 +1250,66 @@ PYWRAP1(set_eink_mode) {
     if (OPT(eink_mode) == (bool)enabled) Py_RETURN_NONE;
     OPT(eink_mode) = enabled;
     // Report each explicit change immediately, including when toggled again before the next poll.
-    for (size_t i = 0; i < global_state.num_os_windows; i++) {
-        OSWindow *os_window = global_state.os_windows + i;
-        const char *previous_kind = os_window->display_info.kind;
-        os_window_display_info(os_window, &os_window->display_info);
-        const bool changed = os_window->display_info_at && previous_kind != os_window->display_info.kind;
-        os_window->display_info_at = monotonic();
-        if (!changed) continue;
-        for (size_t t = 0; t < os_window->num_tabs; t++) {
-            Tab *tab = os_window->tabs + t;
-            for (size_t w = 0; w < tab->num_windows; w++) {
-                if (tab->windows[w].render_data.screen) screen_display_changed(tab->windows[w].render_data.screen, &os_window->display_info);
-            }
-        }
-    }
+    const monotonic_t now = monotonic();
+    for (size_t i = 0; i < global_state.num_os_windows; i++) update_display_info(global_state.os_windows + i, now, true);
+    if (PyErr_Occurred()) return NULL;
     Py_RETURN_NONE;
+}
+
+// After a change of the options that say what a display is, such as monitor_info, acted on at once
+PYWRAP0(refresh_display_info) {
+    const monotonic_t now = monotonic();
+    for (size_t i = 0; i < global_state.num_os_windows; i++) update_display_info(global_state.os_windows + i, now, true);
+    if (PyErr_Occurred()) return NULL;
+    Py_RETURN_NONE;
+}
+
+// The colors of the OS window outside its terminal windows on a display that shows only gray, a dict with foreground,
+// background, tab_bar_background and tab_bar_margin_color, or None for those of the options
+PYWRAP1(set_os_window_eink_chrome) {
+    id_type os_window_id;
+    PyObject *spec;
+    PA("KO", &os_window_id, &spec);
+    OSWindow *w = os_window_for_id(os_window_id);
+    if (!w) Py_RETURN_NONE;
+    if (spec == Py_None) {
+        w->eink_chrome.active = false;
+    } else {
+        if (!PyDict_Check(spec)) {
+            PyErr_SetString(PyExc_TypeError, "spec must be a dict or None");
+            return NULL;
+        }
+#define C(name, fallback)                                                                    \
+    {                                                                                        \
+        PyObject *v = PyDict_GetItemString(spec, #name);                                     \
+        w->eink_chrome.name = v && PyLong_Check(v) ? (color_type)(PyLong_AsUnsignedLong(v) & 0xffffff) : fallback; \
+    }
+        C(background, OPT(background)) C(foreground, OPT(foreground)) C(tab_bar_background, w->eink_chrome.background);
+        C(tab_bar_margin_color, w->eink_chrome.background);
+#undef C
+        if (PyErr_Occurred()) return NULL;
+        w->eink_chrome.active = true;
+    }
+    w->needs_render = true;
+    set_os_window_chrome(w);
+    Py_RETURN_NONE;
+}
+
+// Whether the OS window is treated as on e-paper and as on a display that shows only gray, see update_eink_state(),
+// worked out now if it has not been yet, as for a window that has not been drawn
+PYWRAP1(os_window_eink_state) {
+    id_type os_window_id;
+    PA("K", &os_window_id);
+    OSWindow *w = os_window_for_id(os_window_id);
+    if (!w) {
+        // A window with no OS window, as in tests, goes by what the options say of every display
+        DisplayInfo d;
+        os_window_display_info(NULL, &d);
+        return Py_BuildValue("OO", d.eink & EINK_REFRESH ? Py_True : Py_False, d.eink & EINK_GRAY ? Py_True : Py_False);
+    }
+    if (!w->eink.known) update_display_info(w, monotonic(), false);
+    if (PyErr_Occurred()) return NULL;
+    return Py_BuildValue("OO", os_window_is_eink(w) ? Py_True : Py_False, os_window_is_gray(w) ? Py_True : Py_False);
 }
 
 PYWRAP1(set_ignore_os_keyboard_processing) {
@@ -2377,6 +2422,9 @@ static PyMethodDef module_methods[] = {
     MW(apply_options_update, METH_NOARGS),
     MW(patch_global_colors, METH_VARARGS),
     MW(set_eink_mode, METH_VARARGS),
+    MW(refresh_display_info, METH_NOARGS),
+    MW(os_window_eink_state, METH_VARARGS),
+    MW(set_os_window_eink_chrome, METH_VARARGS),
     MW(create_mock_window, METH_VARARGS),
     MW(destroy_global_data, METH_NOARGS),
     MW(wakeup_main_loop, METH_NOARGS),

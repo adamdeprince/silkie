@@ -918,7 +918,8 @@ collect_cursor_info(CursorRenderInfo *ans, Window *w, monotonic_t now, OSWindow 
     }
     if (!ans->is_visible && ans->multicursor_count == 0 && !rd->screen->sgr_blink_was_used) return cursor_needs_render(w);
     monotonic_t time_since_start_blink = now - os_window->cursor_blink_zero_time;
-    const bool allow_blinking = OPT(cursor_blink_interval) > 0;
+    // Blinking ghosts on e-paper, where the cursor and blinking text stay shown
+    const bool allow_blinking = OPT(cursor_blink_interval) > 0 && !os_window_is_eink(os_window);
     const bool blink_has_ceased = OPT(cursor_stop_blinking_after) != 0 && time_since_start_blink > OPT(cursor_stop_blinking_after);
     const bool cursor_blinking = !cursor->non_blinking && os_window->is_focused;
     float blink_opacity = 1.f;
@@ -1023,11 +1024,11 @@ prepare_to_render_os_window(
         else set_maximum_wait(OPT(mouse_hide.hide_wait) - now + os_window->last_mouse_activity_at);
     }
     Tab *tab = os_window->tabs + os_window->active_tab;
-    *active_window_bg = OPT(background);
+    *active_window_bg = os_window_background(os_window);
     *all_windows_have_same_bg = true;
     *num_visible_windows = 0;
     color_type first_window_bg = 0;
-    os_window->needs_layers = os_window->needs_layers || (OPT(cursor_trail) && tab->cursor_trail.needs_render);
+    os_window->needs_layers = os_window->needs_layers || (os_window_has_cursor_trail(os_window) && tab->cursor_trail.needs_render);
     for (unsigned int i = 0; i < tab->num_windows; i++) {
         Window *w = tab->windows + i;
 #define WD w->render_data
@@ -1077,7 +1078,7 @@ prepare_to_render_os_window(
 #undef CHECK
                     os_window->screen_state_checked_at = MAX(since, latest);
                 }
-                if (OPT(cursor_trail)) {
+                if (os_window_has_cursor_trail(os_window)) {
                     if (os_window->last_active_tab != os_window->active_tab && os_window->last_active_tab < os_window->num_tabs) {
                         tab->cursor_trail = os_window->tabs[os_window->last_active_tab].cursor_trail;
                         tab->cursor_trail.needs_render = true;
@@ -1113,7 +1114,8 @@ prepare_to_render_os_window(
                     WD.screen->cursor_render_info.cursor_opacity = 0;
                 }
             }
-            if (scan_for_animated_images) {
+            // Image animations ghost on e-paper, where images stay on the frame they show
+            if (scan_for_animated_images && !os_window_is_eink(os_window)) {
                 monotonic_t min_gap;
                 if (scan_active_animations(WD.screen->grman, now, &min_gap, true)) needs_render = true;
                 if (min_gap < MONOTONIC_T_MAX) {
@@ -1129,7 +1131,9 @@ prepare_to_render_os_window(
             // Also after send_cell_data_to_gpu(), as HDR images count as HDR content
             if (OPT(hdr) == HDR_AUTO && !os_window->hdr_content) os_window->hdr_content = screen_has_hdr_content(WD.screen);
             if (WD.screen->start_visual_bell_at | WD.screen->start_drag_overlay_at) needs_render = true;
-            if (OPT(progress_bar) != PROGRESS_BAR_HIDDEN && WD.screen->progress_state == PROGRESS_STATE_INDETERMINATE) needs_render = true;
+            // An indeterminate progress bar is animated, except on e-paper
+            if (OPT(progress_bar) != PROGRESS_BAR_HIDDEN && WD.screen->progress_state == PROGRESS_STATE_INDETERMINATE && !os_window_is_eink(os_window))
+                needs_render = true;
             // Prepare window title bar screen data for GPU
             WindowRenderData *trd = &w->window_title_render_data;
             if (trd->screen && trd->geometry.bottom > trd->geometry.top && trd->geometry.right > trd->geometry.left) {
@@ -1407,21 +1411,50 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
             return;
         }
     }
+    update_display_info(os_window, now, false);
+    set_maximum_wait(interval);
+}
+
+// Takes in what is now known of the display of the window, telling the programs that asked when it changed. explicit is
+// for a change the user made, such as of eink_mode, which is acted on at once rather than once it has lasted.
+void
+update_display_info(OSWindow *os_window, monotonic_t now, bool explicit) {
     DisplayInfo d, *o = &os_window->display_info;
     os_window_display_info(os_window, &d);
+    log_window_monitor(os_window, &d);
+    // What Silkie does for an e-paper display follows the window from monitor to monitor
+    monotonic_t eink_wait;
+    const bool eink_changed = update_eink_state(os_window, &d, explicit, now, &eink_wait);
+    set_maximum_wait(eink_wait);
+    if (eink_changed) {
+        debug_rendering("OS window %llu is now treated as on %s%s\n", os_window->id, os_window_is_eink(os_window) ? "e-paper" : "an ordinary display",
+            os_window_is_gray(os_window) ? " that shows only gray" : "");
+        // No dithering on e-paper, and the cursor and text that were blinking stay shown
+        os_window->needs_render = true;
+        d.output_dither = output_dither_bits(os_window);
+    }
+    if (!explicit && os_window->eink.known && os_window->eink.seen != os_window->eink.acted) {
+        // A move that changes what is done is reported once it is acted on, with what it changed, so that programs get
+        // one event with the outcome, as for a change of depth
+        os_window->display_info_at = now;
+        return;
+    }
     const bool color_changed = os_window->display_info_at && (d.kind != o->kind || d.color != o->color || d.gamut != o->gamut || d.bits != o->bits ||
         d.red_bits != o->red_bits || d.green_bits != o->green_bits || d.blue_bits != o->blue_bits || d.gray_bits != o->gray_bits ||
         strcmp(d.precision, o->precision) || d.headroom != o->headroom || d.output_bits != o->output_bits || strcmp(d.output_type, o->output_type) ||
         d.output_dither != o->output_dither);
-    const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi));
+    const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi ||
+        d.monitor != o->monitor));
     *o = d;
     os_window->display_info_at = now;
-    set_maximum_wait(interval);
-    if (!changed) return;
-    for (unsigned t = 0; t < os_window->num_tabs; t++) {
-        Tab *tab = os_window->tabs + t;
-        for (unsigned i = 0; i < tab->num_windows; i++) if (tab->windows[i].render_data.screen) screen_display_changed(tab->windows[i].render_data.screen, &d);
+    if (changed) {
+        for (unsigned t = 0; t < os_window->num_tabs; t++) {
+            Tab *tab = os_window->tabs + t;
+            for (unsigned i = 0; i < tab->num_windows; i++) if (tab->windows[i].render_data.screen) screen_display_changed(tab->windows[i].render_data.screen, &d);
+        }
     }
+    if (eink_changed) call_boss(on_os_window_eink_change, "KOO", os_window->id, os_window_is_eink(os_window) ? Py_True : Py_False,
+        os_window_is_gray(os_window) ? Py_True : Py_False);
     if (color_changed) call_boss(on_display_color_change, "K", os_window->id);
 }
 

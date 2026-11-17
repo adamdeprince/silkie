@@ -16,17 +16,18 @@ from kitty.options.utils import (
     deprecated_hide_window_decorations_aliases, deprecated_macos_show_window_title_in_menubar_alias,
     deprecated_scrollback_indicator_opacity, deprecated_send_text, disable_ligatures, edge_width, env,
     filter_notification, font_features, font_role, hdr_multiplier, hide_window_decorations,
-    macos_option_as_alt, macos_titlebar_color, menu_map, modify_font, mouse_hide_wait, narrow_symbols,
-    notify_on_cmd_finish, optional_edge_width, parse_font_spec, parse_map, parse_mouse_map,
-    paste_actions, pointer_shape_when_dragging, remap_modifiers, remote_control_password,
-    resize_debounce_time, scrollback_lines, scrollback_pager_history_size, scrollbar_color,
-    shell_integration, show_hyperlink_targets, spatial_angle, spatial_divergence, spatial_exponent,
-    spatial_phase_limit, spatial_scale, store_multiple, symbol_map, tab_activity_symbol, tab_bar_edge,
-    tab_bar_margin_height, tab_bar_min_tabs, tab_fade, tab_font_style, tab_separator,
-    tab_title_template, tab_title_wrap, text_fg_override_threshold, titlebar_color, to_cursor_shape,
-    to_cursor_unfocused_shape, to_font_size, to_layout_names, to_modifiers,
-    transparent_background_colors, underline_exclusion, url_prefixes, url_style, visual_bell_duration,
-    visual_window_select_characters, window_border_width, window_logo_scale, window_size
+    macos_option_as_alt, macos_titlebar_color, menu_map, modify_font, monitor_info, mouse_hide_wait,
+    narrow_symbols, notify_on_cmd_finish, optional_edge_width, parse_font_spec, parse_map,
+    parse_mouse_map, paste_actions, pointer_shape_when_dragging, remap_modifiers,
+    remote_control_password, resize_debounce_time, scrollback_lines, scrollback_pager_history_size,
+    scrollbar_color, shell_integration, show_hyperlink_targets, spatial_angle, spatial_divergence,
+    spatial_exponent, spatial_phase_limit, spatial_scale, store_multiple, symbol_map,
+    tab_activity_symbol, tab_bar_edge, tab_bar_margin_height, tab_bar_min_tabs, tab_fade,
+    tab_font_style, tab_separator, tab_title_template, tab_title_wrap, text_fg_override_threshold,
+    titlebar_color, to_cursor_shape, to_cursor_unfocused_shape, to_font_size, to_layout_names,
+    to_modifiers, transparent_background_colors, underline_exclusion, url_prefixes, url_style,
+    visual_bell_duration, visual_window_select_characters, window_border_width, window_logo_scale,
+    window_size
 )
 
 
@@ -1275,6 +1276,10 @@ class Parser:
     def momentum_scroll(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['momentum_scroll'] = unit_float(val)
 
+    def monitor_info(self, val: str, ans: dict[str, typing.Any]) -> None:
+        for k, v in monitor_info(val, ans["monitor_info"]):
+            ans["monitor_info"][k] = v
+
     def mouse_hide_wait(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['mouse_hide_wait'] = mouse_hide_wait(val)
 
@@ -1821,6 +1826,7 @@ def create_result_dict() -> dict[str, typing.Any]:
         'kitten_alias': {},
         'menu_map': {},
         'modify_font': {},
+        'monitor_info': {},
         'narrow_symbols': {},
         'remote_control_password': {},
         'symbol_map': {},

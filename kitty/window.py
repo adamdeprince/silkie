@@ -28,7 +28,7 @@ from typing import (
 from .child import ProcessDesc
 from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .clipboard import ClipboardRequestManager, set_clipboard_string
-from .colors import ColorSchemes, SessionColorSchemes, color_profile_signature, colors_forced_by_eink, parse_color_scheme_variants
+from .colors import ColorSchemes, SessionColorSchemes, color_profile_signature, eink_color_spec, parse_color_scheme_variants
 from .constants import (
     app_display_name,
     clear_handled_signals,
@@ -86,6 +86,7 @@ from .fast_data_types import (
     monotonic,
     mouse_selection,
     move_cursor_to_mouse_if_in_prompt,
+    os_window_eink_state,
     pointer_name_to_css_name,
     pt_to_px,
     remove_timer,
@@ -916,6 +917,8 @@ class Window:
         self.remote_control_passwords = remote_control_passwords
         self.allow_remote_control = allow_remote_control
         self.scroll_animation = ScrollAnimation()
+        # A window opened on a display that shows only gray starts with its colors
+        self.screen.color_profile.set_eink_colors(eink_color_spec(opts) if os_window_eink_state(self.os_window_id)[1] else None)
 
     def remote_control_allowed(self, pcmd: dict[str, Any], extra_data: dict[str, Any]) -> bool:
         if not self.allow_remote_control:
@@ -937,9 +940,22 @@ class Window:
         self.update_effective_padding()
 
     def change_tab(self, tab: TabType) -> None:
+        moved = self.os_window_id != tab.os_window_id
         self.tab_id = tab.id
         self.os_window_id = tab.os_window_id
         self.tabref = weakref.ref(tab)
+        if moved:
+            self.apply_eink_colors()
+
+    def apply_eink_colors(self) -> None:
+        'The colors of a display that shows only gray when the OS window is on one, see sync_eink_colors()'
+        cp = self.screen.color_profile
+        bg_before = cp.default_bg
+        if cp.set_eink_colors(eink_color_spec(get_options()) if os_window_eink_state(self.os_window_id)[1] else None):
+            if cp.default_bg != bg_before:
+                get_boss().default_bg_changed_for(self.id)
+            self.notify_child_of_color_change()
+            self.refresh()
 
     def effective_margin(self, edge: EdgeLiteral) -> int:
         q = getattr(self.margin, edge)
@@ -1833,10 +1849,8 @@ class Window:
             get_boss().default_bg_changed_for(self.id, via_escape_code=True)
 
     def apply_session_color_scheme(self, scheme: ColorSchemes | None = None) -> None:
-        # E-ink mode shows black on white over every color layer, the session
-        # colors are applied again when it is turned off
-        if colors_forced_by_eink(get_options()):
-            return
+        # On a display that shows only gray the e-ink colors are above the
+        # session colors, which show again when the window leaves it
         cp = self.screen.color_profile
         bg_before = cp.default_bg
         colors_before = color_profile_signature(cp)
@@ -2993,7 +3007,8 @@ class Window:
         if not self.screen.is_main_linebuf():
             return
         duration = glfw_get_keyboard_repeat_interval()
-        if duration <= 0:
+        # On e-paper every frame of a glide ghosts, so the scroll jumps
+        if duration <= 0 or os_window_eink_state(self.os_window_id)[0]:
             self.screen.fractional_scroll(lines)
             return
         a = self.scroll_animation
