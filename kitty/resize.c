@@ -224,6 +224,17 @@ copy_range(Line *src, index_type src_at, Line *dest, index_type dest_at, index_t
 }
 
 static void
+copy_multicell_range(Line *src, index_type src_at, Line *dest, index_type dest_at, index_type num) {
+    // A multicell char torn by the right edge of its line has fewer cells in
+    // src than its width: copy those it has and blank the rest, rather than
+    // reading past the end of the line.
+    const index_type avail = src_at < src->xnum ? MIN(num, src->xnum - src_at) : 0;
+    copy_range(src, src_at, dest, dest_at, avail);
+    zero_at_ptr_count(dest->cpu_cells + dest_at + avail, num - avail);
+    zero_at_ptr_count(dest->gpu_cells + dest_at + avail, num - avail);
+}
+
+static void
 copy_multiline_extra_lines(Rewrap *r, CPUCell *src_cell, index_type mc_width) {
     // multiline_char_is_complete() has checked that all rows are present in src,
     // the bound is kept so that this never reads out of bounds
@@ -232,7 +243,7 @@ copy_multiline_extra_lines(Rewrap *r, CPUCell *src_cell, index_type mc_width) {
         init_src_line_basic(r, r->src.y + i, &r->src.scratch_line, false);
         linebuf_init_line_at(r->sb, i - 1, &r->dest.scratch_line);
         linebuf_mark_line_dirty(r->sb, i - 1);
-        copy_range(&r->src.scratch_line, r->src.x, &r->dest.scratch_line, r->dest.x, mc_width);
+        copy_multicell_range(&r->src.scratch_line, r->src.x, &r->dest.scratch_line, r->dest.x, mc_width);
         update_tracked_cursors(r, mc_width, r->src.y + i, r->dest.y + i, src_xnum + 10000 /* ensure cursor is moved only if in region being copied */);
     }
 }
@@ -275,7 +286,7 @@ multiline_copy_src_to_dest(Rewrap *r) {
             }
         } else mc_width = 1;
         find_space_in_dest(r, mc_width);
-        copy_range(&r->src.line, r->src.x, &r->dest.line, r->dest.x, mc_width);
+        copy_multicell_range(&r->src.line, r->src.x, &r->dest.line, r->dest.x, mc_width);
         update_tracked_cursors(r, mc_width, r->src.y, r->dest.y, r->src_x_limit);
         if (c->is_multicell && c->scale > 1) copy_multiline_extra_lines(r, c, mc_width);
         r->src.x += mc_width;
