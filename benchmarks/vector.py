@@ -26,7 +26,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error('--repeat must be positive')
-    with tempfile.TemporaryDirectory(prefix='silkie-vector-bench-') as cache, patch.dict(os.environ, {'KITTY_CACHE_DIRECTORY': cache}):
+    with tempfile.TemporaryDirectory(prefix='silkie-vector-bench-') as cache, patch.dict(os.environ, {'SILKIE_CACHE_DIRECTORY': cache}):
         test = BaseTest()
         screen = test.create_screen()
 

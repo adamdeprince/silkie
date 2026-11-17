@@ -382,7 +382,9 @@ init_simd(void *x) {
     do_check();
 #endif
 #endif
-    const char *simd_env = getenv("KITTY_SIMD");
+    // SILKIE_SIMD is the documented name. KITTY_SIMD is still read for compatibility with existing scripts.
+    const char *simd_env = getenv("SILKIE_SIMD");
+    if (!simd_env) simd_env = getenv("KITTY_SIMD");
     if (simd_env) {
         has_sse4_2 = strcmp(simd_env, "128") == 0;
         has_avx2 = strcmp(simd_env, "256") == 0;

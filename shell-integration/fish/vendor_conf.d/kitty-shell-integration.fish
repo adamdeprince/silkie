@@ -218,15 +218,23 @@ function __ksi_schedule --on-event fish_prompt -d "Setup kitty integration after
             set _ksi_sourced "y"
             conda activate "$CONDA_DEFAULT_ENV"
         end
+        # SILKIE_CLONE_SOURCE_CODE and SILKIE_CLONE_SOURCE_PATH are the documented names. The KITTY_ names are still
+        # read, when the SILKIE_ ones are not set, for compatibility with existing scripts.
+        set --local ksi_clone_code "$KITTY_CLONE_SOURCE_CODE"
+        set --query SILKIE_CLONE_SOURCE_CODE
+        and set ksi_clone_code "$SILKIE_CLONE_SOURCE_CODE"
+        set --local ksi_clone_path "$KITTY_CLONE_SOURCE_PATH"
+        set --query SILKIE_CLONE_SOURCE_PATH
+        and set ksi_clone_path "$SILKIE_CLONE_SOURCE_PATH"
         if _ksi_s_is_ok "env_var"
-            and test -n "$KITTY_CLONE_SOURCE_CODE"
+            and test -n "$ksi_clone_code"
             set _ksi_sourced "y"
-            eval "$KITTY_CLONE_SOURCE_CODE"
+            eval "$ksi_clone_code"
         end
         if _ksi_s_is_ok "path"
-            and test -r "$KITTY_CLONE_SOURCE_PATH"
+            and test -r "$ksi_clone_path"
             set _ksi_sourced "y"
-            source "$KITTY_CLONE_SOURCE_PATH"
+            source "$ksi_clone_path"
         end
         set --erase KITTY_IS_CLONE_LAUNCH KITTY_CLONE_SOURCE_STRATEGIES _ksi_sourced
         functions --erase _ksi_s_is_ok

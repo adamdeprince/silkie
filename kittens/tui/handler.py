@@ -93,10 +93,13 @@ class KittenUI:
             if enable:
                 os.set_inheritable(self.rc_fd, True)
                 if self.password:
-                    os.environ['KITTY_RC_PASSWORD'] = self.password
+                    # SILKIE_RC_PASSWORD is what kitten @ reads first. KITTY_RC_PASSWORD is set too for programs
+                    # that only know the old name.
+                    os.environ['SILKIE_RC_PASSWORD'] = os.environ['KITTY_RC_PASSWORD'] = self.password
             else:
                 os.set_inheritable(self.rc_fd, False)
                 if self.password:
+                    os.environ.pop('SILKIE_RC_PASSWORD', None)
                     os.environ.pop('KITTY_RC_PASSWORD', None)
 
     def remote_control(self, cmd: str | Sequence[str], **kw: Any) -> Any:

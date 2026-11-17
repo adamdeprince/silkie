@@ -154,10 +154,21 @@ def config_dir_files_ignored() -> bool:
     return _ignore_config_dir_files
 
 
+def silkie_env(name: str) -> str | None:
+    '''The value of the environment variable SILKIE_<name>, falling back to KITTY_<name>, or None when neither is set.
+
+    SILKIE_<name> is the documented name. KITTY_<name> is still read for compatibility with existing scripts written
+    for kitty or for older versions of Silkie. SILKIE_<name> wins whenever it is set, even to an empty value, so that
+    it can override a KITTY_<name> inherited from the environment.
+    '''
+    ans = os.environ.get(f'SILKIE_{name}')
+    return os.environ.get(f'KITTY_{name}') if ans is None else ans
+
+
 @run_once
 def cache_dir() -> str:
-    if 'KITTY_CACHE_DIRECTORY' in os.environ:
-        candidate = os.path.abspath(os.environ['KITTY_CACHE_DIRECTORY'])
+    if (edir := silkie_env('CACHE_DIRECTORY')) is not None:
+        candidate = os.path.abspath(edir)
     elif is_macos:
         candidate = os.path.join(os.path.expanduser('~/Library/Caches'), appname)
     else:
@@ -169,8 +180,8 @@ def cache_dir() -> str:
 
 @run_once
 def runtime_dir() -> str:
-    if 'KITTY_RUNTIME_DIRECTORY' in os.environ:
-        candidate = os.path.abspath(os.environ['KITTY_RUNTIME_DIRECTORY'])
+    if (rdir := silkie_env('RUNTIME_DIRECTORY')) is not None:
+        candidate = os.path.abspath(rdir)
     elif is_macos:
         from .fast_data_types import user_cache_dir
 
@@ -251,7 +262,7 @@ def native_ui_module_path() -> str:
 def detect_if_wayland_ok() -> bool:
     if not os.environ.get('WAYLAND_DISPLAY') and not os.environ.get('WAYLAND_SOCKET'):
         return False
-    if os.environ.get('KITTY_DISABLE_WAYLAND'):
+    if silkie_env('DISABLE_WAYLAND'):
         return False
     wayland = glfw_path('wayland')
     if not os.path.exists(wayland):

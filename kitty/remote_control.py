@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar, cast
 
 from .cli import parse_args
 from .cli_stub import RCOptions
-from .constants import RC_ENCRYPTION_PROTOCOL_VERSION, appname, version
+from .constants import RC_ENCRYPTION_PROTOCOL_VERSION, appname, silkie_env, version
 from .fast_data_types import (
     AES256GCMDecrypt,
     AES256GCMEncrypt,
@@ -432,10 +432,12 @@ Used if no :option:`kitten @ --password` is supplied. Defaults to checking for t
 
 
 --password-env
-default=KITTY_RC_PASSWORD
+default=SILKIE_RC_PASSWORD
 The name of an environment variable to read the password from.
 Used if no :option:`kitten @ --password-file` is supplied. Defaults
-to checking the environment variable :envvar:`KITTY_RC_PASSWORD`.
+to checking the environment variable :envvar:`SILKIE_RC_PASSWORD`, or
+:envvar:`KITTY_RC_PASSWORD` when that is not set, which is still read
+for compatibility with existing scripts.
 
 
 --use-password
@@ -650,7 +652,11 @@ def get_password(opts: RCOptions) -> str:
             except OSError:
                 pass
     if not ans and opts.password_env:
-        ans = os.environ.get(opts.password_env, '')
+        if opts.password_env == 'SILKIE_RC_PASSWORD':
+            # The default name. KITTY_RC_PASSWORD is still read for compatibility with existing scripts.
+            ans = silkie_env('RC_PASSWORD') or ''
+        else:
+            ans = os.environ.get(opts.password_env, '')
     if not ans and opts.use_password == 'always':
         raise SystemExit('No password was found')
     if ans and len(ans) > 1024:

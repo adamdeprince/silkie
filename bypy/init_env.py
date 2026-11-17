@@ -61,7 +61,7 @@ def build_frozen_launcher(extra_include_dirs):
 
 def run_tests(kitty_exe) -> None:
     with tempfile.TemporaryDirectory() as tdir:
-        uenv = {'SILKIE_CONFIG_DIRECTORY': os.path.join(tdir, 'conf'), 'KITTY_CACHE_DIRECTORY': os.path.join(tdir, 'cache')}
+        uenv = {'SILKIE_CONFIG_DIRECTORY': os.path.join(tdir, 'conf'), 'SILKIE_CACHE_DIRECTORY': os.path.join(tdir, 'cache')}
         [os.mkdir(x) for x in uenv.values()]
         env = os.environ.copy()
         env.update(uenv)

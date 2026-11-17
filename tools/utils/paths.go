@@ -141,7 +141,7 @@ var ConfigDir = sync.OnceValue(func() (config_dir string) {
 
 var CacheDir = sync.OnceValue(func() (cache_dir string) {
 	candidate := ""
-	if edir := os.Getenv("KITTY_CACHE_DIRECTORY"); edir != "" {
+	if edir, _ := SilkieEnv("CACHE_DIRECTORY"); edir != "" {
 		candidate = Abspath(Expanduser(edir))
 	} else if runtime.GOOS == "darwin" {
 		candidate = Expanduser("~/Library/Caches/kitty")
@@ -196,7 +196,7 @@ func macos_user_cache_dir() string {
 
 var RuntimeDir = sync.OnceValue(func() (runtime_dir string) {
 	var candidate string
-	if q := os.Getenv("KITTY_RUNTIME_DIRECTORY"); q != "" {
+	if q, _ := SilkieEnv("RUNTIME_DIRECTORY"); q != "" {
 		candidate = q
 	} else if runtime.GOOS == "darwin" {
 		candidate = macos_user_cache_dir()

@@ -18,7 +18,7 @@ from kittens.tui.operations import colored, styled
 from .child import cmdline_of_pid
 from .cli import version
 from .colors import theme_colors
-from .constants import extensions_dir, is_macos, is_wayland, kitty_base_dir, kitty_exe, shell_path
+from .constants import app_display_name, extensions_dir, is_macos, is_wayland, kitty_base_dir, kitty_exe, shell_path
 from .fast_data_types import Color, SingleKey, current_fonts, glfw_get_system_color_theme, gpu_driver_version_string, num_users, wayland_compositor_data
 from .options.types import Options as KittyOpts
 from .options.types import defaults, secret_options
@@ -335,7 +335,7 @@ def debug_config(opts: KittyOpts | None = None, global_shortcuts: dict[str, Sing
         p(' ', '\n  '.join(opts.config_overrides))
     compare_opts(opts, global_shortcuts, p)
     p()
-    p(green('Important environment variables seen by the kitty process:'))
+    p(green(f'Important environment variables seen by the {app_display_name} process:'))
 
     def penv(k: str) -> None:
         v = os.environ.get(k)
@@ -343,8 +343,10 @@ def debug_config(opts: KittyOpts | None = None, global_shortcuts: dict[str, Sing
             p('\t' + k.ljust(35), styled(v, dim=True))
 
     for k in (
-        'PATH LANG SILKIE_CONFIG_DIRECTORY KITTY_CACHE_DIRECTORY VISUAL EDITOR SHELL'
-        ' GLFW_IM_MODULE KITTY_WAYLAND_DETECT_MODIFIERS DISPLAY WAYLAND_DISPLAY USER XCURSOR_SIZE'
+        'PATH LANG SILKIE_CONFIG_DIRECTORY SILKIE_CACHE_DIRECTORY KITTY_CACHE_DIRECTORY SILKIE_RUNTIME_DIRECTORY'
+        ' KITTY_RUNTIME_DIRECTORY VISUAL EDITOR SHELL GLFW_IM_MODULE SILKIE_WAYLAND_DETECT_MODIFIERS'
+        ' KITTY_WAYLAND_DETECT_MODIFIERS SILKIE_DISABLE_WAYLAND KITTY_DISABLE_WAYLAND SILKIE_SIMD KITTY_SIMD'
+        ' DISPLAY WAYLAND_DISPLAY USER XCURSOR_SIZE'
     ).split():
         penv(k)
     for k in os.environ:

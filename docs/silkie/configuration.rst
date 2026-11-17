@@ -34,6 +34,9 @@ The configuration syntax and inherited settings are described in
 `kitty's configuration reference <https://sw.kovidgoyal.net/kitty/conf/>`_.
 The paths above are specific to Silkie.
 
+:doc:`environment` lists the environment variables that Silkie reads and the
+ones it sets for the programs running in it.
+
 Quitting on macOS
 -----------------
 

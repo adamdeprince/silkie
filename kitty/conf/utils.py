@@ -225,9 +225,14 @@ def pygeninclude(path: str) -> list[str]:
     return buf.getvalue().splitlines()
 
 
+# The name of the operating system, available to include directives and geninclude programs. SILKIE_OS is the
+# documented name, KITTY_OS is kept for configuration files written for kitty or for older versions of Silkie.
+OS_ENV_VARS = 'SILKIE_OS', 'KITTY_OS'
+
+
 def geninclude(path: str) -> list[str]:
-    old = os.environ.get('KITTY_OS')
-    os.environ['KITTY_OS'] = os_name()
+    old = {k: os.environ.get(k) for k in OS_ENV_VARS}
+    os.environ.update(dict.fromkeys(OS_ENV_VARS, os_name()))
     try:
         if path.endswith('.py'):
             return pygeninclude(path)
@@ -238,10 +243,11 @@ def geninclude(path: str) -> list[str]:
             raise GenincludeError(f'Running the geninclude program: {path} failed with exit code: {cp.returncode} and STDERR:\n{cp.stderr}')
         return cp.stdout.splitlines()
     finally:
-        if old is None:
-            os.environ.pop('KITTY_OS', None)
-        else:
-            os.environ['KITTY_OS'] = old
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 include_keys = 'include', 'globinclude', 'envinclude', 'geninclude'
@@ -293,7 +299,7 @@ def parse_line(
         return
     key, val = m.groups()
     if key.endswith('include') and key in include_keys:
-        val = expandvars(os.path.expanduser(val.strip()), {'KITTY_OS': os_name()})
+        val = expandvars(os.path.expanduser(val.strip()), dict.fromkeys(OS_ENV_VARS, os_name()))
         if key == 'globinclude':
             from pathlib import Path
 
