@@ -58,10 +58,19 @@ class TestPackedGraphics(BaseTest):
         # f=1 to f=16 were the packed formats before they moved to 300 plus
         # their bits per pixel. f=8 and f=16 are kitty's indexed color formats.
         screen = self.create_screen()
-        for f in (1, 2, 4, 8, 16):
+        for f in (1, 2, 4):
             with self.subTest(f=f):
                 response = self.transmit(screen, b'\x00\x00', f=f, s=1, v=1)
                 self.ae(response.code, 'EINVAL', response.msg)
+        # Indexed color images keep their palette indices, they are not
+        # expanded to RGB as packed images are, and they have no gamut, their
+        # colors being those of the terminal
+        for f, data in ((8, b'\x07\x09'), (16, b'\x07\x80\x09\xff')):
+            with self.subTest(f=f):
+                response = self.transmit(screen, data, f=f, s=2, v=1, G=1)
+                self.ae(response.code, 'OK', response.msg)
+                image = screen.grman.image_for_client_id(1)
+                self.ae((image['indexed_px_sz'], image['data'], image['gamut']), (f // 8, data, 0))
 
     def test_all_rgb565_words_and_gamut(self):
         screen = self.create_screen()
@@ -81,7 +90,7 @@ class TestPackedGraphics(BaseTest):
             screen = self.create_screen(options={'display_info': display})
             screen.callbacks.clear()
             parse_bytes(screen, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-            self.assertIn(b':format=24,32,64,100,200,301,302,304,308,316\x1b\\', screen.callbacks.wtcbuf)
+            self.assertIn(b':format=8,16,24,32,64,100,200,301,302,304,308,316\x1b\\', screen.callbacks.wtcbuf)
             for fmt, encoded, expected in (
                 (301, b'\x40', b'\x00' * 3 + b'\xff' * 3),
                 (308, b'\x00\xff', b'\x00' * 3 + b'\xff' * 3),

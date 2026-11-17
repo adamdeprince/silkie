@@ -48,6 +48,8 @@ from kitty.fast_data_types import (
     GAMUT_MASK,
     GLSL_VERSION,
     GRAPHICS_ALPHA_MASK_PROGRAM,
+    GRAPHICS_INDEXED_PROGRAM,
+    GRAPHICS_INDEXED_UNSCALED_PROGRAM,
     GRAPHICS_PREMULT_PROGRAM,
     GRAPHICS_PROGRAM,
     HDR_BG,
@@ -56,6 +58,7 @@ from kitty.fast_data_types import (
     MARK,
     MARK_MASK,
     MAX_CUSTOM_SHADER_GROUPS,
+    NUM_INDEXED_IMAGE_SPECIAL_COLORS,
     PADDING_PROGRAM,
     REVERSE,
     ROUNDED_RECT_PROGRAM,
@@ -288,6 +291,9 @@ class LoadShaderPrograms:
         }.items():
             vert, frag = glsl_shaders('graphics', vname)
             compile_program(prog, (vert,), (frag,), metadata['graphics'], allow_recompile)
+        for prog, vname in {GRAPHICS_INDEXED_PROGRAM: '', GRAPHICS_INDEXED_UNSCALED_PROGRAM: 'unscaled'}.items():
+            vert, frag = glsl_shaders('indexed_graphics', vname)
+            compile_program(prog, (vert,), (frag,), metadata['indexed_graphics'], allow_recompile)
         for name, prog in {
             'bgimage': BGIMAGE_PROGRAM,
             'tint': TINT_PROGRAM,
@@ -443,6 +449,7 @@ class SlangFile(NamedTuple):
         match os.path.basename(self.path):
             case 'background.slang' | 'cell.slang':
                 ans['MARK_MASK'] = str(MARK_MASK)
+                ans['NUM_INDEXED_IMAGE_SPECIAL_COLORS'] = str(NUM_INDEXED_IMAGE_SPECIAL_COLORS)
                 ans['REVERSE_SHIFT'] = str(REVERSE)
                 ans['STRIKE_SHIFT'] = str(STRIKETHROUGH)
                 ans['DIM_SHIFT'] = str(DIM)
@@ -475,6 +482,9 @@ class SlangFile(NamedTuple):
                 yield s()
                 yield s('alpha_mask', is_alpha_mask='true')
                 yield s('premult', texture_is_not_premultiplied='false')
+            case 'indexed_graphics.slang':
+                yield s()
+                yield s('unscaled', is_scaled='false')
             case 'cell.slang':
                 d = cell_variant()
                 seen = set()

@@ -29,6 +29,8 @@ enum {
     GRAPHICS_PROGRAM,
     GRAPHICS_PREMULT_PROGRAM,
     GRAPHICS_ALPHA_MASK_PROGRAM,
+    GRAPHICS_INDEXED_PROGRAM,
+    GRAPHICS_INDEXED_UNSCALED_PROGRAM,
     BGIMAGE_PROGRAM,
     TINT_PROGRAM,
     TRAIL_PROGRAM,
@@ -512,6 +514,23 @@ update_image_on_gpu(GLuint tex_id, const void *data, GLint x, GLint y, GLsizei w
     glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, is_float ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE, data);
 }
 
+// Indexed color images are stored as integer textures with the palette index
+// in the red channel and, if bytes_per_pixel is 2, alpha in the green channel.
+// Integer textures cannot be filtered, the shader does its own filtering after
+// the palette lookup.
+void
+send_indexed_image_to_gpu(GLuint *tex_id, const void *data, GLsizei width, GLsizei height, unsigned bytes_per_pixel, bool is_4byte_aligned) {
+    if (!(*tex_id)) { glGenTextures(1, tex_id); }
+    glBindTexture(GL_TEXTURE_2D, *tex_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, is_4byte_aligned ? 4 : 1);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    const bool has_alpha = bytes_per_pixel == 2;
+    glTexImage2D(GL_TEXTURE_2D, 0, has_alpha ? GL_RG8UI : GL_R8UI, width, height, 0, has_alpha ? GL_RG_INTEGER : GL_RED_INTEGER, GL_UNSIGNED_BYTE, data);
+}
+
 // }}}
 
 // Rounded rect {{{
@@ -619,6 +638,8 @@ upload_gamma_lut(void) {
     for (int i = CELL_PROGRAM; i < CELL_PROGRAM_SENTINEL; i++) U(i);
     U(BORDERS_PROGRAM);
     U(PADDING_PROGRAM);
+    U(GRAPHICS_INDEXED_PROGRAM);
+    U(GRAPHICS_INDEXED_UNSCALED_PROGRAM);
 #undef U
     unbind_program();
 }
@@ -665,6 +686,11 @@ init_cell_program(void) {
     C(sprite_idx, 1);
     C(is_selected, 2);
 #undef C
+    // Indexed color images get their colors from the color table of the window they are in
+    for (int i = GRAPHICS_INDEXED_PROGRAM; i <= GRAPHICS_INDEXED_UNSCALED_PROGRAM; i++) {
+        UniformBlock ct = program_uniform_block(i, "ColorTable");
+        glUniformBlockBinding(program_id(i), ct.index, COLOR_TABLE_BINDING_POINT);
+    }
 
     if (shader_globals_vao_idx == -1) {
         shader_globals_vao_idx = create_vao();
@@ -1302,25 +1328,28 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
 static void
 draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, float extra_alpha, float hdr_headroom) {
     bind_program(program);
-    if (program != GRAPHICS_ALPHA_MASK_PROGRAM) {
-        glUniform1f(program_uniform_location(program, "extra_alpha"), extra_alpha);
-        glUniform1f(program_uniform_location(program, "hdr_headroom"), hdr_headroom);
-    }
+    // The colors of indexed color images are those of the terminal, they are never HDR, so their programs have no
+    // headroom or tone mapping.
+    const bool has_texture_uniforms = program == GRAPHICS_PROGRAM || program == GRAPHICS_PREMULT_PROGRAM;
+    if (program != GRAPHICS_ALPHA_MASK_PROGRAM) glUniform1f(program_uniform_location(program, "extra_alpha"), extra_alpha);
+    if (has_texture_uniforms) glUniform1f(program_uniform_location(program, "hdr_headroom"), hdr_headroom);
     glActiveTexture(GL_TEXTURE0 + GRAPHICS_UNIT);
     GLint src_rect_loc = program_uniform_location(program, "src_rect");
     GLint dest_rect_loc = program_uniform_location(program, "dest_rect");
-    // Images tagged with a gamut are converted to that of the window, the alpha mask program draws none
+    // Images tagged with a gamut are converted to that of the window, the alpha mask program draws none. Indexed
+    // color images are untagged, their colors are those of the terminal.
     const GLint image_gamut_loc = try_program_uniform_location(program, "image_gamut");
     const GLint output_gamut_loc = try_program_uniform_location(program, "output_gamut");
     const unsigned viewport_width = get_gpu_viewport().width;
     if (output_gamut_loc >= 0) glUniform1ui(output_gamut_loc, current_output_gamut);
+    const bool is_indexed = program == GRAPHICS_INDEXED_PROGRAM || program == GRAPHICS_INDEXED_UNSCALED_PROGRAM;
+    const GLint has_alpha_loc = is_indexed ? program_uniform_location(program, "has_alpha") : -1;
     for (GLuint i = 0; i < count;) {
         ImageRenderData *group = data + start + i;
         glBindTexture(GL_TEXTURE_2D, spatial_window && spatial_window->spatial.eye > 0 && group->right_texture_id ? group->right_texture_id : group->texture_id);
-        if (program != GRAPHICS_ALPHA_MASK_PROGRAM) {
-            glUniform1f(program_uniform_location(program, "tone_peak"), group->tone_map ? group->peak : 0.f);
-        }
+        if (has_texture_uniforms) glUniform1f(program_uniform_location(program, "tone_peak"), group->tone_map ? group->peak : 0.f);
         if (image_gamut_loc >= 0) glUniform1ui(image_gamut_loc, group->gamut);
+        if (has_alpha_loc > -1) glUniform1ui(has_alpha_loc, group->indexed_px_sz == 2);
         if (group->group_count == 0) {
             i++;
             continue;
@@ -1401,7 +1430,7 @@ set_cell_uniforms(bool force) {
     if (!constants_set || force) {
         float text_contrast = 1.0f + OPT(text_contrast) * 0.01f;
         float text_gamma_adjustment = OPT(text_gamma_adjustment) < 0.01f ? 1.0f : 1.0f / OPT(text_gamma_adjustment);
-        for (int i = GRAPHICS_PROGRAM; i <= GRAPHICS_ALPHA_MASK_PROGRAM; i++) {
+        for (int i = GRAPHICS_PROGRAM; i <= GRAPHICS_INDEXED_UNSCALED_PROGRAM; i++) {
             bind_program(i);
             glUniform1i(program_uniform_location(i, "image"), GRAPHICS_UNIT);
         }
@@ -2297,6 +2326,35 @@ draw_tint(const UIRenderData *ui) {
     draw_quad(true, 0);
 }
 
+// Draw a range of the image render data. Indexed color images need a
+// different program, so when any are present, switch programs at the
+// boundaries between runs of images that need different programs, preserving
+// draw order.
+static int
+program_for_image(const ImageRenderData *rd) {
+    if (!rd->indexed_px_sz) return GRAPHICS_PROGRAM;
+    return rd->is_unscaled ? GRAPHICS_INDEXED_UNSCALED_PROGRAM : GRAPHICS_INDEXED_PROGRAM;
+}
+
+static void
+draw_image_layer(const UIRenderData *ui, ssize_t vao_idx, float hdr_headroom, GLuint start, GLuint count) {
+    if (!ui->grd.num_of_indexed_refs) {
+        draw_graphics(GRAPHICS_PROGRAM, ui->grd.images, start, count, ui->inactive_text_alpha, hdr_headroom);
+        return;
+    }
+    CELL_BUFFERS;
+    // The color table may not be bound yet, for example, when the window has a background image
+    bind_vao_uniform_buffer(vao_idx, color_table_buffer, COLOR_TABLE_BINDING_POINT);
+    const ImageRenderData *data = ui->grd.images;
+    for (GLuint run_start = start, end = start + count; run_start < end;) {
+        const int program = program_for_image(data + run_start);
+        GLuint run_end = run_start + 1;
+        while (run_end < end && program_for_image(data + run_end) == program) run_end++;
+        draw_graphics(program, ui->grd.images, run_start, run_end - run_start, ui->inactive_text_alpha, hdr_headroom);
+        run_start = run_end;
+    }
+}
+
 static void
 draw_cells_with_layers(const UIRenderData *ui, ssize_t vao_idx) {
     if (ui->has_background_image && OPT(background_tint) > 0) draw_tint(ui);
@@ -2305,16 +2363,13 @@ draw_cells_with_layers(const UIRenderData *ui, ssize_t vao_idx) {
     if (has_content_between_background_and_foreground) {
         if (!ui->has_background_image) call_cell_program(CELL_BG_PROGRAM, ui, vao_idx, false, DRAW_DEFAULT_BG);
         if (ui->window_logo != NULL) draw_window_logo(ui);
-        if (ui->grd.num_of_below_refs > 0) draw_graphics(GRAPHICS_PROGRAM, ui->grd.images, 0, ui->grd.num_of_below_refs, ui->inactive_text_alpha, hdr_headroom);
+        if (ui->grd.num_of_below_refs > 0) draw_image_layer(ui, vao_idx, hdr_headroom, 0, ui->grd.num_of_below_refs);
         call_cell_program(CELL_BG_PROGRAM, ui, vao_idx, false, DRAW_NON_DEFAULT_BG);
-        if (ui->grd.num_of_negative_refs)
-            draw_graphics(GRAPHICS_PROGRAM, ui->grd.images, ui->grd.num_of_below_refs, ui->grd.num_of_negative_refs, ui->inactive_text_alpha, hdr_headroom);
+        if (ui->grd.num_of_negative_refs) draw_image_layer(ui, vao_idx, hdr_headroom, ui->grd.num_of_below_refs, ui->grd.num_of_negative_refs);
         call_cell_program(CELL_FG_PROGRAM, ui, vao_idx, false, DRAW_NEITHER_BG);
     } else call_cell_program(CELL_PROGRAM, ui, vao_idx, false, ui->has_background_image ? DRAW_NON_DEFAULT_BG : DRAW_BOTH_BG);
 
-    if (ui->grd.num_of_positive_refs > 0)
-        draw_graphics(
-            GRAPHICS_PROGRAM, ui->grd.images, ui->grd.num_of_below_refs + ui->grd.num_of_negative_refs, ui->grd.num_of_positive_refs, ui->inactive_text_alpha, hdr_headroom);
+    if (ui->grd.num_of_positive_refs > 0) draw_image_layer(ui, vao_idx, hdr_headroom, ui->grd.num_of_below_refs + ui->grd.num_of_negative_refs, ui->grd.num_of_positive_refs);
 
     draw_visual_bell(ui);
     draw_drag_preview_overlay(ui);
@@ -3913,6 +3968,8 @@ init_shaders(PyObject *module) {
     C(GRAPHICS_PROGRAM);
     C(GRAPHICS_PREMULT_PROGRAM);
     C(GRAPHICS_ALPHA_MASK_PROGRAM);
+    C(GRAPHICS_INDEXED_PROGRAM);
+    C(GRAPHICS_INDEXED_UNSCALED_PROGRAM);
     C(BGIMAGE_PROGRAM);
     C(TINT_PROGRAM);
     C(TRAIL_PROGRAM);

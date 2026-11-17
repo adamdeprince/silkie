@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <math.h>
 
 #include <zlib.h>
 #include <structmember.h>
@@ -324,6 +325,7 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
     dest->num_of_below_refs = 0;
     dest->num_of_negative_refs = 0;
     dest->num_of_positive_refs = 0;
+    dest->num_of_indexed_refs = 0;
     if (self == NULL) return;
     dest->window_id = self->window_id;
     dest->layers_dirty = true;
@@ -798,6 +800,8 @@ get_free_client_id(const GraphicsManager *self) {
 // graphics protocol, such as its indexed color formats f=8 and f=16
 #define PACKED_FORMAT_BASE 300u
 enum FORMATS {
+    INDEXED = 8,
+    INDEXED_ALPHA = 16,
     RGB = 24,
     RGBA = 32,
     RGBA16F = 64,
@@ -825,7 +829,8 @@ static unsigned
 bits_per_pixel(uint32_t format) {
     if (is_packed_format(format)) return format - PACKED_FORMAT_BASE;
     switch (format) {
-        case RGB: case RGBA: case RGBA16F: return format;
+        // the value of these formats is their bits per pixel
+        case INDEXED: case INDEXED_ALPHA: case RGB: case RGBA: case RGBA16F: return format;
         default: return 0;
     }
 }
@@ -1117,8 +1122,9 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         return img;
     }
     bool needs_processing = g->compressed || data_fmt == PNG;
-    // An HDR image is linear extended sRGB whatever the command says, see docs/hdr-protocol.rst
-    self->currently_loading.gamut = data_fmt == RGBA16F || is_gray_format(data_fmt) ? 0 : gamut_of_command(g);
+    // An HDR image is linear extended sRGB whatever the command says, see docs/hdr-protocol.rst. The colors of an
+    // indexed color image are those of the terminal, which are untagged, as are the colors of cells.
+    self->currently_loading.gamut = data_fmt == RGBA16F || is_gray_format(data_fmt) || data_fmt == INDEXED || data_fmt == INDEXED_ALPHA ? 0 : gamut_of_command(g);
     if (needs_processing) {
         uint8_t *buf;
         size_t bufsz;
@@ -1193,6 +1199,15 @@ initialize_load_data(
             self->currently_loading.is_4byte_aligned = !self->currently_loading.is_opaque || self->currently_loading.width % 4 == 0;
             self->currently_loading.is_float = data_fmt == RGBA16F;
             break;
+        case INDEXED:
+        case INDEXED_ALPHA:
+            if (!g->data_width || !g->data_height) ABRT("EINVAL", "Zero width/height not allowed");
+            if (!raw_image_data_size(data_fmt, g->data_width, g->data_height, &self->currently_loading.data_sz))
+                ABRT("EOVERFLOW", "Image dimensions overflow address space");
+            self->currently_loading.indexed_px_sz = data_fmt / 8;
+            self->currently_loading.is_4byte_aligned = ((size_t)self->currently_loading.width * self->currently_loading.indexed_px_sz) % 4 == 0;
+            self->currently_loading.is_opaque = data_fmt == INDEXED;
+            break;
         default: ABRT("EINVAL", "Unknown image format: %u", data_fmt);
     }
     self->currently_loading.loading_for.image_id = img->internal_id;
@@ -1228,7 +1243,9 @@ upload_to_gpu(GraphicsManager *self, Image *img, const bool is_opaque, const boo
         if (!make_window_context_current(self->window_id)) return;
         self->context_made_current_for_this_command = true;
     }
-    if (img->texture) { send_image_to_gpu(&img->texture->id, data, img->width, img->height, is_opaque, is_float, is_4byte_aligned, true, REPEAT_CLAMP); }
+    if (!img->texture) return;
+    if (img->indexed_px_sz) send_indexed_image_to_gpu(&img->texture->id, data, img->width, img->height, img->indexed_px_sz, is_4byte_aligned);
+    else send_image_to_gpu(&img->texture->id, data, img->width, img->height, is_opaque, is_float, is_4byte_aligned, true, REPEAT_CLAMP);
 }
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -1360,6 +1377,7 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             free_image_resources(self, img);
             img->texture = new_texture_ref();
             img->root_frame_data_loaded = false;
+            img->indexed_px_sz = 0;
             img->is_drawn = false;
             img->current_frame_shown_at = 0;
             img->extra_framecnt = 0;
@@ -1434,7 +1452,9 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->root_frame_data_loaded = true;
         return img;
     }
-    size_t required_sz = (size_t)pixel_size(self->currently_loading.is_opaque, self->currently_loading.is_float) * self->currently_loading.width * self->currently_loading.height;
+    const size_t px_sz = self->currently_loading.indexed_px_sz ? self->currently_loading.indexed_px_sz
+                                                               : pixel_size(self->currently_loading.is_opaque, self->currently_loading.is_float);
+    size_t required_sz = px_sz * self->currently_loading.width * self->currently_loading.height;
     if (self->currently_loading.data_sz != required_sz)
         ABRT(
             "EINVAL",
@@ -1447,6 +1467,7 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->width = self->currently_loading.width;
         img->height = self->currently_loading.height;
         img->gamut = self->currently_loading.gamut;
+        img->indexed_px_sz = self->currently_loading.indexed_px_sz;
         if (img->root_frame.id) remove_from_cache(self, (const ImageAndFrame){.image_id = img->internal_id, .frame_id = img->root_frame.id});
         img->root_frame = (const Frame){
             .id = ++img->frame_id_counter,
@@ -1522,10 +1543,13 @@ supported_keys_for_query(const GraphicsCommand *g) {
             // Silkie adds the packed formats (packed-image-protocol), half
             // float RGBA (hdr-protocol) and vector images, which cannot have
             // animation frames (vector-protocol)
-            if (fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt) || (fmt == VECTOR && action != 'f'))
+            // and kitty's indexed color formats, which cannot have animation frames either
+            const bool is_indexed = fmt == INDEXED || fmt == INDEXED_ALPHA;
+            if (fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt) || ((fmt == VECTOR || is_indexed) && action != 'f'))
                 print(",f=%u", fmt);
-            if (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020) print(",G=%u", g->gamut);
-            if (action != 'f') ECHO_ONE('T', tone_map);
+            // The colors of an indexed color image are those of the terminal, it has no gamut of its own and is never HDR
+            if (!is_indexed && (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020)) print(",G=%u", g->gamut);
+            if (action != 'f' && !is_indexed) ECHO_ONE('T', tone_map);
             if (g->data_width <= MAX_IMAGE_DIMENSION) ECHO_UINT('s', data_width);
             if (g->data_height <= MAX_IMAGE_DIMENSION) ECHO_UINT('v', data_height);
             ECHO_UINT('S', data_sz);
@@ -2095,6 +2119,7 @@ grman_update_layers(
     self->num_of_below_refs = 0;
     self->num_of_negative_refs = 0;
     self->num_of_positive_refs = 0;
+    self->num_of_indexed_refs = 0;
     ImageRect r;
     float screen_width = dx * num_cols, screen_height = dy * num_rows;
     float screen_bottom = screen_top - screen_height;
@@ -2197,6 +2222,14 @@ grman_update_layers(
             rd->peak = img->peak;
             rd->tone_map = img->tone_map;
             rd->gamut = img->gamut;
+            rd->indexed_px_sz = img->indexed_px_sz;
+            if (img->indexed_px_sz) {
+                self->num_of_indexed_refs++;
+                // The rect is in normalized device co-ordinates, so allow for rounding errors
+                const float width_px = (r.right - r.left) / screen_width * screen_width_px;
+                const float height_px = (r.top - r.bottom) / screen_height * screen_height_px;
+                rd->is_unscaled = fabsf(width_px - ref->src_width) < 0.01f && fabsf(height_px - ref->src_height) < 0.01f;
+            }
             img->is_drawn = true;
             refitr = vt_next(refitr);
         }
@@ -2235,12 +2268,14 @@ grman_update_layers(
      ((a)->z_index == (b)->z_index && ((a)->image_id < (b)->image_id || ((a)->image_id == (b)->image_id && a->ref_id < b->ref_id))))
     QSORT(ImageRenderData, self->render_data.item, self->render_data.count, lt);
 #undef lt
-    // Calculate the group counts
+    // Calculate the group counts. Refs drawn with different programs must not
+    // be in the same group as programs are switched only between groups.
     i = 0;
     while (i < self->render_data.count) {
         id_type num_identical = 1, image_id = self->render_data.item[i].image_id, start = i;
+        const bool is_unscaled = self->render_data.item[i].is_unscaled;
         while (++i < self->render_data.count) {
-            if (self->render_data.item[i].image_id != image_id) break;
+            if (self->render_data.item[i].image_id != image_id || self->render_data.item[i].is_unscaled != is_unscaled) break;
             num_identical++;
         }
         while (num_identical > 0) { self->render_data.item[start++].group_count = num_identical--; }
@@ -2839,6 +2874,7 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     if (is_chunked_continuation) {
         INIT_CHUNKED_LOAD; // g now points to the command that started the chunked load
     }
+    if (img->indexed_px_sz || fmt == INDEXED || fmt == INDEXED_ALPHA) ABRT("EINVAL", "Animation is not supported for indexed color images");
     uint32_t frame_number = g->frame_number;
     if (!frame_number || frame_number > img->extra_framecnt + 2) frame_number = img->extra_framecnt + 2;
     bool is_new_frame = frame_number == img->extra_framecnt + 2;
@@ -3216,6 +3252,10 @@ static void
 handle_compose_command(GraphicsManager *self, bool *is_dirty, const GraphicsCommand *g, Image *img) {
     if (img->vector) {
         set_command_failed_response("EINVAL", "Composition is not supported for vector images");
+        return;
+    }
+    if (img->indexed_px_sz) {
+        set_command_failed_response("EINVAL", "Composition is not supported for indexed color images");
         return;
     }
     Frame *src_frame = frame_for_number(img, g->frame_number);
@@ -3918,7 +3958,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         "{sI sI sI sI sI sI sI "
         "sO sI sO "
         "sI sI sI "
-        "sI sI sy# sN sO sf sI}",
+        "sI sI sy# sN sO sf sI sI}",
         "texture_id",
         texture_id_for_img(img),
         U(client_id),
@@ -3943,14 +3983,15 @@ image_as_dict(GraphicsManager *self, Image *img) {
         U(gamut),
         "data",
         cfd.buf,
-        (Py_ssize_t)(cfd.buf ? pixel_size(cfd.is_opaque, cfd.is_float) * img->width * img->height : 0),
+        (Py_ssize_t)(cfd.buf ? (img->indexed_px_sz ? img->indexed_px_sz : pixel_size(cfd.is_opaque, cfd.is_float)) * img->width * img->height : 0),
         "extra_frames",
         frames,
         B(tone_map),
         "peak",
         (double)img->peak,
         "vector_elements",
-        (unsigned int)(img->vector ? vector_doc_element_count(img->vector) : 0));
+        (unsigned int)(img->vector ? vector_doc_element_count(img->vector) : 0),
+        U(indexed_px_sz));
     free(cfd.buf);
     return ans;
 #undef B
@@ -4028,7 +4069,7 @@ grman_render_data_as_python(GraphicsManager *self) {
             ans,
             i,
             Py_BuildValue(
-                "{sN sN sI si sK sK}",
+                "{sN sN sI si sK sK sI sO}",
                 "src_rect",
                 R(src_rect),
                 "dest_rect",
@@ -4040,7 +4081,11 @@ grman_render_data_as_python(GraphicsManager *self) {
                 "image_id",
                 r->image_id,
                 "ref_id",
-                r->ref_id));
+                r->ref_id,
+                "indexed_px_sz",
+                (unsigned int)r->indexed_px_sz,
+                "is_unscaled",
+                r->is_unscaled ? Py_True : Py_False));
 #undef R
     }
     return ans;
@@ -4316,6 +4361,7 @@ grman_render_data(GraphicsManager *self) {
         .num_of_below_refs = self->num_of_below_refs,
         .num_of_negative_refs = self->num_of_negative_refs,
         .num_of_positive_refs = self->num_of_positive_refs,
+        .num_of_indexed_refs = self->num_of_indexed_refs,
     };
     return ans;
 }

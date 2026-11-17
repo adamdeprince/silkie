@@ -56,6 +56,11 @@ typedef struct {
     int z_index;
     int32_t depth;
     float depth_pixels, phase;
+    // Zero for normal images, otherwise the number of bytes per pixel of an indexed color image
+    uint8_t indexed_px_sz;
+    // True for indexed color images drawn at their natural size, which can use
+    // a cheaper shader. Always false for normal images.
+    bool is_unscaled;
     id_type image_id, ref_id;
     float peak; // of HDR images, see docs/hdr-protocol.rst
     bool tone_map;
@@ -125,6 +130,9 @@ typedef struct {
     void *surface;
     uint32_t surface_texture;
     bool surface_is_bgra;
+    // Zero for normal images, otherwise the number of bytes per pixel of an
+    // indexed color image. Such images cannot have more than one frame.
+    uint8_t indexed_px_sz;
 
     bool root_frame_data_loaded;
     id_type ref_id_counter;
@@ -160,6 +168,7 @@ typedef struct {
     uint8_t *data;
     bool is_4byte_aligned;
     bool is_opaque, loading_completed_successfully, is_float;
+    uint8_t indexed_px_sz;
     uint32_t width, height;
     uint8_t gamut;  // of the loaded pixels
     GraphicsCommand start_command;
@@ -186,6 +195,8 @@ typedef struct {
     bool layers_dirty;
     // The number of images below MIN_ZINDEX / 2, then the number of refs between MIN_ZINDEX / 2 and -1 inclusive, then the number of refs above 0 inclusive.
     size_t num_of_below_refs, num_of_negative_refs, num_of_positive_refs;
+    // The number of visible refs to indexed color images
+    size_t num_of_indexed_refs;
     unsigned int last_scrolled_by;
     float last_scroll_offset_lines;
     size_t used_storage;
@@ -241,7 +252,7 @@ tex_pos_y(const int px_from_top_margin, const unsigned texture_height) {
 
 
 typedef struct GraphicsRenderData {
-    size_t count, capacity, num_of_below_refs, num_of_negative_refs, num_of_positive_refs;
+    size_t count, capacity, num_of_below_refs, num_of_negative_refs, num_of_positive_refs, num_of_indexed_refs;
     ImageRenderData *images;
 } GraphicsRenderData;
 

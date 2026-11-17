@@ -35,9 +35,12 @@ Format numbers
 
 Each packed format is ``300`` plus its number of bits per pixel, so that the
 numbers stay clear of those of the kitty graphics protocol, which uses ``f=8``
-and ``f=16`` for its indexed color formats. Earlier development versions of
-Silkie used ``f=1``, ``f=2``, ``f=4``, ``f=8`` and ``f=16`` for these formats;
-those numbers are no longer accepted for them.
+and ``f=16`` for its `indexed color formats
+<https://sw.kovidgoyal.net/kitty/graphics-protocol/#indexed-color-data>`_,
+whose pixels are indices into the terminal's color palette. Silkie supports
+those formats as well. Earlier development versions of Silkie used ``f=1``,
+``f=2``, ``f=4``, ``f=8`` and ``f=16`` for the packed formats; those numbers
+are no longer accepted for them.
 
 Grayscale: ``f=301``, ``f=302``, ``f=304``, ``f=308``
 -----------------------------------------------------
