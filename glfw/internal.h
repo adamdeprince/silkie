@@ -439,7 +439,12 @@ struct _GLFWwindow {
     bool lockKeyMods;
     int cursorMode;
     char mouseButtons[GLFW_MOUSE_BUTTON_LAST + 1];
-    GLFWkeyevent activated_keys[16];
+    // The keys currently held down, in the order they were pressed. There is one entry per physical key
+    // (native_key_id), so the set never holds more entries than the keyboards have keys, however many that is.
+    struct {
+        GLFWkeyevent *items;
+        size_t count, capacity;
+    } activated_keys;
     // Virtual cursor position when cursor is disabled
     double virtualCursorPosX, virtualCursorPosY;
     bool rawMouseMotion;
