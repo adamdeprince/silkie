@@ -63,6 +63,8 @@ typedef struct {
     // True for indexed color images drawn at their natural size, which can use
     // a cheaper shader. Always false for normal images.
     bool is_unscaled;
+    // The texture holding the palette of a palette image, zero for other images
+    uint32_t palette_texture_id;
     id_type image_id, ref_id;
     float peak; // of HDR images, see docs/hdr-protocol.rst
     bool tone_map;
@@ -122,6 +124,14 @@ typedef struct TextureRef {
     uint32_t id, refcnt;
 } TextureRef;
 
+// The palette of a palette image (f=401 to f=408, see
+// docs/silkie/palette-image-protocol.rst). It is shared with the copies of the
+// image that paused rendering makes, and copied before a change while shared.
+typedef struct ImagePalette {
+    uint32_t refcnt, texture, slots, version;
+    uint8_t rgba[];  // slots entries of four bytes: red, green, blue and straight alpha, in sRGB
+} ImagePalette;
+
 #define NAME ref_map
 #define KEY_TY id_type
 #define VAL_TY ImageRef *
@@ -139,7 +149,10 @@ typedef struct {
     bool surface_is_bgra;
     // Zero for normal images, otherwise the number of bytes per pixel of an
     // indexed color image. Such images cannot have more than one frame.
+    // Palette images are indexed too, with one byte per pixel.
     uint8_t indexed_px_sz;
+    // The palette of a palette image, NULL for other images
+    ImagePalette *palette;
 
     bool root_frame_data_loaded;
     id_type ref_id_counter;
@@ -177,6 +190,7 @@ typedef struct {
     bool is_4byte_aligned;
     bool is_opaque, loading_completed_successfully, is_float;
     uint8_t indexed_px_sz;
+    ImagePalette *palette;  // of a palette image being loaded
     uint32_t width, height;
     uint8_t gamut;  // of the loaded pixels
     uint8_t deep, transfer;  // the DeepStorage and TransferFunction of the loaded pixels
@@ -204,7 +218,7 @@ typedef struct {
     bool layers_dirty;
     // The number of images below MIN_ZINDEX / 2, then the number of refs between MIN_ZINDEX / 2 and -1 inclusive, then the number of refs above 0 inclusive.
     size_t num_of_below_refs, num_of_negative_refs, num_of_positive_refs;
-    // The number of visible refs to indexed color images
+    // The number of visible refs to indexed color and palette images
     size_t num_of_indexed_refs;
     unsigned int last_scrolled_by;
     float last_scroll_offset_lines;
@@ -325,6 +339,6 @@ PyObject *grman_render_data_as_python(GraphicsManager *self);
 void grman_mark_layers_dirty(GraphicsManager *self);
 void grman_set_window_id(GraphicsManager *self, id_type id);
 bool grman_has_images(GraphicsManager *self);
-bool grman_image_version(GraphicsManager *self, uint32_t client_id, id_type *image, uint32_t *frame);
+bool grman_image_version(GraphicsManager *self, uint32_t client_id, id_type *image, uint64_t *version);
 uint8_t *grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uint32_t *height);
 GraphicsRenderData grman_render_data(GraphicsManager *self);

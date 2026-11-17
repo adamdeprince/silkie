@@ -50,6 +50,8 @@ from kitty.fast_data_types import (
     GRAPHICS_ALPHA_MASK_PROGRAM,
     GRAPHICS_INDEXED_PROGRAM,
     GRAPHICS_INDEXED_UNSCALED_PROGRAM,
+    GRAPHICS_PALETTE_PROGRAM,
+    GRAPHICS_PALETTE_UNSCALED_PROGRAM,
     GRAPHICS_PREMULT_PROGRAM,
     GRAPHICS_PROGRAM,
     HDR_BG,
@@ -291,9 +293,12 @@ class LoadShaderPrograms:
         }.items():
             vert, frag = glsl_shaders('graphics', vname)
             compile_program(prog, (vert,), (frag,), metadata['graphics'], allow_recompile)
-        for prog, vname in {GRAPHICS_INDEXED_PROGRAM: '', GRAPHICS_INDEXED_UNSCALED_PROGRAM: 'unscaled'}.items():
+        for prog, vname in {
+            GRAPHICS_INDEXED_PROGRAM: '', GRAPHICS_INDEXED_UNSCALED_PROGRAM: 'unscaled',
+            GRAPHICS_PALETTE_PROGRAM: 'palette', GRAPHICS_PALETTE_UNSCALED_PROGRAM: 'palette_unscaled',
+        }.items():
             vert, frag = glsl_shaders('indexed_graphics', vname)
-            compile_program(prog, (vert,), (frag,), metadata['indexed_graphics'], allow_recompile)
+            compile_program(prog, (vert,), (frag,), variant_metadata(metadata, 'indexed_graphics', vname), allow_recompile)
         for name, prog in {
             'bgimage': BGIMAGE_PROGRAM,
             'tint': TINT_PROGRAM,
@@ -485,6 +490,8 @@ class SlangFile(NamedTuple):
             case 'indexed_graphics.slang':
                 yield s()
                 yield s('unscaled', is_scaled='false')
+                yield s('palette', own_palette='true')
+                yield s('palette_unscaled', own_palette='true', is_scaled='false')
             case 'cell.slang':
                 d = cell_variant()
                 seen = set()
@@ -1043,13 +1050,25 @@ def glsl_metadata_for_shader(path: str) -> dict[str, Any]:
 
 
 def write_glsl_metadata(dest_dir: str, dest: str = 'glsl-uniforms.json') -> None:
-    metadata_map = {}
+    # Variants share the metadata of their shader, which works when a variant
+    # merely lacks some of its loose uniforms, as their locations are then
+    # unknown. A variant with uniforms the shader lacks, or with other uniform
+    # blocks, such as the palette variants of indexed_graphics, which have a
+    # palette rather than the color table, is stored under shader.variant, see
+    # variant_metadata().
+    metadata_map, variants = {}, {}
     for x in glob.glob(os.path.join(dest_dir, '*.glsl.json')):
         shader_name = shader_name_from_path(x)
-        if '.' in shader_name:
-            continue
-        metadata_map[shader_name] = glsl_metadata_for_shader(x)
+        (variants if '.' in shader_name else metadata_map)[shader_name] = glsl_metadata_for_shader(x)
+    for name, m in variants.items():
+        base = metadata_map.get(name.partition('.')[0])
+        if base is None or set(m['loose_uniforms']) - set(base['loose_uniforms']) or set(m['uniform_structs']) != set(base['uniform_structs']):
+            metadata_map[name] = m
     write_if_changed(os.path.join(dest_dir, dest), json.dumps(metadata_map, indent=2, sort_keys=True))
+
+
+def variant_metadata(metadata: dict[str, dict[str, Any]], name: str, variant_name: str) -> dict[str, Any]:
+    return metadata.get(f'{name}.{variant_name}', metadata[name]) if variant_name else metadata[name]
 
 
 @lru_cache(maxsize=1)

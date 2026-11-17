@@ -31,6 +31,8 @@ enum {
     GRAPHICS_ALPHA_MASK_PROGRAM,
     GRAPHICS_INDEXED_PROGRAM,
     GRAPHICS_INDEXED_UNSCALED_PROGRAM,
+    GRAPHICS_PALETTE_PROGRAM,
+    GRAPHICS_PALETTE_UNSCALED_PROGRAM,
     BGIMAGE_PROGRAM,
     TINT_PROGRAM,
     TRAIL_PROGRAM,
@@ -43,7 +45,15 @@ enum {
 
     NUM_PROGRAMS
 };
-enum { SPRITE_MAP_UNIT, GRAPHICS_UNIT, SPRITE_DECORATIONS_MAP_UNIT, CUSTOM_END_TEXTURE_A_UNIT, CUSTOM_END_TEXTURE_B_UNIT, CUSTOM_END_TEXTURE_PERSIST_UNIT };
+enum {
+    SPRITE_MAP_UNIT,
+    GRAPHICS_UNIT,
+    SPRITE_DECORATIONS_MAP_UNIT,
+    CUSTOM_END_TEXTURE_A_UNIT,
+    CUSTOM_END_TEXTURE_B_UNIT,
+    CUSTOM_END_TEXTURE_PERSIST_UNIT,
+    GRAPHICS_PALETTE_UNIT
+};
 
 typedef struct UIRenderData {
     unsigned screen_width, screen_height, cell_width, cell_height, screen_left, screen_top, full_framebuffer_width, full_framebuffer_height;
@@ -549,6 +559,29 @@ update_image_on_gpu(GLuint tex_id, const void *data, GLint x, GLint y, GLsizei w
     glBindTexture(GL_TEXTURE_2D, tex_id);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, is_float ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE, data);
+}
+
+// The palette of a palette image is a row of slots, each straight alpha RGBA in
+// sRGB, read by index in the shader. An sRGB texture gives linear colors as for
+// other images.
+void
+send_palette_to_gpu(GLuint *tex_id, const void *rgba, GLsizei slots) {
+    if (!(*tex_id)) { glGenTextures(1, tex_id); }
+    glBindTexture(GL_TEXTURE_2D, *tex_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, slots, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+}
+
+// Replaces count slots of a palette from first on
+void
+update_palette_on_gpu(GLuint tex_id, const void *rgba, GLint first, GLsizei count) {
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, first, 0, count, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 }
 
 // Indexed color images are stored as integer textures with the palette index
@@ -1382,10 +1415,17 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
     const GLint image_is_gray_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_is_gray") : -1;
     const unsigned viewport_width = get_gpu_viewport().width;
     if (output_gamut_loc >= 0) glUniform1ui(output_gamut_loc, current_output_gamut);
+    // Indexed color images have alpha or not, palette images have it in their palettes
     const bool is_indexed = program == GRAPHICS_INDEXED_PROGRAM || program == GRAPHICS_INDEXED_UNSCALED_PROGRAM;
+    const bool is_palette = program == GRAPHICS_PALETTE_PROGRAM || program == GRAPHICS_PALETTE_UNSCALED_PROGRAM;
     const GLint has_alpha_loc = is_indexed ? program_uniform_location(program, "has_alpha") : -1;
     for (GLuint i = 0; i < count;) {
         ImageRenderData *group = data + start + i;
+        if (is_palette) {
+            glActiveTexture(GL_TEXTURE0 + GRAPHICS_PALETTE_UNIT);
+            glBindTexture(GL_TEXTURE_2D, group->palette_texture_id);
+            glActiveTexture(GL_TEXTURE0 + GRAPHICS_UNIT);
+        }
         glBindTexture(GL_TEXTURE_2D, spatial_window && spatial_window->spatial.eye > 0 && group->right_texture_id ? group->right_texture_id : group->texture_id);
         if (has_texture_uniforms) glUniform1f(program_uniform_location(program, "tone_peak"), group->tone_map ? group->peak : 0.f);
         if (image_gamut_loc >= 0) glUniform1ui(image_gamut_loc, group->gamut);
@@ -1472,9 +1512,13 @@ set_cell_uniforms(bool force) {
     if (!constants_set || force) {
         float text_contrast = 1.0f + OPT(text_contrast) * 0.01f;
         float text_gamma_adjustment = OPT(text_gamma_adjustment) < 0.01f ? 1.0f : 1.0f / OPT(text_gamma_adjustment);
-        for (int i = GRAPHICS_PROGRAM; i <= GRAPHICS_INDEXED_UNSCALED_PROGRAM; i++) {
+        for (int i = GRAPHICS_PROGRAM; i <= GRAPHICS_PALETTE_UNSCALED_PROGRAM; i++) {
             bind_program(i);
             glUniform1i(program_uniform_location(i, "image"), GRAPHICS_UNIT);
+        }
+        for (int i = GRAPHICS_PALETTE_PROGRAM; i <= GRAPHICS_PALETTE_UNSCALED_PROGRAM; i++) {
+            bind_program(i);
+            glUniform1i(program_uniform_location(i, "palette"), GRAPHICS_PALETTE_UNIT);
         }
         // These are set for every cell program, but the background program draws no
         // text and so does not have them.
@@ -2368,13 +2412,14 @@ draw_tint(const UIRenderData *ui) {
     draw_quad(true, 0);
 }
 
-// Draw a range of the image render data. Indexed color images need a
-// different program, so when any are present, switch programs at the
+// Draw a range of the image render data. Indexed color and palette images need
+// different programs, so when any are present, switch programs at the
 // boundaries between runs of images that need different programs, preserving
 // draw order.
 static int
 program_for_image(const ImageRenderData *rd) {
     if (!rd->indexed_px_sz) return GRAPHICS_PROGRAM;
+    if (rd->palette_texture_id) return rd->is_unscaled ? GRAPHICS_PALETTE_UNSCALED_PROGRAM : GRAPHICS_PALETTE_PROGRAM;
     return rd->is_unscaled ? GRAPHICS_INDEXED_UNSCALED_PROGRAM : GRAPHICS_INDEXED_PROGRAM;
 }
 
@@ -4012,6 +4057,8 @@ init_shaders(PyObject *module) {
     C(GRAPHICS_ALPHA_MASK_PROGRAM);
     C(GRAPHICS_INDEXED_PROGRAM);
     C(GRAPHICS_INDEXED_UNSCALED_PROGRAM);
+    C(GRAPHICS_PALETTE_PROGRAM);
+    C(GRAPHICS_PALETTE_UNSCALED_PROGRAM);
     C(BGIMAGE_PROGRAM);
     C(TINT_PROGRAM);
     C(TRAIL_PROGRAM);

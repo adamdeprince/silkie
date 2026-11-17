@@ -104,7 +104,8 @@ formats of :doc:`packed-image-protocol`, which are expanded to eight bits
 first and keep the curve. ``f=64`` is linear by definition: ``E=8`` is
 accepted for it and changes nothing, any other value is refused. The key is
 refused for ``f=100`` (a PNG says what it is itself), for ``f=8`` and ``f=16``
-(their colors are those of the terminal), for ``f=200`` (each paint of a
+(their colors are those of the terminal), for the palette images ``f=401`` to
+``f=408`` of :doc:`palette-image-protocol` (their palettes are sRGB), for ``f=200`` (each paint of a
 vector image names its own colors) and for GPU surfaces, ``t=g``.
 
 Silkie's linear values have SDR white, the white of ordinary text, at ``1.0``,

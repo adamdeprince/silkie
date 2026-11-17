@@ -34,7 +34,7 @@ Format numbers
 --------------
 
 Silkie numbers its raw formats by family, the base of the family plus the
-number of bits per pixel: ``300`` for gray, ``400`` for palette images,
+number of bits per pixel: ``300`` for gray, ``400`` for :doc:`palette images <palette-image-protocol>`,
 ``500`` for RGB without alpha and ``600`` for RGBA. Eight-bit gray is
 ``f=308``, RGB565 is ``f=516`` and RGB10A2 is ``f=632``. The numbers stay
 clear of those of the kitty graphics protocol, which uses ``f=8`` and ``f=16``
@@ -124,6 +124,9 @@ references, and animation-frame uploads work as for other raster inputs.
 Packed pixels expand before caching and GPU upload; their wire precision
 does not restrict later frame formats or depend on display capabilities.
 Existing rules for mixing ordinary and HDR animation frames still apply.
+
+Images of indices into a palette the program sends, with alpha in every
+palette slot, are described in :doc:`palette-image-protocol`.
 
 For inherited framing, chunking, placement, and animation fields, see the
 `upstream graphics protocol manual

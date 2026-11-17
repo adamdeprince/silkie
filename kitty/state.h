@@ -801,6 +801,8 @@ bool hdr_should_be_active(const OSWindow *w);
 void scale_output_to_hdr_white_level(const OSWindow *w);
 bool backbuffer_is_float(void);
 void send_indexed_image_to_gpu(uint32_t *, const void *, int32_t, int32_t, unsigned, bool);
+void send_palette_to_gpu(uint32_t *, const void *, int32_t);
+void update_palette_on_gpu(uint32_t, const void *, int32_t, int32_t);
 // Uploads the pixels of an image the graphics shader decodes, a DeepStorage or eight bit RGB or RGBA, see
 // docs/silkie/precision-image-protocol.rst
 void send_encoded_image_to_gpu(uint32_t *tex_id, const void *data, int32_t width, int32_t height, uint8_t deep, bool is_opaque, bool is_4byte_aligned);

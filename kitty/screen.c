@@ -2537,8 +2537,8 @@ screen_pointer_shape(Screen *self, PointerImage *image) {
         if (ps->stack[i] == IMAGE_POINTER) {
             // an image shape is ignored while its image does not exist, see docs/pointer-shapes.rst
             id_type img;
-            uint32_t frame;
-            if (!grman_image_version(self->grman, ps->images[i].image_id, &img, &frame)) continue;
+            uint64_t version;
+            if (!grman_image_version(self->grman, ps->images[i].image_id, &img, &version)) continue;
             if (image) *image = ps->images[i];
         }
         return ps->stack[i];

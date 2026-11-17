@@ -715,7 +715,8 @@ chunked transmission in progress. The ``e`` key is only allowed in
 other *query action*.
 
 Silkie reports its own additions to the protocol the same way: the packed
-formats of the :doc:`packed-image-protocol`, ``f=64`` of the
+formats of the :doc:`packed-image-protocol`, the palette formats and the
+``x`` and ``w`` keys of palette updates of the :doc:`palette-image-protocol`, ``f=64`` of the
 :doc:`hdr-protocol` and the ``T`` key, ``f=200`` and the ``e`` and ``v``
 actions of the :doc:`vector-protocol`, the ``G`` key of the
 :doc:`wide-gamut-protocol`, the high precision formats and the ``E`` key of the
@@ -1360,8 +1361,8 @@ Key      Value                 Default    Description
 **Keys for image transmission**
 -----------------------------------------------------------
 ``f``    Positive integer.     ``32``     The format in which the image data is sent.
-         ``(8, 16, 24, 32,``              Silkie adds the packed and high precision formats ``301, 302, 304,``
-         ``64, 100, 200)``.               ``308, 316, 516, 632, 664``.
+         ``(8, 16, 24, 32,``              Silkie adds the packed, palette and high precision formats ``301, 302,``
+         ``64, 100, 200)``.               ``304, 308, 316, 401, 402, 404, 408, 516, 632, 664``.
 ``t``    Single character.     ``d``      The transmission medium used.
          ``(d, f, t, s, g)``.
 ``s``    Positive integer.     ``0``      The width of the image being sent.

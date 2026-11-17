@@ -122,8 +122,53 @@ free_refs_data(Image *img) {
     vt_cleanup(&img->refs_by_client_id);
 }
 
+// Palettes of palette images, see docs/silkie/palette-image-protocol.rst {{{
+static ImagePalette *
+alloc_palette(uint32_t slots) {
+    // a palette has at most 256 slots, so its size cannot overflow
+    ImagePalette *ans = calloc(1, sizeof(ImagePalette) + (size_t)slots * 4);
+    if (ans) {
+        ans->refcnt = 1;
+        ans->slots = slots;
+    }
+    return ans;
+}
+
+static void
+release_palette(ImagePalette **p) {
+    if (!*p) return;
+    if ((*p)->refcnt < 2) {
+        if ((*p)->texture) free_texture(&(*p)->texture);
+        free(*p);
+    } else (*p)->refcnt--;
+    *p = NULL;
+}
+
+static ImagePalette *
+incref_palette(ImagePalette *p) {
+    if (p) p->refcnt++;
+    return p;
+}
+
+// The palette of the image, made its own before it is changed, so that a copy
+// of the image made for paused rendering keeps showing the old colors
+static ImagePalette *
+palette_for_change(Image *img) {
+    ImagePalette *p = img->palette;
+    if (p->refcnt < 2) return p;
+    ImagePalette *copy = alloc_palette(p->slots);
+    if (!copy) return NULL;
+    memcpy(copy->rgba, p->rgba, (size_t)p->slots * 4);
+    copy->version = p->version;
+    p->refcnt--;
+    img->palette = copy;
+    return copy;
+}
+// }}}
+
 static void
 free_load_data(LoadData *ld) {
+    release_palette(&ld->palette);
     free(ld->buf);
     ld->buf_used = 0;
     ld->buf_capacity = 0;
@@ -181,6 +226,7 @@ static void
 free_image_resources(GraphicsManager *self, Image *img) {
     clear_texture_ref(&img->texture);
     clear_texture_ref(&img->vector_right_texture);
+    release_palette(&img->palette);
     vector_doc_free(img->vector);
     img->vector = NULL;
 #if defined(__APPLE__) || defined(__linux__)
@@ -358,6 +404,7 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
         }
         clone->texture = incref_texture_ref(img->texture);
         clone->vector_right_texture = incref_texture_ref(img->vector_right_texture);
+        clone->palette = incref_palette(img->palette);
         vt_insert(&dest->images_by_internal_id, clone->internal_id, clone);
     }
 }
@@ -795,12 +842,14 @@ get_free_client_id(const GraphicsManager *self) {
     }
 
 #define MAX_DATA_SZ (4u * 100000000u)
-// Silkie's raw formats (docs/silkie/packed-image-protocol.rst and
+// Silkie's raw formats (docs/silkie/packed-image-protocol.rst,
+// docs/silkie/palette-image-protocol.rst and
 // docs/silkie/precision-image-protocol.rst) are the base of their family plus
-// their bits per pixel: 300 for gray, 500 for RGB and 600 for RGBA. That keeps
-// them clear of the formats of the kitty graphics protocol, such as its
-// indexed color formats f=8 and f=16.
+// their bits per pixel: 300 for gray, 400 for palette images (the bits of each
+// index), 500 for RGB and 600 for RGBA. That keeps them clear of the formats
+// of the kitty graphics protocol, such as its indexed color formats f=8 and f=16.
 #define PACKED_FORMAT_BASE 300u
+#define PALETTE_FORMAT_BASE 400u
 #define RGB_FORMAT_BASE 500u
 #define RGBA_FORMAT_BASE 600u
 enum FORMATS {
@@ -816,6 +865,10 @@ enum FORMATS {
     GRAY4 = PACKED_FORMAT_BASE + 4,
     GRAY8 = PACKED_FORMAT_BASE + 8,
     GRAY16 = PACKED_FORMAT_BASE + 16,
+    PALETTE1 = PALETTE_FORMAT_BASE + 1,
+    PALETTE2 = PALETTE_FORMAT_BASE + 2,
+    PALETTE4 = PALETTE_FORMAT_BASE + 4,
+    PALETTE8 = PALETTE_FORMAT_BASE + 8,
     RGB565 = RGB_FORMAT_BASE + 16,
     RGB10A2 = RGBA_FORMAT_BASE + 32,
     RGBA16 = RGBA_FORMAT_BASE + 64,
@@ -832,6 +885,18 @@ is_packed_format(uint32_t format) {
     return is_gray_format(format) || format == RGB565;
 }
 
+static bool
+is_palette_format(uint32_t format) {
+    return format == PALETTE1 || format == PALETTE2 || format == PALETTE4 || format == PALETTE8;
+}
+
+// The size of the palette at the start of the data of a palette image: every
+// one of the 2 ** bits slots, four bytes each
+static size_t
+palette_size_of_format(uint32_t format) {
+    return (size_t)4 << (format - PALETTE_FORMAT_BASE);
+}
+
 // The formats kept at their own precision, see docs/silkie/precision-image-protocol.rst
 static uint8_t
 deep_storage_of_format(uint32_t format) {
@@ -843,10 +908,12 @@ deep_storage_of_format(uint32_t format) {
     }
 }
 
-// The bits per pixel of a raw format, 0 for one that is not raw pixels
+// The bits per pixel of a raw format, 0 for one that is not raw pixels. For a
+// palette format, the bits of the indices after the palette.
 static unsigned
 bits_per_pixel(uint32_t format) {
-    if (is_packed_format(format) || deep_storage_of_format(format)) return format % 100;
+    // the number of a Silkie raw format is the base of its family plus its bits per pixel
+    if (is_packed_format(format) || is_palette_format(format) || deep_storage_of_format(format)) return format % 100;
     switch (format) {
         // the value of these formats is their bits per pixel
         case INDEXED: case INDEXED_ALPHA: case RGB: case RGBA: case RGBA16F: return format;
@@ -1151,6 +1218,43 @@ unpack_image_data(GraphicsManager *self, Image *img, uint32_t format) {
     return img;
 }
 
+// The data of a palette image is its palette followed by its packed indices.
+// The indices are expanded to a byte each, for an integer texture the shaders
+// look up in the palette, which is kept apart so that it can be replaced
+// without the indices. The palette always has every slot, so no index can be
+// out of range.
+static Image *
+unpack_palette_image(GraphicsManager *self, Image *img, uint32_t format) {
+    LoadData *ld = &self->currently_loading;
+    const unsigned bits = bits_per_pixel(format);
+    const size_t palette_sz = palette_size_of_format(format);
+    size_t size, row_size;
+    if (!raw_image_data_size(PALETTE8, ld->width, ld->height, &size) || !raw_image_data_size(format, ld->width, 1, &row_size))
+        ABRT("EOVERFLOW", "Expanded image dimensions overflow address space");
+    ImagePalette *palette = alloc_palette(1u << bits);
+    if (!palette) ABRT("ENOMEM", "Out of memory allocating palette");
+    uint8_t *indices = malloc(size);
+    if (!indices) {
+        free(palette);
+        ABRT("ENOMEM", "Out of memory expanding palette image");
+    }
+    memcpy(palette->rgba, ld->data, palette_sz);
+    const uint8_t *packed = ld->data + palette_sz;
+    uint8_t *dst = indices;
+    const unsigned per_byte = 8 / bits, maximum = (1u << bits) - 1;
+    for (uint32_t y = 0; y < ld->height; y++, dst += ld->width) {
+        const uint8_t *src = packed + (size_t)y * row_size;
+        if (bits == 8) memcpy(dst, src, ld->width);
+        else for (uint32_t x = 0; x < ld->width; x++) dst[x] = (src[x / per_byte] >> (8 - bits - (x % per_byte) * bits)) & maximum;
+    }
+    free_load_data(ld);
+    ld->buf = ld->data = indices;
+    ld->buf_capacity = ld->buf_used = ld->data_sz = size;
+    ld->palette = palette;
+    ld->loading_completed_successfully = true;
+    return img;
+}
+
 static Image *
 process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, const uint32_t data_fmt, const bool is_frame) {
     if (data_fmt == VECTOR) {  // text records of a size known only once loaded
@@ -1216,6 +1320,7 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
         } else self->currently_loading.data = self->currently_loading.buf;
         self->currently_loading.loading_completed_successfully = true;
     }
+    if (is_palette_format(data_fmt)) return unpack_palette_image(self, img, data_fmt);
     return is_packed_format(data_fmt) ? unpack_image_data(self, img, data_fmt) : img;
 }
 
@@ -1256,6 +1361,20 @@ initialize_load_data(
                                                                           : !self->currently_loading.is_opaque || self->currently_loading.width % 4 == 0;
             self->currently_loading.is_float = data_fmt == RGBA16F;
             break;
+        case PALETTE1:
+        case PALETTE2:
+        case PALETTE4:
+        case PALETTE8: {
+            if (!g->data_width || !g->data_height) ABRT("EINVAL", "Zero width/height not allowed");
+            size_t indices_sz;
+            const size_t palette_sz = palette_size_of_format(data_fmt);
+            if (!raw_image_data_size(data_fmt, g->data_width, g->data_height, &indices_sz) || indices_sz > SIZE_MAX - palette_sz)
+                ABRT("EOVERFLOW", "Image dimensions overflow address space");
+            self->currently_loading.data_sz = palette_sz + indices_sz;
+            // The indices are expanded to a byte each once loaded, see unpack_palette_image()
+            self->currently_loading.indexed_px_sz = 1;
+            self->currently_loading.is_4byte_aligned = self->currently_loading.width % 4 == 0;
+        } break;
         case INDEXED:
         case INDEXED_ALPHA:
             if (!g->data_width || !g->data_height) ABRT("EINVAL", "Zero width/height not allowed");
@@ -1314,6 +1433,20 @@ upload_to_gpu(GraphicsManager *self, Image *img, const CoalescedFrameData *data)
     else if (data->deep || (img->transfer != TRANSFER_SRGB && !data->is_float))
         send_encoded_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, data->deep, data->is_opaque, data->is_4byte_aligned);
     else send_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, data->is_opaque, data->is_float, data->is_4byte_aligned, true, REPEAT_CLAMP);
+}
+
+// Sends count slots of the palette of a palette image from first on to the
+// GPU, or all of them when it has no texture yet. The indices are not sent again.
+static void
+upload_palette_to_gpu(GraphicsManager *self, Image *img, uint32_t first, uint32_t count) {
+    if (!self->context_made_current_for_this_command) {
+        if (!self->window_id) return;
+        if (!make_window_context_current(self->window_id)) return;
+        self->context_made_current_for_this_command = true;
+    }
+    ImagePalette *p = img->palette;
+    if (!p->texture) send_palette_to_gpu(&p->texture, p->rgba, p->slots);
+    else update_palette_on_gpu(p->texture, p->rgba + (size_t)first * 4, first, count);
 }
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -1540,6 +1673,9 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->gamut = self->currently_loading.gamut;
         img->transfer = self->currently_loading.transfer;
         img->indexed_px_sz = self->currently_loading.indexed_px_sz;
+        release_palette(&img->palette);
+        img->palette = self->currently_loading.palette;
+        self->currently_loading.palette = NULL;
         if (img->root_frame.id) remove_from_cache(self, (const ImageAndFrame){.image_id = img->internal_id, .frame_id = img->root_frame.id});
         img->root_frame = (const Frame){
             .id = ++img->frame_id_counter,
@@ -1564,12 +1700,14 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             upload_to_gpu(self, img, &(const CoalescedFrameData){
                 .buf = self->currently_loading.data, .is_opaque = img->root_frame.is_opaque, .is_float = img->root_frame.is_float,
                 .is_4byte_aligned = img->root_frame.is_4byte_aligned, .deep = img->root_frame.deep});
+            if (img->palette) upload_palette_to_gpu(self, img, 0, img->palette->slots);
             if (!add_load_data_to_cache(self, (const ImageAndFrame){.image_id = img->internal_id, .frame_id = img->root_frame.id}, img->root_frame.transient)) {
                 if (PyErr_Occurred()) PyErr_Print();
                 ABRT("ENOSPC", "Failed to store image data in cache");
             }
-            self->used_storage += required_sz;
-            img->used_storage = required_sz;
+            const size_t stored = required_sz + (img->palette ? (size_t)img->palette->slots * 4 : 0);
+            self->used_storage += stored;
+            img->used_storage = stored;
         }
         img->root_frame_data_loaded = true;
     }
@@ -1625,17 +1763,19 @@ supported_keys_for_query(const GraphicsCommand *g) {
             // float RGBA (hdr-protocol) and vector images, which cannot have
             // animation frames (vector-protocol)
             // and kitty's indexed color formats, which cannot have animation frames either
-            const bool is_indexed = fmt == INDEXED || fmt == INDEXED_ALPHA;
-            // and the high precision formats (precision-image-protocol), which cannot have animation frames either
+            // and Silkie's palette images (palette-image-protocol) and high precision images (precision-image-protocol),
+            // which cannot have animation frames either
+            const bool is_indexed = fmt == INDEXED || fmt == INDEXED_ALPHA, is_palette = is_palette_format(fmt);
             const bool is_deep = deep_storage_of_format(fmt) != DEEP_NONE;
-            if (fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt) || ((fmt == VECTOR || is_indexed || is_deep) && action != 'f'))
-                print(",f=%u", fmt);
-            // The colors of an indexed color image are those of the terminal, it has no gamut of its own and is never HDR
+            const bool has_frames = fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt);
+            if (has_frames || ((fmt == VECTOR || is_indexed || is_palette || is_deep) && action != 'f')) print(",f=%u", fmt);
+            // The colors of an indexed color image are those of the terminal, it has no gamut of its own and is never HDR.
+            // The palette of a palette image can be in a gamut, but is never HDR.
             if (!is_indexed && (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020)) print(",G=%u", g->gamut);
             // A transfer function other than sRGB, for the formats that take it, see transfer_of_command(). Frames are sRGB.
             uint8_t transfer;
             if (g->transfer && !surface && transfer_of_command(g, fmt ? fmt : RGBA, &transfer) && (action != 'f' || transfer == TRANSFER_SRGB)) print(",E=%u", g->transfer);
-            if (action != 'f' && !is_indexed) ECHO_ONE('T', tone_map);
+            if (action != 'f' && !is_indexed && !is_palette) ECHO_ONE('T', tone_map);
             if (g->data_width <= MAX_IMAGE_DIMENSION) ECHO_UINT('s', data_width);
             if (g->data_height <= MAX_IMAGE_DIMENSION) ECHO_UINT('v', data_height);
             ECHO_UINT('S', data_sz);
@@ -1691,9 +1831,12 @@ supported_keys_for_query(const GraphicsCommand *g) {
             ECHO_FLAG('o', compressed);
             break;
         case 'e':
-            // a vector edit carries a patch, sent directly or from a file
+            // a vector edit carries a patch and a palette update palette slots, sent directly or from a file
             if (g->transmission_type != 'g') ECHO_FLAG('t', transmission_type);
             ECHO_FLAG('o', compressed);
+            // the first palette slot to replace and the number of slots
+            ECHO_UINT('x', x_offset);
+            ECHO_UINT('w', width);
             break;
         case 'r':
             // a refresh has no keys besides the image it refers to
@@ -2311,6 +2454,7 @@ grman_update_layers(
             rd->decode = img->vector || img->surface ? IMAGE_DECODE_NONE : image_decode_for(img->root_frame.deep, img->transfer);
             rd->is_gray = img->root_frame.deep == DEEP_GRAY16;
             rd->indexed_px_sz = img->indexed_px_sz;
+            rd->palette_texture_id = img->palette ? img->palette->texture : 0;
             if (img->indexed_px_sz) {
                 self->num_of_indexed_refs++;
                 // The rect is in normalized device co-ordinates, so allow for rounding errors
@@ -2666,13 +2810,27 @@ decode_frame_to_half(const Image *img, const CoalescedFrameData *cfd) {
 
 // Vector images {{{
 
+// The pixels of a palette image as RGBA: its colors, straight alpha, in the gamut of the image
+static uint8_t *
+palette_image_rgba(GraphicsManager *self, Image *img) {
+    CoalescedFrameData cfd = get_coalesced_frame_data(self, img, &img->root_frame);
+    if (!cfd.buf) return NULL;
+    // the indices are a byte each, so the number of pixels fits in memory, four bytes for each might not
+    const size_t num = (size_t)img->width * img->height;
+    uint8_t *ans = num <= SIZE_MAX / 4 ? malloc(num * 4) : NULL;
+    if (ans) for (size_t i = 0; i < num; i++) memcpy(ans + 4 * i, img->palette->rgba + 4 * (size_t)cfd.buf[i], 4);
+    free(cfd.buf);
+    return ans;
+}
+
 static bool
 vector_lookup(void *ctx, uint32_t image_id, bool with_pixels, VectorImageData *out) {
     GraphicsManager *self = ctx;
     Image *img = img_by_client_id(self, image_id);
     // The pixels of an indexed color image are indices into the palette of a
-    // window, not colors, so a vector image cannot draw one
-    if (!img || img->vector || img->indexed_px_sz || !img->root_frame_data_loaded) return false;
+    // window, not colors, so a vector image cannot draw one. A palette image
+    // has a palette of its own.
+    if (!img || img->vector || (img->indexed_px_sz && !img->palette) || !img->root_frame_data_loaded) return false;
     out->width = img->width;
     out->height = img->height;
     // High precision pixels, and those with a transfer function other than sRGB, are drawn as linear half floats
@@ -2680,6 +2838,12 @@ vector_lookup(void *ctx, uint32_t image_id, bool with_pixels, VectorImageData *o
     out->is_float = img->root_frame.is_float || decoded;
     out->gamut = decoded ? 0 : img->gamut;
     if (!with_pixels) return true;
+    if (img->palette) {
+        if (!(out->data = palette_image_rgba(self, img))) return false;
+        out->is_opaque = false;
+        out->is_float = false;
+        return true;
+    }
     CoalescedFrameData cfd = get_coalesced_frame_data(self, img, &img->root_frame);
     if (!cfd.buf) return false;
     if (needs_decoding(img, &cfd)) {
@@ -3039,6 +3203,7 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     if (is_chunked_continuation) {
         INIT_CHUNKED_LOAD; // g now points to the command that started the chunked load
     }
+    if (img->palette || is_palette_format(fmt)) ABRT("EINVAL", "Animation is not supported for palette images");
     if (img->indexed_px_sz || fmt == INDEXED || fmt == INDEXED_ALPHA) ABRT("EINVAL", "Animation is not supported for indexed color images");
     // Frames are blended on the CPU in eight bit sRGB or in half float, see docs/silkie/precision-image-protocol.rst
     if (img->root_frame.deep || img->transfer != TRANSFER_SRGB || deep_storage_of_format(fmt) || (fmt != RGBA16F && g->transfer != 0 && g->transfer != 13))
@@ -3239,6 +3404,57 @@ handle_vector_edit_command(GraphicsManager *self, GraphicsCommand *g, Image *img
     return img;
 }
 
+// Replaces slots of the palette of a palette image, without sending its
+// indices again, see docs/silkie/palette-image-protocol.rst. The slots are
+// loaded as an RGBA image with one pixel for each, so that every transmission
+// medium, chunking and compression work as they do for f=32.
+static Image *
+handle_palette_edit_command(GraphicsManager *self, GraphicsCommand *g, Image *img, const uint8_t *payload, bool *is_dirty) {
+    unsigned char tt = g->transmission_type ? g->transmission_type : 'd';
+    const bool is_chunked_continuation = tt == 'd' && self->currently_loading.loading_for.image_id == img->internal_id;
+    GraphicsCommand slots_command;
+    if (is_chunked_continuation) {
+        self->currently_loading.start_command.more = g->more;
+        self->currently_loading.start_command.payload_sz = g->payload_sz;
+        g = &self->currently_loading.start_command;
+        tt = g->transmission_type ? g->transmission_type : 'd';
+    } else {
+        const uint32_t slots = img->palette->slots, first = g->x_offset;
+        if (first >= slots) ABRT("EINVAL", "The palette has %u slots, there is no slot: %u", slots, first);
+        const uint32_t count = g->width ? g->width : slots - first;
+        if (count > slots - first) ABRT("EINVAL", "The palette has %u slots, %u slots from slot %u do not fit", slots, count, first);
+        // the colors of the palette are all in the gamut of the image
+        if (g->gamut && gamut_of_command(g) != img->gamut) ABRT("EINVAL", "The palette is in gamut %u, an update cannot change it", img->gamut);
+        slots_command = *g;
+        slots_command.format = RGBA;
+        slots_command.data_width = count;
+        slots_command.data_height = 1;
+        g = &slots_command;
+        self->currently_loading.loading_for = (const ImageAndFrame){0};
+        if (!initialize_load_data(self, g, img, tt, RGBA, 0)) return NULL;
+    }
+    LoadData *ld = &self->currently_loading;
+    img = load_image_data(self, img, g, tt, RGBA, payload);
+    if (!img || !ld->loading_completed_successfully) return NULL;
+    ld->loading_for = (const ImageAndFrame){0};
+    // Direct, uncompressed data has a known size, so more than that does not fit
+    if (tt == 'd' && !g->compressed && ld->buf_used > ld->data_sz) ABRT("EFBIG", "Too much data: %zu > %zu", ld->buf_used, ld->data_sz);
+    img = process_image_data(self, img, g, RGBA, false);
+    if (!img) return NULL;
+    ImagePalette *p = palette_for_change(img);
+    if (!p) ABRT("ENOMEM", "Out of memory copying the palette");
+    const uint32_t first = g->x_offset, count = ld->width;
+    memcpy(p->rgba + (size_t)first * 4, ld->data, (size_t)count * 4);
+    p->version++;
+    upload_palette_to_gpu(self, img, first, count);
+    img->atime = monotonic();
+    // every placement is drawn with the new colors, as are vector images that draw this one
+    *is_dirty = true;
+    set_layers_dirty(self);
+    invalidate_vector_users(self, img->client_id);
+    return img;
+}
+
 #undef ABRT
 
 static Image *
@@ -3380,14 +3596,15 @@ cfd_free(CoalescedFrameData *p) {
     p->buf = NULL;
 }
 
-// Whether an image with the client id exists; *image and *frame change whenever its pixels do.
+// Whether an image with the client id exists; *image and *version change whenever its pixels do: the current frame
+// in the low 32 bits of version and the number of changes to the palette of a palette image in the high 32 bits.
 bool
-grman_image_version(GraphicsManager *self, uint32_t client_id, id_type *image, uint32_t *frame) {
+grman_image_version(GraphicsManager *self, uint32_t client_id, id_type *image, uint64_t *version) {
     Image *img = client_id ? img_by_client_id(self, client_id) : NULL;
     if (!img) return false;
     Frame *f = current_frame(img);
     *image = img->internal_id;
-    *frame = f ? f->id : 0;
+    *version = ((uint64_t)(img->palette ? img->palette->version : 0) << 32) | (f ? f->id : 0);
     return true;
 }
 
@@ -3396,8 +3613,16 @@ uint8_t *
 grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uint32_t *height) {
     Image *img = client_id ? img_by_client_id(self, client_id) : NULL;
     // The pixels of an indexed color image are indices into the palette of a window, not colors
-    Frame *f = img && img->root_frame_data_loaded && !img->indexed_px_sz ? current_frame(img) : NULL;
+    Frame *f = img && img->root_frame_data_loaded && (!img->indexed_px_sz || img->palette) ? current_frame(img) : NULL;
     if (!f) return NULL;
+    if (img->palette) {
+        uint8_t *ans = palette_image_rgba(self, img);
+        if (ans) {
+            *width = img->width;
+            *height = img->height;
+        }
+        return ans;
+    }
     RAII_CoalescedFrameData(cfd, get_coalesced_frame_data(self, img, f));
     if (!cfd.buf) {
         if (PyErr_Occurred()) PyErr_Print();
@@ -3435,7 +3660,8 @@ handle_compose_command(GraphicsManager *self, bool *is_dirty, const GraphicsComm
         return;
     }
     if (img->indexed_px_sz) {
-        set_command_failed_response("EINVAL", "Composition is not supported for indexed color images");
+        if (img->palette) set_command_failed_response("EINVAL", "Composition is not supported for palette images");
+        else set_command_failed_response("EINVAL", "Composition is not supported for indexed color images");
         return;
     }
     if (img->root_frame.deep || img->transfer != TRANSFER_SRGB) {
@@ -4032,14 +4258,14 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
         }
         case 'e': {
             if (!g->id && !g->image_number && !self->currently_loading.loading_for.image_id) {
-                REPORT_ERROR("Vector edit command without image id or number");
+                REPORT_ERROR("Edit command without image id or number");
                 break;
             }
             Image *img;
             if (self->currently_loading.loading_for.image_id) img = img_by_internal_id(self, self->currently_loading.loading_for.image_id);
             else img = g->id ? img_by_client_id(self, g->id) : img_by_client_number(self, g->image_number);
             if (!img) {
-                set_command_failed_response("ENOENT", "Vector edit command refers to non-existent image with id: %u and number: %u", g->id, g->image_number);
+                set_command_failed_response("ENOENT", "Edit command refers to non-existent image with id: %u and number: %u", g->id, g->image_number);
                 ret = finish_command_response(g, false);
             } else {
                 GraphicsCommand eg = *g;
@@ -4048,7 +4274,9 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
                     eg.id = self->currently_loading.start_command.id;
                     eg.image_number = self->currently_loading.start_command.image_number;
                 }
-                img = handle_vector_edit_command(self, &eg, img, payload, is_dirty);
+                // a palette image has its palette updated, any other image is edited as a vector image
+                if (img->palette) img = handle_palette_edit_command(self, &eg, img, payload, is_dirty);
+                else img = handle_vector_edit_command(self, &eg, img, payload, is_dirty);
                 if (!self->currently_loading.loading_for.image_id) free_load_data(&self->currently_loading);
                 if (g->quiet) eg.quiet = g->quiet;
                 else eg.quiet = self->currently_loading.start_command.quiet;
@@ -4144,7 +4372,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         "{sI sI sI sI sI sI sI "
         "sO sI sO "
         "sI sI sI "
-        "sI sI sy# sN sO sf sI sI sI sI}",
+        "sI sI sy# sN sO sf sI sI sN sI sI}",
         "texture_id",
         texture_id_for_img(img),
         U(client_id),
@@ -4178,6 +4406,8 @@ image_as_dict(GraphicsManager *self, Image *img) {
         "vector_elements",
         (unsigned int)(img->vector ? vector_doc_element_count(img->vector) : 0),
         U(indexed_px_sz),
+        "palette",
+        img->palette ? PyBytes_FromStringAndSize((const char *)img->palette->rgba, (Py_ssize_t)img->palette->slots * 4) : Py_NewRef(Py_None),
         U(transfer),
         "deep",
         (unsigned int)img->root_frame.deep);
@@ -4197,6 +4427,28 @@ W(image_for_client_id) {
     Image *img = find_or_create_image(self, id, &existing);
     if (!existing) { Py_RETURN_NONE; }
     return image_as_dict(self, img);
+}
+
+// For tests: the current frame of an image as RGBA, as pointer and vector images get it, or None
+W(rgba_for_client_id) {
+    const unsigned long id = PyLong_AsUnsignedLong(args);
+    if (PyErr_Occurred()) return NULL;
+    uint32_t width, height;
+    uint8_t *data = grman_image_rgba(self, (uint32_t)id, &width, &height);
+    if (!data) { Py_RETURN_NONE; }
+    PyObject *ans = PyBytes_FromStringAndSize((const char *)data, (Py_ssize_t)width * height * 4);
+    free(data);
+    return ans;
+}
+
+// For tests: the version of the pixels of an image, see grman_image_version(), or None
+W(version_for_client_id) {
+    const unsigned long id = PyLong_AsUnsignedLong(args);
+    if (PyErr_Occurred()) return NULL;
+    id_type image;
+    uint64_t version;
+    if (!grman_image_version(self, (uint32_t)id, &image, &version)) { Py_RETURN_NONE; }
+    return PyLong_FromUnsignedLongLong(version);
 }
 
 W(image_for_client_number) {
@@ -4426,6 +4678,8 @@ W(choose_vector_view) {
 
 static PyMethodDef methods[] = {
     M(image_for_client_id, METH_O),
+    M(rgba_for_client_id, METH_O),
+    M(version_for_client_id, METH_O),
     M(image_for_client_number, METH_O),
     M(update_layers, METH_VARARGS),
     M(render_vector_image, METH_VARARGS),
