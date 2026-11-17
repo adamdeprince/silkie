@@ -2409,6 +2409,78 @@ class TestScreen(BaseTest):
         for x in ('hello', '13;x', '0;x', '1x', '', '42'):
             self.assertFalse(is_conemu_osc9_command(x), x)
 
+    def test_conemu_osc9_prompt_start(self):
+        # OSC 9;12 marks the start of a prompt exactly as OSC 133;A does
+
+        def run(mark):
+            s = self.create_screen(scrollback=10)
+            c = s.callbacks
+            c.notifications = []
+            s.draw('start'), s.carriage_return(), s.index()
+            for i in range(4):
+                parse_bytes(s, mark)
+                s.draw(f'$ {i}ab'), s.carriage_return(), s.index()
+                parse_bytes(s, b'\x1b]133;C\x07')
+                c.last_cmd_at = 1  # cleared by a prompt start mark
+                s.draw('out'), s.carriage_return(), s.index()
+            parse_bytes(s, mark)
+            self.ae(c.last_cmd_at, 0)
+            self.ae(c.notifications, [])
+            ans = [str(s.visual_line(0))]
+            for jump in (-1, -1, -1, -1, 1, 1):
+                ans.append((s.scroll_to_prompt(jump), str(s.visual_line(0))))
+            return ans
+
+        expected = run(b'\x1b]133;A\x07')
+        self.assertIn((True, '$ 0ab'), expected)
+        for mark in (b'\x1b]9;12\x07', b'\x1b]9;12\x1b\\', b'\x1b]9;12;\x07'):
+            self.ae(run(mark), expected, mark)
+        # 9;120 and 9;1 are not prompt marks
+        s = self.create_screen()
+        s.callbacks.notifications = []
+        parse_bytes(s, b'\x1b]9;120\x07\x1b]9;1;100\x07')
+        self.ae(s.callbacks.notifications, [(9, '120'), (9, '1;100')])
+
+    def test_conemu_osc9_commands(self):
+        from unittest.mock import Mock, patch
+
+        from kitty.window import Window, conemu_text_argument
+
+        for raw, expected in (('"x y"', 'x y'), ('x y', 'x y'), ('"', '"'), ('""', ''), ('"a', '"a'), ('a"', 'a"'), ('"a"b"', 'a"b')):
+            self.ae(conemu_text_argument(raw), expected, raw)
+
+        def run(payload: bytes, dump_commands: bool = False):
+            boss = Mock()
+            boss.args.dump_commands = dump_commands
+            w = Mock(id=7)
+            tab = Mock()
+            w.tabref.return_value = tab
+            logged = []
+            with patch('kitty.window.get_boss', return_value=boss), patch('kitty.window.log_error', side_effect=logged.append):
+                Window.desktop_notify(w, 9, memoryview(payload))
+            calls = boss.notification_manager.handle_notification_cmd.call_args_list
+            notifications = [c.args for c in calls]
+            titles = [c.args[0] for c in tab.set_title.call_args_list]
+            return notifications, titles, logged
+
+        # 9;2 is shown as a notification with the text, unquoted, as its title
+        self.ae(run(b'2;"Build done"'), ([(7, 9, 'Build done')], [], []))
+        self.ae(run(b'2;a;b'), ([(7, 9, 'a;b')], [], []))
+        # 9;3 sets the tab title, empty text restores the default
+        self.ae(run(b'3;"my tab"'), ([], ['my tab'], []))
+        self.ae(run(b'3;plain'), ([], ['plain'], []))
+        self.ae(run(b'3;""'), ([], [''], []))
+        self.ae(run(b'3;'), ([], [''], []))
+        self.ae(run(b'3'), ([], [''], []))
+        # The others are ignored, logged only with --dump-commands
+        for cmd in (b'1;5000', b'5', b'6;"Close(1)"', b'7;"calc.exe"', b'8;"HOME"', b'10', b'10;1', b'11;"comment"'):
+            self.ae(run(cmd), ([], [], []), cmd)
+            n, t, logged = run(cmd, dump_commands=True)
+            self.ae((n, t, len(logged)), ([], [], 1), cmd)
+        # Anything that is not a ConEmu sub-command is an ordinary notification
+        for raw in ('hello', '13;foo', '0;x', '42', '2x', ''):
+            self.ae(run(raw.encode()), ([(7, 9, raw)], [], []), raw)
+
     def test_match_query_cache(self):
         # The ConEmu check must not take the cache that belongs to compile_match_query
         from kitty.window import compile_match_query

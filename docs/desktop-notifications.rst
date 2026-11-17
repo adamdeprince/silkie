@@ -502,10 +502,41 @@ Key      Value                 Default    Description
 .. note::
    |kitty| also supports the `legacy OSC 9 protocol developed by iTerm2
    <https://iterm2.com/documentation-escape-codes.html>`__ for desktop
-   notifications. OSC 9 payloads that start with a ConEmu numeric sub-command
-   (``1;`` to ``12;``) are not shown as notifications. Of these, ``9;4`` is
-   used for progress reporting and ``9;9;path`` to report the current working
-   directory, the rest are ignored.
+   notifications, and the ConEmu OSC 9 sub-commands described in
+   :ref:`conemu_osc9`.
+
+
+.. _conemu_osc9:
+
+ConEmu OSC 9 sub-commands
+---------------------------
+
+`ConEmu <https://conemu.github.io/en/AnsiEscapeCodes.html>`__ uses OSC 9 for
+numbered sub-commands, ``OSC 9 ; number ; arguments ST``. An OSC 9 payload is a
+ConEmu sub-command when it starts with a number from 1 to 12 followed by ``;``
+or the end of the payload; any other payload, including ``13;text``, is shown as
+an iTerm2 style notification. Text arguments may be enclosed in double quotes,
+which are removed.
+
+======  =============================  =========================================================
+Number  ConEmu                         |kitty|
+======  =============================  =========================================================
+1       Sleep for some milliseconds    Not implemented
+2       Show a message box             Shows a desktop notification with the text as its title
+3       Set the tab title              Sets the tab title, empty text restores the default title
+4       Set the progress state         Shows progress, see :opt:`tab_title_template`
+5       Wait for a key press           Not implemented
+6       Run a GuiMacro                 Not implemented
+7       Run a process                  Not implemented
+8       Print an environment variable  Not implemented
+9       Report the working directory   Records the directory, like OSC 7
+10      Control xterm emulation        Not implemented
+11      Comment                        Ignored
+12      Mark the start of a prompt     Marks the prompt exactly as ``OSC 133 ; A`` does
+======  =============================  =========================================================
+
+Sub-commands that are not implemented are ignored, and logged only when |kitty|
+is run with :option:`kitty --dump-commands`.
 
 
 .. _base64:

@@ -582,6 +582,9 @@ dispatch_osc(PS *self, uint8_t *buf, size_t limit, bool is_extended_osc) {
             break;
         case 8: dispatch_hyperlink(self, (char *)buf + i); break;
         case 9:
+            // ConEmu OSC 9 sub-commands that must act at this point in the
+            // output are handled here, the others in Window.desktop_notify(),
+            // see https://conemu.github.io/en/AnsiEscapeCodes.html
             if (limit - i >= 2 && buf[i] == '9' && buf[i + 1] == ';') {
                 // ConEmu cwd reporting: OSC 9;9;path
                 i += 2;
@@ -591,6 +594,17 @@ dispatch_osc(PS *self, uint8_t *buf, size_t limit, bool is_extended_osc) {
                 END_DISPATCH_WITHOUT_BREAK
 #endif
                 process_cwd_notification(self->screen, code, (char *)buf + i, limit - i);
+                break;
+            }
+            if (limit - i >= 2 && buf[i] == '1' && buf[i + 1] == '2' && (limit - i == 2 || buf[i + 2] == ';')) {
+                // ConEmu OSC 9;12: the cursor is at the start of a prompt, mark it exactly as OSC 133;A does
+                char prompt_start[] = "A";
+#ifdef DUMP_COMMANDS
+                RAII_PyObject(mv, PyMemoryView_FromMemory(prompt_start, 1, PyBUF_READ));
+                if (mv) { REPORT_OSC2(shell_prompt_marking, 133, mv); }
+                PyErr_Clear();
+#endif
+                shell_prompt_marking(self->screen, prompt_start);
                 break;
             }
             /* fallthrough */
