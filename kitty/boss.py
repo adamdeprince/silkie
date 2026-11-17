@@ -4062,7 +4062,14 @@ class Boss:
         tm.created_in_session_name = session_name
         return tm
 
-    def _move_window_to(self, window: Window | None = None, target_tab_id: str | int | None = None, target_os_window_id: str | int | None = None) -> None:
+    def _move_window_to(
+        self,
+        window: Window | None = None,
+        target_tab_id: str | int | None = None,
+        target_os_window_id: str | int | None = None,
+        new_tab_title: str = '',
+        new_tab_location: str = '',
+    ) -> None:
         window = window or self.active_window
         if not window:
             return
@@ -4072,8 +4079,8 @@ class Boss:
         # A tab or OS window created for the window belongs to its session
         session_name = window.effective_session_name
 
-        def new_tab(tm: TabManager, location: str = 'last') -> Tab:
-            ans = tm.new_tab(empty_tab=True, location=location)
+        def new_tab(tm: TabManager, location: str = 'last', title: str = '') -> Tab:
+            ans = tm.new_tab(empty_tab=True, location=location, title=title)
             ans.created_in_session_name = session_name
             # With native tabs the new tab is an OS window of its own
             if (ans_tm := ans.tab_manager_ref()) is not None and ans_tm is not tm:
@@ -4089,7 +4096,7 @@ class Boss:
             # can change below, so detach them first
             detached = src_tab.detach_window(window) if src_tab.windows.is_in_os_window_dock(window) else None
             if target_os_window_id == 'new':
-                target_tab = new_tab(self._new_os_window_for_session(session_name))
+                target_tab = new_tab(self._new_os_window_for_session(session_name), title=new_tab_title)
             else:
                 target_os_window_id = target_os_window_id or current_os_window()
                 if isinstance(target_tab_id, str):
@@ -4101,7 +4108,7 @@ class Boss:
                         tm = self.os_window_map[target_os_window_id]
                     if target_tab_id.startswith('new'):
                         # valid values for target_tab_id are 'new', 'new_after' and 'new_before'
-                        target_tab = new_tab(tm, location=(target_tab_id[4:] or 'last'))
+                        target_tab = new_tab(tm, location=(new_tab_location or target_tab_id[4:] or 'last'), title=new_tab_title)
                     else:
                         target_tab = tm.tab_at_location(target_tab_id) or new_tab(tm)
                 else:
@@ -4285,6 +4292,8 @@ class Boss:
         """,
     )
     def detach_window(self, *args: str) -> None:
+        if args and args[0].startswith('-'):
+            return self.remote_control('detach-window', *args)
         if not args or args[0] == 'new':
             return self._move_window_to(target_os_window_id='new')
         if args[0] in ('new-tab', 'tab-prev', 'tab-left', 'tab-right', 'new-tab-left', 'new-tab-right'):
