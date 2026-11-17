@@ -98,6 +98,118 @@ polymorphic_string_as_utf8(id string) {
     return ans ? ans : "(nil)";
 }
 
+// Growable keyboard text storage {{{
+// Nothing here has a maximum: insertText: can deliver any amount of text for one key event (an input method
+// committing a sentence, dictation, a device such as an AlphaSmart typing its stored text) and a keyboard
+// layout can map one keystroke to a string of any length. When memory runs out the input is dropped with an
+// error, never truncated.
+
+// Raises *capacity (in items) to at least needed by doubling; false if the size in bytes would overflow.
+static bool
+grow_capacity(size_t *capacity, size_t needed, size_t item_size) {
+    if (needed <= *capacity) return true;
+    size_t cap = *capacity ? *capacity : 64, bytes;
+    while (cap < needed) {
+        if (__builtin_mul_overflow(cap, (size_t)2, &cap)) {
+            cap = needed;
+            break;
+        }
+    }
+    if (__builtin_mul_overflow(cap, item_size, &bytes)) return false;
+    *capacity = cap;
+    return true;
+}
+
+static const char *
+current_text(void) {
+    return _glfw.ns.text.data ? _glfw.ns.text.data : "";
+}
+
+static void
+clear_text(void) {
+    if (_glfw.ns.text.data) _glfw.ns.text.data[0] = 0;
+    _glfw.ns.text.len = 0;
+}
+
+// Appends to the text of the key event being handled; on failure the text is left as it was.
+static bool
+append_text(const char *utf8) {
+    const size_t add = strlen(utf8);
+    size_t needed, cap = _glfw.ns.text.capacity;
+    if (__builtin_add_overflow(_glfw.ns.text.len, add, &needed) || __builtin_add_overflow(needed, (size_t)1, &needed) ||
+        !grow_capacity(&cap, needed, 1)) {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "Cocoa: Too much text input (%zu bytes) for one key event, dropping it", add);
+        return false;
+    }
+    if (cap != _glfw.ns.text.capacity || !_glfw.ns.text.data) {
+        char *d = realloc(_glfw.ns.text.data, cap);
+        if (!d) {
+            _glfwInputError(GLFW_PLATFORM_ERROR, "Cocoa: Out of memory storing %zu bytes of text input, dropping it", add);
+            return false;
+        }
+        _glfw.ns.text.data = d;
+        _glfw.ns.text.capacity = cap;
+    }
+    memcpy(_glfw.ns.text.data + _glfw.ns.text.len, utf8, add + 1);
+    _glfw.ns.text.len += add;
+    return true;
+}
+
+// UCKeyTranslate() into a buffer that grows until the keystroke's output fits: a 'uchr' layout can map one keystroke
+// to a string of any length and UCKeyTranslate() reports kUCOutputBufferTooSmall rather than truncating. On success
+// *dead_key_state is updated and *count set; the returned characters stay valid until the next call.
+static OSStatus
+translate_keystroke(
+    UInt16 keycode, UInt16 action, UInt32 modifiers, OptionBits options, UInt32 *dead_key_state, UniCharCount *count, const UniChar **chars) {
+    *count = 0;
+    *chars = NULL;
+    if (!_glfw.ns.unicodeData) return paramErr;
+    for (;;) {
+        if (_glfw.ns.keystrokeChars.data) {
+            UInt32 state = *dead_key_state;
+            OSStatus status = UCKeyTranslate(
+                [(NSData *)_glfw.ns.unicodeData bytes],
+                keycode,
+                action,
+                modifiers,
+                LMGetKbdType(),
+                options,
+                &state,
+                _glfw.ns.keystrokeChars.capacity,
+                count,
+                _glfw.ns.keystrokeChars.data);
+            if (status != kUCOutputBufferTooSmall) {
+                if (status == noErr) {
+                    *dead_key_state = state;
+                    *chars = _glfw.ns.keystrokeChars.data;
+                } else *count = 0;
+                return status;
+            }
+        }
+        size_t cap = _glfw.ns.keystrokeChars.capacity, needed;
+        UniChar *d = NULL;
+        if (__builtin_add_overflow(cap, (size_t)1, &needed) || !grow_capacity(&cap, needed, sizeof(UniChar)) ||
+            !(d = realloc(_glfw.ns.keystrokeChars.data, cap * sizeof(UniChar)))) {
+            _glfwInputError(GLFW_PLATFORM_ERROR, "Cocoa: Out of memory translating keycode 0x%x", keycode);
+            *count = 0;
+            return memFullErr;
+        }
+        _glfw.ns.keystrokeChars.data = d;
+        _glfw.ns.keystrokeChars.capacity = cap;
+    }
+}
+
+void
+_glfwCocoaFreeKeyboardText(void) {
+    free(_glfw.ns.text.data);
+    free(_glfw.ns.keystrokeChars.data);
+    free(_glfw.ns.keyName.data);
+    memset(&_glfw.ns.text, 0, sizeof(_glfw.ns.text));
+    memset(&_glfw.ns.keystrokeChars, 0, sizeof(_glfw.ns.keystrokeChars));
+    memset(&_glfw.ns.keyName, 0, sizeof(_glfw.ns.keyName));
+}
+// }}}
+
 static bool
 forward_dictation_selector_to_app(SEL selector, id sender) {
     static SEL start_dictation_selector = NULL, stop_dictation_selector = NULL;
@@ -314,7 +426,7 @@ is_surrogate(UniChar uc) {
 }
 
 static uint32_t
-get_first_codepoint(UniChar *utf16, UniCharCount num) {
+get_first_codepoint(const UniChar *utf16, UniCharCount num) {
     if (!num) return 0;
     if (!is_surrogate(*utf16)) return *utf16;
     if (CFStringIsSurrogateHighCharacter(*utf16) && num > 1 && CFStringIsSurrogateLowCharacter(utf16[1]))
@@ -330,22 +442,12 @@ is_pua_char(uint32_t ch) {
 uint32_t
 vk_to_unicode_key_with_current_layout(uint16_t keycode) {
     UInt32 dead_key_state = 0;
-    UniChar characters[256];
+    const UniChar *characters;
     UniCharCount character_count = 0;
     uint32_t ans = vk_code_to_functional_key_code(keycode);
     if (ans) return ans;
 
-    if (UCKeyTranslate(
-            [(NSData *)_glfw.ns.unicodeData bytes],
-            keycode,
-            kUCKeyActionDisplay,
-            0,
-            LMGetKbdType(),
-            kUCKeyTranslateNoDeadKeysBit,
-            &dead_key_state,
-            arraysz(characters),
-            &character_count,
-            characters) == noErr) {
+    if (translate_keystroke(keycode, kUCKeyActionDisplay, 0, kUCKeyTranslateNoDeadKeysBit, &dead_key_state, &character_count, &characters) == noErr) {
         uint32_t cp = get_first_codepoint(characters, character_count);
         if (cp) {
             if (cp < 32 || (0xF700 <= cp && cp <= 0xF8FF)) return mac_ucode_to_functional(cp);
@@ -561,18 +663,23 @@ format_mods(int mods) {
     return buf;
 }
 
+// Formats text as hex bytes for debug output. Each byte takes at most five characters ("0xff "), so the buffer is sized
+// from the text and the whole of it is shown however long it is.
 static const char *
 format_text(const char *src) {
-    static char buf[256];
-    char *p = buf;
-    const char *last_char = buf + sizeof(buf) - 1;
+    static char *buf = NULL;
+    static size_t capacity = 0;
     if (!src[0]) return "<none>";
-    while (*src) {
-        int num = snprintf(p, sizeof(buf) - (p - buf), "0x%x ", (unsigned char)*(src++));
-        if (num < 0) return "<error>";
-        if (p + num >= last_char) break;
-        p += num;
+    size_t needed, len = strlen(src);
+    if (__builtin_mul_overflow(len, (size_t)5, &needed) || __builtin_add_overflow(needed, (size_t)1, &needed)) return "<too long>";
+    if (needed > capacity) {
+        char *d = realloc(buf, needed);
+        if (!d) return "<out of memory>";
+        buf = d;
+        capacity = needed;
     }
+    char *p = buf;
+    while (*src) p += snprintf(p, capacity - (p - buf), "0x%x ", (unsigned char)*(src++));
     if (p != buf) *(--p) = 0;
     return buf;
 }
@@ -766,7 +873,7 @@ static void _glfwUpdateNotchCover(_GLFWwindow *);
         [window->ns.view unmarkText];
         GLFWkeyevent dummy = {.action = GLFW_RELEASE, .ime_state = GLFW_IME_PREEDIT_CHANGED};
         _glfwInputKeyboard(window, &dummy);
-        _glfw.ns.text[0] = 0;
+        clear_text();
     }
 }
 
@@ -1176,13 +1283,6 @@ convert_cocoa_to_carbon_modifiers(NSUInteger flags) {
     return (mods >> 8) & 0xFF;
 }
 
-static void
-convert_utf16_to_utf8(UniChar *src, UniCharCount src_length, char *dest, size_t dest_sz) {
-    CFStringRef string = CFStringCreateWithCharactersNoCopy(kCFAllocatorDefault, src, src_length, kCFAllocatorNull);
-    CFStringGetCString(string, dest, dest_sz, kCFStringEncodingUTF8);
-    CFRelease(string);
-}
-
 static bool
 alternate_key_is_ok(uint32_t key, uint32_t akey) {
     return akey > 31 && akey != key && !is_pua_char(akey);
@@ -1243,7 +1343,7 @@ is_ascii_control_char(char x) {
     const uint32_t key = translateKey(keycode, true);
     const bool process_text =
         !_glfw.ignoreOSKeyboardProcessing && (!window->ns.textInputFilterCallback || window->ns.textInputFilterCallback(key, mods, keycode, flags) != 1);
-    _glfw.ns.text[0] = 0;
+    clear_text();
     if (keycode == 0x33 /* backspace */ || keycode == 0x35 /* escape */ || (keycode == 0x04 /* h */ && mods == GLFW_MOD_CONTROL)) [self unmarkText];
     GLFWkeyevent glfw_keyevent = {.key = key, .native_key = keycode, .native_key_id = keycode, .action = GLFW_PRESS, .mods = mods};
     if (!_glfw.ns.unicodeData) {
@@ -1255,20 +1355,17 @@ is_ascii_control_char(char x) {
             [self interpretKeyEvents:@[ event ]];
         }
     } else {
-        static UniChar text[256];
+        const UniChar *text;
         UniCharCount char_count = 0;
         const bool in_compose_sequence = window->ns.deadKeyState != 0;
-        if (UCKeyTranslate(
-                [(NSData *)_glfw.ns.unicodeData bytes],
+        if (translate_keystroke(
                 keycode,
                 kUCKeyActionDown,
                 convert_cocoa_to_carbon_modifiers(flags),
-                LMGetKbdType(),
                 (process_text ? 0 : kUCKeyTranslateNoDeadKeysMask),
                 &(window->ns.deadKeyState),
-                sizeof(text) / sizeof(text[0]),
                 &char_count,
-                text) != noErr) {
+                &text) != noErr) {
             debug_input("UCKeyTranslate failed for keycode: 0x%x (%s) %s\n", keycode, safe_name_for_keycode(keycode), format_mods(mods));
             window->ns.deadKeyState = 0;
             return;
@@ -1285,7 +1382,7 @@ is_ascii_control_char(char x) {
         marked_text_cleared_by_insert = false;
         if (process_text) {
             in_key_handler = 1;
-            // this will call insertText which will fill up _glfw.ns.text
+            // this will call insertText which will fill up _glfw.ns.text.data
             [self interpretKeyEvents:@[ event ]];
             in_key_handler = 0;
         } else {
@@ -1293,7 +1390,7 @@ is_ascii_control_char(char x) {
         }
         if (window->ns.deadKeyState && (char_count == 0 || keycode == 0x75)) {
             // 0x75 is the delete key which needs to be ignored during a compose sequence
-            debug_input("Sending pre-edit text for dead key (text: %s markedText: %s).\n", format_text(_glfw.ns.text), glfw_keyevent.text);
+            debug_input("Sending pre-edit text for dead key (text: %s markedText: %s).\n", format_text(current_text()), glfw_keyevent.text);
             UPDATE_PRE_EDIT_TEXT;
             return;
         }
@@ -1302,8 +1399,8 @@ is_ascii_control_char(char x) {
             CLEAR_PRE_EDIT_TEXT;
         }
     }
-    if (is_ascii_control_char(_glfw.ns.text[0])) _glfw.ns.text[0] = 0; // don't send text for ascii control codes
-    debug_input("text: %s glfw_key: %s marked_text: (%s)\n", format_text(_glfw.ns.text), _glfwGetKeyName(key), [[markedText string] UTF8String]);
+    if (is_ascii_control_char(current_text()[0])) clear_text(); // don't send text for ascii control codes
+    debug_input("text: %s glfw_key: %s marked_text: (%s)\n", format_text(current_text()), _glfwGetKeyName(key), [[markedText string] UTF8String]);
     bool bracketed_ime = false;
     if (!window->ns.deadKeyState) {
         if ([self hasMarkedText]) {
@@ -1313,7 +1410,7 @@ is_ascii_control_char(char x) {
         } else if (previous_has_marked_text) {
             CLEAR_PRE_EDIT_TEXT;
         }
-        if (([self hasMarkedText] || previous_has_marked_text) && !_glfw.ns.text[0]) {
+        if (([self hasMarkedText] || previous_has_marked_text) && !current_text()[0]) {
             // do not pass keys like BACKSPACE while there's pre-edit text, let IME handle it
             debug_input("Ignoring key press as IME is active and it generated no text\n");
             return;
@@ -1323,7 +1420,7 @@ is_ascii_control_char(char x) {
         // insertText followed by setMarkedText
         CLEAR_PRE_EDIT_TEXT;
     }
-    glfw_keyevent.text = _glfw.ns.text;
+    glfw_keyevent.text = current_text();
     glfw_keyevent.ime_state = GLFW_IME_NONE;
     add_alternate_keys(&glfw_keyevent, event);
     _glfwInputKeyboard(window, &glfw_keyevent);
@@ -1344,8 +1441,10 @@ is_modifier_pressed(NSUInteger flags, NSUInteger target_mask, NSUInteger other_m
 
 - (void)flagsChanged:(NSEvent *)event {
     int action = GLFW_RELEASE;
-    const char old_first_char = _glfw.ns.text[0];
-    _glfw.ns.text[0] = 0;
+    // Clear the text without discarding it, so that it can be restored below if the input context inserts nothing
+    const char old_first_char = current_text()[0];
+    const size_t old_text_len = _glfw.ns.text.len;
+    clear_text();
     const NSUInteger modifierFlags = remap_cocoa_flags([event modifierFlags]) & NSEventModifierFlagDeviceIndependentFlagsMask;
     const uint32_t key = vk_code_to_functional_key_code([event keyCode]);
     const unsigned int keycode = [event keyCode];
@@ -1385,15 +1484,18 @@ is_modifier_pressed(NSUInteger flags, NSUInteger target_mask, NSUInteger other_m
         format_mods(mods));
     marked_text_cleared_by_insert = false;
     if (process_text && input_context) {
-        // this will call insertText which will fill up _glfw.ns.text
+        // this will call insertText which will fill up _glfw.ns.text.data
         in_key_handler = 2;
         [input_context handleEvent:event];
         in_key_handler = 0;
         if (marked_text_cleared_by_insert) {
             debug_input("Clearing pre-edit text because insertText called from flagsChanged\n");
             CLEAR_PRE_EDIT_TEXT;
-            if (_glfw.ns.text[0]) glfw_keyevent.text = _glfw.ns.text;
-            else _glfw.ns.text[0] = old_first_char;
+            if (current_text()[0]) glfw_keyevent.text = current_text();
+            else if (_glfw.ns.text.data) {
+                _glfw.ns.text.data[0] = old_first_char;
+                _glfw.ns.text.len = old_text_len;
+            }
         }
     }
     glfw_keyevent.ime_state = GLFW_IME_NONE;
@@ -2067,7 +2169,7 @@ glfwCocoaPreserveDroppedFilePromises(GLFWwindow *w) {
             debug_input("Clearing pre-edit because setMarkedText called from %s\n", in_key_handler ? "flagsChanged" : "event loop");
             GLFWkeyevent glfw_keyevent = {.ime_state = GLFW_IME_PREEDIT_CHANGED};
             _glfwInputKeyboard(window, &glfw_keyevent);
-            _glfw.ns.text[0] = 0;
+            clear_text();
         }
         return;
     }
@@ -2089,10 +2191,10 @@ glfwCocoaPreserveDroppedFilePromises(GLFWwindow *w) {
         markedTextSelectedRange = selectedRange;
     }
     if (!in_key_handler || in_key_handler == 2) {
-        debug_input("Updating IME text in kitty from setMarkedText called from %s: %s\n", in_key_handler ? "flagsChanged" : "event loop", _glfw.ns.text);
+        debug_input("Updating IME text in kitty from setMarkedText called from %s: %s\n", in_key_handler ? "flagsChanged" : "event loop", current_text());
         GLFWkeyevent glfw_keyevent = {.text = [[markedText string] UTF8String], .ime_state = GLFW_IME_PREEDIT_CHANGED};
         _glfwInputKeyboard(window, &glfw_keyevent);
-        _glfw.ns.text[0] = 0;
+        clear_text();
     }
 }
 
@@ -2112,7 +2214,7 @@ _glfwPlatformUpdateIMEState(_GLFWwindow *w, const GLFWIMEUpdateEvent *ev) {
         [self unmarkText];
         GLFWkeyevent glfw_keyevent = {.ime_state = GLFW_IME_PREEDIT_CHANGED};
         _glfwInputKeyboard(window, &glfw_keyevent);
-        _glfw.ns.text[0] = 0;
+        clear_text();
     }
     if (which != GLFW_IME_UPDATE_CURSOR_POSITION) return;
 
@@ -2186,35 +2288,28 @@ _glfwPlatformUpdateIMEState(_GLFWwindow *w, const GLFWIMEUpdateEvent *ev) {
             debug_input("Clearing pre-edit because insertText called from event loop\n");
             GLFWkeyevent glfw_keyevent = {.ime_state = GLFW_IME_PREEDIT_CHANGED};
             _glfwInputKeyboard(window, &glfw_keyevent);
-            _glfw.ns.text[0] = 0;
+            clear_text();
         }
     }
-    // Outside key handling there is no key event to accumulate text for. This
-    // path already commits immediately, so do not constrain a full IME result
-    // to the fixed-size buffer used by the key handlers.
+    // Outside key handling there is no key event to accumulate text for, so commit the text immediately.
     if (!in_key_handler) {
         if (!is_ascii_control_char(utf8[0])) {
             debug_input("Sending text to kitty from insertText called from event loop: %s\n", utf8);
             GLFWkeyevent glfw_keyevent = {.text = utf8, .ime_state = GLFW_IME_COMMIT_TEXT};
             _glfwInputKeyboard(window, &glfw_keyevent);
         }
-        _glfw.ns.text[0] = 0;
+        clear_text();
         return;
     }
     // insertText can be called multiple times for a single key event
-    size_t existing_length = strnlen(_glfw.ns.text, sizeof(_glfw.ns.text));
-    size_t required_length = strlen(utf8) + 1;
-    size_t available_length = sizeof(_glfw.ns.text) - existing_length;
-    if (available_length >= required_length) {
-        memcpy(_glfw.ns.text + existing_length, utf8, required_length); // copies the null terminator from utf8 as well
-        _glfw.ns.text[sizeof(_glfw.ns.text) - 1] = 0;
-        if (in_key_handler == 2 && _glfw.ns.text[0]) {
-            if (!is_ascii_control_char(_glfw.ns.text[0])) {
-                debug_input("Sending text to kitty from insertText called from flagsChanged: %s\n", _glfw.ns.text);
-                GLFWkeyevent glfw_keyevent = {.text = _glfw.ns.text, .ime_state = GLFW_IME_COMMIT_TEXT};
+    if (append_text(utf8)) {
+        if (in_key_handler == 2 && current_text()[0]) {
+            if (!is_ascii_control_char(current_text()[0])) {
+                debug_input("Sending text to kitty from insertText called from flagsChanged: %s\n", current_text());
+                GLFWkeyevent glfw_keyevent = {.text = current_text(), .ime_state = GLFW_IME_COMMIT_TEXT};
                 _glfwInputKeyboard(window, &glfw_keyevent);
             }
-            _glfw.ns.text[0] = 0;
+            clear_text();
         }
     }
 }
@@ -3371,27 +3466,32 @@ _glfwPlatformSetCursorMode(_GLFWwindow *window, int mode UNUSED) {
 const char *
 _glfwPlatformGetNativeKeyName(int keycode) {
     UInt32 deadKeyState = 0;
-    UniChar characters[8];
+    const UniChar *characters;
     UniCharCount characterCount = 0;
 
-    if (UCKeyTranslate(
-            [(NSData *)_glfw.ns.unicodeData bytes],
-            keycode,
-            kUCKeyActionDisplay,
-            0,
-            LMGetKbdType(),
-            kUCKeyTranslateNoDeadKeysBit,
-            &deadKeyState,
-            sizeof(characters) / sizeof(characters[0]),
-            &characterCount,
-            characters) != noErr) {
+    if (translate_keystroke(keycode, kUCKeyActionDisplay, 0, kUCKeyTranslateNoDeadKeysBit, &deadKeyState, &characterCount, &characters) != noErr) {
         return NULL;
     }
 
     if (!characterCount) return NULL;
 
-    convert_utf16_to_utf8(characters, characterCount, _glfw.ns.keyName, sizeof(_glfw.ns.keyName));
-    return _glfw.ns.keyName;
+    // One UTF-16 code unit becomes at most three bytes of UTF-8 (a surrogate pair, two units, becomes four), plus the NUL.
+    size_t needed, cap = _glfw.ns.keyName.capacity;
+    if (__builtin_mul_overflow(characterCount, (size_t)3, &needed) || __builtin_add_overflow(needed, (size_t)1, &needed) ||
+        !grow_capacity(&cap, needed, 1)) {
+        return NULL;
+    }
+    if (cap != _glfw.ns.keyName.capacity || !_glfw.ns.keyName.data) {
+        char *d = realloc(_glfw.ns.keyName.data, cap);
+        if (!d) return NULL;
+        _glfw.ns.keyName.data = d;
+        _glfw.ns.keyName.capacity = cap;
+    }
+    CFStringRef string = CFStringCreateWithCharactersNoCopy(kCFAllocatorDefault, characters, characterCount, kCFAllocatorNull);
+    if (!string) return NULL;
+    const Boolean ok = CFStringGetCString(string, _glfw.ns.keyName.data, cap, kCFStringEncodingUTF8);
+    CFRelease(string);
+    return ok ? _glfw.ns.keyName.data : NULL;
 }
 
 int

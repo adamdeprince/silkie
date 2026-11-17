@@ -982,6 +982,7 @@ _glfwPlatformTerminate(void) {
         }
 
         _glfwClearDisplayLinks();
+        _glfwCocoaFreeKeyboardText();
 
         if (_glfw.ns.inputSource) {
             CFRelease(_glfw.ns.inputSource);

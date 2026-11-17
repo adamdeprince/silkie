@@ -209,8 +209,20 @@ typedef struct _GLFWlibraryNS {
     id appleSettings;
     id nibObjects;
 
-    char keyName[64];
-    char text[512];
+    // All three grow to fit what they hold: a keyboard layout can map one keystroke to a string of any length, and an
+    // input method, dictation or a device typing stored text can deliver any amount of text for one key event.
+    struct {
+        char *data;
+        size_t capacity;
+    } keyName;
+    struct {
+        UniChar *data;
+        UniCharCount capacity;
+    } keystrokeChars; // output of UCKeyTranslate()
+    struct {
+        char *data;
+        size_t len, capacity;
+    } text; // text insertText: produced for the key event being handled, NUL terminated
     CGPoint cascadePoint;
     // Where to place the cursor when re-enabled
     double restoreCursorPosX, restoreCursorPosY;
@@ -276,5 +288,6 @@ void _glfwRequestRenderFrame(_GLFWwindow *w);
 // event loop
 void _glfwDispatchTickCallback(void);
 void _glfwCocoaPostEmptyEvent(void);
+void _glfwCocoaFreeKeyboardText(void);
 
 uint32_t vk_to_unicode_key_with_current_layout(uint16_t keycode);
