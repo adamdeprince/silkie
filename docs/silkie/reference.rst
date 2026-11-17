@@ -69,5 +69,6 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
    :caption: Using Silkie
 
    configuration
+   environment
    show-pointer
    window-actions
