@@ -54,6 +54,17 @@ print(' '.join(map(str, buf)))"""),
         pty.process_input_from_child()
         self.ae(pty.screen_contents(), '13 77 770 260')
 
+    def test_ssh_shared_connection_timeout(self):
+        from kittens.ssh import seconds_or_auto
+        from kittens.ssh.main import definition
+        for val, expected in {'auto': -1, ' AUTO ': -1, '0': 0, '2.5': 2.5, '30': 30, 'inf': 0}.items():
+            self.ae(seconds_or_auto(val), expected, val)
+        for val in ('', '-1', 'nan', 'never', '5s'):
+            with self.assertRaises(ValueError, msg=val):
+                seconds_or_auto(val)
+        opt = definition.option_map['shared_connection_timeout']
+        self.ae(opt.parser_func(opt.defval_as_string), -1)
+
     @retry_on_failure()
     def test_ssh_connection_data(self):
         def t(cmdline, binary='ssh', host='main', port=None, identity_file='', extra_args=()):

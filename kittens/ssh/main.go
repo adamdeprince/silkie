@@ -140,10 +140,36 @@ func connection_sharing_args(kitty_pid int) ([]string, error) {
 		"-o", "ControlMaster=auto",
 		"-o", "ControlPath=" + filepath.Join(rd, cp),
 		"-o", "ControlPersist=yes",
-		"-o", "ServerAliveInterval=60",
-		"-o", "ServerAliveCountMax=5",
-		"-o", "TCPKeepAlive=no",
 	}, nil
+}
+
+// Return whether the ControlMaster at the end of master_cmd (the ssh command
+// line with connection sharing options, without the trailing -- hostname)
+// responds to a request that requires a round trip to the server, and how
+// long that took. The request asks the server to connect to a closed port
+// which fails immediately and requires running nothing on the server.
+// ProxyCommand=false ensures that if there is no master, ssh fails immediately
+// instead of making a new connection. Only returns false if ctx expires before
+// the master responds.
+func master_responds(ctx context.Context, master_cmd []string, hostname string) (bool, time.Duration) {
+	// ssh options are first one wins so put ours before any user specified ones
+	pcmd := []string{master_cmd[0], "-o", "ControlMaster=no", "-o", "ProxyCommand=false", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes"}
+	pcmd = append(pcmd, master_cmd[1:]...)
+	pcmd = append(pcmd, "-T", "-W", "127.0.0.1:1", "--", hostname)
+	c := exec.CommandContext(ctx, pcmd[0], pcmd[1:]...)
+	start := time.Now()
+	// Any result other than a timeout means the master is either responsive
+	// or not present, in both cases there is nothing to recover from
+	_ = c.Run()
+	return ctx.Err() == nil, time.Since(start)
+}
+
+// A context that expires after timeout, or never if has_timeout is false
+func context_with_optional_timeout(timeout time.Duration, has_timeout bool) (context.Context, context.CancelFunc) {
+	if has_timeout {
+		return context.WithTimeout(context.Background(), timeout)
+	}
+	return context.WithCancel(context.Background())
 }
 
 func set_askpass(hostname_for_match, uname string, overrides []string) (need_to_request_data bool) {
@@ -723,7 +749,11 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 		}
 		return 1, unix.Exec(utils.FindExe(delegate_cmd[0]), utils.Concat(delegate_cmd, ssh_args, server_args), os.Environ())
 	}
+	// Needed before running anything that might start a master, to decide its
+	// keepalive options
+	cd.ssh_config = <-ssh_config_channel
 	master_is_alive, master_checked := false, false
+	master_pid := 0
 	var control_master_args []string
 	if host_opts.Share_connections {
 		kpid, err := strconv.Atoi(os.Getenv("KITTY_PID"))
@@ -734,6 +764,7 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 		if err != nil {
 			return 1, err
 		}
+		control_master_args = append(control_master_args, keepalive_args(cd.ssh_config, ssh_args)...)
 		cmd = slices.Insert(cmd, insertion_point, control_master_args...)
 	}
 	use_kitty_askpass := host_opts.Askpass == Askpass_native || (host_opts.Askpass == Askpass_unless_set && os.Getenv("SSH_ASKPASS") == "")
@@ -741,6 +772,10 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 	if use_kitty_askpass {
 		need_to_request_data = set_askpass(hostname_for_match, uname, overrides)
 	}
+	// ssh -O check only talks to the master over its local socket, so it is
+	// instant. It cannot tell whether the master's connection to the server
+	// is alive, but the keepalive options make a master with a dead
+	// connection exit on its own, after which this reports no master.
 	master_is_functional := func() bool {
 		if master_checked {
 			return master_is_alive
@@ -748,12 +783,51 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 		master_checked = true
 		// slices.Insert can mutate cmd's backing array in place; clone so cmd stays intact
 		check_cmd := slices.Insert(slices.Clone(cmd), 1, "-O", "check")
-		master_is_alive = exec.Command(check_cmd[0], check_cmd[1:]...).Run() == nil
+		out, err := exec.Command(check_cmd[0], check_cmd[1:]...).CombinedOutput()
+		master_is_alive = err == nil
+		master_pid = 0
+		if master_is_alive {
+			master_pid = parse_master_pid(string(out))
+		}
 		return master_is_alive
 	}
+	rtts := new_rtt_store()
+	identity := host_identity(cd.ssh_config, hostname)
+	// How long to wait for a round trip through the current master before
+	// declaring it dead, false means wait for ever
+	round_trip_timeout := func() (time.Duration, bool) {
+		return master_timeout(host_opts.Shared_connection_timeout, rtts.load(identity, master_pid))
+	}
+	record_round_trip := func(d time.Duration) {
+		// Failing to persist a measurement only means a later connection
+		// waits for ssh's keepalives instead of timing out sooner
+		_, _ = rtts.record(identity, master_pid, d)
+	}
 
-	if need_to_request_data && host_opts.Share_connections && master_is_functional() {
+	// The value to use if we end up making a new connection rather than
+	// re-using an existing master
+	need_to_request_data_without_master := need_to_request_data
+	if host_opts.Share_connections && master_is_functional() && need_to_request_data {
 		need_to_request_data = false
+	}
+	// Tell the master to stop accepting new sessions, needed when its
+	// connection to the server has died but it has not noticed yet. The master
+	// removes its socket so the next session starts a new master, and exits
+	// once its existing sessions end. Sessions in other windows are left
+	// alone: if the connection really is dead they end on their own via the
+	// keepalives, and if it was only slow they keep working. This only talks
+	// to the master over its local socket so it does not hang even when the
+	// connection is dead.
+	stop_master := func() {
+		cmcmd := slices.Clone(cmd[:insertion_point])
+		cmcmd = append(cmcmd, control_master_args...)
+		cmcmd = append(cmcmd, "-O", "stop", "--", hostname)
+		if err := exec.Command(cmcmd[0], cmcmd[1:]...).Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to stop unresponsive SSH ControlMaster with error: %s\n", err)
+		}
+		master_checked = false
+		master_is_alive = false
+		master_pid = 0
 	}
 	run_control_master := func() error {
 		cmcmd := slices.Clone(cmd[:insertion_point])
@@ -768,19 +842,29 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 		}
 		master_checked = false
 		master_is_alive = false
+		master_pid = 0
 		return err
 	}
+	// Whether to check that an existing master is responsive in parallel with
+	// starting the session. Not needed if there is no master.
+	probe_master := host_opts.Share_connections && master_is_functional() && host_opts.Shared_connection_timeout != 0
 	if host_opts.Forward_remote_control && os.Getenv("KITTY_LISTEN_ON") != "" {
 		if !host_opts.Share_connections {
 			return 1, fmt.Errorf("Cannot use forward_remote_control=yes without share_connections=yes as it relies on SSH Controlmasters")
 		}
-		if !master_is_functional() {
-			if err = run_control_master(); err != nil {
-				return 1, err
-			}
+		ensure_master := func() error {
 			if !master_is_functional() {
-				return 1, fmt.Errorf("SSH ControlMaster not functional after being started explicitly")
+				if err := run_control_master(); err != nil {
+					return err
+				}
+				if !master_is_functional() {
+					return fmt.Errorf("SSH ControlMaster not functional after being started explicitly")
+				}
 			}
+			return nil
+		}
+		if err = ensure_master(); err != nil {
+			return 1, err
 		}
 		protocol, listen_on, found := strings.Cut(os.Getenv("KITTY_LISTEN_ON"), ":")
 		if !found {
@@ -793,13 +877,47 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 		cmcmd = append(cmcmd, control_master_args...)
 		cmcmd = append(cmcmd, "-R", "0:"+listen_on, "-O", "forward")
 		cmcmd = append(cmcmd, "--", hostname)
-		c := exec.Command(cmcmd[0], cmcmd[1:]...)
 		b := bytes.Buffer{}
-		c.Stdout = &b
-		c.Stderr = os.Stderr
-		if err := c.Run(); err != nil {
+		request_forward := func() (timed_out bool, err error) {
+			// Setting up the forward requires a round trip to the server, so
+			// it hangs if the master's connection is dead
+			ctx, cancel := context_with_optional_timeout(round_trip_timeout())
+			defer cancel()
+			b.Reset()
+			c := exec.CommandContext(ctx, cmcmd[0], cmcmd[1:]...)
+			c.Stdout = &b
+			c.Stderr = os.Stderr
+			start := time.Now()
+			err = c.Run()
+			if err == nil {
+				record_round_trip(time.Since(start))
+			}
+			return ctx.Err() != nil, err
+		}
+		timed_out, err := request_forward()
+		master_gone := false
+		if err != nil && !timed_out {
+			// The master may have exited while we were waiting, because its
+			// keepalives found its connection dead
+			master_checked = false
+			master_gone = !master_is_functional()
+		}
+		if timed_out || master_gone {
+			fmt.Fprintln(os.Stderr, "Existing shared SSH connection is not responding, reconnecting...")
+			if timed_out {
+				stop_master()
+			}
+			need_to_request_data = need_to_request_data_without_master
+			if err = ensure_master(); err != nil {
+				return 1, err
+			}
+			_, err = request_forward()
+		}
+		if err != nil {
 			return 1, fmt.Errorf("%s\nSetup of port forward in SSH ControlMaster failed with error: %w", b.String(), err)
 		}
+		// The master has just successfully done a round trip to the server
+		probe_master = false
 		port, err := strconv.Atoi(strings.TrimSpace(b.String()))
 		if err != nil {
 			os.Stderr.Write(b.Bytes())
@@ -838,21 +956,13 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 		}
 	}
 	defer cleanup()
-	// Receive ssh config
-	cd.ssh_config = <-ssh_config_channel
-	err = get_remote_command(&cd)
-	if err != nil {
-		return 1, err
+	var pre_launch_termios unix.Termios
+	if err = term.Tcgetattr(&pre_launch_termios); err != nil {
+		return 1, fmt.Errorf("Failed to get terminal attributes with error: %w", err)
 	}
-	cmd = append(cmd, cd.rcmd...)
-	c := exec.Command(cmd[0], cmd[1:]...)
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	err = c.Start()
-	if err != nil {
-		return 1, err
-	}
-
-	if !cd.request_data {
+	// Ask kitty to send the data for the session, used when the data is not
+	// requested by the remote side
+	send_data := func() error {
 		rq := fmt.Sprintf("id=%s:pwfile=%s:pw=%s", cd.replacements["REQUEST_ID"], cd.replacements["PASSWORD_FILENAME"], cd.replacements["DATA_PASSWORD"])
 		err := term.ApplyOperations(tty.TCSANOW, tty.SetNoEcho)
 		if err == nil {
@@ -862,18 +972,148 @@ func run_ssh(ssh_args, server_args, found_extra_args []string, ssh_config_channe
 				err = term.WriteAllString(dcs)
 			}
 		}
-		if err != nil {
-			_ = c.Process.Kill()
-			_ = c.Wait()
-			return 1, err
+		return err
+	}
+	kill := func(c *exec.Cmd) {
+		_ = c.Process.Kill()
+		_ = c.Wait()
+	}
+	// Start the session. When watch is true the session's output goes
+	// through a pipe so that we know whether it has produced any and sending
+	// the data is left to the caller.
+	launch := func(watch bool) (*exec.Cmd, *output_watcher, error) {
+		if err := get_remote_command(&cd); err != nil {
+			return nil, nil, err
 		}
+		scmd := append(slices.Clone(cmd), cd.rcmd...)
+		c := exec.Command(scmd[0], scmd[1:]...)
+		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+		var r, w *os.File
+		if watch {
+			// ssh only checks whether stdin is a terminal, so a pipe for
+			// stdout makes no difference to it
+			if r, w, err = os.Pipe(); err != nil {
+				return nil, nil, err
+			}
+			c.Stdout = w
+		}
+		err := c.Start()
+		if w != nil {
+			w.Close()
+		}
+		if err != nil {
+			if r != nil {
+				r.Close()
+			}
+			return nil, nil, err
+		}
+		var watcher *output_watcher
+		if watch {
+			watcher = watch_output(r, os.Stdout)
+		} else if !cd.request_data {
+			if err := send_data(); err != nil {
+				kill(c)
+				return nil, nil, err
+			}
+		}
+		return c, watcher, nil
+	}
+	c, watcher, err := launch(probe_master)
+	if err != nil {
+		return 1, err
 	}
 	go func() {
 		<-sigs
 		// ignore any interrupt and terminate signals as they will usually be sent to the ssh child process as well
 		// and we are waiting on that.
 	}()
-	err = c.Wait()
+	if probe_master {
+		// An existing master may have a dead connection to the server (for
+		// example after a network change or suspend) without having noticed
+		// yet, in which case the session hangs. Check the master in parallel
+		// with the session so as not to add latency when it is fine. The data
+		// for the session is sent only once the master has responded, so that
+		// the probe is not queued behind it on a slow link and so that nothing
+		// is lost if the session has to be restarted.
+		session_done := make(chan error, 1)
+		go func() { session_done <- c.Wait() }()
+		probe_ctx, cancel_probe := context_with_optional_timeout(round_trip_timeout())
+		type probe_result struct {
+			responded bool
+			elapsed   time.Duration
+		}
+		probe_done := make(chan probe_result, 1)
+		go func() {
+			r, e := master_responds(probe_ctx, cmd[:len(cmd)-2], hostname)
+			probe_done <- probe_result{r, e}
+		}()
+		wait_for_session := func() error {
+			err := <-session_done
+			// The master closes its end of the output pipe when the
+			// session's channel closes, wait for the remaining output
+			<-watcher.done
+			return err
+		}
+		select {
+		case err = <-session_done:
+			cancel_probe()
+			<-probe_done
+			<-watcher.done
+		case pr := <-probe_done:
+			cancel_probe()
+			if pr.responded || watcher.seen.Load() {
+				if !cd.request_data {
+					if err = send_data(); err != nil {
+						kill(c)
+						return 1, err
+					}
+				}
+				if pr.responded {
+					// The probe also returns promptly if the master exited
+					// while it waited, only a master that is still the same
+					// one has really done a round trip
+					probed_pid := master_pid
+					master_checked = false
+					if master_is_functional() && master_pid == probed_pid {
+						record_round_trip(pr.elapsed)
+					}
+				}
+				err = wait_for_session()
+			} else {
+				// The session is stuck waiting on the same dead connection:
+				// it has produced no output and no data has been sent for it,
+				// so it is safe to kill
+				_ = c.Process.Signal(unix.SIGTERM)
+				select {
+				case <-session_done:
+				case <-time.After(time.Second):
+					_ = c.Process.Kill()
+					<-session_done
+				}
+				fmt.Fprintln(os.Stderr, "Existing shared SSH connection is not responding, reconnecting...")
+				stop_master()
+				// Discard anything sent to the terminal for the killed session
+				// and restore the terminal to the state the session expects
+				drain_potential_tty_garbage(term)
+				if err = term.Tcsetattr(tty.TCSANOW, &pre_launch_termios); err != nil {
+					return 1, fmt.Errorf("Failed to restore terminal attributes with error: %w", err)
+				}
+				// The data prepared for the killed session is not needed
+				if data_shm != nil {
+					data_shm.Close()
+					_ = data_shm.Unlink()
+					data_shm = nil
+				}
+				cd.request_data = need_to_request_data_without_master
+				if c, _, err = launch(false); err != nil {
+					return 1, err
+				}
+				err = c.Wait()
+			}
+		}
+	} else {
+		err = c.Wait()
+	}
 	drain_potential_tty_garbage(term)
 	if err != nil {
 		if exit_err, ok := errors.AsType[*exec.ExitError](err); ok {
