@@ -4,8 +4,6 @@
 from base64 import standard_b64encode
 
 from kitty.program_status import (
-    MAX_BODY_BYTES,
-    MAX_RECORDS,
     QUERY_REPLY,
     Clear,
     InvalidReport,
@@ -56,30 +54,36 @@ class TestProgramStatus(BaseTest):
         bad('app=x')
         bad('')
         # invalid ids discard the report rather than fall back to the root record
-        for rid in ('', 'a//b', '/a', 'a/', 'a b', 'a*b', 'a,b', 'x' * 33, '/'.join('a' * 9), '/'.join(['x' * 32] * 8) + 'x'):
+        for rid in ('', 'a//b', '/a', 'a/', 'a b', 'a*b', 'a,b', 'a/' * 20 + '*'):
             bad(f'state=clear:id={rid}')
-        # the longest id allowed by the segment limits is accepted, the 128 byte limit in the spec is an error
-        rid = '/'.join(['x' * 32] * 8)
-        self.ae(len(rid), 263)
-        self.ae(p(f'state=idle:id={rid}'), Record(id=rid))
         bad('state=idle:id=a:id=a*b')
-        # limits, checked even for values that are later replaced
-        bad(f'state=idle:{"k" * 17}=1')
-        bad(f'state=idle:{"K" * 17}=1')
-        self.ae(p(f'state=idle:{"K" * 16}=1'), Record())
+        # Silkie applies none of the size limits of the specification: ids of
+        # any length and depth, and keys of any length, are accepted
+        for rid in ('x' * 33, '/'.join('a' * 9), '/'.join(['x' * 32] * 8) + 'x', '/'.join(['seg'] * 5000), 'y' * 100000):
+            self.ae(p(f'state=idle:id={rid}'), Record(id=rid))
+        self.ae(p(f'state=idle:{"k" * 17}=1'), Record())
+        self.ae(p(f'state=idle:{"K" * 17}=1'), Record())
+        self.ae(p(f'state=idle:{"k" * 100000}=1'), Record())
         # only ASCII whitespace is removed
         self.ae(p('\tstate=done\r\n'), Record(state=State.done))
         bad('\x1cstate=done')
-        # the limit is on bytes, not on decoded text
-        filler = 'state=idle:' + 'x=y:' * ((MAX_BODY_BYTES - 100) // 4)
-        self.ae(parse_report(filler.encode() + b'\xff' * 30), Record())
-        bad(filler.encode() + b'\xff' * 100)
-        bad(f'state=idle:app={"a" * 33}:app=b')
-        bad(f'state=idle:title={b64("x" * 193)}')
-        bad(f'state=idle:msg={b64("x" * 2049)}')
-        bad(f'state=idle:msg={"QUFB" * 684}:msg=QQ')
-        bad('state=idle:' + 'x=y:' * 1100)
-        p(f'state=idle:title={b64("x" * 192)}:msg={b64("y" * 2048)}')
+        # reports far longer than the 4096 byte limit of the specification,
+        # made of repeated and unknown pairs or malformed bytes, are accepted
+        filler = 'state=idle:' + 'x=y:' * 25000 + 'state=working:progress=7'
+        self.assertGreater(len(filler), 100000)
+        self.ae(parse_report(filler), Record(state=State.working, progress=7))
+        self.ae(parse_report(filler.encode() + b':' + b'\xff' * 10000), Record(state=State.working, progress=7))
+        # as are fields far longer than the field limits of the specification
+        long_msg, long_title = 'm\u00e9' * 50000, 'title ' * 10000
+        self.ae(
+            p(f'state=done:app={"a" * 10000}:title={b64(long_title)}:msg={b64(long_msg)}'),
+            Record(state=State.done, app='a' * 10000, title=long_title, msg=long_msg))
+        self.ae(p(f'state=idle:msg={"QUFB" * 684}:msg=QQ'), Record(msg='A'))
+        # progress may have any number of leading zeros, but stays within 0 to 100
+        self.ae(p('state=working:progress=' + '0' * 10000 + '42'), Record(state=State.working, progress=42))
+        self.ae(p('state=working:progress=' + '0' * 10000), Record(state=State.working, progress=0))
+        self.ae(p('state=working:progress=' + '9' * 10000), Record(state=State.working))
+        self.ae(p('state=working:progress=0101'), Record(state=State.working))
         # invalid base64, utf-8 or control characters
         bad('state=idle:msg=Q')
         bad('state=idle:msg=QQ=Q')
@@ -87,6 +91,11 @@ class TestProgramStatus(BaseTest):
         for cc in '\x00\t\n\x1b\x7f\x85\x9b':
             bad(f'state=idle:msg={b64("a" + cc)}')
         bad(f'state=idle:title={b64("a\nb")}')
+        # control characters are refused in values of any length
+        bad(f'state=idle:msg={b64("x" * 100000 + "\x1b[31m")}')
+        bad(f'state=idle:title={b64("\x07" + "x" * 100000)}')
+        # as is invalid base64 of any length
+        bad(f'state=idle:msg={"QUFB" * 100000}Q')
 
     def test_program_status_records(self):
         ps = ProgramStatus()
@@ -141,19 +150,23 @@ class TestProgramStatus(BaseTest):
         self.assertFalse(ps.on_process_exit_or_prompt())
         self.assertTrue(ps.on_seen_by_user())
         self.assertFalse(ps)
-        # the least recently updated record is removed past the cap
-        for i in range(MAX_RECORDS):
+        # Silkie keeps any number of records, well past the 256 of the specification
+        n = 5000
+        for i in range(n):
             apply(f'state=idle:id=r{i}')
-        apply('state=working:id=r0')
-        apply('state=idle:id=new')
-        self.ae(len(ps.records), MAX_RECORDS)
-        self.assertNotIn('r1', ps.records)
-        self.assertIn('r0', ps.records)
-        # an identical report still counts as recent for eviction
+        self.ae(len(ps.records), n)
+        self.ae(ids(), [f'r{i}' for i in range(n)])
         self.assertFalse(apply('state=idle:id=r2'))
-        apply('state=idle:id=newer')
-        self.assertIn('r2', ps.records)
-        self.assertNotIn('r3', ps.records)
+        self.assertTrue(ps.on_process_exit_or_prompt())
+        self.assertFalse(ps)
+        # app is inherited through ids of any depth
+        deep = '/'.join(['d'] * 20000)
+        apply('state=working:id=d:app=top')
+        apply(f'state=working:id={deep}')
+        apply(f'state=working:id={deep}/x:app=leaf')
+        apply(f'state=working:id={deep}/x/y')
+        self.ae({d['id']: d['app'] for d in ps.as_list()}, {'d': 'top', deep: 'top', f'{deep}/x': 'leaf', f'{deep}/x/y': 'leaf'})
+        ps.clear()
 
     def test_program_status_symbol(self):
         self.ae(status_symbol(None), '')

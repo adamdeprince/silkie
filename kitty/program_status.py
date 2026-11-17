@@ -3,6 +3,16 @@
 
 # Program Status Protocol (OSC 7501), revision 0.4
 # https://www.superlogical.com/rex/docs/build/program-status
+#
+# Silkie applies none of the size limits in the Limits section of the
+# specification: not the 4096 byte limit on the whole sequence, nor the limits
+# on the length of keys, msg, title, app and id, the depth of an id, or the
+# number of records kept per window. A report of any length is accepted and
+# only its syntax is checked: the character sets of keys and values, base64,
+# UTF-8 and the refusal of control characters required by the Security
+# section. Records do not accumulate without bound in practice as the lifetime
+# rules drop them at the next shell prompt, when the program exits and when the
+# user has seen them.
 
 import re
 from collections import OrderedDict
@@ -14,17 +24,6 @@ from typing import Any, NamedTuple
 from .fast_data_types import base64_decode
 
 OSC_CODE = 7501
-# The whole sequence, ESC ] through ST, assuming the longer ST of ESC \
-MAX_SEQUENCE_BYTES = 4096
-MAX_BODY_BYTES = MAX_SEQUENCE_BYTES - len(f'\x1b]{OSC_CODE};') - len('\x1b\\')
-MAX_KEY_BYTES = 16
-MAX_MSG_ENCODED_BYTES, MAX_MSG_BYTES = 2732, 2048
-MAX_TITLE_ENCODED_BYTES, MAX_TITLE_BYTES = 256, 192
-MAX_APP_BYTES = 32
-MAX_ID_SEGMENT_BYTES, MAX_ID_DEPTH = 32, 8
-# The spec says 128 but that is an error as it is less than the maximum length allowed by the segment and depth limits
-MAX_ID_BYTES = MAX_ID_SEGMENT_BYTES * MAX_ID_DEPTH + MAX_ID_DEPTH - 1
-MAX_RECORDS = 256
 
 key_pat = re.compile(r'[a-z]+')
 value_pat = re.compile(r'[A-Za-z0-9_.,+/=-]*')
@@ -97,15 +96,20 @@ class Clear(NamedTuple):
 
 
 def is_valid_id(val: str) -> bool:
-    if len(val) > MAX_ID_BYTES:
-        return False
-    segments = val.split('/')
-    return len(segments) <= MAX_ID_DEPTH and all(len(s) <= MAX_ID_SEGMENT_BYTES and name_pat.fullmatch(s) for s in segments)
+    return all(name_pat.fullmatch(s) for s in val.split('/'))
 
 
-def decode_text(encoded: str, max_encoded: int, max_decoded: int) -> str:
-    if len(encoded) > max_encoded:
-        raise InvalidReport('text value too long')
+def parse_progress(val: str) -> int | None:
+    "A percentage from 0 to 100, None if absent or invalid"
+    if progress_pat.fullmatch(val) is None:
+        return None
+    # leading zeros are allowed in any number, strip them so that int() never
+    # sees more digits than it accepts (sys.get_int_max_str_digits())
+    digits = val.lstrip('0') or '0'
+    return int(digits) if len(digits) <= 3 and int(digits) <= 100 else None
+
+
+def decode_text(encoded: str) -> str:
     if len(encoded) % 4 == 1:
         raise InvalidReport('invalid base64')
     try:
@@ -113,8 +117,6 @@ def decode_text(encoded: str, max_encoded: int, max_decoded: int) -> str:
         text = raw.decode('utf-8')
     except (ValueError, UnicodeDecodeError) as e:
         raise InvalidReport(f'invalid text value: {e}') from e
-    if len(raw) > max_decoded:
-        raise InvalidReport('decoded text value too long')
     if control_chars_pat.search(text) is not None:
         raise InvalidReport('text value contains control characters')
     return text
@@ -122,39 +124,26 @@ def decode_text(encoded: str, max_encoded: int, max_decoded: int) -> str:
 
 def parse_report(raw: str | bytes | memoryview) -> Record | Clear:
     "Parse the body of an OSC 7501 report, everything after 7501; Raises InvalidReport if the report must be discarded."
-    if isinstance(raw, str):
-        body, num_bytes = raw, len(raw.encode('utf-8'))
-    else:
-        # invalid UTF-8 is outside the value set and so is skipped, as a malformed pair
-        body, num_bytes = str(raw, 'utf-8', 'replace'), len(raw)
-    if num_bytes > MAX_BODY_BYTES:
-        raise InvalidReport('report too long')
+    # invalid UTF-8 is outside the value set and so is skipped, as a malformed pair
+    body = raw if isinstance(raw, str) else str(raw, 'utf-8', 'replace')
     values: dict[str, str] = {}
     for pair in body.split(':'):
         key, sep, val = pair.partition('=')
         if not sep:
             continue
         key, val = key.strip(WHITESPACE), val.strip(WHITESPACE)
-        if len(key) > MAX_KEY_BYTES:
-            raise InvalidReport('key too long')
         if not key_pat.fullmatch(key):
             continue
         if value_pat.fullmatch(val) is None:
             if key == 'id':  # never fall back to the root record because of a malformed id
                 raise InvalidReport('invalid id')
             continue
-        # Every value is checked against its limit, even if a later pair with the same key replaces it
+        # Every id is checked, even if a later pair replaces it
         if key == 'id' and not is_valid_id(val):
             raise InvalidReport('invalid id')
-        if key == 'app' and len(val) > MAX_APP_BYTES:
-            raise InvalidReport('app too long')
-        if key == 'msg' and len(val) > MAX_MSG_ENCODED_BYTES:
-            raise InvalidReport('msg too long')
-        if key == 'title' and len(val) > MAX_TITLE_ENCODED_BYTES:
-            raise InvalidReport('title too long')
         values[key] = val
-    title = decode_text(t, MAX_TITLE_ENCODED_BYTES, MAX_TITLE_BYTES) if (t := values.get('title')) else ''
-    msg = decode_text(m, MAX_MSG_ENCODED_BYTES, MAX_MSG_BYTES) if (m := values.get('msg')) else ''
+    title = decode_text(t) if (t := values.get('title')) else ''
+    msg = decode_text(m) if (m := values.get('msg')) else ''
     rid = values.get('id', '')
     state_name = values.get('state', '')
     if state_name == 'clear':
@@ -170,9 +159,7 @@ def parse_report(raw: str | bytes | memoryview) -> Record | Clear:
             kind = Kind(values.get('kind', ''))
         except ValueError:
             pass
-    progress = None
-    if state in (State.working, State.blocked) and progress_pat.fullmatch(p := values.get('progress', '')) and int(p) <= 100:
-        progress = int(p)
+    progress = parse_progress(values.get('progress', '')) if state in (State.working, State.blocked) else None
     app = values.get('app', '')
     if not name_pat.fullmatch(app):
         app = ''
@@ -191,8 +178,6 @@ class ProgramStatus:
         self.records: OrderedDict[str, Record] = OrderedDict()
         # when each record last changed, used to break ties between equally urgent records
         self.update_seq: dict[str, int] = {}
-        # when each record was last reported, even identically, used for eviction
-        self.report_seq: dict[str, int] = {}
 
     def __bool__(self) -> bool:
         return bool(self.records)
@@ -216,20 +201,16 @@ class ProgramStatus:
         "Apply a report, returns True if the records changed"
         if isinstance(report, Clear):
             return self.remove(lambda r: is_descendant_or_self(r.id, report.id))
-        seq = next(update_counter)
-        self.report_seq[report.id] = seq
         if self.records.get(report.id) == report:
-            # an identical report changes nothing that is displayed, so only its recency for eviction is updated
+            # an identical report changes nothing that is displayed
             return False
-        self.update_seq[report.id] = seq
+        self.update_seq[report.id] = next(update_counter)
         self.records[report.id] = report
         self.records.move_to_end(report.id)
-        while len(self.records) > MAX_RECORDS:  # drop the least recently reported record
-            self.discard(min(self.report_seq, key=self.report_seq.__getitem__))
         return True
 
     def discard(self, rid: str) -> None:
-        del self.records[rid], self.update_seq[rid], self.report_seq[rid]
+        del self.records[rid], self.update_seq[rid]
 
     def remove(self, predicate: Callable[[Record], bool]) -> bool:
         remove = tuple(rid for rid, r in self.records.items() if predicate(r))
@@ -241,7 +222,6 @@ class ProgramStatus:
         ans = bool(self.records)
         self.records.clear()
         self.update_seq.clear()
-        self.report_seq.clear()
         return ans
 
     def on_process_exit_or_prompt(self) -> bool:
@@ -250,14 +230,24 @@ class ProgramStatus:
     def on_seen_by_user(self) -> bool:
         return self.remove(lambda r: r.state in UNSEEN_STATES)
 
-    def app_for(self, record: Record) -> str:
-        "The app of a record, inherited from its nearest ancestor if absent"
+    def app_for(self, record: Record, app_id_lengths: frozenset[int] | None = None) -> str:
+        """
+        The app of a record, inherited from its nearest ancestor if absent.
+        app_id_lengths is the set of the lengths of the ids of the records that
+        have an app, only ancestors of those lengths are looked up so that a
+        deep id costs a single scan rather than a lookup per level.
+        """
         if record.app:
             return record.app
+        if app_id_lengths is None:
+            app_id_lengths = frozenset(len(r.id) for r in self.records.values() if r.app)
+        if not app_id_lengths:
+            return ''
         rid = record.id
-        while rid:
-            rid = rid.rpartition('/')[0]
-            if (a := self.records.get(rid)) is not None and a.app:
+        end = len(rid)
+        while end > 0:
+            end = max(rid.rfind('/', 0, end), 0)
+            if end in app_id_lengths and (a := self.records.get(rid[:end])) is not None and a.app:
                 return a.app
         return ''
 
@@ -270,9 +260,10 @@ class ProgramStatus:
 
     def as_list(self) -> list[dict[str, Any]]:
         ans = []
+        app_id_lengths = frozenset(len(r.id) for r in self.records.values() if r.app)
         for r in self.records.values():
             d = r.as_dict()
-            d['app'] = self.app_for(r)
+            d['app'] = self.app_for(r, app_id_lengths)
             ans.append(d)
         return ans
 

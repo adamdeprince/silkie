@@ -76,9 +76,16 @@ lifetime rules of the specification:
 
 * a full reset removes every record
 
-The limit on the length of an :code:`id` is 263 bytes rather than the 128 bytes
-in the specification, as 263 bytes is what the limits on the length and number
-of its segments allow.
+Silkie applies none of the size limits in the Limits section of the
+specification. It accepts a report of any length, not just up to the 4096 byte
+limit on the whole sequence, and fields of any length: keys, :code:`msg` and
+:code:`title` (before and after base64 decoding), :code:`app`, and :code:`id`
+with any number of segments of any length. It also keeps any number of records
+per window rather than at most 256, as the lifetime rules above already drop
+them. Only the syntax of a report is checked: the character sets of keys and
+values, :code:`progress` being a whole number from 0 to 100, valid base64 and
+UTF-8, and, as the Security section of the specification requires, text values
+that contain control characters are refused.
 
 The status is shown in the tab bar via the :code:`tab.program_status` field of
 :opt:`tab_title_template`, is reported in the output of ``kitten @ ls``, and
