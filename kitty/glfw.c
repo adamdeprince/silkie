@@ -153,12 +153,32 @@ strip_csi_(const char *title, char *buf, size_t bufsz) {
     remove_invalid_utf8_from_end(buf, dest - buf);
 }
 
+// Returns a newly allocated copy of title without escape codes, or NULL if
+// title is NULL or memory runs out. Stripping never lengthens the text, so a
+// buffer the size of title holds all of it.
+static char *
+strip_csi_dup(const char *title) {
+    if (!title) return NULL;
+    const size_t bufsz = strlen(title) + 1;
+    char *buf = malloc(bufsz);
+    if (buf) strip_csi_(title, buf, bufsz);
+    return buf;
+}
+
 
 void
 update_menu_bar_title(PyObject *title UNUSED) {
 #ifdef __APPLE__
-    static char buf[2048];
-    strip_csi_(PyUnicode_AsUTF8(title), buf, arraysz(buf));
+    const char *utf8 = PyUnicode_AsUTF8(title);
+    if (!utf8) {
+        PyErr_Print();
+        return;
+    }
+    RAII_ALLOC(char, buf, strip_csi_dup(utf8));
+    if (!buf) {
+        log_error("Out of memory updating the menu bar title");
+        return;
+    }
     RAII_PyObject(stitle, PyUnicode_FromString(buf));
     if (stitle) cocoa_update_menu_bar_title(stitle);
     else PyErr_Print();
@@ -996,14 +1016,31 @@ window_focus_callback(GLFWwindow *w, int focused) {
 #define TAB_DRAG_MIME_NUMBER 400
 #define WINDOW_DRAG_MIME_NUMBER 401
 
+// Whether mime is prefix followed by the decimal pid of this process, as
+// written by Python's f'{prefix}{os.getpid()}', compared without formatting
+// the pid into a buffer
+static bool
+is_mime_for_this_process(const char *mime, const char *prefix) {
+    const size_t plen = strlen(prefix);
+    if (strncmp(mime, prefix, plen) != 0) return false;
+    const char *digits = mime + plen;
+    if (!digits[0] || (digits[0] == '0' && digits[1])) return false;
+    const uintmax_t pid = (uintmax_t)getpid();
+    uintmax_t val = 0;
+    for (const char *p = digits; *p; p++) {
+        if (*p < '0' || *p > '9') return false;
+        // val <= pid here, so val * 10 + 9 cannot overflow: pid is at most INT_MAX
+        if (val > pid / 10u) return false;
+        val = val * 10u + (unsigned)(*p - '0');
+        if (val > pid) return false;
+    }
+    return val == pid;
+}
+
 static int
 is_droppable_mime(const char *mime) {
-    static char tab_mime[64] = {0};
-    if (!tab_mime[0]) snprintf(tab_mime, sizeof(tab_mime), "application/net.kovidgoyal.kitty-tab-%d", getpid());
-    if (strcmp(mime, tab_mime) == 0) return TAB_DRAG_MIME_NUMBER;
-    static char window_mime[64] = {0};
-    if (!window_mime[0]) snprintf(window_mime, sizeof(window_mime), "application/net.kovidgoyal.kitty-window-%d", getpid());
-    if (strcmp(mime, window_mime) == 0) return WINDOW_DRAG_MIME_NUMBER;
+    if (is_mime_for_this_process(mime, "application/net.kovidgoyal.kitty-tab-")) return TAB_DRAG_MIME_NUMBER;
+    if (is_mime_for_this_process(mime, "application/net.kovidgoyal.kitty-window-")) return WINDOW_DRAG_MIME_NUMBER;
     if (strcmp(mime, "text/uri-list") == 0) return 3;
     if (strcmp(mime, "text/plain;charset=utf-8") == 0) return 2;
     if (strcmp(mime, "text/plain") == 0) return 1;
@@ -1238,6 +1275,7 @@ drop_dest_callback(GLFWwindow *window, GLFWDropEvent *ev) {
             if (global_state.drop_dest.client_window_data_request) {
                 if ((w = window_for_window_id(global_state.drop_dest.client_window_data_request))) {
                     if (w->drop.getting_data_for_mime && strcmp(w->drop.getting_data_for_mime, ev->mimes[0]) == 0) {
+                        // One chunk of a stream: DATA_AVAILABLE repeats until all of the data is read
                         char buf[3072];
                         ssize_t ret = ev->read_data(window, ev, buf, sizeof(buf));
                         drop_dispatch_data(w, ev->mimes[0], buf, ret);
@@ -1509,9 +1547,16 @@ draw_text_callback(
     double xdpi, ydpi;
     get_window_dpi(window, &xdpi, &ydpi);
     unsigned px_sz = 2 * height / 3;
-    static char title[2048];
+    RAII_ALLOC(char, title, NULL);
     if (!is_single_glyph) {
-        snprintf(title, sizeof(title), " ❭ %s", text);
+        // strlen(text) is less than SIZE_MAX, so adding the prefix cannot overflow
+        // in practice; check anyway rather than rely on it
+        static const char prefix[] = " ❭ ";
+        const size_t text_len = strlen(text);
+        if (text_len > SIZE_MAX - sizeof(prefix)) return false;
+        const size_t title_sz = text_len + sizeof(prefix);
+        if (!(title = malloc(title_sz))) return false;
+        snprintf(title, title_sz, "%s%s", prefix, text);
         text = title;
     }
     bool ok = render_single_line(ctx, text, px_sz, fg, bg, output_buf, width, height, x_offset, y_offset, right_margin, is_single_glyph);
@@ -2956,7 +3001,7 @@ glfw_get_key_name(PyObject UNUSED *self, PyObject *args) {
                 return PyUnicode_FromString("iso_level5_shift");
                 /* end glfw functional key names */
         }
-        char buf[8] = {0};
+        char buf[8] = {0};  // a UTF-8 encoded code point is at most 4 bytes
         encode_utf8(key, buf);
         return PyUnicode_FromString(buf);
     }
@@ -3150,8 +3195,11 @@ set_os_window_title(OSWindow *w, const char *title) {
         if (global_state.is_wayland) glfwWaylandRedrawCSDWindowTitle(w->handle);
         return;
     }
-    static char buf[2048];
-    strip_csi_(title, buf, arraysz(buf));
+    RAII_ALLOC(char, buf, strip_csi_dup(title));
+    if (!buf) {
+        log_error("Out of memory setting the OS window title");
+        return;
+    }
     glfwSetWindowTitle(w->handle, buf);
 }
 
