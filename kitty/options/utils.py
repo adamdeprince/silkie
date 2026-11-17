@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, fields
-from functools import lru_cache
+from math import isfinite
 from typing import (
     Any,
     Generic,
@@ -315,12 +315,18 @@ def parse_change_font_size(func: str, rest: str) -> tuple[str, tuple[bool, str |
         log_error(f'Invalid change_font_size specification: {rest}, treating it as default')
         return func, (True, None, 0)
     c_all = vals[0].lower() == 'all'
+    sign, amt = parse_font_size_change(vals[1])
+    return func, (c_all, sign, amt)
+
+
+def parse_font_size_change(spec: str) -> tuple[str | None, float]:
     sign: str | None = None
-    amt = vals[1]
-    if amt[0] in '+-*/':
-        sign = amt[0]
-        amt = amt[1:]
-    return func, (c_all, sign, float(amt.strip()))
+    if spec and spec[0] in '+-*/':
+        sign, spec = spec[0], spec[1:]
+    amt = float(spec.strip())
+    if not isfinite(amt):
+        raise ValueError(f'{spec} is not a finite number')
+    return sign, amt
 
 
 @func_with_args('clear_terminal')
@@ -1394,16 +1400,26 @@ class ActionAlias(NamedTuple):
 class AliasMap:
     def __init__(self) -> None:
         self.aliases: dict[str, list[ActionAlias]] = {}
+        self.resolved: dict[tuple[str, MapType], tuple[KeyAction, ...]] = {}
 
     def append(self, name: str, aa: ActionAlias) -> None:
         self.aliases.setdefault(name, []).append(aa)
+        self.resolved.clear()
 
     def update(self, aa: 'AliasMap') -> None:
         self.aliases.update(aa.aliases)
+        self.resolved.clear()
 
-    @lru_cache(maxsize=256)
     def resolve_aliases(self, definition: str, map_type: MapType = MapType.MAP) -> tuple[KeyAction, ...]:
-        return tuple(resolve_aliases_and_parse_actions(definition, self.aliases, map_type))
+        key = definition, map_type
+        if (ans := self.resolved.get(key)) is None:
+            # The memo has no size bound by design: it holds one entry per
+            # distinct definition resolved since the aliases last changed,
+            # which is cleared by append() and update(). Definitions sent by
+            # remote control action commands add entries too; memory use is
+            # for the OS (ulimit, the OOM killer) to police, not a cap here.
+            ans = self.resolved[key] = tuple(resolve_aliases_and_parse_actions(definition, self.aliases, map_type))
+        return ans
 
 
 def build_action_aliases(raw: dict[str, str], first_arg_replacement: str = '') -> AliasMap:

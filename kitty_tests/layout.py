@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 # License: GPL v3 Copyright: 2018, Kovid Goyal <kovid at kovidgoyal.net>
 
+import weakref
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from kitty.borders import Border, BorderColor, add_borders
 from kitty.config import defaults
 from kitty.fast_data_types import BOTTOM_EDGE, LEFT_EDGE, RIGHT_EDGE, TOP_EDGE, Region
 from kitty.layout.base import blank_rects_for_window, layout_dimension, lgd
 from kitty.layout.interface import Fat, Grid, Horizontal, Splits, Stack, Tall, Vertical
 from kitty.layout.splits import Pair, SplitsLayoutOpts
+from kitty.rc.set_spacing import parse_spacing_settings
 from kitty.types import WindowGeometry
-from kitty.window import EdgeWidths
+from kitty.window import DeferredWatcherCalls, EdgeWidths, GlobalWatchers, Watchers
 from kitty.window_list import WindowList, reset_group_id_counter
 
 from .base import BaseTest
@@ -1566,3 +1571,165 @@ class TestProportionalSplits(BaseTest):
         self.check_weights(q, dict.fromkeys((1, 2, 3), 1 / 3))
         self.ae(q.balanced_add_window(4).horizontal, q.pairs_root.horizontal)
         self.check_weights(q, dict.fromkeys((1, 2, 3, 4), 0.25))
+
+
+class TestWindowHelpers(BaseTest):
+    def test_edge_widths_launch_args(self):
+        ew = EdgeWidths({'left': 1, 'right': 2, 'top': 3, 'bottom': 4})
+        for prefix in ('padding', 'margin'):
+            args = list(ew.as_launch_args(prefix))
+            self.ae(len(set(args)), 4)
+            self.ae(parse_spacing_settings(a.partition('=')[2] for a in args), {
+                f'{prefix}-left': 1, f'{prefix}-right': 2, f'{prefix}-top': 3, f'{prefix}-bottom': 4})
+
+    def test_deferred_watcher_calls(self):
+        timers = []
+        next_timer_id = [0]
+
+        def add_timer(callback, interval, repeats=True):
+            if len(timers) >= 128:  # simulate the fixed size glfw timer table
+                return 0
+            timers.append(callback)
+            next_timer_id[0] += 1
+            return next_timer_id[0]
+
+        def fire_timers():
+            while timers:
+                callback = timers.pop(0)
+                callback(1)
+
+        delivered = []
+
+        class FakeWindow:
+            def __init__(self, num, watched=True):
+                self.num = num
+                self.watchers = Watchers()
+                if watched:
+                    self.watchers.on_resize.append(lambda boss, window, data: None)
+
+            def call_watchers(self, which, data):
+                delivered.append((self.num, data['n']))
+                if data.get('recurse'):
+                    dc(weakref.ref(self), 'on_resize', {'n': data['n'] + 1000})
+
+        with patch('kitty.window.add_timer', add_timer), patch('kitty.window.log_error', lambda *a: None):
+            dc = DeferredWatcherCalls()
+            windows = [FakeWindow(i) for i in range(10)]
+            unwatched = FakeWindow(-1, watched=False)
+            expected = []
+            for n in range(300):
+                w = windows[n % len(windows)]
+                dc(weakref.ref(w), 'on_resize', {'n': n})
+                dc(weakref.ref(unwatched), 'on_resize', {'n': n})
+                expected.append((w.num, n))
+            self.ae(len(timers), 1)
+            self.ae(delivered, [])
+            fire_timers()
+            self.ae(delivered, expected)
+
+            # calls made during delivery go to the next batch
+            del delivered[:]
+            dc(weakref.ref(windows[0]), 'on_resize', {'n': 1, 'recurse': True})
+            timers.pop(0)(1)
+            self.ae(delivered, [(0, 1)])
+            self.ae(len(timers), 1)
+            fire_timers()
+            self.ae(delivered, [(0, 1), (0, 1001)])
+
+            # calls for windows that have been garbage collected are dropped
+            del delivered[:]
+            w = FakeWindow(99)
+            dc(weakref.ref(w), 'on_resize', {'n': 7})
+            dc(weakref.ref(windows[1]), 'on_resize', {'n': 8})
+            del w
+            fire_timers()
+            self.ae(delivered, [(1, 8)])
+
+            # an exception escaping a watcher does not lose the rest of the batch
+            del delivered[:]
+
+            class Interrupted(BaseException):
+                pass
+
+            def interrupting_call_watchers(which, data):
+                raise Interrupted()
+
+            bad = FakeWindow(50)
+            bad.call_watchers = interrupting_call_watchers
+            dc(weakref.ref(windows[0]), 'on_resize', {'n': 1})
+            dc(weakref.ref(bad), 'on_resize', {'n': 2})
+            dc(weakref.ref(windows[1]), 'on_resize', {'n': 3})
+            with self.assertRaises(Interrupted):
+                timers.pop(0)(1)
+            self.ae(delivered, [(0, 1)])
+            self.ae(len(timers), 1)
+            fire_timers()
+            self.ae(delivered, [(0, 1), (1, 3)])
+
+            # if the timer cannot be added, calls are kept and retried on the next event
+            del delivered[:]
+            timers.extend([lambda timer_id: None] * 128)
+            dc(weakref.ref(windows[2]), 'on_resize', {'n': 1})
+            self.ae(dc.timer_id, 0)
+            del timers[:]
+            dc(weakref.ref(windows[3]), 'on_resize', {'n': 2})
+            self.ae(len(timers), 1)
+            fire_timers()
+            self.ae(delivered, [(2, 1), (3, 2)])
+
+    def test_global_watchers(self):
+        opts = SimpleNamespace(watcher={})
+        w1 = Watchers()
+        calls = []
+
+        def load(paths):
+            paths = tuple(paths)
+            calls.append(paths)
+            return w1 if paths else None
+
+        with patch('kitty.window.get_options', lambda: opts), patch('kitty.launch.load_watch_modules', load):
+            g = GlobalWatchers()
+            g.set_extra('x.py')
+            self.assertIs(g(), w1)
+            self.assertIs(g(), w1)
+            self.ae(calls, [('x.py',)])
+            g = GlobalWatchers()
+            opts.watcher = {'a.py': 'a.py'}
+            self.assertIs(g(), w1)
+            opts.watcher = {}
+            ans = g()
+            self.assertIsNot(ans, w1)
+            self.assertIsInstance(ans, Watchers)
+            self.ae(calls[-1], ())
+
+    def test_on_quit_watchers_aborting_quit(self):
+        # An on_quit watcher that aborts the quit must clear the application quit
+        # request, otherwise process_pending_closes() calls quit() on every tick
+        from unittest.mock import Mock
+
+        from kitty.boss import Boss
+        from kitty.fast_data_types import CLOSE_BEING_CONFIRMED, IMPERATIVE_CLOSE_REQUESTED, NO_CLOSE_REQUESTED
+
+        def quit(confirm_threshold: int, watchers_allow: bool) -> tuple[list[int], Mock]:
+            boss = Mock(os_window_map={1: [[Mock()]]}, active_window=None)
+            boss.close_windows_with_confirmation_msg.return_value = ('', 1)
+            boss._call_on_quit_watchers.return_value = watchers_allow
+            opts = SimpleNamespace(confirm_os_window_close=(confirm_threshold, False))
+            with (
+                patch('kitty.boss.get_options', return_value=opts),
+                patch('kitty.boss.current_application_quit_request', return_value=NO_CLOSE_REQUESTED),
+                patch('kitty.boss.set_application_quit_request') as set_request,
+            ):
+                Boss.quit(boss)
+            return [c.args[0] for c in set_request.call_args_list], boss
+
+        for threshold, confirmed in ((0, True), (1, False)):
+            with self.subTest(needs_confirmation=not confirmed):
+                requests, boss = quit(threshold, False)
+                self.ae(requests, [NO_CLOSE_REQUESTED])
+                boss._call_on_quit_watchers.assert_called_once_with({'confirmed': confirmed})
+                boss.confirm.assert_not_called()
+        self.ae(quit(0, True)[0], [IMPERATIVE_CLOSE_REQUESTED])
+        requests, boss = quit(1, True)
+        self.ae(requests, [CLOSE_BEING_CONFIRMED])
+        boss.confirm.assert_called_once()

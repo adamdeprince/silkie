@@ -2594,9 +2594,9 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     int x = INT_MIN, y = INT_MIN, window_state = WINDOW_NORMAL, disallow_override_title = 0, want_transparency = 0, native_host = 0;
     unsigned long long native_tab_parent = 0;
     const char *native_tab_location = "last";
-    char *title, *wm_class_class, *wm_class_name;
-    PyObject *optional_window_state = NULL, *load_programs = NULL, *get_window_size, *pre_show_callback, *optional_x = NULL, *optional_y = NULL,
-             *layer_shell_config = NULL;
+    char *wm_class_class, *wm_class_name;
+    PyObject *title, *optional_window_state = NULL, *load_programs = NULL, *get_window_size, *pre_show_callback, *optional_x = NULL, *optional_y = NULL,
+                     *layer_shell_config = NULL;
     static const char *kwlist[] = {
         "get_window_size",
         "pre_show_callback",
@@ -2617,7 +2617,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     if (!PyArg_ParseTupleAndKeywords(
             args,
             kw,
-            "OOsss|OOOOpOKspp",
+            "OOUss|OOOOpOKspp",
             (char **)kwlist,
             &get_window_size,
             &pre_show_callback,
@@ -2635,6 +2635,8 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
             &want_transparency,
             &native_host))
         return NULL;
+    const char *title_utf8 = PyUnicode_AsUTF8(title);
+    if (!title_utf8) return NULL;
     GLFWLayerShellConfig *lsc = NULL, lsc_stack = {0};
     if (optional_window_state && optional_window_state != Py_None) {
         if (!PyLong_Check(optional_window_state)) {
@@ -2805,7 +2807,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     }
     glfwGetError(NULL); // clear any stale error
     if (global_state.is_wayland && native_host && glfwWaylandSetNextWindowEmbedded) glfwWaylandSetNextWindowEmbedded(true);
-    GLFWwindow *glfw_window = glfwCreateWindow(width, height, title, NULL, temp_window ? temp_window : common_context, lsc);
+    GLFWwindow *glfw_window = glfwCreateWindow(width, height, title_utf8, NULL, temp_window ? temp_window : common_context, lsc);
     initial_window_size_py_callback = NULL;
     if (temp_window) {
         glfwDestroyWindow(temp_window);
@@ -2862,6 +2864,8 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     w->hdr_headroom = glfwGetWindowHDRHeadroom(glfw_window);
     w->hdr_white_level = 1.f;
     w->disallow_title_changes = disallow_override_title;
+    // A fixed title is never synced from the active window, so store it here
+    if (disallow_override_title) w->window_title = Py_NewRef(title);
     if (lsc != NULL) {
         w->is_layer_shell = true;
         w->hide_on_focus_loss = lsc->hide_on_focus_loss;

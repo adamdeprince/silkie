@@ -419,15 +419,52 @@ class Watchers:
         )
 
 
-def call_watchers(windowref: Callable[[], Optional['Window']], which: str, data: dict[str, Any]) -> None:
+class DeferredWatcherCalls:
+    """
+    Deliver watcher calls on the next main loop tick, in order, using a single
+    timer. Deferring prevents infinite recursion when a watcher causes the
+    event it is watching (for example, resizing in on_resize). Using a single
+    timer prevents bursts of events from exhausting the fixed size timer table.
+    Calls made during delivery are delivered in the next batch.
+    """
 
-    def callback(timer_id: int | None) -> None:
+    def __init__(self) -> None:
+        self.pending: list[tuple[Callable[[], Optional['Window']], str, dict[str, Any]]] = []
+        self.timer_id = 0
+
+    def __call__(self, windowref: Callable[[], Optional['Window']], which: str, data: dict[str, Any]) -> None:
         w = windowref()
-        if w is not None:
-            watchers: list[Watcher] = getattr(w.watchers, which)
-            w.call_watchers(watchers, data)
+        if w is None or not getattr(w.watchers, which):
+            return
+        self.pending.append((windowref, which, data))
+        self.schedule()
 
-    add_timer(callback, 0, False)
+    def schedule(self) -> None:
+        if not self.timer_id and self.pending:
+            self.timer_id = add_timer(self.deliver, 0, False)
+            if not self.timer_id:
+                log_error(f'Failed to schedule delivery of {len(self.pending)} watcher calls, will retry on the next watched event')
+
+    def deliver(self, timer_id: int | None) -> None:
+        self.timer_id = 0
+        batch, self.pending = self.pending, []
+        delivered = 0
+        try:
+            for windowref, which, data in batch:
+                delivered += 1
+                w = windowref()
+                if w is not None:
+                    watchers: list[Watcher] = getattr(w.watchers, which)
+                    w.call_watchers(watchers, data)
+        finally:
+            if delivered < len(batch):
+                # An exception not handled by Window.call_watchers() interrupted
+                # delivery, requeue the remaining calls ahead of any new ones
+                self.pending[:0] = batch[delivered:]
+                self.schedule()
+
+
+call_watchers = DeferredWatcherCalls()
 
 
 class WindowCreationSpec(NamedTuple):
@@ -696,11 +733,11 @@ class EdgeWidths:
         if self.left is not None:
             yield f'--spacing={prefix}-left={self.left}'
         if self.right is not None:
-            yield f'--spacing={prefix}-left={self.right}'
+            yield f'--spacing={prefix}-right={self.right}'
         if self.top is not None:
-            yield f'--spacing={prefix}-left={self.top}'
+            yield f'--spacing={prefix}-top={self.top}'
         if self.bottom is not None:
-            yield f'--spacing={prefix}-left={self.bottom}'
+            yield f'--spacing={prefix}-bottom={self.bottom}'
 
 
 class GlobalWatchers:
@@ -710,16 +747,17 @@ class GlobalWatchers:
         self.extra = ''
 
     def __call__(self) -> Watchers:
-        spec = get_options().watcher
-        if spec == self.options_spec:
+        raw_spec = get_options().watcher
+        if raw_spec == self.options_spec:
             return self.ans
         from .launch import load_watch_modules
 
+        spec = raw_spec.copy()
         if self.extra:
-            spec = spec.copy()
             spec[self.extra] = self.extra
-        self.ans = load_watch_modules(spec.keys()) or self.ans
-        self.options_spec = spec.copy()
+        ans = load_watch_modules(spec.keys())
+        self.ans = Watchers() if ans is None else ans
+        self.options_spec = raw_spec.copy()
         return self.ans
 
     def set_extra(self, extra: str) -> None:
@@ -937,6 +975,14 @@ class Window:
         if tab is None:
             return None
         return tab.overlay_parent(self)
+
+    @property
+    def effective_session_name(self) -> str:
+        "The session this window belongs to: the one it was created in, or else the one its tab was created in"
+        if self.created_in_session_name:
+            return self.created_in_session_name
+        tab = self.tabref()
+        return '' if tab is None else tab.created_in_session_name
 
     @property
     def current_colors(self) -> dict[str, int | None | tuple[tuple[Color, float], ...]]:
