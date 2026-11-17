@@ -60,8 +60,9 @@ typedef struct {
     float depth_pixels, phase;
     // Zero for normal images, otherwise the number of bytes per pixel of an indexed color image
     uint8_t indexed_px_sz;
-    // True for indexed color images drawn at their natural size, which can use
-    // a cheaper shader. Always false for normal images.
+    // True for indexed color images, and images the shader decodes, drawn at
+    // their natural size, which can use a cheaper shader. Always false for
+    // other images.
     bool is_unscaled;
     // The texture holding the palette of a palette image, zero for other images
     uint32_t palette_texture_id;
@@ -73,6 +74,9 @@ typedef struct {
     // whether the texture holds gray in its red channel alone
     uint8_t decode;
     bool is_gray;
+    // Whether the shader filters the image itself, in linear light: a scaled
+    // image it decodes, see graphics.slang
+    bool filter_decoded;
 } ImageRenderData;
 
 typedef struct {

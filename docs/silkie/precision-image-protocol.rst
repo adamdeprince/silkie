@@ -170,8 +170,11 @@ expands gray to RGB and decodes the curve into Silkie's linear,
 extended-range values, so a slow gradient reaches an HDR window, which has a
 floating point framebuffer, without being cut to eight bits. A window without
 HDR stores eight bits per channel, and other output paths are unchanged. When
-an image is scaled, the GPU interpolates between the encoded values of
-neighbouring pixels, before the curve is decoded.
+an image is scaled, the shader decodes each of the neighbouring pixels and
+interpolates in linear light, as the GPU does for sRGB textures, so that edges
+and gradients are not darkened by interpolating encoded values. When an image
+is shrunk, the pixels a screen pixel covers are averaged, up to four in each
+direction. An image drawn at its natural size needs no interpolation.
 
 Vector images that draw one of these images (``img=`` in
 :doc:`vector-protocol`) receive its decoded linear values as half floats.

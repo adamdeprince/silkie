@@ -1413,6 +1413,7 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
     // High precision images and those with a transfer function are decoded by the shader, see docs/silkie/precision-image-protocol.rst
     const GLint image_decode_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_decode") : -1;
     const GLint image_is_gray_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_is_gray") : -1;
+    const GLint filter_decoded_loc = has_texture_uniforms ? try_program_uniform_location(program, "filter_decoded") : -1;
     const unsigned viewport_width = get_gpu_viewport().width;
     if (output_gamut_loc >= 0) glUniform1ui(output_gamut_loc, current_output_gamut);
     // Indexed color images have alpha or not, palette images have it in their palettes
@@ -1431,6 +1432,8 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
         if (image_gamut_loc >= 0) glUniform1ui(image_gamut_loc, group->gamut);
         if (image_decode_loc >= 0) glUniform1ui(image_decode_loc, group->decode);
         if (image_is_gray_loc >= 0) glUniform1ui(image_is_gray_loc, group->is_gray);
+        // the same for the whole group, as refs drawn at their natural size are grouped apart from scaled ones
+        if (filter_decoded_loc >= 0) glUniform1ui(filter_decoded_loc, group->filter_decoded);
         if (has_alpha_loc > -1) glUniform1ui(has_alpha_loc, group->indexed_px_sz == 2);
         if (group->group_count == 0) {
             i++;

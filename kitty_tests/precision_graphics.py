@@ -299,3 +299,36 @@ class TestPrecisionGraphics(BaseTest):
         # the same colors as a decoded image, sixteen bit linear RGBA
         self.image(screen, b''.join(struct.pack('<4H', *(round(65535 * min(max(c, 0), 1)) for c in p)) for p in px), f=RGBA16, s=2, v=1, i=2, E=LINEAR)
         self.ae(screen.grman.rgba_for_client_id(2), expected)
+
+    def test_scaled_decoded_images_are_filtered_in_linear_light(self):
+        # The GPU filters a texture before the shader decodes it, so a scaled
+        # image the shader decodes is filtered by the shader, in linear light.
+        # One drawn at its natural size, and images the GPU decodes itself,
+        # keep the hardware path. See graphics.slang.
+        from .graphics import parse_response, put_helpers, send_command
+        cw, ch = 10, 20
+        s, dx, dy, put_image, put_ref, layers, rect_eq = put_helpers(self, cw, ch)
+        n = cw * ch
+        images = (
+            (rgb10a2(100, 600, 1023, 3) * n, dict(f=RGB10A2, E=PQ), True),
+            (rgb10a2(100, 600, 1023, 3) * n, dict(f=RGB10A2, E=HLG), True),
+            (struct.pack('<4H', 1, 2, 3, 65535) * n, dict(f=RGBA16), True),
+            (b'\x10\x80\xf0\xff' * n, dict(f=32, E=PQ), True),
+            (b'\x10\x80\xf0\xff' * n, dict(f=32), False),
+            (struct.pack('<4e', 0.5, 2, 0, 1) * n, dict(f=64), False),
+            (struct.pack('<4H', 1, 2, 3, 65535) * n, dict(f=RGBA16, E=LINEAR), False),
+        )
+        expected = []
+        for i, (data, options, decoded) in enumerate(images, start=1):
+            options = ','.join(f'{k}={v}' for k, v in options.items())
+            # at its natural size of a cell, then scaled up to two by two cells
+            self.ae(parse_response(send_command(s, f'a=T,i={i},p=1,C=1,s={cw},v={ch},{options}', data)), 'OK')
+            self.ae(parse_response(send_command(s, f'a=p,i={i},p=2,C=1,c=2,r=2')), 'OK')
+            # refs drawn differently are in groups of their own, the others in one
+            expected += [(decoded, True, False, 1 if decoded else 2), (decoded, False, decoded, 1)]
+        found = [(x['image_id'], x['ref_id'], x['is_unscaled'], x['filter_decoded'], x['group_count']) for x in layers(s)]
+        found.sort()
+        self.ae(len(found), len(expected))
+        for (image_id, ref_id, is_unscaled, filter_decoded, group_count), (decoded, natural, filtered, count) in zip(found, expected):
+            # only images the shader decodes are told apart by their scale
+            self.ae((is_unscaled, filter_decoded, group_count), (natural and decoded, filtered, count), f'image {image_id} ref {ref_id}')

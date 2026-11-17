@@ -2455,13 +2455,14 @@ grman_update_layers(
             rd->is_gray = img->root_frame.deep == DEEP_GRAY16;
             rd->indexed_px_sz = img->indexed_px_sz;
             rd->palette_texture_id = img->palette ? img->palette->texture : 0;
-            if (img->indexed_px_sz) {
-                self->num_of_indexed_refs++;
+            if (img->indexed_px_sz) self->num_of_indexed_refs++;
+            if (img->indexed_px_sz || rd->decode != IMAGE_DECODE_NONE) {
                 // The rect is in normalized device co-ordinates, so allow for rounding errors
                 const float width_px = (r.right - r.left) / screen_width * screen_width_px;
                 const float height_px = (r.top - r.bottom) / screen_height * screen_height_px;
                 rd->is_unscaled = fabsf(width_px - ref->src_width) < 0.01f && fabsf(height_px - ref->src_height) < 0.01f;
             }
+            rd->filter_decoded = rd->decode != IMAGE_DECODE_NONE && !rd->is_unscaled;
             img->is_drawn = true;
             refitr = vt_next(refitr);
         }
@@ -4532,7 +4533,7 @@ grman_render_data_as_python(GraphicsManager *self) {
             ans,
             i,
             Py_BuildValue(
-                "{sN sN sI si sK sK sI sO}",
+                "{sN sN sI si sK sK sI sO sO}",
                 "src_rect",
                 R(src_rect),
                 "dest_rect",
@@ -4548,7 +4549,9 @@ grman_render_data_as_python(GraphicsManager *self) {
                 "indexed_px_sz",
                 (unsigned int)r->indexed_px_sz,
                 "is_unscaled",
-                r->is_unscaled ? Py_True : Py_False));
+                r->is_unscaled ? Py_True : Py_False,
+                "filter_decoded",
+                r->filter_decoded ? Py_True : Py_False));
 #undef R
     }
     return ans;
