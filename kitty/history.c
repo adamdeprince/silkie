@@ -97,6 +97,8 @@
 #include <structmember.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <sched.h>
+#include <sys/resource.h>
 #include <signal.h>
 #include <stdatomic.h>
 #include <time.h>
@@ -848,6 +850,28 @@ finish_job(CompressJob *j) {
     pthread_cond_broadcast(&W.idle);
 }
 
+// The threads run at low priority, so that they use the CPU time the threads
+// that parse and draw output, and other programs, leave: on Linux SCHED_IDLE,
+// or the lowest nice value if that is refused; on macOS the utility QoS
+// class. The background class starved them during a flood of output: the
+// encoder fell behind, uncompressed blocks piled up to 30 GB and output
+// slowed to 18 MB/s, against 2.9 GB and 70 MB/s with utility (see the docs of
+// scrollback_compression).
+static void
+lower_priority(void) {
+#if defined(__APPLE__)
+    pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
+#elif defined(__linux__)
+#ifndef SCHED_IDLE
+#define SCHED_IDLE 5 // from linux/sched.h, glibc declares it only with _GNU_SOURCE
+#endif
+    struct sched_param sp = {0};
+    // on Linux setpriority() with who 0 applies to the calling thread
+    if (pthread_setschedparam(pthread_self(), SCHED_IDLE, &sp) != 0) setpriority(PRIO_PROCESS, 0, 19);
+#endif
+    // elsewhere (the BSDs) setpriority() would apply to the whole process: the threads keep the default priority
+}
+
 // Two threads: the encoder encodes blocks, which frees their cells, so it has
 // a core of its own and keeps up with output; the compressor compresses the
 // encoded blocks in order, and frames to compress again.
@@ -855,6 +879,7 @@ static void *
 compressor_main(void *arg) {
     const bool is_encoder = arg != NULL;
     set_thread_name(is_encoder ? "ScrollbackEnc" : "ScrollbackZstd");
+    lower_priority();
     sigset_t all;
     sigfillset(&all);
     pthread_sigmask(SIG_BLOCK, &all, NULL);

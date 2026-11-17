@@ -646,11 +646,15 @@ with: -131072 to 22 for zstd 1.5). Any combination with
 
 The newest 2048 lines are always kept uncompressed, so output, scrolling near
 the bottom and editing near the screen cost nothing extra. Older lines are
-handed, 128 at a time, to a background thread that first encodes them
-compactly (about 100 bytes for a line of log output, freeing the 5.7 KB the
-line took) and then compresses them, so output never waits for compression;
-until then they are readable as before. If output outpaces compression the
-encoded lines wait, without limit, until the thread catches up.
+handed, 128 at a time, to two background threads that encode them compactly
+(about 100 bytes for a line of log output, freeing the 5.7 KB the line took)
+and then compress them, so output never waits for compression; until then
+they are readable as before. The threads run at low priority (SCHED_IDLE on
+Linux, the utility QoS class on macOS: the background class starved them), so
+they use only CPU time that output and other programs leave. If output
+outpaces them the lines wait, without limit, until they catch up: encoded, or
+uncompressed if even encoding falls behind, which a flood of random text at
+90 MB/s did on an x86 Linux machine, holding 19 GB until it caught up.
 
 The compressed stream is cut into frames of 1 MiB of encoded lines. Frames
 exist for random access to old scrollback: showing an old line decompresses
