@@ -16,8 +16,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dlclark/regexp2"
-	"github.com/dlclark/regexp2/syntax"
+	"github.com/dlclark/regexp2/v2"
+	"github.com/dlclark/regexp2/v2/syntax"
 	"github.com/seancfoley/ipaddress-go/ipaddr"
 
 	"github.com/kovidgoyal/kitty"
@@ -138,17 +138,25 @@ func char_at(s string, i int) string {
 	return string(ans)
 }
 
+func char_before(s string, i int) string {
+	ans, _ := utf8.DecodeLastRuneInString(s[:i])
+	if ans == utf8.RuneError {
+		return ""
+	}
+	return string(ans)
+}
+
 func matching_remover(openers ...string) PostProcessorFunc {
 	return func(text string, s, e int) (int, int) {
 		if s < e && e <= len(text) {
 			before := char_at(text, s)
 			if slices.Index(openers, before) > -1 {
 				q := closing_bracket_for(before)
-				if e > 0 && char_at(text, e-1) == q {
-					s++
-					e--
+				if s+len(before) <= e-len(q) && char_before(text, e) == q {
+					s += len(before)
+					e -= len(q)
 				} else if char_at(text, e) == q {
-					s++
+					s += len(before)
 				}
 			}
 		}
@@ -175,15 +183,16 @@ var PostProcessorMap = sync.OnceValue(func() map[string]PostProcessorFunc {
 					e -= len(url) - idx
 				}
 			}
-			for e > 1 && is_punctuation(char_at(text, e-1)) { // remove trailing punctuation
+			for e > 1 && is_punctuation(char_before(text, e)) { // remove trailing punctuation
 				e--
 			}
 			// truncate url at closing bracket/quote
-			if s > 0 && e <= len(text) && closing_bracket_for(char_at(text, s-1)) != "" {
-				q := closing_bracket_for(char_at(text, s-1))
-				idx := strings.Index(text[s:], q)
-				if idx > 0 {
-					e = s + idx
+			if s > 0 && e <= len(text) {
+				if q := closing_bracket_for(char_before(text, s)); q != "" {
+					idx := strings.Index(text[s:], q)
+					if idx > 0 {
+						e = s + idx
+					}
 				}
 			}
 			// reStructuredText URLs
@@ -438,55 +447,22 @@ func (self Match) HasNamedGroups() bool {
 
 func find_all_matches(re *regexp2.Regexp, text string) (ans []Match, err error) {
 	m, err := re.FindStringMatch(text)
-	if err != nil {
-		return
-	}
-	rune_to_bytes := utils.RuneOffsetsToByteOffsets(text)
-	get_byte_offset_map := func(groups []regexp2.Group) (ans map[int]int, err error) {
-		ans = make(map[int]int, len(groups)*2)
-		rune_offsets := make([]int, 0, len(groups)*2)
-		for _, g := range groups {
-			for _, c := range g.Captures {
-				if _, found := ans[c.Index]; !found {
-					rune_offsets = append(rune_offsets, c.Index)
-					ans[c.Index] = -1
-				}
-				end := c.Index + c.Length
-				if _, found := ans[end]; !found {
-					rune_offsets = append(rune_offsets, end)
-					ans[end] = -1
-				}
-			}
-		}
-		slices.Sort(rune_offsets)
-		for _, pos := range rune_offsets {
-			if ans[pos] = rune_to_bytes(pos); ans[pos] < 0 {
-				return nil, fmt.Errorf("Matches are not monotonic cannot map rune offsets to byte offsets")
-			}
-		}
-		return
-	}
-
-	for m != nil {
+	for m != nil && err == nil {
 		groups := m.Groups()
-		bom, err := get_byte_offset_map(groups)
-		if err != nil {
-			return nil, err
-		}
 		match := Match{Groups: make([]Group, len(groups))}
-		for i, g := range m.Groups() {
+		for i, g := range groups {
 			match.Groups[i].Name = g.Name
 			match.Groups[i].IsNamed = g.Name != "" && g.Name != strconv.Itoa(i)
 			for _, c := range g.Captures {
 				cn := Capture{Text: c.String(), Text_as_runes: c.Runes()}
-				cn.Rune_Offsets.End = c.Index + c.Length
-				cn.Rune_Offsets.Start = c.Index
-				cn.Byte_Offsets.Start, cn.Byte_Offsets.End = bom[c.Index], bom[cn.Rune_Offsets.End]
+				cn.Rune_Offsets.Start, cn.Rune_Offsets.End = c.RuneIndex, c.RuneIndex+c.RuneLength
+				start, length := c.ByteRange()
+				cn.Byte_Offsets.Start, cn.Byte_Offsets.End = start, start+length
 				match.Groups[i].Captures = append(match.Groups[i].Captures, cn)
 			}
 		}
 		ans = append(ans, match)
-		m, _ = re.FindNextMatch(m)
+		m, err = re.FindNextMatch(m)
 	}
 	return
 }
@@ -716,7 +692,9 @@ func find_marks(text string, opts *Options, cli_args ...string) (sanitized_text 
 			if err != nil {
 				return fmt.Errorf("Failed to compile the regex pattern: %#v with error: %w", pattern, err)
 			}
-			matches, _ = find_all_matches(r, sanitized_text)
+			if matches, err = find_all_matches(r, sanitized_text); err != nil {
+				return fmt.Errorf("Failed to match the regex pattern: %#v with error: %w", pattern, err)
+			}
 		}
 		ans = mark(matches, post_processors, group_processors, sanitized_text, opts)
 		used_pattern = pattern

@@ -28,6 +28,13 @@ func (c cmd_renderer) String() string {
 	return c.cmdline[0]
 }
 
+// CacheKeyExtra returns the command line, including the path argument exactly
+// as the command receives it. The command may produce different output for a
+// different command line or for different symlinks to the same file.
+func (c cmd_renderer) CacheKeyExtra(path string) string {
+	return fmt.Sprintf("%q", append(slices.Clone(c.cmdline), path))
+}
+
 type CmdResult struct {
 	Lines      []string `json:"lines"`
 	Image      string   `json:"image"`
@@ -49,13 +56,18 @@ func (c cmd_renderer) Render(path string) (m map[string][]byte, mi metadata, img
 	var md CmdResult
 	if err = json.Unmarshal(stdout.Bytes(), &md); err != nil {
 		err = fmt.Errorf("could not decode JSON response from %v for %s: %w", c.cmdline, path, err)
+		return
 	}
 	if md.Image != "" {
 		var ip ImagePreviewRenderer
 		if m, mi, img, err = ip.Render(md.Image); err != nil {
 			return
 		}
+	} else {
+		m = make(map[string][]byte, 1)
 	}
+	// Store the result so that Unmarshall can restore it from the disk cache.
+	m[CMD_METADATA_KEY] = stdout.Bytes()
 	mi.custom = &md
 	return
 }
