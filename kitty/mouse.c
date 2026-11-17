@@ -19,6 +19,8 @@ extern PyTypeObject Screen_Type;
 static MouseShape mouse_cursor_shape = TEXT_POINTER;
 typedef enum MouseActions { PRESS, RELEASE, DRAG, MOVE, LEAVE } MouseAction;
 #define debug debug_input
+#define MOUSE_MAPPING_MODS_MASK (GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_CONTROL | GLFW_MOD_SUPER | GLFW_MOD_HYPER | GLFW_MOD_META)
+static_assert(MOUSE_MAPPING_MODS_MASK < 64, "mouse mapping modifiers must fit in a uint64_t bitmap");
 
 static void
 finish_scroll_animation(Screen *screen) {
@@ -1595,9 +1597,6 @@ mapped_scroll_steps(GLFWOffsetType offset_type, double offset, double *pending, 
 
 // Bit i of wheel_mappings[button - MOUSE_WHEEL_UP][grabbed] is set when the wheel is mapped
 // with the modifiers i, so that unmapped scrolling never calls into Python.
-#define WHEEL_MAPPING_MODS_MASK (GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_CONTROL | GLFW_MOD_SUPER | GLFW_MOD_HYPER | GLFW_MOD_META)
-static_assert(WHEEL_MAPPING_MODS_MASK < 64, "wheel mapping modifiers must fit in a uint64_t bitmap");
-
 bool
 set_wheel_mappings(PyObject *py_opts, Options *opts) {
     memset(opts->wheel_mappings, 0, sizeof(opts->wheel_mappings));
@@ -1618,7 +1617,7 @@ set_wheel_mappings(PyObject *py_opts, Options *opts) {
         const long button = PyLong_AsLong(PyTuple_GET_ITEM(key, 0)), mods = PyLong_AsLong(PyTuple_GET_ITEM(key, 1));
         if (PyErr_Occurred()) return false;
         // modifiers outside the mask are stripped from events, so such a mapping can never match
-        if (button < MOUSE_WHEEL_UP || button > MOUSE_WHEEL_RIGHT || (mods & ~WHEEL_MAPPING_MODS_MASK)) continue;
+        if (button < MOUSE_WHEEL_UP || button > MOUSE_WHEEL_RIGHT || (mods & ~MOUSE_MAPPING_MODS_MASK)) continue;
         const int grabbed = PyObject_IsTrue(PyTuple_GET_ITEM(key, 3));
         if (grabbed < 0) return false;
         opts->wheel_mappings[button - MOUSE_WHEEL_UP][grabbed] |= 1ull << mods;
@@ -1746,7 +1745,7 @@ scroll_event_in_window(OSWindow *osw, Window *w, const GLFWScrollEvent *ev, unsi
     }
     if (ev->momentum_type == GLFW_NO_MOMENTUM_DATA) {
         const bool grabbed = screen->modes.mouse_tracking_mode != NO_TRACKING;
-        const int mods = ev->keyboard_modifiers & WHEEL_MAPPING_MODS_MASK;
+        const int mods = ev->keyboard_modifiers & MOUSE_MAPPING_MODS_MASK;
         if (dispatch_mapped_scroll(osw, w, ev, mods, grabbed)) osw->scroll.mapped_gesture = true;
         else if (osw->scroll.mapped_gesture) {
             osw->scroll.mapped_gesture = continues_mapped_gesture(osw, w, ev, mods, grabbed);
