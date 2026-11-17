@@ -338,11 +338,10 @@ class ThemeColors:
             return
         # Back to auto: the theme for the system color scheme, if any, otherwise the configured colors
         self.refresh()
-        if self.apply_theme(glfw_get_system_color_theme()):
-            return
-        if self.configured_colors is not None:
+        if not self.apply_theme(glfw_get_system_color_theme()) and self.configured_colors is not None:
             self.applied_theme, self.applied_builtin_theme = '', False
             patch_colors(*self.configured_colors, configured=True)
+        # e-ink mode removed the session colors
         for w in get_boss().all_windows:
             if w.session_color_schemes:
                 w.apply_session_color_scheme()

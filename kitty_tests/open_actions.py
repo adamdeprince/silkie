@@ -393,6 +393,73 @@ action two
             cp.reset_color(4)
             self.ae(cp.as_dict()['color4'], 0x2A5BB0)
 
+    def test_color_scheme_option_with_theme_layers(self):
+        # Silkie's color_scheme option and e-ink mode with the color layers and
+        # the built-in light theme
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from kitty.colors import SessionColorSchemes, ThemeColors
+        from kitty.fast_data_types import COLOR_LAYER_WINDOW, patch_color_profiles
+
+        builtin_bg = 0xF6F4EF
+        s = self.create_screen()
+        cp = s.color_profile
+        notified = []
+        sessions = SessionColorSchemes()
+
+        def apply_session_color_scheme(scheme=None):
+            sessions.apply(cp, scheme or system_scheme[0])
+
+        window = SimpleNamespace(
+            id=1, screen=s, refresh=lambda *a, **k: None, notify_child_of_color_change=lambda: notified.append(1),
+            session_color_schemes=sessions, apply_session_color_scheme=apply_session_color_scheme,
+        )
+        boss = SimpleNamespace(
+            args=SimpleNamespace(debug_rendering=False), all_windows=[window], all_tab_managers=[], default_bg_changed_for=lambda *a: None
+        )
+        system_scheme = ['light']
+        with (
+            patch('kitty.colors.config_dir_files_ignored', return_value=True),
+            patch('kitty.colors.get_boss', return_value=boss),
+            patch('kitty.colors.get_options', side_effect=lambda: opts),
+            patch('kitty.colors.glfw_get_system_color_theme', side_effect=lambda *a: system_scheme[0]),
+        ):
+            # color_scheme dark wins over the built-in light theme of a light system
+            opts = self.set_options({'color_scheme': 'dark'})
+            tc = ThemeColors()
+            tc.patch_opts(opts)
+            self.ae((int(opts.foreground), int(opts.background)), (0xFFFFFF, 0))
+            self.ae((tc.applied_theme, tc.builtin_light_theme_allowed), ('', True))
+            self.assertFalse(tc.on_system_color_scheme_change('light'))
+            cp.reload_from_opts(opts)
+            # launch --color and session colors are on layers above the configured colors
+            patch_color_profiles({'color1': 0x010101}, None, (cp,), COLOR_LAYER_WINDOW)
+            sessions.add(1, {'light': {'foreground': 0x020202}, 'dark': {'foreground': 0x030303}})
+            apply_session_color_scheme()
+            self.ae(int(cp.default_fg), 0x020202)
+            # back to auto: the built-in light theme, under the window and session colors
+            opts.color_scheme = 'auto'
+            del notified[:]
+            tc.apply_color_scheme()
+            self.ae((tc.applied_theme, tc.applied_builtin_theme), ('light', True))
+            self.ae(int(cp.default_bg), builtin_bg)
+            self.ae((int(cp.default_fg), cp.as_dict()['color1']), (0x020202, 0x010101))
+            self.assertTrue(notified, 'the program was not told its colors changed')
+            # e-ink mode is black on white over every layer
+            opts.eink_mode = True
+            tc.apply_color_scheme()
+            self.ae((int(cp.default_fg), int(cp.default_bg), tc.applied_theme), (0, 0xFFFFFF, ''))
+            # it forces the colors it names, the palette is left alone
+            self.ae(cp.as_dict()['color1'], 0x010101)
+            self.assertFalse(tc.on_system_color_scheme_change('dark'))
+            self.ae(int(cp.default_bg), 0xFFFFFF)
+            # and when it is turned off the theme and the session colors come back
+            opts.eink_mode = False
+            system_scheme[0] = 'light'
+            tc.apply_color_scheme()
+            self.ae((int(cp.default_fg), int(cp.default_bg)), (0x020202, builtin_bg))
+
     def test_mime_cache(self):
         import shutil
         import subprocess
