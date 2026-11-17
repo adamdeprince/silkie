@@ -801,6 +801,8 @@ bool hdr_should_be_active(const OSWindow *w);
 void scale_output_to_hdr_white_level(const OSWindow *w);
 bool backbuffer_is_float(void);
 void send_indexed_image_to_gpu(uint32_t *, const void *, int32_t, int32_t, unsigned, bool);
+void send_palette_to_gpu(uint32_t *, const void *, int32_t);
+void update_palette_on_gpu(uint32_t, const void *, int32_t, int32_t);
 void send_sprite_to_gpu(FONTS_DATA_HANDLE fg, sprite_index, pixel *, sprite_index);
 void blank_canvas(float, color_type, bool);
 void blank_os_window(OSWindow *);

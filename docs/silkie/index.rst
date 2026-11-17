@@ -103,6 +103,8 @@ each sample to make a round trip to the application.
 Send one-, two-, four-, or eight-bit grayscale pixels and RGB565 without
 requiring compression; :doc:`packed-image-protocol` describes the compact
 wire encodings, independent of the display's color model.
+:doc:`palette-image-protocol` adds images of one- to eight-bit indices into a
+palette of RGBA colors that can be replaced without resending the pixels.
 
 Color beyond ordinary SDR
 ~~~~~~~~~~~~~~~~~~~~~~~~~

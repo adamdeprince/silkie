@@ -90,7 +90,7 @@ class TestPackedGraphics(BaseTest):
             screen = self.create_screen(options={'display_info': display})
             screen.callbacks.clear()
             parse_bytes(screen, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-            self.assertIn(b':format=8,16,24,32,64,100,200,301,302,304,308,316\x1b\\', screen.callbacks.wtcbuf)
+            self.assertIn(b':format=8,16,24,32,64,100,200,301,302,304,308,316,401,402,404,408\x1b\\', screen.callbacks.wtcbuf)
             for fmt, encoded, expected in (
                 (301, b'\x40', b'\x00' * 3 + b'\xff' * 3),
                 (308, b'\x00\xff', b'\x00' * 3 + b'\xff' * 3),

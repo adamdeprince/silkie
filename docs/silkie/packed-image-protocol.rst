@@ -109,6 +109,9 @@ Packed pixels expand before caching and GPU upload; their wire precision
 does not restrict later frame formats or depend on display capabilities.
 Existing rules for mixing ordinary and HDR animation frames still apply.
 
+Images of indices into a palette the program sends, with alpha in every
+palette slot, are described in :doc:`palette-image-protocol`.
+
 For inherited framing, chunking, placement, and animation fields, see the
 `upstream graphics protocol manual
 <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_.

@@ -65,7 +65,8 @@ as ``g`` for a GPU surface. ``format`` lists the values of the ``f`` key:
 ``24`` RGB, ``32`` RGBA, ``100`` PNG, ``8`` and ``16`` indexed color (where
 supported), and any format an extension adds, such as ``64`` for HDR images, ``200`` for vector images and ``301``, ``302``,
 ``304`` and ``308`` grayscale and ``316`` RGB565 (see
-:doc:`packed-image-protocol`). Both describe what the
+:doc:`packed-image-protocol`) and ``401``, ``402``, ``404`` and ``408``
+palette images (see :doc:`palette-image-protocol`). Both describe what the
 terminal accepts, not what is wise over a given connection, and the graphics
 protocol's own query action (``a=q``) remains the check for one particular
 image. A relay answers with what it can carry to the terminal behind it:

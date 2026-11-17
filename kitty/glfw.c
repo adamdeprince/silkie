@@ -1825,7 +1825,7 @@ set_mouse_cursor(MouseShape type) {
 static struct {
     GLFWcursor *glfw;
     id_type window_id, image;
-    uint32_t frame;
+    uint64_t frame;  // the version of the image, see grman_image_version()
     PointerImage spec;
 } image_cursor = {0};
 
@@ -1835,7 +1835,7 @@ set_mouse_cursor_image(Screen *screen, const PointerImage *spec) {
     if (!global_state.callback_os_window) return;
     GLFWwindow *w = (GLFWwindow *)global_state.callback_os_window->handle;
     id_type image;
-    uint32_t frame;
+    uint64_t frame;
     if (!grman_image_version(screen->grman, spec->image_id, &image, &frame)) return;
     if (!image_cursor.glfw || image_cursor.window_id != screen->window_id || image_cursor.image != image || image_cursor.frame != frame ||
         image_cursor.spec.image_id != spec->image_id || image_cursor.spec.xhot != spec->xhot || image_cursor.spec.yhot != spec->yhot) {

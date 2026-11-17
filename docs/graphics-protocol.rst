@@ -711,7 +711,8 @@ chunked transmission in progress. The ``e`` key is only allowed in
 other *query action*.
 
 Silkie reports its own additions to the protocol the same way: the packed
-formats of the :doc:`packed-image-protocol`, ``f=64`` of the
+formats of the :doc:`packed-image-protocol`, the palette formats and the
+``x`` and ``w`` keys of palette updates of the :doc:`palette-image-protocol`, ``f=64`` of the
 :doc:`hdr-protocol` and the ``T`` key, ``f=200`` and the ``e`` and ``v``
 actions of the :doc:`vector-protocol`, the ``G`` key of the
 :doc:`wide-gamut-protocol` and GPU surfaces, ``t=g``, with the ``r`` action.
