@@ -4249,12 +4249,16 @@ set_color_table_color(Screen *self, unsigned int code, PyObject *color) {
     }
 }
 
+// Both OSC 7 and the ConEmu OSC 9;9 report the working directory, a change by either is a cwd change
 static void
 set_last_reported_cwd(Screen *self, const char *data, size_t sz) {
     PyObject *x = PyBytes_FromStringAndSize(data, sz);
     if (x) {
+        bool changed = !self->last_reported_cwd || PyBytes_GET_SIZE(self->last_reported_cwd) != (Py_ssize_t)sz ||
+                       memcmp(PyBytes_AS_STRING(self->last_reported_cwd), data, sz) != 0;
         Py_CLEAR(self->last_reported_cwd);
         self->last_reported_cwd = x;
+        if (changed) CALLBACK("on_cwd_change", "O", x);
     } else {
         PyErr_Clear();
     }

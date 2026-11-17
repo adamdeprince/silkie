@@ -49,6 +49,16 @@ class FloatEdges(NamedTuple):
 DockEdge = Literal['left', 'top', 'right', 'bottom']
 # What a dock is docked to: a window, a tab or an OS window
 DockScope = Literal['window', 'tab', 'os-window']
+CloseReason = Literal['window', 'os_window', 'quit']
+
+
+class CloseEvent(TypedDict):
+    # The data passed to on_close watchers, see the watchers documentation for the possible values of cause
+    reason: CloseReason
+    cause: str
+    confirmed: bool
+
+
 dock_edges: tuple[DockEdge, ...] = ('left', 'top', 'right', 'bottom')
 opposite_dock_edge: dict[DockEdge, DockEdge] = {'left': 'right', 'right': 'left', 'top': 'bottom', 'bottom': 'top'}
 

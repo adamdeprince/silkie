@@ -70,7 +70,7 @@ from .layout.base import DragOverlayMode, Layout
 from .layout.interface import all_layouts, create_layout_object_for, evict_cached_layouts
 from .progress import ProgressState
 from .tab_bar import TabBar, TabBarData, WindowDropTarget, apply_title_template
-from .types import DockSpec, WindowResizeDragData, ac
+from .types import CloseEvent, DockSpec, WindowResizeDragData, ac
 from .typing_compat import EdgeLiteral, SessionTab, SessionType, TypedDict
 from .utils import cmdline_for_hold, color_as_int, log_error, natsort_key, platform_window_id, resolved_shell, shlex_split, which
 from .window import CwdRequest, Watchers, Window, WindowCreationSpec, WindowDict, global_watchers
@@ -1596,10 +1596,10 @@ class Tab:  # {{{
     def __contains__(self, window: Window) -> bool:
         return window in self.windows
 
-    def destroy(self) -> None:
+    def destroy(self, close_event: CloseEvent | None = None) -> None:
         evict_cached_layouts(self.id)
         for w in self.windows:
-            w.destroy()
+            w.destroy(close_event)
         self.windows = WindowList(self, self.windows.os_window_docks)
 
     def __repr__(self) -> str:
@@ -1651,6 +1651,8 @@ class WindowBeingDropped(NamedTuple):
 
 class TabManager:  # {{{
     confirm_close_window_id: int = 0
+    # Set when the user confirmed closing this OS window
+    close_confirmed: bool = False
     num_of_windows_with_progress: int = 0
     total_progress: int = 0
     has_indeterminate_progress: bool = False
@@ -2831,12 +2833,14 @@ class TabManager:  # {{{
     def tab_bar_rects(self) -> tuple[Border, ...]:
         return self.tab_bar.blank_rects if self.tab_bar_should_be_visible else ()
 
-    def destroy(self) -> None:
+    def destroy(self, close_event: CloseEvent | None = None) -> None:
+        if close_event is None:
+            close_event = {'reason': 'os_window', 'cause': 'closed', 'confirmed': self.close_confirmed}
         self._cancel_drag_hover()
         # Parked docks are destroyed along with the tab they are put back into
         self.sync_os_window_docks()
         for t in self:
-            t.destroy()
+            t.destroy(close_event)
         self.tab_bar.destroy()
         del self.tab_bar
         del self.tabs
