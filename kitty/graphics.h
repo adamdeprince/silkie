@@ -126,7 +126,7 @@ typedef struct {
     monotonic_t current_frame_shown_at;
     ref_map refs_by_internal_id;
     VectorDoc *vector;  // f=200 images are rasterized on demand at the size they are shown at, the document tracks what changed
-    uint32_t vector_tex_width, vector_tex_height;
+    VectorView vector_view;  // the part of the image, at the size it is shown at, that its texture holds
 } Image;
 
 typedef struct {

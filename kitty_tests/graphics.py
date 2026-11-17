@@ -2092,6 +2092,59 @@ class TestGraphics(BaseTest):
         self.ae(bytes(part), g.render_vector_image(i, 37, 29))
         self.assertNotEqual(bytes(part), full)
 
+    def test_vector_render_view(self):
+        # The raster of a vector image is that of the part of it that is shown, so its size has nothing to do with
+        # how large the image is shown, and an allocation too large fails rather than wrapping around.
+        s = self.create_screen()
+        g = s.grman
+        doc = 'p id=1 d=M2,2L18,3L10,18Z fill=#ff8000c0 stroke=#0000ff w=1.5\nk id=2 pts=3,15,2,15,4,3 fill=#00ff0080\n'
+        self.ae(parse_full_response(send_command(s, 'a=T,f=200,s=20,v=20,i=1', doc)).code, 'OK')
+        W, H = 200, 160
+        full = g.render_vector_image(1, W, H)
+        # a part comes out as that part of all of it, to within the rounding of where it starts
+        x, y, cols, rows = 53, 31, 70, 45
+        part = g.render_vector_view(1, W, H, x, y, cols, rows)
+        crop = b''.join(full[((y + r) * W + x) * 4:((y + r) * W + x + cols) * 4] for r in range(rows))
+        self.ae(len(part), len(crop))
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(part, crop)), 1)
+        # an image shown at a thousand million pixels across takes no longer to draw a part of than a small one
+        start = time.monotonic()
+        part = g.render_vector_view(1, 1e9, 8e8, 5e8, 1.5e8, 64, 64)
+        self.assertLess(time.monotonic() - start, 5)
+        self.ae(len(part), 64 * 64 * 4)
+        self.ae(set(part[3::4]), {192})  # inside the triangle, far from its edges
+        # sizes that cannot be allocated, or held in the types they are counted in, fail
+        for args in ((W, H, 0, 0, 2**31 - 1, 2**31 - 1), (W, H, 0, 0, 2**31, 1), (W, H, 0.5, 0, 10, 10), (float('inf'), H, 0, 0, 10, 10)):
+            with self.assertRaises(RuntimeError, msg=str(args)):
+                g.render_vector_view(1, *args)
+        with self.assertRaises(RuntimeError):
+            g.render_vector_image(1, 2**31 - 1, 2**31 - 1)
+
+        # Which part is rasterized: all of an image no bigger than the window, the part on screen of one that is,
+        # and the part already drawn while it still holds what is on screen
+        view = g.choose_vector_view
+        self.ae(view(300, 200, (0, 0, 1, 1), 800, 600), (300, 200, 0, 0, 300, 200))
+        self.ae(view(300.4, 200.6, (0.2, 0.2, 0.3, 0.3), 800, 600), (300, 201, 0, 0, 300, 201))
+        W, H, x, y, cols, rows = v = view(1e9, 1e9, (0.5, 0.5, 0.5000008, 0.5000006), 800, 600)
+        self.ae((W, H), (1e9, 1e9))
+        self.assertLessEqual(x, 5e8 - 2)
+        self.assertGreaterEqual(x + cols, 5e8 + 800 + 2)
+        self.assertLessEqual(y, 5e8 - 2)
+        self.assertGreaterEqual(y + rows, 5e8 + 600 + 2)
+        self.assertLessEqual(cols * rows, 3 * 800 * 600)
+        # to the pixel: the quarter window of margin, the 2 pixels of filtering and nothing more
+        self.ae((x, y, x + cols, y + rows), (5e8 - 202, 5e8 - 152, 5e8 + 1002, 5e8 + 752))
+        self.ae(view(1e9, 1e9, (0.50000001, 0.5, 0.50000081, 0.5000006), 800, 600, v), v)
+        self.assertNotEqual(view(1e9, 1e9, (0.6, 0.5, 0.6000008, 0.5000006), 800, 600, v), v)
+        # placements that show far apart parts of one image at the largest magnification are drawn smaller
+        W, H, x, y, cols, rows = view(1e6, 1e6, (0, 0, 1, 1), 800, 600)
+        self.assertLess(W, 1e6)
+        self.assertLessEqual(cols * rows, 4 * 800 * 600 * 1.6)
+        # an image shown larger than doubles count pixels exactly is shown at that size
+        W, H, x, y, cols, rows = view(1e300, 1e300, (0.5, 0.5, 0.5, 0.5), 800, 600)
+        self.assertLessEqual(W, 2**53)
+        self.assertLessEqual(cols * rows, 3 * 800 * 600)
+
     def test_vector_amplification(self):
         # Work and memory for a vector command are in proportion to its size and to what it changes, not to that
         # times the size of the document, and not many times that in memory.

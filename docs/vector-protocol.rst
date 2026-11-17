@@ -39,8 +39,10 @@ scene is scaled to fit the cells. For example, a red square on a white page::
 
 Transmitting again with the same image id replaces the whole scene, as it
 does for any image. With ``o=z`` the uncompressed size need not be given. The
+records, after decompression, can take up to the 400 MB any image data can. The
 terminal answers ``OK`` or, for a scene it cannot parse, ``EINVAL`` with the
-line number and the problem, and nothing of such a transmission is kept.
+line number and the problem, and nothing of such a transmission is kept. A
+scene the terminal does not have the memory for is answered with ``ENOMEM``.
 
 Editing a vector image
 -------------------------
@@ -214,6 +216,15 @@ part is drawn as an equivalent scene of ordinary size would draw it. A stroke
 more than four million pixels wide is flattened to within a millionth of its
 width rather than a quarter of a pixel. Geometry whose coordinates overflow a
 double after the transforms are applied is not drawn.
+
+The texture holds the part of the image that is on screen, at the size it is
+shown at, with a quarter of the window more on each side so that scrolling a
+little does not draw it again, or all of the image when that is no larger. So
+its size is bounded by the window, however large the placement or however
+much a source rectangle magnifies the image. When several placements show
+parts of one image at different magnifications that would together take more
+than four windows of pixels at the largest, the image is drawn smaller until
+they fit.
 
 Rendering a PDF
 ------------------
