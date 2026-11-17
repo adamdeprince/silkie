@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 from kitty.fast_data_types import Screen
@@ -701,3 +701,59 @@ class TestSessions(BaseTest):
             tab_a.created_in_session_name = boss.os_window_map[1].created_in_session_name = ''
             cast(Boss, boss)._move_window_to(cast(RealWindow, unnamed), 'new')
             self.ae(sessions(unnamed), ('', '', ''))
+
+            # With native tabs every tab is an OS Window of its own, which belongs to the session of the window moved
+            # into it, not to that of the OS Window it was opened from
+            class NativeTabManager(FakeTabManager):
+                native_tabs = True
+
+                def new_tab(self, empty_tab: bool = False, location: str = 'last', title: str = '') -> FakeTab:
+                    tm = NativeTabManager(len(boss.os_window_map) + 1)
+                    boss.os_window_map[tm.os_window_id] = tm
+                    return FakeTab(tm, '')
+
+            for target_tab_id in ('new', 'new_after'):
+                boss, unnamed, from_b, tab_a, tab_b = world()
+                native = NativeTabManager(1, 'a')
+                native.tabs = boss.os_window_map[1].tabs
+                boss.os_window_map[1] = native
+                cast(Boss, boss)._move_window_to(cast(RealWindow, from_b), target_tab_id, 1)
+                self.ae(sessions(from_b), ('b', 'b', 'b'), target_tab_id)
+                self.ae(native.created_in_session_name, 'a')
+
+    def test_native_tabs_from_session_keep_session(self) -> None:
+        # Tabs a session opens in native tab mode are OS Windows of their own, which belong to the session
+        from kitty.tabs import TabManager
+
+        class FakeTab:
+            active_window = None
+
+            def __init__(self, tm: 'FakeTabManager', session_tab: object = None, session_name: str = '') -> None:
+                self.created_in_session_name = session_name
+
+            def __iter__(self) -> Iterator[object]:
+                return iter(())
+
+        class FakeTabManager:
+            def __init__(self, session: str = '') -> None:
+                self.created_in_session_name = session
+                self.tabs: list[FakeTab] = []
+
+            def _set_active_tab(self, idx: int) -> None:
+                pass
+
+        opened: list[FakeTabManager] = []
+
+        def new_native_tab_manager(parent: FakeTabManager) -> FakeTabManager:
+            opened.append(FakeTabManager('parent session leaked' if parent.created_in_session_name else ''))
+            return opened[-1]
+
+        boss = Mock(new_native_tab_manager=new_native_tab_manager)
+        session = SimpleNamespace(tabs=['one', 'two', 'three'], active_tab_idx=-1, focus_tab_spec=None)
+        for session_name, expected in (('work', 'work'), ('', 'start')):
+            del opened[:]
+            first = FakeTabManager('start')
+            with patch('kitty.tabs.get_boss', return_value=boss), patch('kitty.tabs.Tab', FakeTab):
+                TabManager.add_native_tabs_from_session(cast(TabManager, first), cast(Any, session), session_name)
+            self.ae(len(first.tabs), 1)
+            self.ae([(tm.created_in_session_name, tm.tabs[0].created_in_session_name) for tm in opened], [(expected, expected)] * 2)
