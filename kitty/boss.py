@@ -166,6 +166,7 @@ from .fast_data_types import (
 )
 from .key_encoding import get_name_to_functional_number_map
 from .keys import Mappings
+from .launch_wrapper import user_launch_request
 from .layout.base import set_layout_options
 from .notifications import NotificationManager
 from .options.types import Options, nullable_colors
@@ -857,7 +858,7 @@ class Boss:
             sw: SpecialWindowInstance | None = args
         else:
             args = tuple(args)
-            sw = self.args_to_special_window(args, cwd_from) if args else None
+            sw = self.args_to_special_window(args, cwd_from, launch_type='os-window') if args else None
         startup_session = next(create_sessions(get_options(), special_window=sw, cwd_from=cwd_from))
         startup_session.session_name = ''
         ans = self.add_os_window(startup_session)
@@ -896,7 +897,7 @@ class Boss:
         if isinstance(wd, str):
             wd = wd.split(os.pathsep) if str_is_multiple_paths else [wd]
         for path in wd:
-            special_window = SpecialWindow(None, cwd=path)
+            special_window = SpecialWindow(None, cwd=path, launch_request=user_launch_request('os-window'))
             self._new_os_window(special_window)
 
     def add_child(self, window: Window) -> None:
@@ -3648,7 +3649,7 @@ class Boss:
             self.run_background_process(cmd, cwd_from=cwd_from, stdin=stdin, env=env)
         return None
 
-    def args_to_special_window(self, args: Iterable[str], cwd_from: CwdRequest | None = None) -> SpecialWindowInstance:
+    def args_to_special_window(self, args: Iterable[str], cwd_from: CwdRequest | None = None, launch_type: str = 'window') -> SpecialWindowInstance:
         args = list(args)
         stdin = None
         w = self.active_window
@@ -3667,7 +3668,7 @@ class Boss:
                     continue
                 arg = q
             cmd.append(arg)
-        return SpecialWindow(cmd, stdin, cwd_from=cwd_from)
+        return SpecialWindow(cmd, stdin, cwd_from=cwd_from, launch_request=user_launch_request(launch_type, cwd_from))
 
     def _new_tab(self, args: SpecialWindowInstance | Iterable[str], cwd_from: CwdRequest | None = None, as_neighbor: bool = False) -> Tab | None:
         special_window = None
@@ -3676,7 +3677,7 @@ class Boss:
         else:
             args = tuple(args)
             if args:
-                special_window = self.args_to_special_window(args, cwd_from=cwd_from)
+                special_window = self.args_to_special_window(args, cwd_from=cwd_from, launch_type='tab')
         if not self.os_window_map:
             self.add_os_window()
         tm = self.active_tab_manager
@@ -3712,7 +3713,7 @@ class Boss:
         if isinstance(wd, str):
             wd = wd.split(os.pathsep) if str_is_multiple_paths else [wd]
         for path in wd:
-            special_window = SpecialWindow(None, cwd=path)
+            special_window = SpecialWindow(None, cwd=path, launch_request=user_launch_request('tab'))
             self._new_tab(special_window)
 
     def _new_window(self, args: list[str], cwd_from: CwdRequest | None = None) -> Window | None:
@@ -3735,7 +3736,9 @@ class Boss:
         if args:
             w = tab.new_special_window(self.args_to_special_window(args, cwd_from=cwd_from), location=location, allow_remote_control=allow_remote_control)
         else:
-            w = tab.new_window(cwd_from=cwd_from, location=location, allow_remote_control=allow_remote_control)
+            w = tab.new_window(
+                cwd_from=cwd_from, location=location, allow_remote_control=allow_remote_control, launch_request=user_launch_request('window', cwd_from)
+            )
         if cwd_from is not None and (sw := cwd_from.window):
             w.created_in_session_name = sw.effective_session_name
         return w
@@ -3937,6 +3940,10 @@ class Boss:
         clear_caches()
 
         from .shaders.slang import clear_caches
+
+        clear_caches()
+
+        from .launch_wrapper import clear_caches
 
         clear_caches()
 
