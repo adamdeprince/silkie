@@ -15,3 +15,4 @@ typedef void (*GLFWDBusnotificationcreatedfun)(notification_id_type, uint32_t, v
 typedef void (*GLFWDBusnotificationactivatedfun)(uint32_t, int, const char *);
 notification_id_type glfw_dbus_send_user_notification(const GLFWDBUSNotificationData *n, GLFWDBusnotificationcreatedfun, void *);
 void glfw_dbus_set_user_notification_activated_handler(GLFWDBusnotificationactivatedfun handler);
+bool glfw_dbus_set_launcher_entry(const char *app_uri, int64_t count, bool urgent);

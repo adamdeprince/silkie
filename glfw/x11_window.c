@@ -4052,6 +4052,11 @@ glfwDBusMonitorSessionState(GLFWDBussessionstatefun callback) {
     return glfw_dbus_monitor_session_state(callback);
 }
 
+GLFWAPI bool
+glfwDBusSetLauncherEntry(const char *app_uri, int64_t count, bool urgent) {
+    return glfw_dbus_set_launcher_entry(app_uri, count, urgent);
+}
+
 GLFWAPI int
 glfwSetX11LaunchCommand(GLFWwindow *handle, char **argv, int argc) {
     _GLFW_REQUIRE_INIT_OR_RETURN(0);

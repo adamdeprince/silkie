@@ -1033,6 +1033,12 @@ class Parser:
     def display_info(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['display_info'] = str(val)
 
+    def dock_attention_on_blocked(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['dock_attention_on_blocked'] = to_bool(val)
+
+    def dock_status_badge(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['dock_status_badge'] = to_bool(val)
+
     def drag_threshold(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['drag_threshold'] = positive_int(val)
 
@@ -1275,6 +1281,9 @@ class Parser:
     def narrow_symbols(self, val: str, ans: dict[str, typing.Any]) -> None:
         for k, v in narrow_symbols(val):
             ans["narrow_symbols"][k] = v
+
+    def native_tab_status_badge(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['native_tab_status_badge'] = to_bool(val)
 
     def native_tabs(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['native_tabs'] = to_bool(val)

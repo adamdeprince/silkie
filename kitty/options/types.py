@@ -374,6 +374,8 @@ option_names = (
     'dim_opacity',
     'disable_ligatures',
     'display_info',
+    'dock_attention_on_blocked',
+    'dock_status_badge',
     'drag_threshold',
     'draw_minimal_borders',
     'draw_window_borders_for_single_window',
@@ -444,6 +446,7 @@ option_names = (
     'mouse_hide_wait',
     'mouse_map',
     'narrow_symbols',
+    'native_tab_status_badge',
     'native_tabs',
     'notify_on_cmd_finish',
     'open_url_with',
@@ -639,6 +642,8 @@ class Options:
     dim_opacity: float = 0.4
     disable_ligatures: int = 0
     display_info: str = ''
+    dock_attention_on_blocked: bool = False
+    dock_status_badge: bool = True
     drag_threshold: int = 5
     draw_minimal_borders: bool = True
     draw_window_borders_for_single_window: bool = False
@@ -698,6 +703,7 @@ class Options:
     mark3_foreground: Color = Color(0, 0, 0)
     momentum_scroll: float = 0.96
     mouse_hide_wait: MouseHideWait = MouseHideWait(hide_wait=0.0, show_wait=0.0, show_threshold=40, scroll_show=True) if is_macos else MouseHideWait(hide_wait=3.0, show_wait=0.0, show_threshold=40, scroll_show=True)
+    native_tab_status_badge: bool = True
     native_tabs: bool = True
     notify_on_cmd_finish: NotifyOnCmdFinish = NotifyOnCmdFinish(when='never', duration=5.0, action='notify', cmdline=(), clear_on=('focus', 'next'))
     open_url_with: list[str] = ['default']

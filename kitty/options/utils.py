@@ -212,7 +212,8 @@ def kitten_parse(func: str, rest: str) -> FuncArgsType:
     return 'kitten', parts[1:]
 
 
-@func_with_args('open_settings', 'new_tab_with_profile', 'new_os_window_with_profile', 'set_window_profile', 'debug_settings_snapshot')
+@func_with_args('open_settings', 'new_tab_with_profile', 'new_os_window_with_profile', 'set_window_profile', 'debug_settings_snapshot',
+                'debug_native_tab_snapshot', 'debug_dock_status')
 def single_string_arg(func: str, rest: str) -> FuncArgsType:
     return func, [rest.strip()]
 

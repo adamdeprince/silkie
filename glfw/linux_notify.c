@@ -202,3 +202,37 @@ glfw_dbus_send_user_notification(const GLFWDBUSNotificationData *n, GLFWDBusnoti
     data = NULL;
     return ans;
 }
+
+bool
+glfw_dbus_set_launcher_entry(const char *app_uri, int64_t count, bool urgent) {
+    // The Unity LauncherEntry API: a signal that docks (Ubuntu Dock, Dash to Dock, KDE Plasma) match to the launcher of
+    // the desktop file named by app_uri, such as application://silkie.desktop. The object path is not significant.
+    DBusConnection *session_bus = glfw_dbus_session_bus();
+    if (!session_bus || !app_uri) return false;
+    RAII_MSG(msg, dbus_message_new_signal("/com/canonical/unity/launcherentry/glfw", "com.canonical.Unity.LauncherEntry", "Update"));
+    if (!msg) return false;
+    DBusMessageIter args, array, dict, variant;
+    const dbus_bool_t visible = count > 0, is_urgent = urgent;
+    const dbus_int64_t num = count;
+#define check_call(func, ...) if (!func(__VA_ARGS__)) return false;
+#define append_entry(k, val_type, val)                                                                  \
+    {                                                                                                   \
+        static const char *key = k;                                                                     \
+        check_call(dbus_message_iter_open_container, &array, DBUS_TYPE_DICT_ENTRY, NULL, &dict);        \
+        check_call(dbus_message_iter_append_basic, &dict, DBUS_TYPE_STRING, &key);                      \
+        check_call(dbus_message_iter_open_container, &dict, DBUS_TYPE_VARIANT, val_type##_AS_STRING, &variant); \
+        check_call(dbus_message_iter_append_basic, &variant, val_type, &val);                           \
+        check_call(dbus_message_iter_close_container, &dict, &variant);                                 \
+        check_call(dbus_message_iter_close_container, &array, &dict);                                   \
+    }
+    dbus_message_iter_init_append(msg, &args);
+    check_call(dbus_message_iter_append_basic, &args, DBUS_TYPE_STRING, &app_uri);
+    check_call(dbus_message_iter_open_container, &args, DBUS_TYPE_ARRAY, "{sv}", &array);
+    append_entry("count", DBUS_TYPE_INT64, num);
+    append_entry("count-visible", DBUS_TYPE_BOOLEAN, visible);
+    append_entry("urgent", DBUS_TYPE_BOOLEAN, is_urgent);
+    check_call(dbus_message_iter_close_container, &args, &array);
+#undef append_entry
+#undef check_call
+    return dbus_connection_send(session_bus, msg, NULL);
+}

@@ -659,6 +659,9 @@ load_glfw(const char* path) {
     *(void **) (&glfwDBusMonitorSessionState_impl) = dlsym(handle, "glfwDBusMonitorSessionState");
     if (glfwDBusMonitorSessionState_impl == NULL) dlerror(); // clear error indicator
 
+    *(void **) (&glfwDBusSetLauncherEntry_impl) = dlsym(handle, "glfwDBusSetLauncherEntry");
+    if (glfwDBusSetLauncherEntry_impl == NULL) dlerror(); // clear error indicator
+
     *(void **) (&glfwSetX11LaunchCommand_impl) = dlsym(handle, "glfwSetX11LaunchCommand");
     if (glfwSetX11LaunchCommand_impl == NULL) dlerror(); // clear error indicator
 

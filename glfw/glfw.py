@@ -127,6 +127,7 @@ def generate_wrappers(glfw_header: str) -> None:
     unsigned long long glfwDBusUserNotify(const GLFWDBUSNotificationData *n, GLFWDBusnotificationcreatedfun callback, void *data)
     void glfwDBusSetUserNotificationHandler(GLFWDBusnotificationactivatedfun handler)
     bool glfwDBusMonitorSessionState(GLFWDBussessionstatefun callback)
+    bool glfwDBusSetLauncherEntry(const char *app_uri, int64_t count, bool urgent)
     int glfwSetX11LaunchCommand(GLFWwindow *handle, char **argv, int argc)
     bool glfwWaylandCreateVirtualDevices(void)
     void glfwWaylandInjectMouseMotionAbsolute(unsigned int x, unsigned int y, unsigned int x_extent, unsigned int y_extent)

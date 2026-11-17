@@ -105,6 +105,7 @@ from .fast_data_types import (
 from .keys import keyboard_mode_name, mod_mask
 from .notifications import NotificationManager
 from .options.types import Options
+from .dock_status import schedule_dock_status_update
 from .program_status import ProgramStatus
 from .options.utils import mouse_wheel_buttons
 from .progress import Progress
@@ -1717,6 +1718,8 @@ class Window:
 
                 traceback.print_exc()
         self.screen.focus_changed(focused)
+        # What the user is looking at is left out of the status on the Dock icon
+        schedule_dock_status_update()
         if focused:
             self.last_focused_at = monotonic()
             update_ime_position_for_window(self.id, False, 1)
@@ -1779,6 +1782,7 @@ class Window:
             self.call_watchers(self.watchers.on_program_status_change, {'program_status': self.program_status.as_list()})
         if (tab := self.tabref()) is not None:
             tab.mark_tab_bar_dirty()
+        schedule_dock_status_update()
 
     def icon_changed(self, new_icon: memoryview) -> None:
         pass  # TODO: Implement this
@@ -2379,6 +2383,8 @@ class Window:
             close_event = {'reason': 'window', 'cause': 'closed', 'confirmed': self.close_confirmed}
         self.call_watchers(self.watchers.on_close, dict(close_event))
         self.destroyed = True
+        if self.program_status:
+            schedule_dock_status_update()
         abort_active_streams_from(window_id=self.id)
         if self.clear_progress_timer:
             remove_timer(self.clear_progress_timer)
