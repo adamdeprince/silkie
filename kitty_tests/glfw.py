@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # License: GPL v3 Copyright: 2020, Kovid Goyal <kovid at kovidgoyal.net>
 
+import os
 import sys
 import unittest
 
@@ -126,3 +127,106 @@ class TestGLFW(BaseTest):
         self.ae(run(100), (REPLACED, full_schedule, 8))
         # A short array gets what fits and the count of all
         self.ae(run(-1, capacity=3), (PENDING | GAVE_UP, full_schedule[:3], 8))
+    @unittest.skipIf(is_macos, 'glfw-cocoa.so is not built with backend_utils, see test_cocoa_timer_table_grows')
+    def test_event_loop_tables_grow(self):
+        # The timer and watch tables of the Linux backends used to be fixed arrays of 128 and 64 entries
+        import ctypes
+        import resource
+
+        from kitty.constants import glfw_path
+
+        num_timers, num_watches = 1000, 500
+        # Each watch is a pipe and a callback adds half as many again
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        needed = 3 * num_watches + 256
+        if soft != resource.RLIM_INFINITY and soft < needed:
+            if hard != resource.RLIM_INFINITY and hard < needed:
+                self.skipTest(f'The limit on open files, {hard}, is too low for {num_watches} watched pipes')
+            resource.setrlimit(resource.RLIMIT_NOFILE, (needed, hard))
+            self.addCleanup(resource.setrlimit, resource.RLIMIT_NOFILE, (soft, hard))
+        for module in ('x11', 'wayland'):
+            path = glfw_path(module)
+            if not os.path.exists(path):
+                continue
+            with self.subTest(module=module):
+                f = ctypes.CDLL(path)._glfwTestEventLoopTables
+                f.restype = ctypes.c_char_p
+                f.argtypes = (ctypes.c_size_t, ctypes.c_size_t)
+                err = f(num_timers, num_watches)
+                self.assertIsNone(err, (err or b'').decode())
+
+    @unittest.skipUnless(is_macos, 'macOS only')
+    def test_cocoa_timer_table_grows(self):
+        # The timer table of the Cocoa backend used to be a fixed array of 128 entries.
+        # Run in a child, since this loads glfw-cocoa.so and runs a run loop.
+        import subprocess
+
+        from kitty.constants import kitty_exe
+
+        p = subprocess.run([kitty_exe(), '+runpy', COCOA_TIMERS_SCRIPT], capture_output=True, text=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn('ok', p.stdout, p.stderr)
+
+
+COCOA_TIMERS_SCRIPT = '''
+def main():
+    # +runpy executes this with separate globals and locals, so everything lives in
+    # here, and with -OO, so check() is used instead of assert
+    import ctypes
+    import time
+
+    from kitty.constants import glfw_path
+
+    n = 1000
+    lib = ctypes.CDLL(glfw_path('cocoa'))
+    cf = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+    cf.CFRunLoopRunInMode.restype = ctypes.c_int32
+    cf.CFRunLoopRunInMode.argtypes = (ctypes.c_void_p, ctypes.c_double, ctypes.c_bool)
+    default_mode = ctypes.c_void_p.in_dll(cf, 'kCFRunLoopDefaultMode')
+    cb_type = ctypes.CFUNCTYPE(None, ctypes.c_ulonglong, ctypes.c_void_p)
+    lib.glfwAddTimer.restype = ctypes.c_ulonglong
+    lib.glfwAddTimer.argtypes = (ctypes.c_int64, ctypes.c_bool, cb_type, ctypes.c_void_p, cb_type)
+    lib.glfwRemoveTimer.argtypes = (ctypes.c_ulonglong,)
+    fired, freed, added_in_callback = [], [], []
+
+    def check(ok, *msg):
+        if not ok:
+            raise SystemExit(f'check failed: {msg}')
+
+    def on_timer(timer_id, data):
+        fired.append(data or 0)
+        if data == 1:
+            added_in_callback.extend(add(n + 1 + i) for i in range(n // 2))
+
+    def on_free(timer_id, data):
+        freed.append(data or 0)
+
+    cb, free_cb = cb_type(on_timer), cb_type(on_free)
+
+    def add(data, interval=0, repeats=False):
+        return lib.glfwAddTimer(interval, repeats, cb, data, free_cb)
+
+    def run_until(pred):
+        deadline = time.monotonic() + 30
+        while not pred() and time.monotonic() < deadline:
+            cf.CFRunLoopRunInMode(default_mode, 0.05, False)
+        check(pred(), (len(fired), len(freed)))
+
+    ids = [add(i + 1) for i in range(n)]
+    check(0 not in ids and len(set(ids)) == n)
+    total = n + n // 2
+    run_until(lambda: len(fired) >= total and len(freed) >= total)
+    check(sorted(fired) == list(range(1, total + 1)), sorted(fired)[:10])
+    check(sorted(freed) == sorted(fired))
+    check(len(added_in_callback) == n // 2 and 0 not in added_in_callback)
+    fired.clear(), freed.clear()
+    ids = [add(i + 1, 3600 * 10**9, True) for i in range(n)]
+    check(0 not in ids)
+    for timer_id in ids:
+        lib.glfwRemoveTimer(timer_id)
+    check(sorted(freed) == list(range(1, n + 1)) and not fired)
+    print('ok', flush=True)
+
+
+main()
+'''
