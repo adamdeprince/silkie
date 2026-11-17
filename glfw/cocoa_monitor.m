@@ -184,6 +184,18 @@ endFadeReservation(CGDisplayFadeReservationToken token) {
     }
 }
 
+// The EDID manufacturer and product codes of the monitor, which Core Graphics
+// gives without the EDID: the vendor number is the manufacturer code of EDID
+// bytes 8 and 9, the model number the product code of bytes 10 and 11
+static void
+setMonitorIds(_GLFWmonitor *monitor) {
+    const uint32_t vendor = CGDisplayVendorNumber(monitor->ns.displayID), product = CGDisplayModelNumber(monitor->ns.displayID);
+    // The vendor is kDisplayVendorIDUnknown, 'unkn', which is no 16 bit code, when the system does not know it
+    monitor->has_ids = vendor && vendor <= 0xffff && product <= 0xffff;
+    monitor->vendor_id = monitor->has_ids ? vendor : 0;
+    monitor->product_id = monitor->has_ids ? product : 0;
+}
+
 // Finds and caches the NSScreen corresponding to the specified monitor
 //
 static bool
@@ -301,6 +313,7 @@ _glfwPollMonitorsNS(void) {
             if (disconnected[j] && disconnected[j]->ns.unitNumber == unitNumber) {
                 disconnected[j]->ns.displayID = displays[i];
                 disconnected[j]->ns.screen = screen;
+                setMonitorIds(disconnected[j]);
                 _glfwCreateDisplayLink(displays[i]);
                 disconnected[j] = NULL;
                 break;
@@ -311,15 +324,19 @@ _glfwPollMonitorsNS(void) {
 
         const CGSize size = CGDisplayScreenSize(displays[i]);
         char *name = getDisplayName(displays[i], screen);
+        // The name the system gives the display is the model of the monitor, from its EDID for an external one
+        char *model = name ? _glfw_strdup(name) : NULL;
         if (!name) {
             _glfwInputError(GLFW_PLATFORM_ERROR, "Failed to get name for display, using generic name");
             name = _glfw_strdup("Display with no name");
         }
 
         _GLFWmonitor *monitor = _glfwAllocMonitor(name, (int)size.width, (int)size.height);
+        monitor->model = model;
         monitor->ns.displayID = displays[i];
         monitor->ns.unitNumber = unitNumber;
         monitor->ns.screen = screen;
+        setMonitorIds(monitor);
         _glfwCreateDisplayLink(monitor->ns.displayID);
 
         free(name);

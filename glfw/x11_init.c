@@ -636,6 +636,7 @@ initExtensions(void) {
         glfw_dlsym(_glfw.x11.randr.GetCrtcInfo, _glfw.x11.randr.handle, "XRRGetCrtcInfo");
         glfw_dlsym(_glfw.x11.randr.GetOutputInfo, _glfw.x11.randr.handle, "XRRGetOutputInfo");
         glfw_dlsym(_glfw.x11.randr.GetOutputPrimary, _glfw.x11.randr.handle, "XRRGetOutputPrimary");
+        glfw_dlsym(_glfw.x11.randr.GetOutputProperty, _glfw.x11.randr.handle, "XRRGetOutputProperty");
         glfw_dlsym(_glfw.x11.randr.GetScreenResourcesCurrent, _glfw.x11.randr.handle, "XRRGetScreenResourcesCurrent");
         glfw_dlsym(_glfw.x11.randr.QueryExtension, _glfw.x11.randr.handle, "XRRQueryExtension");
         glfw_dlsym(_glfw.x11.randr.QueryVersion, _glfw.x11.randr.handle, "XRRQueryVersion");

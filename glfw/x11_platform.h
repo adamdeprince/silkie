@@ -70,6 +70,8 @@ typedef int (*PFN_XRRGetCrtcGammaSize)(Display *, RRCrtc);
 typedef XRRCrtcInfo *(*PFN_XRRGetCrtcInfo)(Display *, XRRScreenResources *, RRCrtc);
 typedef XRROutputInfo *(*PFN_XRRGetOutputInfo)(Display *, XRRScreenResources *, RROutput);
 typedef RROutput (*PFN_XRRGetOutputPrimary)(Display *, Window);
+typedef int (*PFN_XRRGetOutputProperty)(
+    Display *, RROutput, Atom, long, long, Bool, Bool, Atom, Atom *, int *, unsigned long *, unsigned long *, unsigned char **);
 typedef XRRScreenResources *(*PFN_XRRGetScreenResourcesCurrent)(Display *, Window);
 typedef Bool (*PFN_XRRQueryExtension)(Display *, int *, int *);
 typedef Status (*PFN_XRRQueryVersion)(Display *, int *, int *);
@@ -87,6 +89,7 @@ typedef int (*PFN_XRRUpdateConfiguration)(XEvent *);
 #define XRRGetCrtcInfo _glfw.x11.randr.GetCrtcInfo
 #define XRRGetOutputInfo _glfw.x11.randr.GetOutputInfo
 #define XRRGetOutputPrimary _glfw.x11.randr.GetOutputPrimary
+#define XRRGetOutputProperty _glfw.x11.randr.GetOutputProperty
 #define XRRGetScreenResourcesCurrent _glfw.x11.randr.GetScreenResourcesCurrent
 #define XRRQueryExtension _glfw.x11.randr.QueryExtension
 #define XRRQueryVersion _glfw.x11.randr.QueryVersion
@@ -456,6 +459,7 @@ typedef struct _GLFWlibraryX11 {
         PFN_XRRGetCrtcInfo GetCrtcInfo;
         PFN_XRRGetOutputInfo GetOutputInfo;
         PFN_XRRGetOutputPrimary GetOutputPrimary;
+        PFN_XRRGetOutputProperty GetOutputProperty;
         PFN_XRRGetScreenResourcesCurrent GetScreenResourcesCurrent;
         PFN_XRRQueryExtension QueryExtension;
         PFN_XRRQueryVersion QueryVersion;

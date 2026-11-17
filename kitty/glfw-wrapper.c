@@ -203,6 +203,9 @@ load_glfw(const char* path) {
     *(void **) (&glfwGetWindowDisplayInfo_impl) = dlsym(handle, "glfwGetWindowDisplayInfo");
     if (glfwGetWindowDisplayInfo_impl == NULL) fail("Failed to load glfw function glfwGetWindowDisplayInfo with error: %s", dlerror());
 
+    *(void **) (&glfwGetWindowMonitorIdentity_impl) = dlsym(handle, "glfwGetWindowMonitorIdentity");
+    if (glfwGetWindowMonitorIdentity_impl == NULL) fail("Failed to load glfw function glfwGetWindowMonitorIdentity with error: %s", dlerror());
+
     *(void **) (&glfwGetDoubleClickInterval_impl) = dlsym(handle, "glfwGetDoubleClickInterval");
     if (glfwGetDoubleClickInterval_impl == NULL) fail("Failed to load glfw function glfwGetDoubleClickInterval with error: %s", dlerror());
 

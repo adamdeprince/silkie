@@ -3086,12 +3086,37 @@ _glfwPlatformGetWindowContentScale(_GLFWwindow *window UNUSED, float *xscale, fl
     if (yscale) *yscale = _glfw.x11.contentScaleY;
 }
 
+// The monitor the window overlaps most, and its video mode
+static _GLFWmonitor *
+windowMonitorX11(_GLFWwindow *window, GLFWvidmode *best) {
+    int wx, wy, ww, wh, best_overlap = -1;
+    GLFWvidmode mode;
+    _GLFWmonitor *best_monitor = NULL;
+    _glfwPlatformGetWindowPos(window, &wx, &wy);
+    _glfwPlatformGetWindowSize(window, &ww, &wh);
+    for (int i = 0; i < _glfw.monitorCount; i++) {
+        int mx, my;
+        if (!_glfwPlatformGetVideoMode(_glfw.monitors[i], &mode)) continue;
+        _glfwPlatformGetMonitorPos(_glfw.monitors[i], &mx, &my);
+        int overlap = MAX(0, MIN(wx + ww, mx + mode.width) - MAX(wx, mx)) * MAX(0, MIN(wy + wh, my + mode.height) - MAX(wy, my));
+        if (overlap > best_overlap) {
+            best_overlap = overlap;
+            if (best) *best = mode;
+            best_monitor = _glfw.monitors[i];
+        }
+    }
+    return best_monitor;
+}
+
+_GLFWmonitor *
+_glfwPlatformGetWindowCurrentMonitor(_GLFWwindow *window) {
+    return windowMonitorX11(window, NULL);
+}
+
 void
 _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
     // The monitor the window overlaps most
-    int wx, wy, ww, wh, best_overlap = -1;
-    GLFWvidmode mode, best = {0};
-    _GLFWmonitor *best_monitor = NULL;
+    GLFWvidmode best = {0};
     info->color = GLFW_DISPLAY_COLOR_RGB;
     XWindowAttributes attributes;
     if (XGetWindowAttributes(_glfw.x11.display, window->x11.handle, &attributes)) {
@@ -3107,19 +3132,7 @@ _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
         }
     }
     info->scale = _glfw.x11.contentScaleX;
-    _glfwPlatformGetWindowPos(window, &wx, &wy);
-    _glfwPlatformGetWindowSize(window, &ww, &wh);
-    for (int i = 0; i < _glfw.monitorCount; i++) {
-        int mx, my;
-        if (!_glfwPlatformGetVideoMode(_glfw.monitors[i], &mode)) continue;
-        _glfwPlatformGetMonitorPos(_glfw.monitors[i], &mx, &my);
-        int overlap = MAX(0, MIN(wx + ww, mx + mode.width) - MAX(wx, mx)) * MAX(0, MIN(wy + wh, my + mode.height) - MAX(wy, my));
-        if (overlap > best_overlap) {
-            best_overlap = overlap;
-            best = mode;
-            best_monitor = _glfw.monitors[i];
-        }
-    }
+    _GLFWmonitor *best_monitor = windowMonitorX11(window, &best);
     if (!best_monitor) return;
     if (best.refreshRate > 0) info->period_us = 1000000u / (unsigned)best.refreshRate;
     if (best_monitor->widthMM > 0 && !best_monitor->physicalSizeAssumed) info->ppi = best.width * 25.4f / best_monitor->widthMM;

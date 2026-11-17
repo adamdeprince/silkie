@@ -2311,6 +2311,41 @@ typedef struct GLFWdisplayinfo {
     float ppi;
 } GLFWdisplayinfo;
 
+/*! @brief What the system says identifies the monitor a window is on.
+ *
+ *  Strings are UTF-8 and NULL when the system does not give them. They, and
+ *  the EDID, belong to GLFW and stay valid until events are next processed.
+ *
+ *  @sa @ref glfwGetWindowMonitorIdentity
+ *
+ *  @ingroup window
+ */
+typedef struct GLFWmonitoridentity {
+    /*! The system's name for the connection, such as DP-7: the RandR output
+     *  on X11, the name of the wl_output or xdg_output on Wayland.
+     */
+    const char *connector;
+    /*! The manufacturer and model as the system gives them: wl_output's
+     *  geometry on Wayland, the screen's localized name as model on macOS.
+     */
+    const char *make, *model;
+    /*! A description of the monitor meant for people, from wl_output or
+     *  xdg_output on Wayland.
+     */
+    const char *description;
+    /*! The EDID of the monitor, where the system gives it (the RandR EDID
+     *  property on X11), with edid_size bytes, otherwise NULL.
+     */
+    const unsigned char *edid;
+    size_t edid_size;
+    /*! The EDID manufacturer and product codes where the system gives them
+     *  without the EDID, as macOS does, when has_ids is set. The manufacturer
+     *  code is the big endian 16 bits of EDID bytes 8 and 9.
+     */
+    unsigned vendor_id, product_id;
+    bool has_ids;
+} GLFWmonitoridentity;
+
 /*! @brief Gamepad input state
  *
  *  This describes the input state of a gamepad.
@@ -2629,6 +2664,10 @@ GFW_EXTERN glfwGetWindowContentScale_func glfwGetWindowContentScale_impl;
 typedef void (*glfwGetWindowDisplayInfo_func)(GLFWwindow*, GLFWdisplayinfo*);
 GFW_EXTERN glfwGetWindowDisplayInfo_func glfwGetWindowDisplayInfo_impl;
 #define glfwGetWindowDisplayInfo glfwGetWindowDisplayInfo_impl
+
+typedef bool (*glfwGetWindowMonitorIdentity_func)(GLFWwindow*, GLFWmonitoridentity*);
+GFW_EXTERN glfwGetWindowMonitorIdentity_func glfwGetWindowMonitorIdentity_impl;
+#define glfwGetWindowMonitorIdentity glfwGetWindowMonitorIdentity_impl
 
 typedef monotonic_t (*glfwGetDoubleClickInterval_func)(GLFWwindow*);
 GFW_EXTERN glfwGetDoubleClickInterval_func glfwGetDoubleClickInterval_impl;

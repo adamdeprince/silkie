@@ -1984,6 +1984,12 @@ _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info) {
     if (monitor->widthMM > 0 && !monitor->physicalSizeAssumed) info->ppi = mode->width * 25.4f / monitor->widthMM;
 }
 
+// The output the window entered first, none until the compositor says
+_GLFWmonitor *
+_glfwPlatformGetWindowCurrentMonitor(_GLFWwindow *window) {
+    return window->wl.monitorsCount ? window->wl.monitors[0] : NULL;
+}
+
 monotonic_t
 _glfwPlatformGetDoubleClickInterval(_GLFWwindow *window UNUSED) {
     return ms_to_monotonic_t(500ll);

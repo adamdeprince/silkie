@@ -497,6 +497,14 @@ struct _GLFWwindow {
 //
 struct _GLFWmonitor {
     const char *name, *description;
+    // What identifies the monitor, see GLFWmonitoridentity, NULL where the system does not say
+    char *make, *model;
+    unsigned char *edid;
+    size_t edid_size;
+    unsigned vendor_id, product_id;
+    bool has_ids;
+    // name is the system's name for the connection, such as DP-7, rather than one made up or meant for people
+    bool nameIsConnector;
     void *userPointer;
 
     // Physical dimensions in millimeters.
@@ -746,6 +754,7 @@ void _glfwInputLiveResize(_GLFWwindow *window, bool started);
 void _glfwPlatformGetWindowFrameSize(_GLFWwindow *window, int *left, int *top, int *right, int *bottom);
 void _glfwPlatformGetWindowContentScale(_GLFWwindow *window, float *xscale, float *yscale);
 void _glfwPlatformGetWindowDisplayInfo(_GLFWwindow *window, GLFWdisplayinfo *info);
+_GLFWmonitor *_glfwPlatformGetWindowCurrentMonitor(_GLFWwindow *window);
 monotonic_t _glfwPlatformGetDoubleClickInterval(_GLFWwindow *window);
 unsigned _glfwPlatformGetPointerInputClasses(void);
 void _glfwPlatformGetKeyboardRepeatDelay(monotonic_t *delay, monotonic_t *interval);

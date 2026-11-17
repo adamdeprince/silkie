@@ -43,10 +43,19 @@ outputHandleGeometry(
     int32_t physicalWidth,
     int32_t physicalHeight,
     int32_t subpixel UNUSED,
-    const char *make UNUSED,
-    const char *model UNUSED,
+    const char *make,
+    const char *model,
     int32_t transform) {
     struct _GLFWmonitor *monitor = data;
+    // Compositors send these again when the output changes, keep the latest
+    if (make) {
+        free(monitor->make);
+        monitor->make = _glfw_strdup(make);
+    }
+    if (model) {
+        free(monitor->model);
+        monitor->model = _glfw_strdup(model);
+    }
     monitor->wl.x = x;
     monitor->wl.y = y;
     monitor->widthMM = physicalWidth;
@@ -107,6 +116,7 @@ outputHandleName(void *data, struct wl_output *output UNUSED, const char *name) 
     if (name) {
         if (monitor->name) free((void *)monitor->name);
         monitor->name = _glfw_strdup(name);
+        monitor->nameIsConnector = true;
     }
 }
 
@@ -178,17 +188,25 @@ xdgOutputHandleDone(void *data, struct zxdg_output_v1 *xdg_output UNUSED) {
     computeXdgFractionalScale(monitor);
 }
 
+// wl_output gives the name and description from its version 4, which is
+// preferred; xdg_output's are taken only from a compositor without that
 static void
 xdgOutputHandleName(void *data, struct zxdg_output_v1 *xdg_output UNUSED, const char *name) {
-    // wl_output already provides the name; skip to avoid duplicate frees.
-    (void)data;
-    (void)name;
+    struct _GLFWmonitor *monitor = data;
+    if (name && wl_output_get_version(monitor->wl.output) < WL_OUTPUT_NAME_SINCE_VERSION) {
+        free((void *)monitor->name);
+        monitor->name = _glfw_strdup(name);
+        monitor->nameIsConnector = true;
+    }
 }
 
 static void
 xdgOutputHandleDescription(void *data, struct zxdg_output_v1 *xdg_output UNUSED, const char *description) {
-    (void)data;
-    (void)description;
+    struct _GLFWmonitor *monitor = data;
+    if (description && wl_output_get_version(monitor->wl.output) < WL_OUTPUT_DESCRIPTION_SINCE_VERSION) {
+        free((void *)monitor->description);
+        monitor->description = _glfw_strdup(description);
+    }
 }
 
 static const struct zxdg_output_v1_listener xdgOutputListener = {
