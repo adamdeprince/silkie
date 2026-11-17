@@ -51,6 +51,22 @@ class ThemeFile(Enum):
 
 
 theme_file_schemes: dict[str, ColorSchemes] = {ThemeFile.dark.value: 'dark', ThemeFile.light.value: 'light', ThemeFile.no_preference.value: 'no_preference'}
+# The built-in light theme, a file in the kitty package, see the automatic_light_theme option
+builtin_light_theme_name = 'builtin-light-theme.conf'
+
+
+@run_once
+def builtin_light_theme_text() -> str:
+    from .constants import read_kitty_resource
+
+    return read_kitty_resource(builtin_light_theme_name).decode('utf-8')
+
+
+def configured_colors_are_default(opts: Options) -> bool:
+    'Whether the colors in opts, as loaded from kitty.conf, are all the default ones'
+    from kitty.options.types import defaults
+
+    return all(getattr(opts, name) == getattr(defaults, name) for name in all_colors)
 
 
 @dataclass
@@ -64,11 +80,42 @@ class AutoTheme:
 
 class ThemeColors:
     applied_theme: Literal['light', 'dark', 'no_preference', ''] = ''
+    # Whether the applied theme is the built-in light theme rather than a theme file
+    applied_builtin_theme: bool = False
+    # Whether the built-in light theme may be used, set from the options loaded
+    # from kitty.conf by update_builtin_light_theme_allowed()
+    builtin_light_theme_allowed: bool = False
     default_colors: ColorsSpec | None = None
     default_background_image_options: BackgroundImageOptions | None = None
 
     def __init__(self) -> None:
         self.themes: dict[ColorSchemes, AutoTheme] = {'dark': AutoTheme(), 'light': AutoTheme(), 'no_preference': AutoTheme()}
+        self.builtin_light_theme: ColorsSpec | None = None
+
+    def update_builtin_light_theme_allowed(self, opts: Options) -> None:
+        # The built-in light theme is a replacement for the default colors, so
+        # it is not used when kitty.conf sets colors of its own, for instance by
+        # including a theme. opts must not have had any theme applied to it.
+        self.builtin_light_theme_allowed = opts.automatic_light_theme and configured_colors_are_default(opts)
+
+    def get_builtin_light_theme(self) -> ColorsSpec:
+        if self.builtin_light_theme is None:
+            self.builtin_light_theme = self.parse_colors(builtin_light_theme_text().splitlines())[0]
+        return self.builtin_light_theme
+
+    def theme_for(self, scheme: ColorSchemes) -> AutoTheme | None:
+        """
+        The theme to use for the specified system color scheme, a theme file if
+        present, otherwise the built-in light theme for the light scheme, when
+        allowed. The built-in theme has an mtime of -1 and changes neither the
+        transparent background colors nor the background image.
+        """
+        theme = self.themes[scheme]
+        if theme.mtime > -1:
+            return theme
+        if scheme == 'light' and self.builtin_light_theme_allowed:
+            return AutoTheme(spec=self.get_builtin_light_theme())
+        return None
 
     def get_default_colors(self) -> ColorsSpec:
         if self.default_colors is None:
@@ -134,7 +181,11 @@ class ThemeColors:
 
     @property
     def has_applied_theme(self) -> bool:
-        return self.applied_theme != '' and self.themes[self.applied_theme].mtime > -1
+        return self.applied_theme != '' and (self.applied_builtin_theme or self.themes[self.applied_theme].mtime > -1)
+
+    @property
+    def has_theme_file(self) -> bool:
+        return any(t.mtime > -1 for t in self.themes.values())
 
     @property
     def has_dark_theme(self) -> bool:
@@ -151,18 +202,24 @@ class ThemeColors:
     def patch_opts(self, opts: Options, debug_rendering: bool = False) -> None:
         from .utils import log_error
 
+        self.update_builtin_light_theme_allowed(opts)
+        if not self.has_theme_file and not self.builtin_light_theme_allowed:
+            return  # no need to query the system
         if debug_rendering:
             log_error('Querying system for current color scheme')
         which = glfw_get_system_color_theme()
         if debug_rendering:
             log_error('Current system color scheme:', which)
-        theme = self.themes[which]
-        if theme.mtime > -1:
-            patch_options_with_color_spec(opts, theme.spec, theme.tbc, background_image_options=theme.background_image_options)
+        if (theme := self.theme_for(which)) is not None:
+            is_builtin = theme.mtime < 0
+            if is_builtin:
+                patch_options_with_color_spec(opts, theme.spec, None)
+            else:
+                patch_options_with_color_spec(opts, theme.spec, theme.tbc, background_image_options=theme.background_image_options)
             patch_global_colors(theme.spec, True)
-            self.applied_theme = which
+            self.applied_theme, self.applied_builtin_theme = which, is_builtin
             if debug_rendering:
-                log_error(f'Applied {self.applied_theme} color theme')
+                log_error(f'Applied {"built-in " if is_builtin else ""}{self.applied_theme} color theme')
 
     def on_system_color_scheme_change(self, new_value: ColorSchemes, is_initial_value: bool = False) -> bool:
         if is_initial_value:
@@ -176,19 +233,33 @@ class ThemeColors:
         # always re-read so that ones created or deleted since the last refresh
         # are picked up.
         self.refresh()
+        self.update_builtin_light_theme_allowed(get_options())
+        # The colors are now those from kitty.conf, nothing to remove
+        self.applied_builtin_theme = False
         if not self.apply_theme(glfw_get_system_color_theme(), notify_on_bg_change=False):
             self.applied_theme = ''
 
     def apply_theme(self, new_value: ColorSchemes, notify_on_bg_change: bool = True) -> bool:
         from .utils import log_error
 
-        theme = self.themes[new_value]
-        if theme.mtime < 0:
-            return False
-        patch_colors(theme.spec, theme.tbc, True, notify_on_bg_change=notify_on_bg_change, background_image_options=theme.background_image_options)
-        self.applied_theme = new_value
+        if (theme := self.theme_for(new_value)) is None:
+            if not self.applied_builtin_theme:
+                return False
+            # Remove the built-in light theme, it is only used when kitty.conf has the
+            # default colors, so restore those
+            patch_colors(self.get_default_colors(), None, True, notify_on_bg_change=notify_on_bg_change)
+            self.applied_theme, self.applied_builtin_theme = '', False
+            if get_boss().args.debug_rendering:
+                log_error(f'Removed the built-in light color theme for {new_value}')
+            return True
+        is_builtin = theme.mtime < 0
+        if is_builtin:
+            patch_colors(theme.spec, None, True, notify_on_bg_change=notify_on_bg_change)
+        else:
+            patch_colors(theme.spec, theme.tbc, True, notify_on_bg_change=notify_on_bg_change, background_image_options=theme.background_image_options)
+        self.applied_theme, self.applied_builtin_theme = new_value, is_builtin
         if get_boss().args.debug_rendering:
-            log_error(f'Applied color theme {new_value}')
+            log_error(f'Applied {"built-in " if is_builtin else ""}color theme {new_value}')
         return True
 
 

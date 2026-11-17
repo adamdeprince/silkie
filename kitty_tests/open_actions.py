@@ -209,6 +209,190 @@ action two
                 self.assertTrue(tc.has_light_theme)
                 self.assertFalse(tc.has_dark_theme)
 
+    def test_builtin_light_theme_palette(self):
+        from kitty.colors import ThemeColors, builtin_light_theme_text, parse_colors
+        from kitty.config import parse_config
+
+        def luminance(c: int) -> float:
+            def lin(v: int) -> float:
+                x = v / 255
+                return x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4
+
+            return 0.2126 * lin((c >> 16) & 0xFF) + 0.7152 * lin((c >> 8) & 0xFF) + 0.0722 * lin(c & 0xFF)
+
+        def contrast(a: int, b: int) -> float:
+            la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+            return (la + 0.05) / (lb + 0.05)
+
+        self.set_options()
+        text = builtin_light_theme_text()
+        # every line in the file is a valid color setting
+        lines = [x for x in text.splitlines() if x.strip() and not x.lstrip().startswith('#')]
+        conf = parse_config(lines)
+        for line in lines:
+            self.assertIn(line.split()[0], conf, line)
+        spec = parse_colors((text.splitlines(),))[0]
+        self.ae(len(spec), len(lines))
+        bg = spec['background']
+        self.assertGreaterEqual(contrast(spec['foreground'], bg), 7)
+        # all 16 ANSI colors meet WCAG AA for text on the background
+        for i in range(16):
+            c = spec[f'color{i}']
+            self.assertGreaterEqual(contrast(c, bg), 4.5, f'color{i}: #{c:06x} has contrast {contrast(c, bg):.2f}')
+        self.assertGreaterEqual(contrast(spec['url_color'], bg), 4.5)
+        self.assertGreaterEqual(contrast(spec['selection_foreground'], spec['selection_background']), 7)
+        self.assertGreaterEqual(contrast(spec['active_tab_foreground'], spec['active_tab_background']), 7)
+        self.assertGreaterEqual(contrast(spec['inactive_tab_foreground'], spec['inactive_tab_background']), 4.5)
+        # the theme as applied resets everything else to the defaults
+        full = ThemeColors().get_builtin_light_theme()
+        self.ae(full['background'], bg)
+        self.ae(full['color16'], ThemeColors().get_default_colors()['color16'])
+
+    def test_builtin_light_theme(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from kitty.colors import ThemeColors, ThemeFile
+        from kitty.fast_data_types import Color, get_options
+
+        builtin_bg, default_bg = 0xF6F4EF, 0
+        boss = SimpleNamespace(args=SimpleNamespace(debug_rendering=False))
+        system_scheme = ['light']
+        with (
+            tempfile.TemporaryDirectory() as config_dir,
+            patch('kitty.colors.config_dir', config_dir),
+            patch('kitty.colors.config_dir_files_ignored', return_value=False),
+            patch('kitty.colors.get_boss', return_value=boss),
+            patch('kitty.colors.glfw_get_system_color_theme', side_effect=lambda *a: system_scheme[0]) as query,
+            patch('kitty.colors.patch_colors') as apply,
+        ):
+
+            def applied(bg: int) -> None:
+                apply.assert_called_once()
+                self.ae(apply.call_args.args[0]['background'], bg)
+                if bg in (builtin_bg, default_bg):
+                    # the built-in theme leaves transparent background colors and the background image alone
+                    self.assertIsNone(apply.call_args.args[1])
+                    self.assertIsNone(apply.call_args.kwargs.get('background_image_options'))
+                self.assertTrue(apply.call_args.args[2], 'theme not applied as the configured colors')
+                apply.reset_mock()
+
+            def switch(scheme: str) -> bool:
+                system_scheme[0] = scheme
+                return tc.on_system_color_scheme_change(scheme)  # type: ignore
+
+            # No theme files: switching the system scheme applies and removes the built-in theme
+            self.set_options()
+            tc = ThemeColors()
+            tc.on_config_reload()
+            applied(builtin_bg)
+            self.ae((tc.applied_theme, tc.applied_builtin_theme, tc.has_applied_theme), ('light', True, True))
+            self.assertTrue(switch('dark'))
+            applied(default_bg)
+            self.ae((tc.applied_theme, tc.applied_builtin_theme), ('', False))
+            self.assertFalse(switch('no_preference'))
+            apply.assert_not_called()
+            self.assertTrue(switch('light'))
+            applied(builtin_bg)
+            self.assertTrue(switch('no_preference'))
+            applied(default_bg)
+            self.assertFalse(switch('dark'))
+            apply.assert_not_called()
+
+            # A user light theme file always wins
+            switch('light')
+            applied(builtin_bg)
+            path = os.path.join(config_dir, ThemeFile.light.value)
+            with open(path, 'w') as f:
+                f.write('background #abcdef\n')
+            self.assertTrue(switch('light'))
+            applied(0xABCDEF)
+            self.ae((tc.applied_theme, tc.applied_builtin_theme), ('light', False))
+            # Switching away from a user theme file is unchanged: nothing to remove
+            self.assertFalse(switch('dark'))
+            apply.assert_not_called()
+            os.unlink(path)
+            # A user dark theme file with no light one: built-in light, then the dark file
+            with open(os.path.join(config_dir, ThemeFile.dark.value), 'w') as f:
+                f.write('background #111111\n')
+            self.assertTrue(switch('light'))
+            applied(builtin_bg)
+            self.assertTrue(switch('dark'))
+            applied(0x111111)
+            self.ae((tc.applied_theme, tc.applied_builtin_theme), ('dark', False))
+            os.unlink(os.path.join(config_dir, ThemeFile.dark.value))
+
+            # Config reload re-evaluates with the reloaded colors
+            switch('light')
+            applied(builtin_bg)
+            tc.on_config_reload()
+            applied(builtin_bg)
+
+            # The option turned off restores the old behavior: nothing happens without theme files
+            for opts in ({'automatic_light_theme': False}, {'background': Color(1, 2, 3)}, {'color1': Color(1, 2, 3)}):
+                self.set_options(opts)
+                tc = ThemeColors()
+                system_scheme[0] = 'light'
+                tc.on_config_reload()
+                apply.assert_not_called()
+                self.assertFalse(switch('dark'))
+                self.assertFalse(switch('light'))
+                apply.assert_not_called()
+                self.ae(tc.applied_theme, '')
+
+            # Startup
+            for scheme, enabled, expected_bg in (('light', True, builtin_bg), ('dark', True, default_bg), ('light', False, default_bg)):
+                opts = self.set_options({'automatic_light_theme': enabled})
+                tc = ThemeColors()
+                system_scheme[0] = scheme
+                query.reset_mock()
+                tc.refresh()
+                tc.patch_opts(opts)
+                self.ae(int(opts.background), expected_bg)
+                self.ae(tc.applied_builtin_theme, expected_bg == builtin_bg)
+                if not enabled:
+                    query.assert_not_called()  # no theme files and nothing to do, so the system is not queried
+            self.ae(int(get_options().background), default_bg)
+
+    def test_builtin_light_theme_keeps_program_colors(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from kitty.colors import ThemeColors
+        from kitty.fast_data_types import COLOR_LAYER_OVERRIDE, patch_color_profiles
+
+        s = self.create_screen()
+        s.color_profile.reload_from_opts(self.set_options())
+        window = SimpleNamespace(id=1, screen=s, refresh=lambda *a, **k: None)
+        boss = SimpleNamespace(
+            args=SimpleNamespace(debug_rendering=False), all_windows=[window], all_tab_managers=[], default_bg_changed_for=lambda *a: None
+        )
+        system_scheme = ['dark']
+        with (
+            patch('kitty.colors.config_dir_files_ignored', return_value=True),
+            patch('kitty.colors.get_boss', return_value=boss),
+            patch('kitty.colors.glfw_get_system_color_theme', side_effect=lambda *a: system_scheme[0]),
+        ):
+            tc = ThemeColors()
+            tc.on_config_reload()
+            cp = s.color_profile
+            self.ae((int(cp.default_fg), int(cp.default_bg)), (0xDDDDDD, 0))
+            # the program sets the background color and a palette color
+            patch_color_profiles({'background': 0x123456}, None, (cp,), COLOR_LAYER_OVERRIDE)
+            cp.set_color(4, 0x010203)
+            self.ae(int(cp.default_bg), 0x123456)
+            for scheme, fg, color5 in (('light', 0x2B2F36, 0x8E3A9E), ('dark', 0xDDDDDD, 0xCB1ED1), ('light', 0x2B2F36, 0x8E3A9E)):
+                system_scheme[0] = scheme
+                self.assertTrue(tc.on_system_color_scheme_change(scheme))  # type: ignore
+                self.ae(int(cp.default_fg), fg)
+                self.ae(cp.as_dict()['color5'], color5)
+                self.ae(int(cp.default_bg), 0x123456, f'program color lost when switching to {scheme}')
+                self.ae(cp.as_dict()['color4'], 0x010203, f'program color lost when switching to {scheme}')
+            # resetting the program color reveals the theme color
+            cp.reset_color(4)
+            self.ae(cp.as_dict()['color4'], 0x2A5BB0)
+
     def test_mime_cache(self):
         import shutil
         import subprocess

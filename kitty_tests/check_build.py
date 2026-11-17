@@ -179,6 +179,11 @@ class TestBuild(BaseTest):
         if getattr(sys, 'frozen', False):
             self.assertTrue(os.path.isdir(local_docs()), f'Local docs: {local_docs()}')
 
+    def test_builtin_light_theme_is_packaged(self) -> None:
+        from kitty.colors import builtin_light_theme_text
+
+        self.assertIn('background', builtin_light_theme_text())
+
     def test_ca_certificates(self):
         import ssl
 
