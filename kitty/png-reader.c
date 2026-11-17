@@ -149,7 +149,7 @@ read_png_warn_handler(png_structp UNUSED png_ptr, png_const_charp msg) {
     }
 
 void
-inflate_png_inner(png_read_data *d, const uint8_t *buf, size_t bufsz, int max_image_dimension) {
+inflate_png_inner_limited(png_read_data *d, const uint8_t *buf, size_t bufsz, int max_image_dimension) {
     struct fake_file f = {.buf = buf, .sz = bufsz};
     png_structp png = NULL;
     png_infop info = NULL;
@@ -166,12 +166,14 @@ inflate_png_inner(png_read_data *d, const uint8_t *buf, size_t bufsz, int max_im
     if (setjmp(eh.jb)) goto err;
 
     png_set_read_fn(png, &f, read_png_from_buffer);
+    // libpng refuses images wider or taller than a million pixels unless told
+    // otherwise. The PNG format allows 2^31 - 1, the memory needed is checked below.
+    png_set_user_limits(png, 0x7fffffff, 0x7fffffff);
     png_read_info(png, info);
     png_byte color_type, bit_depth;
     d->width = png_get_image_width(png, info);
     d->height = png_get_image_height(png, info);
-    // libpng uses too much memory for overly large images
-    if (d->width > max_image_dimension || d->height > max_image_dimension) { ABRT(ENOMEM, "PNG image is too large"); }
+    if (max_image_dimension > 0 && (d->width > max_image_dimension || d->height > max_image_dimension)) { ABRT(ENOMEM, "PNG image is too large"); }
     color_type = png_get_color_type(png, info);
     bit_depth = png_get_bit_depth(png, info);
     double image_gamma;
@@ -266,13 +268,23 @@ inflate_png_inner(png_read_data *d, const uint8_t *buf, size_t bufsz, int max_im
     if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA) png_set_gray_to_rgb(png);
     png_read_update_info(png, info);
 
-    png_uint_32 rowbytes = png_get_rowbytes(png, info);
-    d->sz = sizeof(png_byte) * rowbytes * d->height;
-    d->decompressed = malloc(d->sz + 16);
-    if (d->decompressed == NULL) ABRT(ENOMEM, "Out of memory allocating decompression buffer for PNG");
-    d->row_pointers = malloc(d->height * sizeof(png_bytep));
-    if (d->row_pointers == NULL) ABRT(ENOMEM, "Out of memory allocating row_pointers buffer for PNG");
-    for (size_t i = 0; i < (size_t)d->height; i++) d->row_pointers[i] = d->decompressed + i * rowbytes * sizeof(png_byte);
+    // a row of an image as wide as PNG allows is more than 32 bits can count
+    const size_t rowbytes = png_get_rowbytes(png, info);
+    size_t alloc_sz, pointers_sz;
+    if (__builtin_mul_overflow(rowbytes, (size_t)d->height, &d->sz) || __builtin_add_overflow(d->sz, (size_t)16, &alloc_sz) ||
+        __builtin_mul_overflow((size_t)d->height, sizeof(png_bytep), &pointers_sz))
+        ABRT(EOVERFLOW, "PNG image dimensions overflow address space");
+    d->decompressed = malloc(alloc_sz);
+    if (d->decompressed == NULL) {
+        d->out_of_memory = true;
+        ABRT(ENOMEM, "Out of memory allocating decompression buffer for PNG");
+    }
+    d->row_pointers = malloc(pointers_sz);
+    if (d->row_pointers == NULL) {
+        d->out_of_memory = true;
+        ABRT(ENOMEM, "Out of memory allocating row_pointers buffer for PNG");
+    }
+    for (size_t i = 0; i < (size_t)d->height; i++) d->row_pointers[i] = d->decompressed + i * rowbytes;
     png_read_image(png, d->row_pointers);
 
     if (colorspace_transform) {
@@ -425,7 +437,8 @@ load_png_data(PyObject *self UNUSED, PyObject *args) {
     const char *data;
     if (!PyArg_ParseTuple(args, "s#", &data, &sz)) return NULL;
     png_read_data d = {.err_handler = png_error_handler};
-    inflate_png_inner(&d, (const uint8_t *)data, sz, 10000);
+    inflate_png_inner(&d, (const uint8_t *)data, sz);
+
     PyObject *ans = NULL;
     if (d.ok && !PyErr_Occurred()) {
         ans = Py_BuildValue("y#ii", d.decompressed, (Py_ssize_t)d.sz, d.width, d.height);

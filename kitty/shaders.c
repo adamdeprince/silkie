@@ -90,6 +90,9 @@ typedef struct {
 
 static const SpriteMap NEW_SPRITE_MAP = {.xnum = 1, .ynum = 1, .last_num_of_layers = 1, .last_ynum = -1};
 static GLint max_texture_size = 0, max_array_texture_layers = 0;
+// The largest texture of the GPU, as it reports it: max_texture_size is that of
+// the sprite atlas, which the tests change
+static GLint gl_max_texture_size = 0;
 
 static GLfloat
 srgb_color(uint8_t color) {
@@ -427,6 +430,12 @@ query_gpu_texture_limits(void) {
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &(max_texture_size));
     glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &(max_array_texture_layers));
 #ifdef __APPLE__
+    // An image larger than this is drawn from tiles of at most this size, see graphics.c
+    gl_max_texture_size = MIN(8192, max_texture_size);
+#else
+    gl_max_texture_size = max_texture_size;
+#endif
+#ifdef __APPLE__
     // Since on Apple we could have multiple GPUs, with different capabilities,
     // upper bound the values according to the data from https://developer.apple.com/graphicsimaging/opengl/capabilities/
     max_texture_size = MIN(8192, max_texture_size);
@@ -739,6 +748,108 @@ send_encoded_image_to_gpu(GLuint *tex_id, const void *data, GLsizei width, GLsiz
 #endif
 }
 
+// Images larger than a texture {{{
+// The largest texture an image can have, 0 until a GPU context has told
+unsigned
+gpu_image_texture_limit(void) {
+    return gl_max_texture_size > 0 ? (unsigned)gl_max_texture_size : 0;
+}
+
+typedef struct {
+    GLint internal_format;
+    GLenum format, type;
+    unsigned px_sz;
+    bool is_integer;
+} TileFormatInfo;
+
+// The formats are those of send_image_to_gpu(), send_encoded_image_to_gpu()
+// and send_indexed_image_to_gpu(), with RGB always as RGBA, so that the apron
+// round a tile at the edge of the image can be transparent as the border of
+// an image in one texture is. All are required, filterable and color
+// renderable, so that glGenerateMipmap() works, in the desktop OpenGL 3.1 and
+// later that Silkie uses, except the integer ones, which are never filtered.
+static TileFormatInfo
+tile_format_info(unsigned format) {
+    switch ((ImageTileFormat)format) {
+        case TILE_HALF: return (TileFormatInfo){GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, 8, false};
+        case TILE_LINEAR8: return (TileFormatInfo){GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, 4, false};
+        case TILE_GRAY16: return (TileFormatInfo){GL_R16, GL_RED, GL_UNSIGNED_SHORT, 2, false};
+        case TILE_RGB10A2: return (TileFormatInfo){GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, 4, false};
+        case TILE_RGBA16: return (TileFormatInfo){GL_RGBA16, GL_RGBA, GL_UNSIGNED_SHORT, 8, false};
+        case TILE_INDEX8: return (TileFormatInfo){GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 1, true};
+        case TILE_INDEX_ALPHA8: return (TileFormatInfo){GL_RG8UI, GL_RG_INTEGER, GL_UNSIGNED_BYTE, 2, true};
+        case TILE_SRGB8: break;
+    }
+    return (TileFormatInfo){GL_SRGB8_ALPHA8, GL_RGBA, GL_UNSIGNED_BYTE, 4, false};
+}
+
+// Makes a texture for a tile, its pixels yet to be sent. Every tile has an
+// apron of a pixel all round, so its texture is clamped to its edge. False
+// when the GPU has no memory for it.
+bool
+alloc_image_tile_texture(GLuint *tex_id, GLsizei width, GLsizei height, unsigned format) {
+    const TileFormatInfo f = tile_format_info(format);
+    while (glGetError() != GL_NO_ERROR);  // so that an error after the allocation is the allocation's
+    if (!(*tex_id)) glGenTextures(1, tex_id);
+    glBindTexture(GL_TEXTURE_2D, *tex_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f.is_integer ? GL_NEAREST : GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f.is_integer ? GL_NEAREST : GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, f.is_integer ? 0 : 1000);
+    glTexImage2D(GL_TEXTURE_2D, 0, f.internal_format, width, height, 0, f.format, f.type, NULL);
+    if (glGetError() == GL_OUT_OF_MEMORY) {
+        free_texture(tex_id);
+        return false;
+    }
+    return true;
+}
+
+// Sends rows of a tile, from row y of its texture on, the words in the byte order of the host
+void
+upload_image_tile_rows(GLuint tex_id, GLint y, GLsizei width, GLsizei rows, unsigned format, const void *data) {
+    const TileFormatInfo f = tile_format_info(format);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    // the wire words of the high precision formats are little-endian, as in send_encoded_image_to_gpu()
+    const bool swap = format == TILE_GRAY16 || format == TILE_RGB10A2 || format == TILE_RGBA16;
+    if (swap) glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
+#endif
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, width, rows, f.format, f.type, data);
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    if (swap) glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
+#endif
+}
+
+// Trilinear filtering of an image drawn smaller than it is: without mipmaps
+// the GPU reads only the pixels round the center of each fragment, and a
+// large image drawn small aliases
+void
+generate_image_texture_mipmaps(GLuint tex_id) {
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+}
+
+// A level of the mipmaps of an integer texture of indices, made on the CPU as the GPU cannot make them
+void
+upload_index_texture_level(GLuint tex_id, GLint level, GLsizei width, GLsizei height, unsigned bytes_per_pixel, const void *data) {
+    const bool has_alpha = bytes_per_pixel == 2;
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, level, has_alpha ? GL_RG8UI : GL_R8UI, width, height, 0, has_alpha ? GL_RG_INTEGER : GL_RED_INTEGER, GL_UNSIGNED_BYTE, data);
+}
+
+// The levels the shader can read, all of them defined, so that the texture is complete for texelFetch() at any of them
+void
+finish_index_texture_mipmaps(GLuint tex_id, GLint max_level) {
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, max_level);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, max_level ? GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST);
+}
+// }}}
+
 // Copies a texture backed by a GPU surface, a rectangle texture on macOS and a 2D one on Linux, into an image texture
 void
 copy_surface_texture_to_texture(bool rectangle, GLuint source_tex_id, GLuint *tex_id, GLsizei width, GLsizei height) {
@@ -806,6 +917,8 @@ send_indexed_image_to_gpu(GLuint *tex_id, const void *data, GLsizei width, GLsiz
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // the mipmaps made for an earlier upload, if any, are of other pixels
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
     const bool has_alpha = bytes_per_pixel == 2;
     glTexImage2D(GL_TEXTURE_2D, 0, has_alpha ? GL_RG8UI : GL_R8UI, width, height, 0, has_alpha ? GL_RG_INTEGER : GL_RED_INTEGER, GL_UNSIGNED_BYTE, data);
 }
@@ -1969,12 +2082,15 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
     const GLint image_decode_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_decode") : -1;
     const GLint image_is_gray_loc = has_texture_uniforms ? try_program_uniform_location(program, "image_is_gray") : -1;
     const GLint filter_decoded_loc = has_texture_uniforms ? try_program_uniform_location(program, "filter_decoded") : -1;
+    const GLint linear_texture_loc = has_texture_uniforms ? try_program_uniform_location(program, "linear_texture") : -1;
     const unsigned viewport_width = get_gpu_viewport().width;
     if (output_gamut_loc >= 0) glUniform1ui(output_gamut_loc, current_output_gamut);
     // Indexed color images have alpha or not, palette images have it in their palettes
     const bool is_indexed = program == GRAPHICS_INDEXED_PROGRAM || program == GRAPHICS_INDEXED_UNSCALED_PROGRAM;
     const bool is_palette = program == GRAPHICS_PALETTE_PROGRAM || program == GRAPHICS_PALETTE_UNSCALED_PROGRAM;
     const GLint has_alpha_loc = is_indexed ? program_uniform_location(program, "has_alpha") : -1;
+    // the scaled variants pick a mipmap level of an integer texture themselves, when it has any
+    const GLint max_lod_loc = program == GRAPHICS_INDEXED_PROGRAM || program == GRAPHICS_PALETTE_PROGRAM ? try_program_uniform_location(program, "max_lod") : -1;
     for (GLuint i = 0; i < count;) {
         ImageRenderData *group = data + start + i;
         if (is_palette) {
@@ -1989,9 +2105,17 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
         if (image_is_gray_loc >= 0) glUniform1ui(image_is_gray_loc, group->is_gray);
         // the same for the whole group, as refs drawn at their natural size are grouped apart from scaled ones
         if (filter_decoded_loc >= 0) glUniform1ui(filter_decoded_loc, group->filter_decoded);
+        // the decoded pixels of an image, or of a tile of it, see "Mipmaps for decoded images" in graphics.c
+        if (linear_texture_loc >= 0) glUniform1ui(linear_texture_loc, group->linear_texture);
         if (has_alpha_loc > -1) glUniform1ui(has_alpha_loc, group->indexed_px_sz == 2);
+        if (max_lod_loc > -1) glUniform1ui(max_lod_loc, group->mip_levels);
         if (group->group_count == 0) {
             i++;
+            continue;
+        }
+        if (!group->texture_id) {
+            // a tile of an image that could not be uploaded, there is nothing to draw
+            i += group->group_count;
             continue;
         }
         for (GLuint k = 0; k < group->group_count; k++, i++) {

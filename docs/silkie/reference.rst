@@ -49,6 +49,7 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
    packed-image-protocol
    palette-image-protocol
    precision-image-protocol
+   image-tiling
    gpu-surface-protocol
    hdr-protocol
    wide-gamut-protocol

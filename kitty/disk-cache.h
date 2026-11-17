@@ -21,6 +21,8 @@ void *read_from_disk_cache(PyObject *self_, const void *key, size_t key_sz, void
 PyObject *read_from_disk_cache_python(PyObject *self_, const void *key, size_t key_sz, bool);
 bool disk_cache_wait_for_write(PyObject *self, monotonic_t timeout);
 size_t disk_cache_total_size(PyObject *self);
+// Reads count rows of row_sz bytes, stride bytes apart from offset on, of an entry into dest
+bool read_rows_from_disk_cache(PyObject *self, const void *key, size_t key_sz, size_t offset, size_t row_sz, size_t stride, size_t count, void *dest);
 size_t disk_cache_size_on_disk(PyObject *self);
 size_t disk_cache_num_cached_in_ram(PyObject *self_);
 

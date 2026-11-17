@@ -107,7 +107,9 @@ wire encodings, independent of the display's color model.
 palette of RGBA colors that can be replaced without resending the pixels. Send
 16-bit gray, RGB10A2 and 16-bit RGBA at their full precision, encoded with
 sRGB, linear, PQ or HLG, so that HDR10 frames go to the GPU as they are; see
-:doc:`precision-image-protocol`.
+:doc:`precision-image-protocol`. Images of any size are drawn, from tiles when they
+are larger than a GPU texture, with mipmaps when shown smaller than they are,
+and stay without a storage quota; see :doc:`image-tiling`.
 
 Color beyond ordinary SDR
 ~~~~~~~~~~~~~~~~~~~~~~~~~

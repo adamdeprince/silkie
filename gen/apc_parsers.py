@@ -20,7 +20,7 @@ KeymapType = dict[str, tuple[str, Union[frozenset[str], str]]]
 def resolve_keys(keymap: KeymapType) -> DefaultDict[str, list[str]]:
     ans: DefaultDict[str, list[str]] = defaultdict(list)
     for ch, (attr, atype) in keymap.items():
-        if isinstance(atype, str) and atype in ('int', 'uint'):
+        if isinstance(atype, str) and atype in ('int', 'uint', 'uint64'):
             q = atype
         else:
             q = 'flag'
@@ -42,7 +42,7 @@ def enum(keymap: KeymapType) -> str:
 def parse_key(keymap: KeymapType) -> str:
     lines = []
     for attr, atype in keymap.values():
-        vs = atype.upper() if isinstance(atype, str) and atype in ('uint', 'int') else 'FLAG'
+        vs = atype.upper() if isinstance(atype, str) and atype in ('uint', 'int', 'uint64') else 'FLAG'
         lines.append(f'case {attr}: value_state = {vs}; break;')
     return '        \n'.join(lines)
 
@@ -84,16 +84,17 @@ def parse_flag(keymap: KeymapType, type_map: dict[str, Any], command_class: str)
     return '        \n'.join(lines)
 
 
-def parse_number(keymap: KeymapType) -> tuple[str, str]:
+def parse_number(keymap: KeymapType) -> tuple[str, str, str]:
     int_keys = [f'I({attr})' for attr, atype in keymap.values() if atype == 'int']
     uint_keys = [f'U({attr})' for attr, atype in keymap.values() if atype == 'uint']
-    return '; '.join(int_keys), '; '.join(uint_keys)
+    uint64_keys = [f'L({attr})' for attr, atype in keymap.values() if atype == 'uint64']
+    return '; '.join(int_keys), '; '.join(uint_keys), '; '.join(uint64_keys)
 
 
 def cmd_for_report(report_name: str, keymap: KeymapType, type_map: dict[str, Any], payload_allowed: bool, payload_is_base64: bool) -> str:
     def group(atype: str, conv: str) -> tuple[str, str]:
         flag_fmt, flag_attrs = [], []
-        cv = {'flag': 'c', 'int': 'i', 'uint': 'I'}[atype]
+        cv = {'flag': 'c', 'int': 'i', 'uint': 'I', 'uint64': 'K'}[atype]
         for ch in type_map[atype]:
             flag_fmt.append(f's{cv}')
             attr = keymap[ch][0]
@@ -103,8 +104,9 @@ def cmd_for_report(report_name: str, keymap: KeymapType, type_map: dict[str, Any
     flag_fmt, flag_attrs = group('flag', '')
     int_fmt, int_attrs = group('int', '(int)')
     uint_fmt, uint_attrs = group('uint', '(unsigned int)')
+    uint64_fmt, uint64_attrs = group('uint64', '(unsigned long long)')
 
-    fmt = f'{flag_fmt} {uint_fmt} {int_fmt}'
+    fmt = f'{flag_fmt} {uint_fmt} {uint64_fmt} {int_fmt}'.replace('  ', ' ')
     if payload_allowed:
         ans = [f'REPORT_VA_COMMAND("K s {{{fmt} ss#}}", self->window_id, "{report_name}",\n']
     else:
@@ -113,6 +115,8 @@ def cmd_for_report(report_name: str, keymap: KeymapType, type_map: dict[str, Any
         ans.append(f'{flag_attrs},\n')
     if uint_attrs:
         ans.append(f'{uint_attrs},\n')
+    if uint64_attrs:
+        ans.append(f'{uint64_attrs},\n')
     if int_attrs:
         ans.append(f'{int_attrs},\n')
     if payload_allowed:
@@ -141,7 +145,29 @@ def generate(
     keys_enum = enum(keymap)
     handle_key = parse_key(keymap)
     flag_keys = parse_flag(keymap, type_map, command_class)
-    int_keys, uint_keys = parse_number(keymap)
+    int_keys, uint_keys, uint64_keys = parse_number(keymap)
+    # Keys whose values are 64 bit unsigned integers: any number of digits, refused when the value does not fit in
+    # 64 bits rather than truncated. A value below 2^32 means what it does as a 32 bit key.
+    uint64_state = ', UINT64' if uint64_keys else ''
+    uint64_case = f'''
+            case UINT64:
+                for (i = pos, lcode = 0; i < parser_buf_pos; i++) {{
+                    uint8_t n = parser_buf[i] - '0'; if (n > 9) break;
+                    if (lcode > (UINT64_MAX - n) / 10) {{ REPORT_ERROR("Malformed {command_class} control block, number is too large"); return; }}
+                    lcode = lcode * 10 + n;
+                }}
+                if (i == pos) {{ REPORT_ERROR("Malformed {command_class} control block, expecting an integer value for key: %c", key & 0xFF); return; }}
+                pos = i;
+#define L(x) case x: g.x = lcode; break
+                switch(key) {{
+                    {uint64_keys};
+                    default: break;
+                }}
+                state = AFTER_VALUE;
+                break;
+#undef L
+''' if uint64_keys else ''
+    uint64_end = '\n        case UINT64:' if uint64_keys else ''
     report_cmd = cmd_for_report(report_name, keymap, type_map, payload_allowed, payload_is_base64)
     post_init_line = f'\n    {post_init}' if post_init else ''
     extra_init = ''
@@ -184,7 +210,7 @@ static inline void
 {function_name}(PS *self, uint8_t *parser_buf, const size_t parser_buf_pos) {{
     unsigned int pos = {start_parsing_at};
     {extra_init}
-    enum PARSER_STATES {{ KEY, EQUAL, UINT, INT, FLAG, AFTER_VALUE {payload} }};
+    enum PARSER_STATES {{ KEY, EQUAL, UINT, INT, FLAG, AFTER_VALUE{uint64_state} {payload} }};
     enum PARSER_STATES state = KEY, value_state = FLAG;
     {command_class} g = {{0}};{post_init_line}
     unsigned int i, code;
@@ -258,7 +284,7 @@ static inline void
                 break;
 #undef U
 #undef READ_UINT
-
+{uint64_case}
             case AFTER_VALUE:
                 switch (parser_buf[pos++]) {{
                     default:
@@ -281,7 +307,7 @@ static inline void
         case EQUAL:
             REPORT_ERROR("Malformed {command_class} control block, no = after key"); return;
         case INT:
-        case UINT:
+        case UINT:{uint64_end}
             REPORT_ERROR("Malformed {command_class} control block, expecting an integer value"); return;
         case FLAG:
             REPORT_ERROR("Malformed {command_class} control block, expecting a flag value"); return;
@@ -324,8 +350,10 @@ def parsers() -> None:
         'y': ('y_offset', 'uint'),
         'v': ('data_height', 'uint'),
         's': ('data_width', 'uint'),
-        'S': ('data_sz', 'uint'),
-        'O': ('data_offset', 'uint'),
+        # 64 bit, so that data in a file or shared memory object can be larger than 4 GiB or past it, see
+        # docs/silkie/image-tiling.rst
+        'S': ('data_sz', 'uint64'),
+        'O': ('data_offset', 'uint64'),
         'c': ('num_cells', 'uint'),
         'r': ('num_lines', 'uint'),
         'X': ('cell_x_offset', 'uint'),

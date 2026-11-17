@@ -486,6 +486,16 @@ keys respectively. For example::
 This tells the terminal emulator to read ``80`` bytes starting from the offset ``10``
 inside the specified shared memory buffer.
 
+.. note::
+   In Silkie ``S`` and ``O`` are 64-bit unsigned integers, so the data can be
+   larger than 4 GiB or begin past 4 GiB into the file. Values below 2\ :sup:`32`
+   mean exactly what they do in kitty, and a terminal whose keys are 32-bit,
+   kitty among them, rejects a larger value as a malformed command rather than
+   misreading it. A feature query such as
+   ``<ESC>_Ga=q,i=31,e=t,t=f,O=4294967296<ESC>\`` is answered with
+   ``O=4294967296`` echoed by a terminal that reads 64-bit offsets, and not at
+   all by one that does not. See :doc:`image-tiling`.
+
 
 Remote client
 ^^^^^^^^^^^^^^^^
@@ -1085,6 +1095,12 @@ deleted, if the capital letter form above is specified. Also, when the terminal
 is running out of quota space for new images, existing images without
 placements will be preferentially deleted.
 
+.. note::
+   Silkie has no storage quota, images stay until they are deleted or leave the
+   scrollback. When memory runs out it evicts images that are not on screen,
+   transient ones first, then the least recently used, see
+   :doc:`image-tiling`.
+
 If an image is being loaded in chunks and the upload is not complete when any
 delete command is received, the partial upload must be aborted.
 
@@ -1332,7 +1348,8 @@ the same and the rectangles overlap, the terminal must respond with `EINVAL`.
    In kitty, doing a composition will cause a frame to be *fully rendered*
    potentially increasing its storage requirements, when the frame was previously
    stored as a set of operations on other frames. If this happens and there
-   is not enough storage space, kitty will respond with ENOSPC.
+   is not enough storage space, kitty will respond with ENOSPC. Silkie has no
+   such limit and responds with ENOMEM only when memory runs out.
 
 
 Image persistence and storage quotas
@@ -1346,12 +1363,21 @@ delete older images to make space for the new one. In kitty, for animations,
 the additional frame data is stored on disk and has a separate, larger quota of
 five times the base quota.
 
+.. note::
+   Silkie has neither quota, nor a largest image size: kitty refuses images
+   wider or taller than 10000 pixels and payloads of more than 400 MB. Images
+   stay until the program deletes them or they leave the scrollback, and when
+   memory runs out Silkie evicts images that are not on screen and fails the
+   command with ``ENOMEM`` if that does not help. Images larger than a GPU
+   texture are drawn from tiles. See :doc:`image-tiling`.
+
 
 Control data reference
 ---------------------------
 
 The table below shows all the control data keys as well as what values they can
-take, and the default value they take when missing. All integers are 32-bit.
+take, and the default value they take when missing. All integers are 32-bit,
+except ``S`` and ``O`` in Silkie, which are 64-bit.
 
 =======  ====================  =========  =================
 Key      Value                 Default    Description

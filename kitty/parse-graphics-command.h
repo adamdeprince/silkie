@@ -8,7 +8,7 @@ static inline void
 parse_graphics_code(PS *self, uint8_t *parser_buf, const size_t parser_buf_pos) {
     unsigned int pos = 1;
 
-    enum PARSER_STATES { KEY, EQUAL, UINT, INT, FLAG, AFTER_VALUE , PAYLOAD };
+    enum PARSER_STATES { KEY, EQUAL, UINT, INT, FLAG, AFTER_VALUE, UINT64 , PAYLOAD };
     enum PARSER_STATES state = KEY, value_state = FLAG;
     GraphicsCommand g = {0};
     unsigned int i, code;
@@ -78,8 +78,8 @@ case x_offset: value_state = UINT; break;
 case y_offset: value_state = UINT; break;
 case data_height: value_state = UINT; break;
 case data_width: value_state = UINT; break;
-case data_sz: value_state = UINT; break;
-case data_offset: value_state = UINT; break;
+case data_sz: value_state = UINT64; break;
+case data_offset: value_state = UINT64; break;
 case num_cells: value_state = UINT; break;
 case num_lines: value_state = UINT; break;
 case cell_x_offset: value_state = UINT; break;
@@ -194,13 +194,30 @@ case report_supported: value_state = FLAG; break;
                 READ_UINT;
 #define U(x) case x: g.x = code; break
                 switch(key) {
-                    U(format); U(more); U(id); U(image_number); U(placement_id); U(quiet); U(width); U(height); U(x_offset); U(y_offset); U(data_height); U(data_width); U(data_sz); U(data_offset); U(num_cells); U(num_lines); U(cell_x_offset); U(cell_y_offset); U(cursor_movement); U(unicode_placement); U(parent_id); U(parent_placement_id); U(usage_hints); U(tone_map); U(gamut); U(transfer);
+                    U(format); U(more); U(id); U(image_number); U(placement_id); U(quiet); U(width); U(height); U(x_offset); U(y_offset); U(data_height); U(data_width); U(num_cells); U(num_lines); U(cell_x_offset); U(cell_y_offset); U(cursor_movement); U(unicode_placement); U(parent_id); U(parent_placement_id); U(usage_hints); U(tone_map); U(gamut); U(transfer);
                     default: break;
                 }
                 state = AFTER_VALUE;
                 break;
 #undef U
 #undef READ_UINT
+
+            case UINT64:
+                for (i = pos, lcode = 0; i < parser_buf_pos; i++) {
+                    uint8_t n = parser_buf[i] - '0'; if (n > 9) break;
+                    if (lcode > (UINT64_MAX - n) / 10) { REPORT_ERROR("Malformed GraphicsCommand control block, number is too large"); return; }
+                    lcode = lcode * 10 + n;
+                }
+                if (i == pos) { REPORT_ERROR("Malformed GraphicsCommand control block, expecting an integer value for key: %c", key & 0xFF); return; }
+                pos = i;
+#define L(x) case x: g.x = lcode; break
+                switch(key) {
+                    L(data_sz); L(data_offset);
+                    default: break;
+                }
+                state = AFTER_VALUE;
+                break;
+#undef L
 
             case AFTER_VALUE:
                 switch (parser_buf[pos++]) {
@@ -234,6 +251,7 @@ case report_supported: value_state = FLAG; break;
             REPORT_ERROR("Malformed GraphicsCommand control block, no = after key"); return;
         case INT:
         case UINT:
+        case UINT64:
             REPORT_ERROR("Malformed GraphicsCommand control block, expecting an integer value"); return;
         case FLAG:
             REPORT_ERROR("Malformed GraphicsCommand control block, expecting a flag value"); return;
@@ -241,11 +259,13 @@ case report_supported: value_state = FLAG; break;
             break;
     }
 
-    REPORT_VA_COMMAND("K s {sc sc sc sc sc sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI si si si ss#}", self->window_id, "graphics_command",
+    REPORT_VA_COMMAND("K s {sc sc sc sc sc sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sI sK sK si si si ss#}", self->window_id, "graphics_command",
 
 "action", g.action, "delete_action", g.delete_action, "transmission_type", g.transmission_type, "compressed", g.compressed, "report_supported", g.report_supported,
 
-"format", (unsigned int)g.format, "more", (unsigned int)g.more, "id", (unsigned int)g.id, "image_number", (unsigned int)g.image_number, "placement_id", (unsigned int)g.placement_id, "quiet", (unsigned int)g.quiet, "width", (unsigned int)g.width, "height", (unsigned int)g.height, "x_offset", (unsigned int)g.x_offset, "y_offset", (unsigned int)g.y_offset, "data_height", (unsigned int)g.data_height, "data_width", (unsigned int)g.data_width, "data_sz", (unsigned int)g.data_sz, "data_offset", (unsigned int)g.data_offset, "num_cells", (unsigned int)g.num_cells, "num_lines", (unsigned int)g.num_lines, "cell_x_offset", (unsigned int)g.cell_x_offset, "cell_y_offset", (unsigned int)g.cell_y_offset, "cursor_movement", (unsigned int)g.cursor_movement, "unicode_placement", (unsigned int)g.unicode_placement, "parent_id", (unsigned int)g.parent_id, "parent_placement_id", (unsigned int)g.parent_placement_id, "usage_hints", (unsigned int)g.usage_hints, "tone_map", (unsigned int)g.tone_map, "gamut", (unsigned int)g.gamut, "transfer", (unsigned int)g.transfer,
+"format", (unsigned int)g.format, "more", (unsigned int)g.more, "id", (unsigned int)g.id, "image_number", (unsigned int)g.image_number, "placement_id", (unsigned int)g.placement_id, "quiet", (unsigned int)g.quiet, "width", (unsigned int)g.width, "height", (unsigned int)g.height, "x_offset", (unsigned int)g.x_offset, "y_offset", (unsigned int)g.y_offset, "data_height", (unsigned int)g.data_height, "data_width", (unsigned int)g.data_width, "num_cells", (unsigned int)g.num_cells, "num_lines", (unsigned int)g.num_lines, "cell_x_offset", (unsigned int)g.cell_x_offset, "cell_y_offset", (unsigned int)g.cell_y_offset, "cursor_movement", (unsigned int)g.cursor_movement, "unicode_placement", (unsigned int)g.unicode_placement, "parent_id", (unsigned int)g.parent_id, "parent_placement_id", (unsigned int)g.parent_placement_id, "usage_hints", (unsigned int)g.usage_hints, "tone_map", (unsigned int)g.tone_map, "gamut", (unsigned int)g.gamut, "transfer", (unsigned int)g.transfer,
+
+"data_sz", (unsigned long long)g.data_sz, "data_offset", (unsigned long long)g.data_offset,
 
 "z_index", (int)g.z_index, "offset_from_parent_x", (int)g.offset_from_parent_x, "offset_from_parent_y", (int)g.offset_from_parent_y,
 

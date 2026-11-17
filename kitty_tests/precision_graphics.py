@@ -102,8 +102,10 @@ class TestPrecisionGraphics(BaseTest):
                 response = self.transmit(screen, zlib.compress(bytes(range(size))), f=fmt, s=9, v=2, o='z')
                 self.ae(response.code, 'OK', response.msg)
                 self.ae(screen.grman.image_for_client_id(1)['data'], bytes(range(size)))
-        # dimensions beyond the existing cap are refused before any size is computed
-        self.ae(self.transmit(screen, b'\0' * 8, f=RGBA16, s=100000, v=100000).code, 'EINVAL')
+        # there is no largest image, the size is computed without overflow and the data is far too short
+        self.ae(self.transmit(screen, b'\0' * 8, f=RGBA16, s=100000, v=100000).code, 'ENODATA')
+        # a size that overflows the address space is refused
+        self.ae(self.transmit(screen, b'\0' * 8, f=RGBA16, s=4294967295, v=4294967295).code, 'EOVERFLOW')
 
     def test_gray16(self):
         screen = self.create_screen()
