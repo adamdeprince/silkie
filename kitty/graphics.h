@@ -15,7 +15,10 @@
 
 typedef struct {
     unsigned char action, transmission_type, compressed, delete_action, report_supported;
-    uint32_t format, more, id, image_number, data_sz, data_offset, placement_id, quiet, parent_id, parent_placement_id, usage_hints, tone_map, gamut;
+    uint32_t format, more, id, image_number, placement_id, quiet, parent_id, parent_placement_id, usage_hints, tone_map, gamut;
+    // The S and O keys: 64 bits, so that data in a file or shared memory object can be larger than 4 GiB or begin past
+    // it, see docs/silkie/image-tiling.rst. Every other key is 32 bits.
+    uint64_t data_sz, data_offset;
     uint32_t transfer;  // the E key, an ITU-T H.273 transfer characteristic, see docs/silkie/precision-image-protocol.rst
     uint32_t width, height, x_offset, y_offset;
     union {

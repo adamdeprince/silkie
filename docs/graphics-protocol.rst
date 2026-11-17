@@ -486,6 +486,16 @@ keys respectively. For example::
 This tells the terminal emulator to read ``80`` bytes starting from the offset ``10``
 inside the specified shared memory buffer.
 
+.. note::
+   In Silkie ``S`` and ``O`` are 64-bit unsigned integers, so the data can be
+   larger than 4 GiB or begin past 4 GiB into the file. Values below 2\ :sup:`32`
+   mean exactly what they do in kitty, and a terminal whose keys are 32-bit,
+   kitty among them, rejects a larger value as a malformed command rather than
+   misreading it. A feature query such as
+   ``<ESC>_Ga=q,i=31,e=t,t=f,O=4294967296<ESC>\`` is answered with
+   ``O=4294967296`` echoed by a terminal that reads 64-bit offsets, and not at
+   all by one that does not. See :doc:`image-tiling`.
+
 
 Remote client
 ^^^^^^^^^^^^^^^^
@@ -1366,7 +1376,8 @@ Control data reference
 ---------------------------
 
 The table below shows all the control data keys as well as what values they can
-take, and the default value they take when missing. All integers are 32-bit.
+take, and the default value they take when missing. All integers are 32-bit,
+except ``S`` and ``O`` in Silkie, which are 64-bit.
 
 =======  ====================  =========  =================
 Key      Value                 Default    Description

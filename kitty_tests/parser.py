@@ -1384,6 +1384,14 @@ class TestParser(BaseTest):
         t('i=%d' % uint32_max, id=uint32_max)
         t('i=3,p=4', id=3, placement_id=4)
         e('i=%d' % (uint32_max + 1), 'Malformed GraphicsCommand control block, number is too large')
+        # S and O are 64 bits in Silkie, see docs/silkie/image-tiling.rst, the other keys stay 32 bits
+        uint64_max = 2**64 - 1
+        t('S=%d,O=%d' % (uint32_max + 1, uint64_max), data_sz=uint32_max + 1, data_offset=uint64_max)
+        t('O=00000000000000000000042', data_offset=42)
+        e('S=%d' % (uint64_max + 1), 'Malformed GraphicsCommand control block, number is too large')
+        e('O=%d' % (10 * uint64_max), 'Malformed GraphicsCommand control block, number is too large')
+        e('O=', 'Malformed GraphicsCommand control block, expecting an integer value')
+        e('O=x', 'Malformed GraphicsCommand control block, expecting an integer value for key: O')
         pb('\033_Gi=12\033\\', c(id=12))
         t('a=t,t=d,s=100,z=-9', payload='X', action='t', transmission_type='d', data_width=100, z_index=-9)
         t('a=t,t=d,s=100,z=9', payload='payload', action='t', transmission_type='d', data_width=100, z_index=9)

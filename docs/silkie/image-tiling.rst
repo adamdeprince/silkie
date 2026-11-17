@@ -24,9 +24,24 @@ echoes ``s`` and ``v`` whatever their value, so
 Data sent directly arrives in a buffer that grows with it: a command that
 claims a large size and sends little data allocates no more than it sends.
 
-The keys of the protocol are 32 bits, so the size ``S`` and offset ``O`` of
-data read from a file or shared memory object cannot name more than 4 GiB.
-Without ``S``, the whole file is read, whatever its size.
+The size ``S`` and offset ``O`` of data read from a file, a temporary file
+or a shared memory object are 64-bit unsigned integers, every other key of
+the protocol 32-bit. Values below 2\ :sup:`32` mean exactly what they do in
+kitty. A value that does not fit in 64 bits makes the command malformed, as a
+value above 32 bits does in kitty, which answers nothing; an offset and size
+whose end does not fit in a file offset (2\ :sup:`63` - 1) are refused with
+``EOVERFLOW`` before the file is opened. Without ``S``, all of the file from
+the offset on is read, whatever its size.
+
+To tell whether a terminal reads 64-bit offsets before relying on them, send
+a feature query with a value above 32 bits::
+
+    <ESC>_Ga=q,i=31,e=t,t=f,O=4294967296<ESC>\
+
+Silkie answers ``<ESC>_Gi=31,e=t,t=f,O=4294967296;OK<ESC>\``. A terminal
+whose keys are 32-bit rejects the command as malformed and answers nothing,
+so a program waits for the answer to a query it sends after this one, as with
+any feature query.
 
 Drawing large images
 --------------------
@@ -92,6 +107,7 @@ Errors
 Code           Cause
 =============  =========================================================
 ``EOVERFLOW``  dimensions whose size in bytes does not fit in the address
-               space
+               space; ``O`` and ``S`` whose end does not fit in a file
+               offset
 ``ENOMEM``     memory ran out, after evicting what could be evicted
 =============  =========================================================

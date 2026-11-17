@@ -393,3 +393,73 @@ class TestImageTiling(BaseTest):
         self.assertAlmostEqual(g, linear(32768), places=2)
         self.ae((b, a), (1.0, 1.0))
         self.ae(at(53, 4), (0, 0, 0, 0))
+
+    def test_64_bit_size_and_offset(self):
+        # S and O are 64 bits: data past 4 GiB in a file is read, see
+        # docs/silkie/image-tiling.rst. The file is sparse, nothing is written
+        # before the image.
+        import tempfile
+        s = self.create_screen()
+        width, height = 7, 3
+        rgb = self.rgb(width, height)
+        offset = 2**32 + 12345
+        with tempfile.NamedTemporaryFile(suffix='.rgb') as f:
+            f.seek(offset)
+            f.write(rgb)
+            f.write(b'tail')
+            f.flush()
+            path = f.name.encode()
+            r = transmit(s, path, t='f', f=24, s=width, v=height, O=offset, S=len(rgb))
+            self.ae(r.code, 'OK', r.msg)
+            self.ae(s.grman.image_for_client_id(1)['data'], rgb)
+            # without S, all from the offset on, which for raw pixels is what they need
+            r = transmit(s, path, t='f', f=24, s=width, v=height, O=offset, i=2)
+            self.ae(r.code, 'OK', r.msg)
+            self.ae(s.grman.image_for_client_id(2)['data'], rgb)
+            # a compressed payload past 4 GiB, its size more than 32 bits can say in a second file
+        with tempfile.NamedTemporaryFile(suffix='.z') as f:
+            data = zlib.compress(rgb)
+            f.seek(2**32 + 7)
+            f.write(data)
+            f.flush()
+            r = transmit(s, f.name.encode(), t='f', f=24, s=width, v=height, o='z', O=2**32 + 7, S=len(data), i=3)
+            self.ae(r.code, 'OK', r.msg)
+            self.ae(s.grman.image_for_client_id(3)['data'], rgb)
+            # an offset and size whose end does not fit in a file offset are refused before the file is opened
+            for o, size in ((2**64 - 1, 2), (2**63, 0), (2**63 - 1, 1)):
+                r = transmit(s, f.name.encode(), t='f', f=24, s=width, v=height, O=o, S=size, i=4)
+                self.ae(r.code, 'EOVERFLOW', (o, size))
+            # past the end of the file is insufficient data, reported as the generic file error
+            r = transmit(s, f.name.encode(), t='f', f=24, s=width, v=height, O=2**40, i=4)
+            self.ae(r.code, 'EBADF')
+        # a value that does not fit in 64 bits is a malformed command, and has no reply
+        self.assertFalse(send_command(s, 'a=t,i=5,t=f,f=24,s=1,v=1,O=%d' % 2**64, b'/x'))
+        self.assertFalse(send_command(s, 'a=t,i=5,t=f,f=24,s=1,v=1,O=123456789012345678901', b'/x'))
+        # the feature query echoes them, so that a program can tell before it relies on them; a terminal whose keys
+        # are 32 bits answers nothing, the command is malformed there
+        res = send_command(s, f'a=q,i=31,e=t,t=f,O={2**32},S={2**40}').decode('ascii')
+        self.ae(res, f'\033_Gi=31,e=t,t=f,S={2**40},O={2**32};OK\033\\')
+
+    def test_64_bit_offset_in_shared_memory(self):
+        # On Linux a POSIX shared memory object is a file in /dev/shm, which can be made sparse
+        import os
+        import unittest
+        if not os.path.isdir('/dev/shm'):
+            raise unittest.SkipTest('POSIX shared memory objects are not files here')
+        s = self.create_screen()
+        width, height = 5, 2
+        rgb = self.rgb(width, height)
+        name = f'/silkie-test-tiling-{os.getpid()}'
+        offset = 2**32 + 99
+        with open('/dev/shm' + name, 'wb') as f:
+            f.seek(offset)
+            f.write(rgb)
+        try:
+            r = transmit(s, name.encode(), t='s', f=24, s=width, v=height, O=offset, S=len(rgb))
+            self.ae(r.code, 'OK', r.msg)
+            self.ae(s.grman.image_for_client_id(1)['data'], rgb)
+            # the terminal removes the object once it has read it
+            self.assertFalse(os.path.exists('/dev/shm' + name))
+        finally:
+            if os.path.exists('/dev/shm' + name):
+                os.unlink('/dev/shm' + name)

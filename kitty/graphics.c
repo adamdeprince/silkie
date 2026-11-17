@@ -638,8 +638,11 @@ err:
 }
 #endif
 
+// sz and offset are the S and O keys, 64 bits, which load_image_data() has checked fit in an off_t together
 static bool
-read_img_file(GraphicsManager *self, int fd, size_t sz, off_t offset, size_t max_to_read, bool is_shm) {
+read_img_file(GraphicsManager *self, int fd, uint64_t sz_key, uint64_t offset_key, size_t max_to_read, bool is_shm) {
+    const off_t offset = (off_t)offset_key;
+    size_t sz = sz_key > SIZE_MAX ? SIZE_MAX : (size_t)sz_key;
     LoadData *ld = &self->currently_loading;
     struct stat s;
     if (fstat(fd, &s) != 0) FABRT("Failed to fstat() the fd: %d file with error: [%d] %s", fd, errno, strerror(errno));
@@ -651,6 +654,9 @@ read_img_file(GraphicsManager *self, int fd, size_t sz, off_t offset, size_t max
     const size_t available = offset < s.st_size ? (size_t)(s.st_size - offset) : 0;
     if (!sz) sz = available;
     if (sz > max_to_read) sz = max_to_read;
+    // nothing past the end of the file can be read, so nothing past it is allocated: what is missing is reported
+    // as insufficient data by the caller
+    if (sz > available) sz = available;
     free(ld->buf);
     // Note that for files the data is copied rather than mmap()ed as the
     // client is free to truncate the file at any time, which would cause
@@ -1298,6 +1304,11 @@ load_image_data(
         case 's': // POSIX shared memory
         {
             if (g->payload_sz >= PTRDIFF_MAX || memchr(payload, 0, g->payload_sz)) ABRT("EINVAL", "Invalid filename");
+            // O and S are 64 bits: the end of the data they name must be an offset in a file. This says nothing about
+            // the file, so it is answered before the file is opened.
+            uint64_t data_end;
+            if (__builtin_add_overflow(g->data_offset, g->data_sz, &data_end) || data_end > (uint64_t)INT64_MAX)
+                ABRT("EOVERFLOW", "The offset and size of the data overflow the size of a file");
             RAII_ALLOC(char, fname, malloc(g->payload_sz+1));
             if (!fname) ABRT("ENOMEM", "Out of memory for filename");
             memcpy(fname, payload, g->payload_sz);
@@ -2158,8 +2169,8 @@ supported_keys_for_query(const GraphicsCommand *g) {
     // leading e=<action> tells the client that the action itself is supported.
     // The reply is bounded by the protocol, not by the input: each key is
     // echoed at most once and the longest action (T) echoes 27 keys and e, each at
-    // most 14 bytes (",k=" and a 32 bit integer with its sign), so 512 bytes
-    // always fits. Grow it if keys are added.
+    // most 14 bytes (",k=" and a 32 bit integer with its sign) but S and O, which
+    // are 64 bits and take 23, so 512 bytes always fits. Grow it if keys are added.
     static char buf[512];
     size_t pos = 0;
     buf[0] = 0;
@@ -2173,6 +2184,8 @@ supported_keys_for_query(const GraphicsCommand *g) {
     if (g->attr) print(",%c=%c", key, g->attr)
 #define ECHO_UINT(key, attr) \
     if (g->attr) print(",%c=%u", key, g->attr)
+#define ECHO_UINT64(key, attr) \
+    if (g->attr) print(",%c=%llu", key, (unsigned long long)g->attr)
 #define ECHO_INT(key, attr) \
     if (g->attr) print(",%c=%d", key, g->attr)
 #define ECHO_ONE(key, attr) \
@@ -2213,8 +2226,9 @@ supported_keys_for_query(const GraphicsCommand *g) {
             if (action != 'f' && !is_indexed && !is_palette) ECHO_ONE('T', tone_map);
             ECHO_UINT('s', data_width);
             ECHO_UINT('v', data_height);
-            ECHO_UINT('S', data_sz);
-            ECHO_UINT('O', data_offset);
+            // 64 bits in Silkie, echoed whatever their value, so a program can tell, see docs/silkie/image-tiling.rst
+            ECHO_UINT64('S', data_sz);
+            ECHO_UINT64('O', data_offset);
             if (g->usage_hints && !(g->usage_hints & ~GRAPHICS_USAGE_HINT_TRANSIENT)) print(",N=%u", g->usage_hints);
             if (action == 'f') {
                 ECHO_UINT('x', x_offset);
@@ -2291,6 +2305,7 @@ supported_keys_for_query(const GraphicsCommand *g) {
 #undef ECHO_ONE
 #undef ECHO_INT
 #undef ECHO_UINT
+#undef ECHO_UINT64
 #undef ECHO_FLAG
 #undef print
     return buf;
