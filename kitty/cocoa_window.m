@@ -20,6 +20,7 @@
 // Needed for _NSGetProgname
 #include <crt_externs.h>
 #include <libproc.h>
+#include <sys/param.h>
 #include <objc/runtime.h>
 
 static inline void
@@ -1628,7 +1629,10 @@ cocoa_yield_reopen_to_other_instance(void) {
     NSData *token = [[event attributeDescriptorForKeyword:keySenderAuditTokenAttr] data];
     if (!token || token.length != sizeof(audit_token_t)) return false;
     audit_token_t t; memcpy(&t, token.bytes, sizeof(t));
-    char name[256] = {0};
+    // proc_name() copies the kernel's process name, which is at most
+    // 2 * MAXCOMLEN bytes (pbi_name in struct proc_bsdinfo), so this size
+    // comes from the OS and never truncates a name.
+    char name[2 * MAXCOMLEN + 1] = {0};
     // val[5] is the pid, see audit_token_to_pid() in libbsm
     if (proc_name((pid_t)t.val[5], name, sizeof(name)) <= 0 || strcmp(name, "usernoted") != 0) return false;
     const monotonic_t now = monotonic(), threshold = s_double_to_monotonic_t(2.0);
