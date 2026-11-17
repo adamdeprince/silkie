@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -362,6 +367,10 @@
 </pre></div>
 </div>
 <p>因此转折点以下保持不变，<em>P</em> 恰好映射到 <em>H</em>，曲线在转折点连续，并保留像素色相。如果 <em>P</em> 未超出亮度余量，则不改变内容。默认 <code class="docutils literal notranslate"><span class="pre">T=0</span></code> 使用裁剪。</p>
+<p>In Silkie, <code class="docutils literal notranslate"><span class="pre">f=64</span></code> is not the only way to send an HDR image: raw images
+encoded with PQ or HLG, among them HDR10 frames, can be sent with the <code class="docutils literal notranslate"><span class="pre">E</span></code>
+key, see <a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a>. They are decoded into the same
+linear values, with SDR white at 203 nits, and <code class="docutils literal notranslate"><span class="pre">T=1</span></code> works for them too.</p>
 <p>检查终端是否支持 <code class="docutils literal notranslate"><span class="pre">f=64</span></code> 时，使用图形协议规定的查询操作，附带 <code class="docutils literal notranslate"><span class="pre">f=64</span></code> 和单个像素数据；不认识此格式的终端回复 <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code>。</p>
 <p><a class="reference internal" href="vector-protocol.html"><span class="doc">矢量图像</span></a> 使用相同的 HDR 呈现路径。亮度后缀和线性扩展 sRGB 绘制色适用于全部矢量图元，包括带样式文本、描边、渐变和符号。嵌套裁剪和分组不透明度保留 HDR 值；嵌入的 <code class="docutils literal notranslate"><span class="pre">f=64</span></code> 图像保留线性颜色。矢量图像也接受 <code class="docutils literal notranslate"><span class="pre">T=1</span></code> 进行色调映射。</p>
 </section>

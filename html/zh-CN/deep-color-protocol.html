@@ -1,0 +1,561 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="字符单元背景透明度" href="cell-alpha-protocol.html"><link rel="prev" title="广色域颜色" href="wide-gamut-protocol.html">
+        <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/deep-color-protocol.html">
+
+    <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Deep colors - Silkie</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-foreground-primary: #12140f;
+  --color-foreground-secondary: #62645c;
+  --color-foreground-muted: #62645c;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #f7f6f1;
+  --color-background-secondary: #eeede6;
+  --color-background-hover: #e9e8e1;
+  --color-background-hover--transparent: #e9e8e100;
+  --color-background-border: #d8d8cf;
+  --color-background-item: #d8d8cf;
+  --color-brand-primary: #416b06;
+  --color-brand-content: #416b06;
+  --color-brand-visited: #096c78;
+  --color-code-background: #eeede6;
+  --color-code-foreground: #12140f;
+  --color-highlighted-background: #e4efcf;
+  --color-highlight-on-target: #e4efcf;
+  --color-admonition-background: #fffefa;
+  --color-accent-warning: #aa4615;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-foreground-primary: #f7f6f1;
+  --color-foreground-secondary: #c5c8be;
+  --color-foreground-muted: #aeb1a7;
+  --color-foreground-border: #79817a;
+  --color-background-primary: #11130f;
+  --color-background-secondary: #1b1e17;
+  --color-background-hover: #2b3024;
+  --color-background-hover--transparent: #2b302400;
+  --color-background-border: #45483f;
+  --color-background-item: #45483f;
+  --color-brand-primary: #a6e22e;
+  --color-brand-content: #a6e22e;
+  --color-brand-visited: #41c4d1;
+  --color-code-background: #1b1e17;
+  --color-code-foreground: #f7f6f1;
+  --color-highlighted-background: #34431e;
+  --color-highlight-on-target: #34431e;
+  --color-admonition-background: #1b1e17;
+  --color-accent-warning: #ff8a55;
+  
+      }
+    }
+  }
+</style>
+
+<link rel="stylesheet" href="../_static/silkie.css">
+<link rel="alternate" hreflang="en" href="../deep-color-protocol.html">
+<link rel="alternate" hreflang="zh-CN" href="deep-color-protocol.html">
+</head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Silkie</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <span class="sidebar-brand-text">Silkie</span>
+</a>
+<nav class="project-links" aria-label="项目资源">
+  <a href="index.html">项目概览</a>
+  <a href="install.html">安装 Silkie</a>
+  <a href="games.html">游戏与实机视频</a>
+  <a href="browser-demo.html">试用浏览器演示</a>
+  <a href="browser-ssh.html">浏览器 SSH 设置</a>
+  <a href="developer-guide.html">开发者指南</a>
+  <a href="reference.html">扩展参考手册</a>
+  <a href="https://sw.kovidgoyal.net/kitty/">kitty 文档 ↗</a>
+  <a href="https://sw.kovidgoyal.net/kitty/kittens_intro/">Kitten 工具文档 ↗</a>
+  <a href="https://github.com/adamdeprince/silkie/tree/silkie">源代码 · silkie 分支 ↗</a>
+  <a href="../deep-color-protocol.html" lang="en">English</a>
+</nav><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="搜索" name="q" aria-label="搜索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">安装 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="games.html">Silkie 与 kitty 游戏</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-demo.html">在浏览器中试用 Silkie</a></li>
+<li class="toctree-l1"><a class="reference internal" href="browser-ssh.html">浏览器演示中的 SSH</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide.html">为 Silkie 开发软件</a></li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="reference.html">Silkie 扩展参考手册</a><input aria-label="Toggle navigation of Silkie 扩展参考手册" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gesture-protocol.html">触控板手势协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="haptic-protocol.html">触觉反馈协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pointer-image-protocol.html">图像指针扩展</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Deep colors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
+<li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
+<li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="deep-colors">
+<h1>Deep colors<a class="headerlink" href="#deep-colors" title="链接到此标题。">¶</a></h1>
+<div class="versionadded">
+<p><span class="versionmodified added">在 0.50.0 版本加入.</span></p>
+</div>
+<p>Terminal colors have eight bits per channel. That is enough to pick a color,
+but not to draw a smooth gradient across a wide window, to place colors
+precisely in a wide gamut, where each step is coarser, or to grade brightness
+finely above SDR white with the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>. This extension lets a
+program give the color of text, its background and its underline with sixteen
+bits per channel. It is a new form of the SGR color attributes that other
+terminals skip, so nothing changes for programs that do not use it.</p>
+<section id="the-escape-code">
+<h2>The escape code<a class="headerlink" href="#the-escape-code" title="链接到此标题。">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="p">[</span><span class="mi">38</span><span class="p">:</span><span class="mi">0</span><span class="p">:</span><span class="o">&lt;</span><span class="nb">id</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">r</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">g</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">b</span><span class="o">&gt;</span><span class="n">m</span>      <span class="n">foreground</span>
+<span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="p">[</span><span class="mi">48</span><span class="p">:</span><span class="mi">0</span><span class="p">:</span><span class="o">&lt;</span><span class="nb">id</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">r</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">g</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">b</span><span class="o">&gt;</span><span class="n">m</span>      <span class="n">background</span>
+<span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="p">[</span><span class="mi">58</span><span class="p">:</span><span class="mi">0</span><span class="p">:</span><span class="o">&lt;</span><span class="nb">id</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">r</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">g</span><span class="o">&gt;</span><span class="p">:</span><span class="o">&lt;</span><span class="n">b</span><span class="o">&gt;</span><span class="n">m</span>      <span class="n">underline</span> <span class="ow">and</span> <span class="n">strikethrough</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">r</span></code>, <code class="docutils literal notranslate"><span class="pre">g</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> are 0 to 65535, encoded with the sRGB transfer curve
+like the components of every other terminal color, so <code class="docutils literal notranslate"><span class="pre">65535</span></code> is SDR white,
+the brightest value of an ordinary color, and <code class="docutils literal notranslate"><span class="pre">257</span></code> times an eight bit value
+is that value exactly. <code class="docutils literal notranslate"><span class="pre">id</span></code> is the gamut of the <a class="reference internal" href="wide-gamut-protocol.html"><span class="doc">广色域颜色</span></a>:
+<code class="docutils literal notranslate"><span class="pre">0</span></code> for sRGB, <code class="docutils literal notranslate"><span class="pre">1</span></code> for Display P3 and <code class="docutils literal notranslate"><span class="pre">2</span></code> for Rec. 2020, any other id
+being <code class="docutils literal notranslate"><span class="pre">0</span></code>. It is required: write <code class="docutils literal notranslate"><span class="pre">0</span></code> for sRGB, never leave it empty, since
+some parsers, Silkie's among them, drop empty sub-parameters and would see too
+few. A group with fewer than four values after the <code class="docutils literal notranslate"><span class="pre">0</span></code>, or with a component
+above 65535, is malformed and changes nothing. The parameters after it in the
+same sequence still apply.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">0</span></code> is the color space type of ITU-T T.416, the standard the
+<code class="docutils literal notranslate"><span class="pre">38:2</span></code> and <code class="docutils literal notranslate"><span class="pre">38:5</span></code> forms come from, which defines <code class="docutils literal notranslate"><span class="pre">0</span></code> as <em>implementation
+defined</em>, <code class="docutils literal notranslate"><span class="pre">1</span></code> transparent, <code class="docutils literal notranslate"><span class="pre">2</span></code> RGB, <code class="docutils literal notranslate"><span class="pre">3</span></code> CMY, <code class="docutils literal notranslate"><span class="pre">4</span></code> CMYK and <code class="docutils literal notranslate"><span class="pre">5</span></code>
+indexed. Only the colon form exists. In the semicolon form the parameters after
+the type are unrelated attributes, and terminals disagree on how many of them
+an unknown type consumes, so <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;[38;0;...m</span></code> is not this extension. Silkie
+ignores such a sequence as it ignores any SGR with an unknown color type.</p>
+<p>A deep color is a color like any other. It replaces the color it is given
+for, and <code class="docutils literal notranslate"><span class="pre">39</span></code>, <code class="docutils literal notranslate"><span class="pre">49</span></code>, <code class="docutils literal notranslate"><span class="pre">59</span></code>, <code class="docutils literal notranslate"><span class="pre">0</span></code> or any other color of the same kind
+replaces it. Its gamut belongs to it: selecting an ordinary color selects that
+color's gamut again. It combines with the brightness of <code class="docutils literal notranslate"><span class="pre">56</span></code> and <code class="docutils literal notranslate"><span class="pre">57</span></code> of
+the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>, with the cell background alpha of
+<a class="reference internal" href="cell-alpha-protocol.html"><span class="doc">字符单元背景透明度</span></a> and with reverse video, under which it follows the
+color it was given for, as the gamut does. Unlike <code class="docutils literal notranslate"><span class="pre">58:2</span></code>, whose id is
+ignored, a deep underline color keeps its gamut. A deep background is never the
+default background, so it is opaque even when it has the value of the default
+background in a window with <code class="xref std std-opt docutils literal notranslate"><span class="pre">background_opacity</span></code>, and it is never one of
+the <code class="xref std std-opt docutils literal notranslate"><span class="pre">transparent_background_colors</span></code>.</p>
+</section>
+<section id="being-understood-elsewhere">
+<h2>Being understood elsewhere<a class="headerlink" href="#being-understood-elsewhere" title="链接到此标题。">¶</a></h2>
+<p>What other terminals do with an unknown color type decided the form. Each of
+them was checked in its source (in November 2026: xterm 412, the main branches
+of VTE, foot, WezTerm, Alacritty's vte crate 0.15, iTerm2, Windows Terminal,
+Ghostty, contour, tmux and mintty, and kitty 0.47):</p>
+<ul class="simple">
+<li><p>xterm, VTE, foot, Alacritty, iTerm2, Windows Terminal, Ghostty, tmux and
+mintty ignore the group <code class="docutils literal notranslate"><span class="pre">38:0:...</span></code> and go on with the next parameter.
+xterm does not support <code class="docutils literal notranslate"><span class="pre">58</span></code> at all and skips the group in the same way.</p></li>
+<li><p>kitty and WezTerm ignore the group and every parameter after it in the same
+sequence.</p></li>
+<li><p>contour resets the color and runs the components as SGR attributes of their
+own.</p></li>
+<li><p>In the semicolon form, xterm, VTE, Alacritty, Windows Terminal, tmux and
+contour consume the type, foot, iTerm2, Ghostty and mintty run it as an
+attribute, and kitty and WezTerm drop the rest of the sequence.</p></li>
+</ul>
+<p>The other forms considered were worse. A component above 255 in <code class="docutils literal notranslate"><span class="pre">38:2</span></code> is
+masked to eight bits, giving a wrong color, by foot, iTerm2, kitty, Ghostty and
+mintty, and rejected by the others. Carrying the low bits in sub-parameters
+added after <code class="docutils literal notranslate"><span class="pre">38:2:&lt;id&gt;:&lt;r&gt;:&lt;g&gt;:&lt;b&gt;</span></code> fails in VTE, which rejects <code class="docutils literal notranslate"><span class="pre">38:2</span></code>
+unless the id is empty, in kitty and iTerm2, which drop an empty id and then
+read the wrong fields, in Windows Terminal, which rejects a non-zero id, and in
+tmux, which ignores a group of eight or more fields, besides overwriting the
+tolerance fields T.416 puts there. A fresh type number avoids all that, but
+<code class="docutils literal notranslate"><span class="pre">6</span></code> is WezTerm's eight bit RGBA, read there as a wrong color, <code class="docutils literal notranslate"><span class="pre">12</span></code> and
+<code class="docutils literal notranslate"><span class="pre">13</span></code> are iTerm2's, <code class="docutils literal notranslate"><span class="pre">3</span></code> and <code class="docutils literal notranslate"><span class="pre">4</span></code> are mintty's CMY and CMYK, and Ghostty
+reads the type as an SGR attribute when it is <code class="docutils literal notranslate"><span class="pre">4</span></code>, <code class="docutils literal notranslate"><span class="pre">38</span></code>, <code class="docutils literal notranslate"><span class="pre">48</span></code> or <code class="docutils literal notranslate"><span class="pre">58</span></code>.
+<code class="docutils literal notranslate"><span class="pre">0</span></code> is the value T.416 sets aside for what an implementation chooses, and
+none of these terminals gives it a meaning.</p>
+<p>Hence how a program should send it:</p>
+<ul>
+<li><p>Send the deep color in a sequence of its own, after the ordinary color it
+refines, which every terminal understands:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="p">[</span><span class="mi">38</span><span class="p">:</span><span class="mi">2</span><span class="p">:</span><span class="mi">1</span><span class="p">:</span><span class="mi">255</span><span class="p">:</span><span class="mi">128</span><span class="p">:</span><span class="mi">0</span><span class="n">m</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="p">[</span><span class="mi">38</span><span class="p">:</span><span class="mi">0</span><span class="p">:</span><span class="mi">1</span><span class="p">:</span><span class="mi">65535</span><span class="p">:</span><span class="mi">32768</span><span class="p">:</span><span class="mi">1</span><span class="n">m</span>
+</pre></div>
+</div>
+<p>A terminal that drops the rest of a sequence then loses nothing, and a
+terminal that limits the number of parameters in a sequence (Ghostty 24,
+contour 16, iTerm2 16 sub-parameters, tmux 64 bytes) is not pushed over its
+limit. Everywhere but contour the program gets the eight bit color or the
+deep one and never a wrong one. Where the eight bit color is the nearest
+one, <code class="docutils literal notranslate"><span class="pre">(c</span> <span class="pre">*</span> <span class="pre">255</span> <span class="pre">+</span> <span class="pre">32767)</span> <span class="pre">/</span> <span class="pre">65535</span></code> for each component <code class="docutils literal notranslate"><span class="pre">c</span></code>, the two are
+the same color to within half a step of eight bits.</p>
+</li>
+<li><p>The group has six fields, which keeps it within the six sub-parameters
+Windows Terminal stores for a parameter and below the eight at which tmux
+ignores a group.</p></li>
+<li><p>contour cannot be made safe by any colon form. A program that cares asks
+first, see below, and only sends deep colors to a terminal that lists them.</p></li>
+</ul>
+</section>
+<section id="asking-for-it">
+<h2>Asking for it<a class="headerlink" href="#asking-for-it" title="链接到此标题。">¶</a></h2>
+<p>A terminal that implements this extension lists <code class="docutils literal notranslate"><span class="pre">deep</span></code> in the <code class="docutils literal notranslate"><span class="pre">sgr</span></code> field
+of the reply to the query of the <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">caps</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">query</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">caps</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="o">...</span> <span class="p">:</span> <span class="n">sgr</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span><span class="n">deep</span><span class="p">,</span><span class="n">gamut</span><span class="p">,</span><span class="n">hdr</span> <span class="p">:</span> <span class="o">...</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Whether the display shows more than eight bits is a separate question, which
+the <code class="docutils literal notranslate"><span class="pre">bits</span></code> of the <code class="docutils literal notranslate"><span class="pre">display</span></code> query of the <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> answers. A
+terminal is free to accept deep colors and show them at the precision of its
+display, as it may accept Display P3 colors on an sRGB display.</p>
+</section>
+<section id="in-silkie">
+<h2>In Silkie<a class="headerlink" href="#in-silkie" title="链接到此标题。">¶</a></h2>
+<p>The color word of a cell has room for an eight bit color and no more, and
+making it wider would grow every cell of every window and its scrollback for
+the few that use deep colors. A deep color is therefore interned in a table
+that each screen has, and the cell holds its index in that table. Equal colors
+share an entry. The table grows as colors are added and is garbage collected:
+every few thousand new colors, and never more often than the number of colors
+in use, the colors that no cell, cursor or saved cursor refers to any more,
+those of lines that scrolled out of the scrollback for instance, are freed.
+Cells that use ordinary colors are stored, drawn and copied exactly as before.</p>
+<p>The table can hold sixteen million colors at a time, which the 24 bits of the
+cell's color word allow, or fewer if the GPU cannot make a texture that large
+(4096 times its largest texture size). When it is full of colors still in use,
+or memory runs out, a new deep color is stored as the nearest eight bit color
+with its gamut instead, which is what a cell can hold by itself.</p>
+<p>Deep colors survive everything colors survive: the scrollback, resizing and
+rewrapping, alternate screens, saved cursors, <code class="docutils literal notranslate"><span class="pre">DECCARA</span></code> and copying with
+formatting. Text copied with formatting, and the scrollback given to the pager,
+write each deep color as its nearest eight bit color and then the deep form in
+a sequence of its own, as recommended above. A <code class="docutils literal notranslate"><span class="pre">DECRQSS</span></code> report of the SGR
+state is a single list of parameters and has only the deep form.</p>
+<p>The cell shader reads the table from a sixteen bit integer texture, so a deep
+color reaches the blending of the cell, its conversion to the gamut of the
+window and the brightness of the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a> at full precision, in
+floating point. Whether all of it reaches the display depends on the window:
+an eight bit window, which is the default, ends at eight bits. The few cell
+colors Silkie works out on the CPU rather than in the shader, such as the
+colors of the window edges, use the nearest eight bit color.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="cell-alpha-protocol.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">字符单元背景透明度</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="wide-gamut-protocol.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">广色域颜色</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026 Adam DePrince。Silkie 基于 kitty 开发；kitty 版权所有 © 2016-2026 Kovid Goyal 及贡献者
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Deep colors</a><ul>
+<li><a class="reference internal" href="#the-escape-code">The escape code</a></li>
+<li><a class="reference internal" href="#being-understood-elsewhere">Being understood elsewhere</a></li>
+<li><a class="reference internal" href="#asking-for-it">Asking for it</a></li>
+<li><a class="reference internal" href="#in-silkie">In Silkie</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=1663b99f"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/translations.js?v=540d3cec"></script>
+    </body>
+</html>

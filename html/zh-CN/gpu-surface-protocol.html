@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="HDR 亮度协议" href="hdr-protocol.html"><link rel="prev" title="Packed image formats" href="packed-image-protocol.html">
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="HDR 亮度协议" href="hdr-protocol.html"><link rel="prev" title="Large images and image storage" href="image-tiling.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/gpu-surface-protocol.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -360,7 +365,7 @@
 </div>
 <p>这会重新复制表面并标记图像已更改，下一帧即可显示新内容。除非用 <code class="docutils literal notranslate"><span class="pre">q</span></code> 抑制回复，否则终端回答 <code class="docutils literal notranslate"><span class="pre">OK</span></code>。对已有图像 ID，再次用 <code class="docutils literal notranslate"><span class="pre">t=g</span></code>、同一表面和 <code class="docutils literal notranslate"><span class="pre">a=t</span></code> 或 <code class="docutils literal notranslate"><span class="pre">a=T</span></code> 传输，等同于先刷新再执行通常的放置。删除图像会释放表面。基于表面的图像不支持动画帧（<code class="docutils literal notranslate"><span class="pre">a=f</span></code>）和合成（<code class="docutils literal notranslate"><span class="pre">a=c</span></code>），终端回复 <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code>。可用 <code class="docutils literal notranslate"><span class="pre">a=q</span></code> 与 <code class="docutils literal notranslate"><span class="pre">t=g</span></code> 检查支持情况；不认识此介质的终端回复错误。</p>
 <p>多路复用器或 Goblin Skiff 等将终端会话转发到另一台机器的中继，不能传送表面本身，但可以读取它。在 macOS 上，同一用户的任何进程都可用 ID 调用 <code class="docutils literal notranslate"><span class="pre">IOSurfaceLookup()</span></code>，再通过 <code class="docutils literal notranslate"><span class="pre">IOSurfaceLock()</span></code> 和 <code class="docutils literal notranslate"><span class="pre">IOSurfaceGetBaseAddress()</span></code> 读取像素。在 Linux 上，由中继启动的客户端可像终端一样用 <code class="docutils literal notranslate"><span class="pre">pidfd_getfd(2)</span></code> 获取描述符，并用 <code class="docutils literal notranslate"><span class="pre">mmap(2)</span></code> 读取线性缓冲区；终端自身会拒绝通过多路复用器指定的 dma-buf，因为这些客户端不在窗口的会话内。中继可以轮询表面，例如每次收到刷新操作时，将像素用普通 <code class="docutils literal notranslate"><span class="pre">t=d</span></code> 传输发送到远端。</p>
-<p>基础传输、放置、删除和回复规则由 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/graphics-protocol/">kitty 图形协议</a> 规定。</p>
+<p id="querying">基础传输、放置、删除和回复规则由 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/graphics-protocol/">kitty 图形协议</a> 规定。</p>
 </section>
 
         </article>
@@ -377,14 +382,14 @@
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="packed-image-protocol.html">
+          <a class="prev-page" href="image-tiling.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Packed image formats</div>
+                <div class="title">Large images and image storage</div>
                 
               </div>
             </a>

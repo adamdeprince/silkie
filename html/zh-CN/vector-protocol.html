@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -347,7 +352,16 @@
 <span class="n">p</span> <span class="nb">id</span><span class="o">=</span><span class="mi">2</span> <span class="n">d</span><span class="o">=</span><span class="n">M20</span><span class="p">,</span><span class="mi">20</span><span class="n">L80</span><span class="p">,</span><span class="mi">20</span><span class="n">L80</span><span class="p">,</span><span class="mi">80</span><span class="n">L20</span><span class="p">,</span><span class="mi">80</span><span class="n">Z</span> <span class="n">fill</span><span class="o">=</span><span class="c1">#ff0000</span>
 </pre></div>
 </div>
-<p>与其他图像一样，以相同图像 ID 重新传输会替换整个场景。使用 <code class="docutils literal notranslate"><span class="pre">o=z</span></code> 时无须提供未压缩尺寸。成功回复 <code class="docutils literal notranslate"><span class="pre">OK</span></code>；场景解析失败则回复 <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code>，附行号和问题描述，且不保留此次传输的任何内容。</p>
+<p>Transmitting again with the same image id replaces the whole scene, as it
+does for any image. With <code class="docutils literal notranslate"><span class="pre">o=z</span></code> the uncompressed size need not be given. The
+records have no size limit of their own, unlike the 400 MB of other image
+data: their size has no bearing on what drawing them costs, and a large scene
+or a large batch of edits is a legitimate thing to send. They are collected as
+they arrive, and a transmission the terminal cannot hold in memory is refused
+with <code class="docutils literal notranslate"><span class="pre">ENOMEM</span></code>, freeing what had arrived. <code class="docutils literal notranslate"><span class="pre">escape_limit</span></code> caps the size of
+one escape code when it is set. The terminal answers <code class="docutils literal notranslate"><span class="pre">OK</span></code> or, for a scene it
+cannot parse, <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code> with the line number and the problem, and nothing of
+such a transmission is kept.</p>
 </section>
 <section id="editing-a-vector-image">
 <h2>编辑矢量图像<a class="headerlink" href="#editing-a-vector-image" title="链接到此标题。">¶</a></h2>
@@ -370,7 +384,26 @@
 <p>将字符串或带样式文本段整形并保留为矢量轮廓。JSON 布局对象见 <a class="reference internal" href="#text-layout-and-measurement">文本布局与测量</a>。文本参与分组变换、裁剪、不透明度、混合及普通元素替换／删除。记录被接受时只生成一次轮廓，此后按放置分辨率栅格化。</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">p</span></code> <em>路径</em></dt><dd><p><code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">id=</span> <span class="pre">[g=]</span> <span class="pre">d=&lt;path&gt;</span> <span class="pre">[fill=&lt;color&gt;|none]</span> <span class="pre">[rule=nz|eo]</span> <span class="pre">[stroke=&lt;color&gt;]</span> <span class="pre">[w=&lt;width&gt;]</span> <span class="pre">[cap=butt|round|square]</span> <span class="pre">[join=miter|round|bevel]</span> <span class="pre">[ml=&lt;miter</span> <span class="pre">limit&gt;]</span> <span class="pre">[dash=&lt;lengths&gt;]</span> <span class="pre">[dp=&lt;dash</span> <span class="pre">phase&gt;]</span> <span class="pre">[t=&lt;transform&gt;]</span></code></p>
-<p><code class="docutils literal notranslate"><span class="pre">d</span></code> 使用 SVG 路径语法，数值之间用逗号，不用空格：<code class="docutils literal notranslate"><span class="pre">M</span></code>、<code class="docutils literal notranslate"><span class="pre">L</span></code>、<code class="docutils literal notranslate"><span class="pre">H</span></code>、<code class="docutils literal notranslate"><span class="pre">V</span></code>、<code class="docutils literal notranslate"><span class="pre">C</span></code>、<code class="docutils literal notranslate"><span class="pre">S</span></code>、<code class="docutils literal notranslate"><span class="pre">Q</span></code>、<code class="docutils literal notranslate"><span class="pre">T</span></code> 和 <code class="docutils literal notranslate"><span class="pre">Z</span></code>，支持绝对形式及小写相对形式。后续数值超出一条命令所需数量时，重复该命令。不支持圆弧，应将其转换为曲线。既无 <code class="docutils literal notranslate"><span class="pre">fill</span></code> 也无 <code class="docutils literal notranslate"><span class="pre">stroke</span></code> 的路径默认黑色填充；只有 <code class="docutils literal notranslate"><span class="pre">stroke</span></code> 的路径不填充。<code class="docutils literal notranslate"><span class="pre">rule</span></code> 是填充规则，默认非零环绕。<code class="docutils literal notranslate"><span class="pre">w</span></code>、<code class="docutils literal notranslate"><span class="pre">cap</span></code>、<code class="docutils literal notranslate"><span class="pre">join</span></code>、<code class="docutils literal notranslate"><span class="pre">ml``（默认</span> <span class="pre">``4</span></code>）和 <code class="docutils literal notranslate"><span class="pre">dash</span></code> 与 SVG 含义相同；描边几何在元素自身坐标系中计算，因此非均匀变换会像拉伸路径一样拉伸描边。设置 <code class="docutils literal notranslate"><span class="pre">vector_dash_limit</span></code> 时，一条路径最多切分为相应数量的虚线：若某子路径使计数超过上限，则该子路径以及之后同样会超限的子路径均绘制为实线。默认 <code class="docutils literal notranslate"><span class="pre">0</span></code> 表示绘制全部虚线。长路径上的细密虚线可能消耗远超可见效果所需的计算。</p>
+<p>The path data in <code class="docutils literal notranslate"><span class="pre">d</span></code> is the SVG path syntax with commas, never spaces,
+between numbers: <code class="docutils literal notranslate"><span class="pre">M</span></code>, <code class="docutils literal notranslate"><span class="pre">L</span></code>, <code class="docutils literal notranslate"><span class="pre">H</span></code>, <code class="docutils literal notranslate"><span class="pre">V</span></code>, <code class="docutils literal notranslate"><span class="pre">C</span></code>, <code class="docutils literal notranslate"><span class="pre">S</span></code>, <code class="docutils literal notranslate"><span class="pre">Q</span></code>, <code class="docutils literal notranslate"><span class="pre">T</span></code>
+and <code class="docutils literal notranslate"><span class="pre">Z</span></code>, in absolute and (lowercase) relative forms, with a command
+repeated when it is followed by more numbers than it takes. Arcs are not
+supported, send them as curves. A path with neither <code class="docutils literal notranslate"><span class="pre">fill</span></code> nor
+<code class="docutils literal notranslate"><span class="pre">stroke</span></code> is filled black; a path with only <code class="docutils literal notranslate"><span class="pre">stroke</span></code> is not filled.
+<code class="docutils literal notranslate"><span class="pre">rule</span></code> is the fill rule, nonzero by default. <code class="docutils literal notranslate"><span class="pre">w</span></code>, <code class="docutils literal notranslate"><span class="pre">cap</span></code>, <code class="docutils literal notranslate"><span class="pre">join</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ml</span></code> (<code class="docutils literal notranslate"><span class="pre">4</span></code> by default) and <code class="docutils literal notranslate"><span class="pre">dash</span></code> have their SVG meanings, with the
+stroke geometry computed in the element's own coordinate system, so a
+stroke transformed non-uniformly is stretched like the path. Dashes are
+cut only where they can be seen, so a path of any length costs the dashes
+shown of it. A pattern that repeats more often than 16 times a pixel,
+which the rasterizer cannot sample, is drawn as the solid stroke shaded by
+the part of it the dashes and their caps cover, which is what the dashes
+average to over a pixel.
+When <code class="docutils literal notranslate"><span class="pre">vector_dash_limit</span></code> is set, the stroke of one path is cut into
+that many dashes at most, counting those cut where they can be seen: a
+subpath whose dashes would take the count past the limit is stroked solid,
+as are the subpaths after it that would too. <code class="docutils literal notranslate"><span class="pre">0</span></code>, the default, cuts
+every dash.</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">s</span></code> <em>符号</em></dt><dd><p><code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">id=</span> <span class="pre">d=&lt;path&gt;</span></code></p>
 <p>不自行绘制的几何对象，通过 <code class="docutils literal notranslate"><span class="pre">u</span></code> 记录按需多次放置。一页文本可以只发送一次各字形轮廓作为符号，再为每个字形发送一个 <code class="docutils literal notranslate"><span class="pre">u</span></code>。</p>
@@ -487,6 +520,27 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">g</span></code> 记录（包括根分组）、符号、渐变或图像记录，以及删除它们、<code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">g=</span></code>、<code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">all</span></code>，或改变作为分组裁剪的路径，都会全量重绘，因为其他元素依赖这些资源。通过根分组变换进行平移或缩放也属于此类。</p></li>
 </ul>
 <p>因此动画程序应把变化限制在独立的小元素中。除用于显示的纹理外，kitty 不保留其他栅格化场景副本，所以只有元素本身计入配额。</p>
+<p>What drawing costs depends on what is shown, not on the numbers in the
+records. Curves are flattened to within a quarter of a device pixel, and only
+the parts of a curve, circle or dash pattern that can reach the pixels being
+drawn are flattened or cut that finely; the rest is replaced by coarse pieces
+that stay out of those pixels and leave the fill, its winding included,
+exactly as it was. So a circle a million million pixels across, a line whose
+ends are far off the image or a transform that magnifies a tiny curve
+enormously costs about what the part of it that can be seen does, and that
+part is drawn as an equivalent scene of ordinary size would draw it. A stroke
+more than four million pixels wide is flattened to within a millionth of its
+width rather than a quarter of a pixel. Geometry whose coordinates overflow a
+double after the transforms are applied is not drawn.</p>
+<p>The texture holds the part of the image that is on screen, at the size it is
+shown at, with a quarter of the window more on each side so that scrolling a
+little does not draw it again, or all of the image when that is no larger. So
+its size is bounded by the window, however large the placement or however
+much a source rectangle magnifies the image. When several placements show
+parts of one image at different magnifications that would together take more
+than four windows of pixels at the largest, the image is drawn smaller until
+they fit. <code class="docutils literal notranslate"><span class="pre">vector_raster_limit</span></code>, when it is set, caps the size the image
+is drawn at as well.</p>
 </section>
 <section id="rendering-a-pdf">
 <h2>渲染 PDF<a class="headerlink" href="#rendering-a-pdf" title="链接到此标题。">¶</a></h2>

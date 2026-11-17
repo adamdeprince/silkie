@@ -307,6 +307,7 @@ encode_line(EncodeBuf *z, const CPUCell *cpu, const GPUCell *gpu, index_type xnu
     *p++ = cpu[xnum - 1].next_char_was_wrapped ? 1 : 0;
     p = write_varint(p, n);
     uint32_t any_attrs[ATTR_WORDS] = {0}, any_ch = 0;
+    bool any_deep = false;  // the trailing empty cells have default colors
     index_type limit = 0;
     if (n) {
         uint32_t tmpl[ATTR_WORDS] = {0}, w[ATTR_WORDS];
@@ -335,6 +336,9 @@ encode_line(EncodeBuf *z, const CPUCell *cpu, const GPUCell *gpu, index_type xnu
                 memcpy(tmpl, w, sizeof(w));
                 run_start = x;
             }
+            if ((gpu[x].fg & COLOR_TYPE_MASK) == DEEP_COLOR_TYPE || (gpu[x].bg & COLOR_TYPE_MASK) == DEEP_COLOR_TYPE ||
+                (gpu[x].decoration_fg & COLOR_TYPE_MASK) == DEEP_COLOR_TYPE)
+                any_deep = true;
             const uint32_t ch = cpu[x].ch_and_idx;
             any_ch |= ch;
             if (ch) limit = x + 1;
@@ -351,6 +355,7 @@ encode_line(EncodeBuf *z, const CPUCell *cpu, const GPUCell *gpu, index_type xnu
     z->enc_len = p - z->enc;
     bool may_have_multicell = false;
     uint8_t h = (any_ch & masks.idx[0]) ? HISTORY_HAS_TEXT_IDX : 0;
+    if (any_deep) h |= HISTORY_HAS_DEEP_COLORS;
     for (unsigned k = 0; k < ATTR_WORDS; k++) {
         if (any_attrs[k] & masks.multicell[k + 1]) may_have_multicell = true;
         if (any_attrs[k] & masks.hyperlink[k + 1]) h |= HISTORY_HAS_HYPERLINKS;
@@ -2850,14 +2855,6 @@ historybuf_delete_lines(HistoryBuf *self, index_type num_newer, index_type count
     free(unused.buf);
 }
 
-GPUCell *
-historybuf_gpu_cells(HistoryBuf *self, index_type lnum) {
-    // Valid until the next access to the buffer, which can decompress other lines in its place
-    Line l = {.xnum = self->xnum, .text_cache = self->text_cache};
-    get_line(self, lnum, &l);
-    return l.gpu_cells;
-}
-
 // Calls body with info set to the line info byte of each visible line, oldest first
 #define FOR_EACH_LINE_INFO(self, info, body)                                                                                         \
     {                                                                                                                                \
@@ -3017,6 +3014,61 @@ historybuf_rewrite_cpu_cells(HistoryBuf *self, unsigned needs, historybuf_cells_
         // lines past the scrollback limit are never shown again: leave them out, so that what only they use is freed
         for (index_type j = oldest_visible > b->first_seq ? (index_type)(oldest_visible - b->first_seq) : 0; j < b->num_lines; j++)
             if (visitor(data, block_cpu(b) + (size_t)j * self->xnum, self->xnum) && i < self->num_pending) b->shadow_modified = true;
+    }
+}
+
+void
+historybuf_visit_gpu_cells(HistoryBuf *self, unsigned needs, historybuf_gpu_cells_visitor visitor, void *data) {
+    HistoryCompression *z = self->z;
+    const uint64_t oldest_visible = self->next_seq - self->count;
+    if (z) {
+        for (size_t i = 0; i < z->num; i++) {
+            HistoryFrame *f = frame_at(z, i);
+            // cached cells may have been changed since the frame was encoded
+            if (!(f->has & needs) && !frame_has_chunks(z, f)) continue;
+            const bool had_raw = f->raw != NULL;
+            const index_type first = oldest_visible > f->first_seq ? (index_type)(oldest_visible - f->first_seq) : 0;
+            for (index_type c = first / CHUNK_LINES; c * CHUNK_LINES < f->num_lines; c++) {
+                bool was_cached = false;
+                for (size_t k = 0; k < z->num_chunks && !was_cached; k++) was_cached = z->chunks[k].frame_id == f->id && z->chunks[k].chunk == c;
+                CellChunk *ch = ensure_chunk(self, f, c);
+                if (!ch) {
+                    log_error("Out of memory decompressing scrollback to read it");
+                    break;
+                }
+                for (index_type l = 0; l < ch->num_lines; l++)
+                    if (c * CHUNK_LINES + l >= first) visitor(data, ch->gpu + (size_t)l * self->xnum, self->xnum);
+                if (!was_cached) evict_chunk(self, (size_t)(ch - z->chunks));
+            }
+            // what was decompressed only to be read is not kept
+            if (!had_raw && !f->raw_modified && !frame_has_chunks(z, f)) free_raw(f);
+        }
+    }
+    for (size_t i = 0; i < self->num_blocks; i++) {
+        LineBlock *b = block_at(self, i);
+        if (b->first_seq + b->num_lines <= oldest_visible) continue;
+        const index_type first = oldest_visible > b->first_seq ? (index_type)(oldest_visible - b->first_seq) : 0;
+        const GPUCell *gpu = block_gpu(b);
+        RAII_ALLOC(GPUCell, decoded, NULL);
+        if (!gpu) {
+            // a pending block whose cells were released once the compressor encoded them
+            if (!b->reenc.enc && !(b->job->has & needs)) continue;
+            const size_t n = (size_t)b->num_lines * self->xnum;
+            RAII_ALLOC(CPUCell, cpu, malloc(MAX(1u, n) * sizeof(CPUCell)));
+            decoded = malloc(MAX(1u, n) * sizeof(GPUCell));
+            bool ok = cpu && decoded;
+            if (ok && b->reenc.enc) {
+                const uint8_t *p = b->reenc.enc, *end = p + b->reenc.enc_len;
+                for (index_type j = 0; j < b->num_lines && (ok = p != NULL); j++)
+                    p = decode_line(p, end, cpu + (size_t)j * self->xnum, decoded + (size_t)j * self->xnum, self->xnum);
+            } else if (ok) ok = decode_job_lines(self, b->job, b->num_lines, cpu, decoded);
+            if (!ok) {
+                log_error("Out of memory reading scrollback");
+                continue;
+            }
+            gpu = decoded;
+        }
+        for (index_type j = first; j < b->num_lines; j++) visitor(data, gpu + (size_t)j * self->xnum, self->xnum);
     }
 }
 
@@ -3365,7 +3417,7 @@ compression_stats(HistoryBuf *self, PyObject *a UNUSED) {
 #define compression_stats_doc "compression_stats() -> A dict describing the compressed part of the buffer and its memory use"
     retire(self);
     size_t frames = 0, compressed = 0, raw = 0, side = 0, raw_cache = 0, chunks = 0, chunk_bytes = 0, contexts = 0, scratch = 0, jobs = 0;
-    size_t lines_in_frames = 0, max_frame_lines = 0;
+    size_t lines_in_frames = 0, max_frame_lines = 0, deep_color_frames = 0;
     unsigned long long lines_compressed = 0, frames_decompressed = 0, frames_recompressed = 0;
     HistoryCompression *z = self->z;
     if (z) {
@@ -3378,6 +3430,7 @@ compression_stats(HistoryBuf *self, PyObject *a UNUSED) {
             raw_cache += f->raw_capacity + f->chunk_offsets_capacity * sizeof(size_t);
             lines_in_frames += f->num_lines;
             max_frame_lines = MAX(max_frame_lines, (size_t)f->num_lines);
+            if (f->has & HISTORY_HAS_DEEP_COLORS) deep_color_frames++;
             if (f->replacement) jobs++;
         }
         chunks = z->num_chunks;
@@ -3400,14 +3453,15 @@ compression_stats(HistoryBuf *self, PyObject *a UNUSED) {
     }
     hot_bytes += self->num_spare_cells * cells_size(self);
     const size_t total = hot_bytes + pending_bytes + compressed + side + raw_cache + chunk_bytes + contexts + scratch;
-    return Py_BuildValue("{sO sI sI sI sI sI sI sn sn sn sn sn sn sn sn sn sn sn sn sn sK sK sK si sn sI}", "compress", self->compress ? Py_True : Py_False,
+    return Py_BuildValue("{sO sI sI sI sI sI sI sn sn sn sn sn sn sn sn sn sn sn sn sn sK sK sK si sn sI sn}", "compress", self->compress ? Py_True : Py_False,
         "count", self->count, "ynum", self->ynum, "hot_lines", self->hot_lines, "pending_lines", self->pending_lines, "compressed_lines",
         (unsigned)lines_in_frames, "max_frame_lines", (unsigned)max_frame_lines, "frames", (Py_ssize_t)frames, "compressed_bytes", (Py_ssize_t)compressed,
         "encoded_bytes", (Py_ssize_t)raw, "side_bytes", (Py_ssize_t)side, "raw_cache_bytes", (Py_ssize_t)raw_cache, "cached_chunks", (Py_ssize_t)chunks,
         "chunk_bytes", (Py_ssize_t)chunk_bytes, "context_bytes", (Py_ssize_t)contexts, "scratch_bytes", (Py_ssize_t)scratch, "hot_bytes",
         (Py_ssize_t)hot_bytes, "pending_bytes", (Py_ssize_t)pending_bytes, "jobs", (Py_ssize_t)jobs, "total_bytes", (Py_ssize_t)total,
         "lines_compressed", lines_compressed, "frames_decompressed", frames_decompressed, "frames_recompressed", frames_recompressed, "level",
-        self->level, "frame_bytes", (Py_ssize_t)self->frame_bytes, "block_lines", self->block_lines);
+        self->level, "frame_bytes", (Py_ssize_t)self->frame_bytes, "block_lines", self->block_lines, "deep_color_frames",
+        (Py_ssize_t)deep_color_frames);
 }
 
 static PyObject *

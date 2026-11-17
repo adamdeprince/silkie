@@ -1,6 +1,6 @@
 cask "silkie" do
-  version "0.49.2-silkie20261116.2"
-  sha256 "d752bc653d3ef4bfcf14c9fb280a17c105db6fb63aa688a2de98d171872501ca"
+  version "0.49.2-silkie20261117.1"
+  sha256 "b96eba0004df18bb974400fc8e9d66800326a4ca756abc1d9c9d86960e3b36e2"
   url "https://brew.goblinreactor.com/casks/silkie-#{version}.zip"
   name "Silkie"
   desc "Silkie terminal emulator"

@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="显示指针信息" href="show-pointer.html"><link rel="prev" title="画面呈现协议" href="frame-protocol.html">
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="Environment variables" href="environment.html"><link rel="prev" title="画面呈现协议" href="frame-protocol.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/configuration.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -362,6 +367,8 @@ copy them to <code class="docutils literal notranslate"><span class="pre">silkie
 <p>The configuration syntax and inherited settings are described in
 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/">kitty's configuration reference</a>.
 The paths above are specific to Silkie.</p>
+<p><a class="reference internal" href="environment.html"><span class="doc">Environment variables</span></a> lists the environment variables that Silkie reads and the
+ones it sets for the programs running in it.</p>
 </section>
 <section id="quitting-on-macos">
 <h2>Quitting on macOS<a class="headerlink" href="#quitting-on-macos" title="链接到此标题。">¶</a></h2>
@@ -405,23 +412,95 @@ permissions, connection lifetime, fallback behavior, and protocol details.</p>
 </section>
 <section id="e-paper-and-color-switching">
 <h2>电子纸与配色切换<a class="headerlink" href="#e-paper-and-color-switching" title="链接到此标题。">¶</a></h2>
-<p>For an external e-paper monitor, including a BOOX monitor that the operating
-system treats as an ordinary display, add this to <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>:</p>
+<p>Silkie knows which monitor each window is on, and treats a window on an
+e-paper monitor as such, even when the operating system thinks it is an
+ordinary display, as it does for every e-paper monitor seen so far. It knows
+some e-paper monitors by the model in their EDID, never by serial number
+(among them the ONYX BOOX Mira and Mira Pro, several DASUNG Paperlike models
+and the Modos Glider). Declare any other
+with <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> in <code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>, by its model, connector, EDID
+manufacturer and product code, or a part of its description:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">monitor_info</span> <span class="n">MIRA253</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span>
+<span class="n">monitor_info</span> <span class="s2">"OBX:0x0011"</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span>
+<span class="n">monitor_info</span> <span class="n">DP</span><span class="o">-</span><span class="mi">7</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">ls</span></code> shows what Silkie knows of the monitor of each OS window, under
+<code class="docutils literal notranslate"><span class="pre">display</span></code>, and <code class="docutils literal notranslate"><span class="pre">silkie</span> <span class="pre">--debug-rendering</span></code> logs it when a window moves to
+another monitor. What follows applies to the windows on that monitor only: a
+window dragged to an ordinary monitor looks and behaves as usual again once it
+has stayed there for a moment, and comes back when it returns.</p>
+<p>E-paper (<code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>) and gray (<code class="docutils literal notranslate"><span class="pre">color=gray</span></code> or <code class="docutils literal notranslate"><span class="pre">mono</span></code>) are independent,
+as there is color e-paper:</p>
+<ul class="simple">
+<li><p>On e-paper, which ghosts when it changes, the cursor and blinking text do not
+blink, there is no cursor trail, animated images stay on the frame they show,
+an indeterminate progress bar stands still, a keyboard scroll jumps rather
+than glides and the output is not dithered, since dither shows as grain that
+ghosts. For now custom shaders, the visual bell, pixel scrolling and the
+repaint timing stay as configured. Programs are told <code class="docutils literal notranslate"><span class="pre">kind=eink</span></code> through the <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a>,
+so that they can avoid animation and frequent redraws themselves.</p></li>
+<li><p>On a display that shows only gray, text is black on white, or white on black
+with <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code>, over the colors of themes, profiles,
+<code class="docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--color</span></code>, sessions and programs, which come back when the window
+moves to another display. Images are shown as they are, and the monitor
+reduces them to its levels of gray.</p></li>
+</ul>
+<p>To treat every window as on e-paper whatever its monitor, add:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">eink_mode</span> <span class="n">yes</span>
 </pre></div>
 </div>
-<p>Silkie 使用白底黑字，并通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> 向应用报告 <code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>。应用可利用这一信息避免动画、平滑滚动和频繁重绘。软件需要支持该协议才能使用此信息。</p>
-<p>按 <code class="docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code> 在白底黑字和黑底白字之间切换。两种配色下，显示器都仍报告为电子纸。按 <code class="docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code> 切换电子纸模式。这些快捷键使用 <code class="docutils literal notranslate"><span class="pre">kitty_mod``（默认</span> <span class="pre">``ctrl+shift</span></code>），并影响全部 Silkie 窗口。命令面板中也可执行这些操作。自定义快捷键：:</p>
+<p>With it a display whose colors nothing declares, in Silkie's table,
+<a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> or <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>, is taken to show gray, so a color
+e-paper monitor needs its colors declared, for example
+<code class="docutils literal notranslate"><span class="pre">monitor_info</span> <span class="pre">&quot;&lt;its</span> <span class="pre">model&gt;&quot;</span> <span class="pre">kind=eink</span> <span class="pre">color=rgb</span></code> or <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=rgb</span></code>.</p>
+<p>Press <code class="docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code> to switch between black on white and white on black.
+The display is still reported as e-paper in either scheme. Press
+<code class="docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code> to toggle <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a>. These shortcuts use
+<code class="docutils literal notranslate"><span class="pre">kitty_mod</span></code> (by default <code class="docutils literal notranslate"><span class="pre">ctrl+shift</span></code>). The actions are also available from
+the command palette. To choose your own shortcuts:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">f6</span> <span class="n">set_color_scheme</span> <span class="n">toggle</span>
 <span class="nb">map</span> <span class="n">f7</span> <span class="n">set_eink_mode</span> <span class="n">toggle</span>
 </pre></div>
 </div>
-<p>在任意显示器上使用 <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">light</span></code> 或 <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> 可固定配色。<code class="docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">auto</span></code> 恢复配置颜色和自动主题；若启用电子纸模式，则恢复白底黑字。明确指定的浅色和深色优先于自动主题及操作系统外观变化。重新加载配置会恢复已保存的选择。</p>
-<p>电子纸模式声明显示器类型，但不假定其色深或刷新时序。如果已知面板有十六级灰度，还可设置：:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span>
+<p>Use <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">light</span></code> or <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> for a persistent color
+choice on any display. <code class="docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">auto</span></code> returns to configured colors
+and automatic themes. Explicit light and dark choices take precedence over
+automatic themes and OS appearance changes. Reloading the configuration
+restores the saved choices.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">auto</span></code>, Silkie follows the OS appearance: it uses
+<code class="file docutils literal notranslate"><span class="pre">dark-theme.auto.conf</span></code>, <code class="file docutils literal notranslate"><span class="pre">light-theme.auto.conf</span></code> or
+<code class="file docutils literal notranslate"><span class="pre">no-preference-theme.auto.conf</span></code> from the Silkie config directory when
+present. With <code class="docutils literal notranslate"><span class="pre">automatic_light_theme</span> <span class="pre">yes</span></code> and no light theme file, a light
+OS appearance selects a built-in light theme, as long as <code class="file docutils literal notranslate"><span class="pre">silkie.conf</span></code>
+sets no colors of its own; by default the colors stay as configured. To
+customize the built-in theme, copy <code class="file docutils literal notranslate"><span class="pre">builtin-light-theme.conf</span></code> from the
+Silkie package to <code class="file docutils literal notranslate"><span class="pre">light-theme.auto.conf</span></code>. Colors from profiles, <code class="docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--color</span></code>, the
+ssh kitten and programs stay on top of any theme. The black on white of a gray
+display shows over all of them.</p>
+<p><a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> declares properties of every display that only change what
+programs are told, for example <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> reports e-paper
+without changing anything Silkie does.</p>
+</section>
+<section id="minimum-contrast">
+<h2>Minimum contrast<a class="headerlink" href="#minimum-contrast" title="链接到此标题。">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">minimum_contrast</span></code> works like iTerm2's Minimum contrast: it makes text that is
+too close to its background readable, such as the dark ANSI blue of <code class="docutils literal notranslate"><span class="pre">ls</span></code> on a
+machine reached over ssh, on a black background. It is a percentage from 0
+(off) to 100: the smallest difference in lightness allowed between text and its
+background. Closer text keeps its hue and becomes lighter or darker, colors
+that already stand out are not changed, and 100 leaves only black and white
+text:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">minimum_contrast</span> <span class="mi">40</span>
 </pre></div>
 </div>
-<p>彩色电子纸显示器可省略这一行，或声明其实际能力。仍可使用 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> 仅覆盖报告信息，而不改变配色。这些声明应用于 Silkie 进程的全部窗口，因此在普通显示器和电子纸显示器之间移动时，应切换相应模式。</p>
+<p>It can differ per terminal: set it in a profile, for a tab in a session file
+with <code class="docutils literal notranslate"><span class="pre">minimum_contrast</span> <span class="pre">40</span></code>, for a window with <code class="docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--minimum-contrast</span> <span class="pre">40</span></code>,
+or at runtime with <code class="docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">set-minimum-contrast</span> <span class="pre">40</span></code> (<code class="docutils literal notranslate"><span class="pre">--match-tab</span></code> for a
+whole tab, <code class="docutils literal notranslate"><span class="pre">default</span></code> to remove the setting). A window's own setting wins over
+its tab's, then its profile's, then the option. Block elements, shades and
+Powerline separators are left alone, since programs draw pictures with them.
+On e-paper and grayscale displays it is what keeps colored text visible.</p>
 </section>
 <section id="display-channel-precision">
 <h2>Display channel precision<a class="headerlink" href="#display-channel-precision" title="链接到此标题。">¶</a></h2>
@@ -477,6 +556,34 @@ palette-change redraw loop.</p>
 <dt><code class="docutils literal notranslate"><span class="pre">vector_curve_limit</span></code></dt><dd><p>将一条曲线或一个圆展平时使用的最大线段数。<code class="docutils literal notranslate"><span class="pre">0</span></code> 表示按展平误差需要生成线段。</p>
 </dd>
 </dl>
+</section>
+<section id="compressed-scrollback">
+<h2>Compressed scrollback<a class="headerlink" href="#compressed-scrollback" title="链接到此标题。">¶</a></h2>
+<p>Silkie keeps unlimited scrollback by default, compressed with zstd at level
+9: <code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_lines</span></code> is <code class="code docutils literal notranslate"><span class="pre">unlimited</span></code> and <code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_compression</span></code>
+is <code class="code docutils literal notranslate"><span class="pre">9</span></code>. The two options are independent: a line limit, compression
+(<code class="code docutils literal notranslate"><span class="pre">none</span></code> or any zstd level, negative fast levels included) or both. The
+option documentation has the measured memory, CPU and latency for several
+levels, and what frames and a line limit cost.</p>
+<p>The newest 2048 lines stay uncompressed. Older lines go, 128 at a time, to a
+background thread that encodes them compactly and compresses them, so output
+does not wait for compression: <code class="code docutils literal notranslate"><span class="pre">benchmark.py</span></code> measured the same
+throughput as uncompressed scrollback. 1.5 million lines of colored log output
+take about 49 MB instead of 8.4 GB.</p>
+<p>The settings can differ per window and per tab:</p>
+<ul class="simple">
+<li><p>a profile can set <code class="code docutils literal notranslate"><span class="pre">scrollback_lines</span></code> and <code class="code docutils literal notranslate"><span class="pre">scrollback_compression</span></code>;</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--scrollback-lines</span> <span class="pre">N</span> <span class="pre">--scrollback-compression</span> <span class="pre">L</span></code> (also on a
+<code class="code docutils literal notranslate"><span class="pre">launch</span></code> line of a session file) sets them for the new window, and
+windows opened later in its tab get the same;</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">set-scrollback-compression</span> <span class="pre">L</span> <span class="pre">[--lines</span> <span class="pre">N]</span> <span class="pre">[--recompress]</span></code>
+changes them for the matched windows, or with <code class="code docutils literal notranslate"><span class="pre">--match-tab</span></code> for
+tabs, including windows opened in them later. <code class="code docutils literal notranslate"><span class="pre">--recompress</span></code> also
+recompresses what is already compressed, in the background.</p></li>
+</ul>
+<p>A new level applies to lines compressed from then on. With unlimited
+scrollback the scrollback pager history (<code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_pager_history_size</span></code>)
+receives nothing, as no line ever leaves the scrollback.</p>
 <dl class="std opt">
 <dt class="sig sig-object std" id="opt-hdr">
 <span class="sig-name descname"><span class="pre">hdr</span></span><a class="headerlink" href="#opt-hdr" title="链接到此定义。">¶</a></dt>
@@ -513,9 +620,64 @@ The minimum is 1.0. Settings increases or decreases this multiplier in steps of 
 <dt class="sig sig-object std" id="opt-eink_mode">
 <span class="sig-name descname"><span class="pre">eink_mode</span></span><a class="headerlink" href="#opt-eink_mode" title="链接到此定义。">¶</a></dt>
 <dd><p>默认：<code class="docutils literal notranslate"><span class="pre">no</span></code>。</p>
-<p>即使操作系统将显示器识别为普通显示器，也声明它为电子纸，例如外接 BOOX 显示器。Silkie 通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示协议</span></a> 报告 <code class="code docutils literal notranslate"><span class="pre">kind=eink</span></code>，并在 <a class="reference internal" href="#opt-color_scheme"><code class="xref std std-opt docutils literal notranslate"><span class="pre">color_scheme</span></code></a> 为 <code class="code docutils literal notranslate"><span class="pre">auto</span></code> 时使用白底黑字。明确设置 <code class="code docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> 在电子纸上也有效。</p>
-<p>此设置适用于全部 Silkie 窗口。运行时可用 <code class="code docutils literal notranslate"><span class="pre">set_eink_mode</span> <span class="pre">yes</span></code>、<code class="code docutils literal notranslate"><span class="pre">no</span></code> 或 <code class="code docutils literal notranslate"><span class="pre">toggle</span></code> 切换，默认快捷键为 <code class="code docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code>。显示信息订阅者会收到变化通知。重新加载配置会恢复配置中的设置。</p>
-<p>电子纸模式不会推断色彩能力和刷新时序。如有需要，使用 <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> 声明，例如十六级灰度面板可设置 <code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=gray</span> <span class="pre">bits=4</span></code>。电子纸模式优先于 <code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=...</span></code>。</p>
+<p>Treat every Silkie window as being on e-paper, whatever monitor it is on.
+Usually this is not needed: Silkie recognizes the e-paper monitors in its
+built-in table, and <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> declares others, for the windows on
+that monitor only, so that a window moved to an ordinary monitor looks
+ordinary again.</p>
+<p>A window on e-paper reports <code class="code docutils literal notranslate"><span class="pre">kind=eink</span></code> through the <a class="reference internal" href="display-protocol.html"><span class="doc">display
+protocol</span></a> and avoids what makes such a panel ghost: the
+cursor and text do not blink, there is no cursor trail, animated images stay
+on the frame they show, an indeterminate progress bar does not move, keyboard
+scrolling jumps rather than glides, and the output is not dithered. For now
+<code class="xref std std-opt docutils literal notranslate"><span class="pre">custom_shaders</span></code>, the visual bell, <code class="xref std std-opt docutils literal notranslate"><span class="pre">pixel_scroll</span></code> and the repaint
+timing stay as configured, and images are not reduced to the levels of gray
+of the panel, which the monitor does itself. Being e-paper does not make a
+display monochrome, as there is color e-paper. Black
+text on white, or white on black with an explicit <code class="code docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code>,
+follows from a display that shows only gray (<code class="code docutils literal notranslate"><span class="pre">color=gray</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">mono</span></code>). With this option a display whose colors nothing declares, in
+the built-in table, <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> or <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>, is taken to
+show gray, as before. For color e-paper declare its colors, for example
+<code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=rgb</span></code>.</p>
+<p>Switch at runtime with <code class="code docutils literal notranslate"><span class="pre">set_eink_mode</span> <span class="pre">yes</span></code>, <code class="code docutils literal notranslate"><span class="pre">no</span></code> or
+<code class="code docutils literal notranslate"><span class="pre">toggle</span></code>; the default shortcut is <code class="code docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code>. Display
+subscribers receive the change. Reloading the configuration restores the
+configured setting. This option takes precedence over <code class="code docutils literal notranslate"><span class="pre">kind=...</span></code> in
+<a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> and <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a>.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-monitor_info">
+<span class="sig-name descname"><span class="pre">monitor_info</span></span><a class="headerlink" href="#opt-monitor_info" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：空（不覆盖）。</p>
+<p>Properties of one monitor that the operating system cannot report, for the
+windows on that monitor. The first word selects the monitor, quoted when it
+has spaces, and the rest are <code class="code docutils literal notranslate"><span class="pre">key=value</span></code> pairs with the keys of
+<a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">monitor_info</span> <span class="n">MIRA253</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span> <span class="n">bits</span><span class="o">=</span><span class="mi">4</span>
+<span class="n">monitor_info</span> <span class="s2">"OBX:0x0011"</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">gray</span>
+<span class="n">monitor_info</span> <span class="n">DP</span><span class="o">-</span><span class="mi">7</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span>
+</pre></div>
+</div>
+<p>A monitor is selected by its EDID manufacturer ID and product code as
+<code class="code docutils literal notranslate"><span class="pre">MFG:PRODUCT</span></code>, with the product code in decimal or in hex with
+<code class="code docutils literal notranslate"><span class="pre">0x</span></code>, or <code class="code docutils literal notranslate"><span class="pre">MFG:*</span></code> for every product of the manufacturer; or else by
+its model (the name the system gives, or the EDID name descriptor), the name
+of its connector, such as <code class="code docutils literal notranslate"><span class="pre">DP-7</span></code>, or its make, each compared whole and
+without regard to case; or by a part of the description the system gives of
+it. Serial numbers are not used, as they say whose monitor it is. <code class="code docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">ls</span></code> shows these for the
+monitor of each OS window, and <code class="xref std std-option docutils literal notranslate"><span class="pre">kitty</span> <span class="pre">--debug-rendering</span></code> logs them
+when a window moves to another monitor.</p>
+<p>Unlike <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>, which only changes what programs are told, this
+changes what Silkie does: a monitor declared <code class="code docutils literal notranslate"><span class="pre">kind=eink</span></code> gets the
+e-paper behavior described for <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a>, and one declared
+<code class="code docutils literal notranslate"><span class="pre">color=gray</span></code> or <code class="code docutils literal notranslate"><span class="pre">mono</span></code> black text on white. The two are
+independent, so color e-paper is <code class="code docutils literal notranslate"><span class="pre">kind=eink</span> <span class="pre">color=rgb</span></code>. Declarations
+here override the built-in table of e-paper monitors and what the operating
+system says. Use this option once per monitor; when several lines select a
+monitor, each key takes its value from the last of them. <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>
+still overrides what programs are told.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -546,9 +708,13 @@ use <code class="code docutils literal notranslate"><span class="pre">color=rgb<
 <code class="code docutils literal notranslate"><span class="pre">bits</span></code> is then zero because the channels differ. A grayscale display uses
 <code class="code docutils literal notranslate"><span class="pre">color=gray</span> <span class="pre">gray_bits=4</span></code> for sixteen levels. <code class="code docutils literal notranslate"><span class="pre">color=mono</span></code> always
 means one bit; use <code class="code docutils literal notranslate"><span class="pre">gray</span></code> for more than two levels.</p>
-<p>The report identifies declared precision as <code class="code docutils literal notranslate"><span class="pre">configured</span></code>. Detected
-framebuffer widths are labeled <code class="code docutils literal notranslate"><span class="pre">framebuffer</span></code>, since they do not establish
-physical panel precision or color calibration. Unknown channel widths are zero.</p>
+<p>The report identifies declared precision as <code class="code docutils literal notranslate"><span class="pre">configured</span></code>, and precision
+from Silkie's table of monitors as <code class="code docutils literal notranslate"><span class="pre">model</span></code>. Detected framebuffer widths
+are labeled <code class="code docutils literal notranslate"><span class="pre">framebuffer</span></code>, since they do not establish physical panel
+precision or color calibration. Unknown channel widths are zero.</p>
+<p>This option applies to every monitor and only changes what programs are told,
+not what Silkie does; <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> declares the properties of one
+monitor and acts on them.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -573,12 +739,12 @@ physical panel precision or color calibration. Unknown channel widths are zero.<
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="show-pointer.html">
+          <a class="next-page" href="environment.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">显示指针信息</div>
+                <div class="title">Environment variables</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -628,9 +794,11 @@ physical panel precision or color calibration. Unknown channel widths are zero.<
 <li><a class="reference internal" href="#spatial-display">Spatial display</a></li>
 <li><a class="reference internal" href="#ssh-agent-forwarding">SSH agent forwarding</a></li>
 <li><a class="reference internal" href="#e-paper-and-color-switching">电子纸与配色切换</a></li>
+<li><a class="reference internal" href="#minimum-contrast">Minimum contrast</a></li>
 <li><a class="reference internal" href="#display-channel-precision">Display channel precision</a></li>
 <li><a class="reference internal" href="#fonts-and-cjk-text">字体与中日韩文本</a></li>
 <li><a class="reference internal" href="#input-limits">输入限制</a></li>
+<li><a class="reference internal" href="#compressed-scrollback">Compressed scrollback</a></li>
 </ul>
 </li>
 </ul>

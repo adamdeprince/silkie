@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="GPU 表面（零拷贝）" href="gpu-surface-protocol.html"><link rel="prev" title="矢量图像" href="vector-protocol.html">
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="Palette images" href="palette-image-protocol.html"><link rel="prev" title="矢量图像" href="vector-protocol.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/packed-image-protocol.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -346,48 +351,76 @@ an image because its precision or color model differs from the display.</p>
 <section id="discovery">
 <h2>Discovery<a class="headerlink" href="#discovery" title="链接到此标题。">¶</a></h2>
 <p>The <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a> lists accepted graphics formats in its
-<code class="docutils literal notranslate"><span class="pre">format</span></code> field, including <code class="docutils literal notranslate"><span class="pre">1,2,4,8,16</span></code> for the formats below. This listing
+<code class="docutils literal notranslate"><span class="pre">format</span></code> field, including <code class="docutils literal notranslate"><span class="pre">301,302,304,308,516</span></code> for the formats below. This listing
 does not depend on the display's color model or precision. The graphics
 protocol's <code class="docutils literal notranslate"><span class="pre">a=q</span></code> action also probes support for a particular image:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">q</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">s</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span><span class="n">VQ</span><span class="o">==&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">q</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">301</span><span class="p">,</span><span class="n">s</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">v</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span><span class="n">VQ</span><span class="o">==&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
 </pre></div>
 </div>
 <p>The one-byte payload is hexadecimal <code class="docutils literal notranslate"><span class="pre">55</span></code>: eight alternating black and white
 pixels. A terminal accepting it replies <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Gi=42;OK&lt;ESC&gt;\</span></code> without
 keeping the image. Applications should handle rejection or timeout and fall
-back to an accepted format.</p>
+back to an accepted format. A <span class="xref std std-ref">feature query</span>,
+for example <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Ga=q,i=42,e=t,f=301&lt;ESC&gt;\</span></code>, asks the same without sending
+pixels.</p>
 </section>
-<section id="grayscale-f-1-f-2-f-4-f-8">
-<h2>Grayscale: <code class="docutils literal notranslate"><span class="pre">f=1</span></code>, <code class="docutils literal notranslate"><span class="pre">f=2</span></code>, <code class="docutils literal notranslate"><span class="pre">f=4</span></code>, <code class="docutils literal notranslate"><span class="pre">f=8</span></code><a class="headerlink" href="#grayscale-f-1-f-2-f-4-f-8" title="链接到此标题。">¶</a></h2>
-<p>The <code class="docutils literal notranslate"><span class="pre">f</span></code> value is the number of bits per grayscale pixel. Values are unsigned
+<section id="format-numbers">
+<h2>Format numbers<a class="headerlink" href="#format-numbers" title="链接到此标题。">¶</a></h2>
+<p>Silkie numbers its raw formats by family, the base of the family plus the
+number of bits per pixel: <code class="docutils literal notranslate"><span class="pre">300</span></code> for gray, <code class="docutils literal notranslate"><span class="pre">400</span></code> for <a class="reference internal" href="palette-image-protocol.html"><span class="doc">palette images</span></a>,
+<code class="docutils literal notranslate"><span class="pre">500</span></code> for RGB without alpha and <code class="docutils literal notranslate"><span class="pre">600</span></code> for RGBA. Eight-bit gray is
+<code class="docutils literal notranslate"><span class="pre">f=308</span></code>, RGB565 is <code class="docutils literal notranslate"><span class="pre">f=516</span></code> and RGB10A2 is <code class="docutils literal notranslate"><span class="pre">f=632</span></code>. The numbers stay
+clear of those of the kitty graphics protocol, which uses <code class="docutils literal notranslate"><span class="pre">f=8</span></code> and <code class="docutils literal notranslate"><span class="pre">f=16</span></code>
+for its <a class="reference external" href="https://sw.kovidgoyal.net/kitty/graphics-protocol/#indexed-color-data">indexed color formats</a>,
+whose pixels are indices into the terminal's color palette. Silkie supports
+those formats as well. The formats of more than eight bits per channel,
+<code class="docutils literal notranslate"><span class="pre">f=316</span></code>, <code class="docutils literal notranslate"><span class="pre">f=632</span></code> and <code class="docutils literal notranslate"><span class="pre">f=664</span></code>, are described in
+<a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a>. <code class="docutils literal notranslate"><span class="pre">f=64</span></code> (half float RGBA, see
+<a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>) and <code class="docutils literal notranslate"><span class="pre">f=200</span></code> (vector images) keep the numbers they were
+released with.</p>
+<p>The numbers have moved twice during development. Versions before
+2026-11-16 used <code class="docutils literal notranslate"><span class="pre">f=1</span></code>, <code class="docutils literal notranslate"><span class="pre">f=2</span></code>, <code class="docutils literal notranslate"><span class="pre">f=4</span></code>, <code class="docutils literal notranslate"><span class="pre">f=8</span></code> and <code class="docutils literal notranslate"><span class="pre">f=16</span></code> for the packed
+formats; those numbers are no longer accepted for them. Versions from then
+until the high precision formats were added used <code class="docutils literal notranslate"><span class="pre">f=316</span></code> for RGB565, which
+is now <code class="docutils literal notranslate"><span class="pre">f=516</span></code>; <code class="docutils literal notranslate"><span class="pre">f=316</span></code> is now 16-bit gray, so an RGB565 image sent with
+the old number is shown as gray instead of being refused. A program can tell
+the two apart with a feature query for <code class="docutils literal notranslate"><span class="pre">f=516</span></code>.</p>
+</section>
+<section id="grayscale-f-301-f-302-f-304-f-308">
+<h2>Grayscale: <code class="docutils literal notranslate"><span class="pre">f=301</span></code>, <code class="docutils literal notranslate"><span class="pre">f=302</span></code>, <code class="docutils literal notranslate"><span class="pre">f=304</span></code>, <code class="docutils literal notranslate"><span class="pre">f=308</span></code><a class="headerlink" href="#grayscale-f-301-f-302-f-304-f-308" title="链接到此标题。">¶</a></h2>
+<p>The number of bits per grayscale pixel, <code class="docutils literal notranslate"><span class="pre">bits</span></code>, is <code class="docutils literal notranslate"><span class="pre">f</span> <span class="pre">-</span> <span class="pre">300</span></code>: one, two,
+four or eight. Values are unsigned
 intensities: zero is black, and the largest value is white. Pixels are opaque;
 there is no alpha channel or palette. The values have the sRGB transfer curve,
-not linear-light intensity. The <code class="docutils literal notranslate"><span class="pre">G</span></code> gamut key is ignored for grayscale.</p>
+not linear-light intensity, unless the <code class="docutils literal notranslate"><span class="pre">E</span></code> key of
+<a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a> names another curve. The <code class="docutils literal notranslate"><span class="pre">G</span></code> gamut key is
+ignored for grayscale.</p>
 <p>Pixels run left to right, rows top to bottom. Within each byte the leftmost
 pixel uses the most significant bits. Each row starts at a byte boundary;
 unused low bits in its last byte are ignored. There is no additional stride
 or padding between rows.</p>
-<p>For width <code class="docutils literal notranslate"><span class="pre">s</span></code>, height <code class="docutils literal notranslate"><span class="pre">v</span></code>, and format <code class="docutils literal notranslate"><span class="pre">f</span></code>, the decoded payload size is:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">row_bytes</span> <span class="o">=</span> <span class="n">ceil</span><span class="p">(</span><span class="n">s</span> <span class="o">*</span> <span class="n">f</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span>
+<p>For width <code class="docutils literal notranslate"><span class="pre">s</span></code>, height <code class="docutils literal notranslate"><span class="pre">v</span></code>, and <code class="docutils literal notranslate"><span class="pre">bits</span></code> as above, the decoded payload size is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">row_bytes</span> <span class="o">=</span> <span class="n">ceil</span><span class="p">(</span><span class="n">s</span> <span class="o">*</span> <span class="n">bits</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span>
 <span class="n">payload_bytes</span> <span class="o">=</span> <span class="n">row_bytes</span> <span class="o">*</span> <span class="n">v</span>
 </pre></div>
 </div>
 <p>For example, nine one-bit pixels require two bytes per row. A final byte
 <code class="docutils literal notranslate"><span class="pre">80</span></code> or <code class="docutils literal notranslate"><span class="pre">ff</span></code> gives the same ninth white pixel; its seven padding bits do
-not begin the next row. In <code class="docutils literal notranslate"><span class="pre">f=2</span></code>, byte <code class="docutils literal notranslate"><span class="pre">1b</span></code> contains four pixels at levels
+not begin the next row. In <code class="docutils literal notranslate"><span class="pre">f=302</span></code>, byte <code class="docutils literal notranslate"><span class="pre">1b</span></code> contains four pixels at levels
 <code class="docutils literal notranslate"><span class="pre">0,1,2,3</span></code>, corresponding to RGB byte values <code class="docutils literal notranslate"><span class="pre">0,85,170,255</span></code>.</p>
 <p>Silkie expands each intensity equally into red, green, and blue internally.
 For these four formats, the exact byte value is
-<code class="docutils literal notranslate"><span class="pre">sample</span> <span class="pre">*</span> <span class="pre">(255</span> <span class="pre">/</span> <span class="pre">((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">f)</span> <span class="pre">-</span> <span class="pre">1))</span></code>. No output-dependent quantization is
+<code class="docutils literal notranslate"><span class="pre">sample</span> <span class="pre">*</span> <span class="pre">(255</span> <span class="pre">/</span> <span class="pre">((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">bits)</span> <span class="pre">-</span> <span class="pre">1))</span></code>. No output-dependent quantization is
 applied to the stored image.</p>
 </section>
-<section id="rgb565-f-16">
-<h2>RGB565: <code class="docutils literal notranslate"><span class="pre">f=16</span></code><a class="headerlink" href="#rgb565-f-16" title="链接到此标题。">¶</a></h2>
+<section id="rgb565-f-516">
+<h2>RGB565: <code class="docutils literal notranslate"><span class="pre">f=516</span></code><a class="headerlink" href="#rgb565-f-516" title="链接到此标题。">¶</a></h2>
 <p>Each opaque pixel is a little-endian 16-bit word: red occupies bits 15–11,
 green bits 10–5, and blue bits 4–0. Each row is exactly <code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">*</span> <span class="pre">2</span></code> bytes, with
 no padding. Pixel and row order are the same as grayscale.</p>
-<p>Channels use the sRGB transfer curve. The <code class="docutils literal notranslate"><span class="pre">G</span></code> gamut key has the same meaning
-as for <code class="docutils literal notranslate"><span class="pre">f=24</span></code>. Expansion to the existing eight-bit RGB representation uses
+<p>Channels use the sRGB transfer curve, unless the <code class="docutils literal notranslate"><span class="pre">E</span></code> key of
+<a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a> names another one. The <code class="docutils literal notranslate"><span class="pre">G</span></code> gamut key has the
+same meaning as for <code class="docutils literal notranslate"><span class="pre">f=24</span></code>. Expansion to the existing eight-bit RGB representation uses
 round-to-nearest independently for each channel:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">red</span>   <span class="o">=</span> <span class="p">(</span><span class="n">r5</span> <span class="o">*</span> <span class="mi">255</span> <span class="o">+</span> <span class="mi">15</span><span class="p">)</span> <span class="o">/</span> <span class="mi">31</span>
 <span class="n">green</span> <span class="o">=</span> <span class="p">(</span><span class="n">g6</span> <span class="o">*</span> <span class="mi">255</span> <span class="o">+</span> <span class="mi">31</span><span class="p">)</span> <span class="o">/</span> <span class="mi">63</span>
@@ -413,6 +446,8 @@ references, and animation-frame uploads work as for other raster inputs.
 Packed pixels expand before caching and GPU upload; their wire precision
 does not restrict later frame formats or depend on display capabilities.
 Existing rules for mixing ordinary and HDR animation frames still apply.</p>
+<p>Images of indices into a palette the program sends, with alpha in every
+palette slot, are described in <a class="reference internal" href="palette-image-protocol.html"><span class="doc">Palette images</span></a>.</p>
 <p>For inherited framing, chunking, placement, and animation fields, see the
 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/graphics-protocol/">upstream graphics protocol manual</a>.</p>
 </section>
@@ -423,12 +458,12 @@ Existing rules for mixing ordinary and HDR animation frames still apply.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="gpu-surface-protocol.html">
+          <a class="next-page" href="palette-image-protocol.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">GPU 表面（零拷贝）</div>
+                <div class="title">Palette images</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -474,8 +509,9 @@ Existing rules for mixing ordinary and HDR animation frames still apply.</p>
             <ul>
 <li><a class="reference internal" href="#">Packed image formats</a><ul>
 <li><a class="reference internal" href="#discovery">Discovery</a></li>
-<li><a class="reference internal" href="#grayscale-f-1-f-2-f-4-f-8">Grayscale: <code class="docutils literal notranslate"><span class="pre">f=1</span></code>, <code class="docutils literal notranslate"><span class="pre">f=2</span></code>, <code class="docutils literal notranslate"><span class="pre">f=4</span></code>, <code class="docutils literal notranslate"><span class="pre">f=8</span></code></a></li>
-<li><a class="reference internal" href="#rgb565-f-16">RGB565: <code class="docutils literal notranslate"><span class="pre">f=16</span></code></a></li>
+<li><a class="reference internal" href="#format-numbers">Format numbers</a></li>
+<li><a class="reference internal" href="#grayscale-f-301-f-302-f-304-f-308">Grayscale: <code class="docutils literal notranslate"><span class="pre">f=301</span></code>, <code class="docutils literal notranslate"><span class="pre">f=302</span></code>, <code class="docutils literal notranslate"><span class="pre">f=304</span></code>, <code class="docutils literal notranslate"><span class="pre">f=308</span></code></a></li>
+<li><a class="reference internal" href="#rgb565-f-516">RGB565: <code class="docutils literal notranslate"><span class="pre">f=516</span></code></a></li>
 <li><a class="reference internal" href="#transport-and-lifecycle">Transport and lifecycle</a></li>
 </ul>
 </li>

@@ -649,7 +649,7 @@ class Options:
     default_profile: str = 'default'
     detect_urls: bool = True
     dim_opacity: float = 0.4
-    disable_ligatures: int = 0
+    disable_ligatures: int = 2
     display_info: str = ''
     dock_attention_on_blocked: bool = False
     dock_status_badge: bool = True

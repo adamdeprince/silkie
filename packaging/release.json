@@ -1,6 +1,6 @@
 {
-  "version": "0.49.2-silkie20261116.2",
-  "debian_version": "0.49.2+silkie20261116.2",
+  "version": "0.49.2-silkie20261117.1",
+  "debian_version": "0.49.2+silkie20261117.1",
   "upstream_version": "0.49.2",
   "build_hosts": {
     "localhost": "macOS arm64",

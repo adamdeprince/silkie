@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="字符单元背景透明度" href="cell-alpha-protocol.html"><link rel="prev" title="HDR 亮度协议" href="hdr-protocol.html">
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="Deep colors" href="deep-color-protocol.html"><link rel="prev" title="HDR 亮度协议" href="hdr-protocol.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/wide-gamut-protocol.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2"><a class="reference internal" href="display-protocol.html">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -349,6 +354,8 @@
 </pre></div>
 </div>
 <p>色域属于与其一同指定的 RGB 颜色。选择十六种基本色、256 色调色板颜色、默认色，或不带 ID 的 RGB 色时，也会选择 sRGB。反显时色域跟随颜色，因此前景为 Display P3 的反显单元会显示 Display P3 背景。下划线和删除线等装饰使用前景及其色域，除非通过 <code class="docutils literal notranslate"><span class="pre">58</span></code> 设置装饰色，后者始终为 sRGB。</p>
+<p>Colors with more than eight bits per channel, in any of these gamuts, are
+given with the <a class="reference internal" href="deep-color-protocol.html"><span class="doc">Deep colors</span></a>.</p>
 <p>不认识 ID 的终端会跳过它，因此程序可无条件发送，在其他终端上将相同分量解释为 sRGB，饱和度稍低但不会产生错误。ID 仅在冒号形式中识别。分号形式 <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;[38;2;&lt;r&gt;;&lt;g&gt;;&lt;b&gt;m</span></code> 没有 ID，因为随后的参数属于无关属性。</p>
 </section>
 <section id="images">
@@ -357,7 +364,19 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Gf</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span><span class="n">s</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">v</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span><span class="n">G</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span><span class="o">&lt;</span><span class="n">payload</span><span class="o">&gt;&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">G=1</span></code> 为 Display P3，<code class="docutils literal notranslate"><span class="pre">G=2</span></code> 为 Rec. 2020；<code class="docutils literal notranslate"><span class="pre">G=0</span></code>、其他值或省略键均为 sRGB。与文本一样，全部色域分量都用 sRGB 传递曲线编码。该键适用于 RGB 和 RGBA 数据（<code class="docutils literal notranslate"><span class="pre">f=24</span></code> 和 <code class="docutils literal notranslate"><span class="pre">f=32</span></code>），分块传输时应位于首块。它同样适用于 GPU 表面 <code class="docutils literal notranslate"><span class="pre">t=g</span></code> 的像素。<code class="docutils literal notranslate"><span class="pre">f=64</span></code> 忽略该键，因为按定义它是线性扩展 sRGB，见 <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>。矢量图像 <code class="docutils literal notranslate"><span class="pre">f=200</span></code> 也忽略 <code class="docutils literal notranslate"><span class="pre">G</span></code>：每种绘制色在 <a class="reference internal" href="vector-protocol.html"><span class="doc">矢量图像</span></a> 中各自指定色彩空间。矢量文本、路径、渐变和内嵌图像共用线性扩展 sRGB 合成器，裁剪与混合过程会保留广色域和 HDR 值。</p>
+<p><code class="docutils literal notranslate"><span class="pre">G=1</span></code> is Display P3 and <code class="docutils literal notranslate"><span class="pre">G=2</span></code> is Rec. 2020. <code class="docutils literal notranslate"><span class="pre">G=0</span></code>, any other value and
+no key at all are sRGB. As for text, the components are encoded with the sRGB
+transfer curve in every gamut. The key applies to RGB and RGBA data, <code class="docutils literal notranslate"><span class="pre">f=24</span></code>
+and <code class="docutils literal notranslate"><span class="pre">f=32</span></code>, and belongs in the first chunk of a chunked transmission. In
+Silkie it also applies to RGB565 and to the high precision formats <code class="docutils literal notranslate"><span class="pre">f=632</span></code>
+and <code class="docutils literal notranslate"><span class="pre">f=664</span></code>, whose curve the <code class="docutils literal notranslate"><span class="pre">E</span></code> key may change, so that <code class="docutils literal notranslate"><span class="pre">G=2</span></code> with
+<code class="docutils literal notranslate"><span class="pre">E=16</span></code> is Rec. 2020 with PQ, see <a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a>. It
+applies in the same way to the pixels of a GPU surface, <code class="docutils literal notranslate"><span class="pre">t=g</span></code>. It is ignored
+for <code class="docutils literal notranslate"><span class="pre">f=64</span></code>, whose pixels are linear extended sRGB by definition, see the
+<a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>. A vector image, <code class="docutils literal notranslate"><span class="pre">f=200</span></code>, also ignores <code class="docutils literal notranslate"><span class="pre">G</span></code>: each paint
+names its own color space in the <a class="reference internal" href="vector-protocol.html"><span class="doc">矢量图像</span></a>. Vector text, paths,
+gradients and embedded images share a linear extended-sRGB compositor and
+retain wide-gamut and HDR values through clipping and blending.</p>
 <p>PNG 图像 <code class="docutils literal notranslate"><span class="pre">f=100</span></code> 自行描述颜色，因此忽略此键。当内嵌配置文件的基色属于 Display P3 或 Rec. 2020 时（无论其曲线如何），或 <code class="docutils literal notranslate"><span class="pre">cICP</span></code> 块指定这些基色与 sRGB 传递函数时，PNG 就属于相应色域。其他 PNG 按以往方式处理为 sRGB，带配置文件时先转换到 sRGB。</p>
 <p>动画图像的所有帧都属于图像创建数据的色域。以其他色域传输的帧会在加载时转换到图像色域，因此程序可按每帧现有色域直接发送。</p>
 <p>与文本颜色 ID 不同，不认识该键的终端可能不会跳过它，而是拒绝整条命令且不回复。因此程序应先使用图形协议查询操作，附带单个像素：:</p>
@@ -386,12 +405,12 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="cell-alpha-protocol.html">
+          <a class="next-page" href="deep-color-protocol.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">字符单元背景透明度</div>
+                <div class="title">Deep colors</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>

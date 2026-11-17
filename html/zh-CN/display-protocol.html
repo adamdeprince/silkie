@@ -285,14 +285,19 @@
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="precision-image-protocol.html">High precision images</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image-tiling.html">Large images and image storage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="gpu-surface-protocol.html">GPU 表面（零拷贝）</a></li>
 <li class="toctree-l2"><a class="reference internal" href="hdr-protocol.html">HDR 亮度协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="wide-gamut-protocol.html">广色域颜色</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deep-color-protocol.html">Deep colors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cell-alpha-protocol.html">字符单元背景透明度</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">显示信息协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="latency-protocol.html">低延迟协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="frame-protocol.html">画面呈现协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html">Silkie 配置</a></li>
+<li class="toctree-l2"><a class="reference internal" href="environment.html">Environment variables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="show-pointer.html">显示指针信息</a></li>
 <li class="toctree-l2"><a class="reference internal" href="window-actions.html">窗口操作</a></li>
 </ul>
@@ -352,7 +357,7 @@
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">id</span></code> 是程序自行选择的非负 31 位整数，回复原样返回，以便匹配查询。支持协议的终端回答：:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">p3</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">8333</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">254</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">42</span> <span class="p">:</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">p3</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">8333</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">254</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="p">:</span> <span class="n">output_bits</span><span class="o">=</span><span class="mi">16</span> <span class="p">:</span> <span class="n">output_type</span><span class="o">=</span><span class="nb">float</span> <span class="p">:</span> <span class="n">output_dither</span><span class="o">=</span><span class="mi">0</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
 </pre></div>
 </div>
 <p>不支持本协议的终端会忽略查询，因此程序必须设置超时，并回退为假定普通彩色显示器。</p>
@@ -360,7 +365,13 @@
 <dl class="simple">
 <dt><code class="docutils literal notranslate"><span class="pre">mode</span></code></dt><dd><p>下述模式的当前状态，<code class="docutils literal notranslate"><span class="pre">0</span></code> 或 <code class="docutils literal notranslate"><span class="pre">1</span></code>。</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">kind</span></code></dt><dd><p><code class="docutils literal notranslate"><span class="pre">lcd</span></code>、<code class="docutils literal notranslate"><span class="pre">oled</span></code>、<code class="docutils literal notranslate"><span class="pre">eink</span></code> 或 <code class="docutils literal notranslate"><span class="pre">unknown</span></code>。电子墨水屏更新较慢且会残影，因此程序应避免动画和平滑滚动，采用低频、大步幅重绘。</p>
+<dt><code class="docutils literal notranslate"><span class="pre">kind</span></code></dt><dd><p>One of <code class="docutils literal notranslate"><span class="pre">lcd</span></code>, <code class="docutils literal notranslate"><span class="pre">oled</span></code>, <code class="docutils literal notranslate"><span class="pre">eink</span></code> and <code class="docutils literal notranslate"><span class="pre">unknown</span></code>. On e-ink, updates are
+slow and leave ghosts, so a program avoids animation and smooth scrolling
+and redraws in large, infrequent steps. It also avoids dithering, whose
+fine pattern shows as grain and ghosts as it changes, and reduces colors to
+the levels of the panel by taking the nearest. <code class="docutils literal notranslate"><span class="pre">kind</span></code> says nothing of
+color: there is color e-paper, and <code class="docutils literal notranslate"><span class="pre">color</span></code> is what says whether a display
+shows only gray.</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">color</span></code></dt><dd><p>One of <code class="docutils literal notranslate"><span class="pre">rgb</span></code> (independent red, green and blue channels), <code class="docutils literal notranslate"><span class="pre">gray</span></code>
 (one grayscale channel) and <code class="docutils literal notranslate"><span class="pre">mono</span></code> (only black and white).</p>
@@ -382,16 +393,40 @@ display is <code class="docutils literal notranslate"><span class="pre">color=gr
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">precision</span></code></dt><dd><p>Where the channel widths came from: <code class="docutils literal notranslate"><span class="pre">framebuffer</span></code> for the system's
 display mode or window visual, <code class="docutils literal notranslate"><span class="pre">configured</span></code> for a user's declaration,
-or <code class="docutils literal notranslate"><span class="pre">unknown</span></code>. A framebuffer width does not establish the physical
+<code class="docutils literal notranslate"><span class="pre">model</span></code> for what the terminal knows of the model of the monitor, or
+<code class="docutils literal notranslate"><span class="pre">unknown</span></code>. A program treats a value it does not know as <code class="docutils literal notranslate"><span class="pre">unknown</span></code>. A framebuffer width does not establish the physical
 panel's precision: the compositor, display link, panel, or dithering may
 change what is finally shown. These fields describe available color
 representation, not a measurement of calibration or color error.</p>
 </dd>
+<dt><code class="docutils literal notranslate"><span class="pre">output_bits</span></code></dt><dd><p>Bits per color channel of the surface the terminal itself draws into and
+hands to the system, <code class="docutils literal notranslate"><span class="pre">0</span></code> when unknown or its channels have different
+widths. The fields above describe the display; this one describes how
+finely the terminal keeps what a program sends, a gradient in an image
+with 16 bits per channel for example, on its way there. What finally
+reaches the panel is the lesser of the two.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">output_type</span></code></dt><dd><p>What the channels of that surface hold: <code class="docutils literal notranslate"><span class="pre">fixed</span></code>, integers standing for
+fractions of full intensity, <code class="docutils literal notranslate"><span class="pre">float</span></code>, floating point numbers, or
+<code class="docutils literal notranslate"><span class="pre">unknown</span></code>. A <code class="docutils literal notranslate"><span class="pre">float</span></code> surface with <code class="docutils literal notranslate"><span class="pre">output_bits=16</span></code> holds half floats,
+with 11 significant bits, in linear light; the system quantizes it for the
+display.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">output_dither</span></code></dt><dd><p>The bits of the steps the terminal dithers what it draws to, of the
+narrowest channel, <code class="docutils literal notranslate"><span class="pre">0</span></code> when it does not dither. Colors between those
+steps show as a fine pattern rather than being rounded into bands; colors
+that are exactly a step are never dithered. This can be less than
+<code class="docutils literal notranslate"><span class="pre">output_bits</span></code>: a deep surface on a display that is not known to show
+more than 8 bits is dithered to the steps of 8 bits, as the system rounds
+it to such a display without dithering. A program that dithers its own
+output can tell from this to which steps, and whether the terminal would
+do it again.</p>
+</dd>
 </dl>
-<p>The individual widths and <code class="docutils literal notranslate"><span class="pre">precision</span></code> are additive version-1 fields. Clients
-must ignore unknown fields and treat missing individual widths as unknown;
-an older terminal's nonzero <code class="docutils literal notranslate"><span class="pre">bits</span></code> still applies equally to its active
-channels.</p>
+<p>The individual widths, <code class="docutils literal notranslate"><span class="pre">precision</span></code> and the <code class="docutils literal notranslate"><span class="pre">output</span></code> fields are additive
+version-1 fields. Clients must ignore unknown fields and treat missing
+individual widths as unknown; an older terminal's nonzero <code class="docutils literal notranslate"><span class="pre">bits</span></code> still
+applies equally to its active channels.</p>
 <dl class="simple">
 <dt><code class="docutils literal notranslate"><span class="pre">gamut</span></code></dt><dd><p><code class="docutils literal notranslate"><span class="pre">srgb</span></code>、<code class="docutils literal notranslate"><span class="pre">p3</span></code>、<code class="docutils literal notranslate"><span class="pre">rec2020</span></code> 或 <code class="docutils literal notranslate"><span class="pre">unknown</span></code>，表示显示器覆盖的最宽色彩空间。</p>
 </dd>
@@ -404,6 +439,33 @@ channels.</p>
 <dt><code class="docutils literal notranslate"><span class="pre">ppi</span></code></dt><dd><p>每英寸的物理像素数：程序绘制的多少像素对应屏幕上一英寸，供程序按真实尺寸绘制。未知时为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。</p>
 </dd>
 </dl>
+<p>The monitor the window is on, where the terminal knows it, which a program
+can use to recognize a monitor whose properties it knows better than the
+system, or to show the user which monitor the window is on. Each of these
+fields is left out when it is not known:</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">mfg</span></code>, <code class="docutils literal notranslate"><span class="pre">product</span></code></dt><dd><p>The manufacturer ID and the product code of the monitor's EDID: three
+capital letters, such as <code class="docutils literal notranslate"><span class="pre">OBX</span></code>, and a number from <code class="docutils literal notranslate"><span class="pre">0</span></code> to <code class="docutils literal notranslate"><span class="pre">65535</span></code>.
+<code class="docutils literal notranslate"><span class="pre">product</span></code> is sent only with <code class="docutils literal notranslate"><span class="pre">mfg</span></code>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">make</span></code>, <code class="docutils literal notranslate"><span class="pre">model</span></code></dt><dd><p>The manufacturer and the model as the system gives them, else from the
+EDID, its manufacturer ID and its name descriptor, such as <code class="docutils literal notranslate"><span class="pre">MIRA253</span></code>.</p>
+</dd>
+</dl>
+<p>No serial number is sent: it would tell whose monitor it is, and the program
+asking may be running on another machine.</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">connector</span></code></dt><dd><p>The system's name for the connection the monitor is on, such as <code class="docutils literal notranslate"><span class="pre">DP-7</span></code>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">description</span></code></dt><dd><p>A description of the monitor meant for people, as the system gives it.</p>
+</dd>
+</dl>
+<p>These four are strings, UTF-8 without control characters encoded as base64
+with padding, as the other extensions of this terminal send strings. For
+example a monitor reported as <code class="docutils literal notranslate"><span class="pre">mfg=OBX</span> <span class="pre">:</span> <span class="pre">product=17</span> <span class="pre">:</span> <span class="pre">make=T0JY</span> <span class="pre">:</span>
+<span class="pre">model=TUlSQTI1Mw==</span> <span class="pre">:</span> <span class="pre">connector=RFAtNw==</span></code> is an ONYX BOOX Mira Pro, make
+<code class="docutils literal notranslate"><span class="pre">OBX</span></code> and model <code class="docutils literal notranslate"><span class="pre">MIRA253</span></code>, on <code class="docutils literal notranslate"><span class="pre">DP-7</span></code>. A move to another monitor is a
+change, and sends an event even when every other field is the same.</p>
 <p>终端无法确定的值为 <code class="docutils literal notranslate"><span class="pre">unknown</span></code> 或 <code class="docutils literal notranslate"><span class="pre">0</span></code>，绝不猜测。例如未连接客户端的多路复用器，若不了解显示器，所有字段均回答未知，程序的处境不会比查询前更差。</p>
 </section>
 <section id="pixels">
@@ -427,7 +489,7 @@ channels.</p>
 <section id="events">
 <h2>事件<a class="headerlink" href="#events" title="链接到此标题。">¶</a></h2>
 <p>开启模式会先发送一次包含当前值的事件，无需单独查询。此后，只要模式开启，任何字段变化都会产生一条事件：窗口移到缩放比例或刷新率不同的显示器、显示亮度设置改变了亮度余量，或切换了色彩配置文件：:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">srgb</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">16666</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">96</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">display</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">event</span> <span class="p">:</span> <span class="n">t</span><span class="o">=</span><span class="mi">408211</span> <span class="p">:</span> <span class="n">kind</span><span class="o">=</span><span class="n">lcd</span> <span class="p">:</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="p">:</span> <span class="n">bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gamut</span><span class="o">=</span><span class="n">srgb</span> <span class="p">:</span> <span class="n">headroom</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">scale</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">period</span><span class="o">=</span><span class="mi">16666</span> <span class="p">:</span> <span class="n">ppi</span><span class="o">=</span><span class="mi">96</span> <span class="p">:</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">8</span> <span class="p">:</span> <span class="n">gray_bits</span><span class="o">=</span><span class="mi">0</span> <span class="p">:</span> <span class="n">precision</span><span class="o">=</span><span class="n">framebuffer</span> <span class="p">:</span> <span class="n">output_bits</span><span class="o">=</span><span class="mi">10</span> <span class="p">:</span> <span class="n">output_type</span><span class="o">=</span><span class="n">fixed</span> <span class="p">:</span> <span class="n">output_dither</span><span class="o">=</span><span class="mi">8</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
 </pre></div>
 </div>
 <p>字段与 <code class="docutils literal notranslate"><span class="pre">cap</span></code> 回复相同，但不含 <code class="docutils literal notranslate"><span class="pre">id</span></code> 和 <code class="docutils literal notranslate"><span class="pre">mode</span></code>，并带有 <code class="docutils literal notranslate"><span class="pre">t</span></code>，表示终端获知变化的时刻，以全部扩展共用时钟上的毫秒表示，见 <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a>。变化相对于上次事件计算，因此关闭再开启模式会报告一次当前值，此后仅报告变化。变化可能稍后才报告，程序关闭模式后仍可能收到已经在途的事件。终端和中继绝不合并或丢弃事件。</p>
@@ -439,7 +501,51 @@ channels.</p>
 </section>
 <section id="configuration">
 <h2>配置<a class="headerlink" href="#configuration" title="链接到此标题。">¶</a></h2>
-<p>操作系统能报告多数属性，但并非全部；例如没有信息直接告诉终端它位于电子墨水屏上。在 Silkie 中，<a class="reference internal" href="configuration.html#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a> 声明电子纸显示器，并在未明确选择浅色或深色配色时启用白底黑字。它优先于检测到的显示器类型和 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=...</span></code>。运行时用 <code class="docutils literal notranslate"><span class="pre">set_eink_mode</span></code> 切换会立即通知显示信息订阅者。<a class="reference internal" href="configuration.html#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> 可声明操作系统无法提供的个别属性，并覆盖检测；仅设置 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> 会改变报告而不改变颜色。两种设置都不猜测电子纸是灰度还是彩色。目前 Silkie 仅在 macOS 上报告 <code class="docutils literal notranslate"><span class="pre">kind</span></code>，在 macOS 及实现色彩管理协议的 Wayland 合成器上报告 <code class="docutils literal notranslate"><span class="pre">gamut</span></code>。后者由合成器提供显示器基色，<code class="docutils literal notranslate"><span class="pre">gamut</span></code> 选择显示器在 CIE 1931 色度图上覆盖面积至少十分之九的最宽色域；两种较宽色域均未达到时为 <code class="docutils literal notranslate"><span class="pre">srgb</span></code>。<code class="docutils literal notranslate"><span class="pre">headroom</span></code> 是 <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a> 的亮度余量，已应用 <a class="reference internal" href="configuration.html#opt-hdr_max_headroom"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr_max_headroom</span></code></a> 上限；除非启用 <a class="reference internal" href="configuration.html#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> 且窗口实际显示 HDR，否则为 <code class="docutils literal notranslate"><span class="pre">1</span></code>。macOS 和 Wayland 何时可使用 HDR 见该页。</p>
+<p>The operating system reports most of these values, but not all. Nothing tells
+a terminal that it is on e-ink: e-paper monitors say in their EDID that they
+are RGB color displays, and operating systems pass that on. Silkie therefore
+goes by which monitor the window is on, as the system identifies it:</p>
+<ul class="simple">
+<li><p>On Wayland, the make and model of <code class="docutils literal notranslate"><span class="pre">wl_output</span></code> and the name and description
+of <code class="docutils literal notranslate"><span class="pre">wl_output</span></code> (version 4) or <code class="docutils literal notranslate"><span class="pre">xdg_output</span></code>. No Wayland protocol gives the
+EDID. Mutter, for example, gives an ONYX BOOX Mira Pro as make <code class="docutils literal notranslate"><span class="pre">OBX</span></code>, model
+<code class="docutils literal notranslate"><span class="pre">MIRA253</span></code>, name <code class="docutils literal notranslate"><span class="pre">DP-7</span></code> and description <code class="docutils literal notranslate"><span class="pre">OBX</span> <span class="pre">25&quot;</span></code>. On Linux Silkie also
+reads the EDID of the connector with that name from
+<code class="file docutils literal notranslate"><span class="pre">/sys/class/drm</span></code>, for the product code, but only when exactly one
+connector has the name and its EDID has the model the compositor gave, so
+that a nested or remote compositor never gets the EDID of another monitor.</p></li>
+<li><p>On X11, the name of the RandR output and its <code class="docutils literal notranslate"><span class="pre">EDID</span></code> property.</p></li>
+<li><p>On macOS, the name of the screen, as model, and the EDID manufacturer and
+product codes that Core Graphics gives as its vendor and model numbers.</p></li>
+</ul>
+<p>Silkie has a table of e-paper monitors, matched on these, which says what each
+is: e-paper, and whether it shows only gray, and with how many levels where
+that is known. The <a class="reference internal" href="configuration.html#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> option declares the properties of a
+monitor, overriding the table and the OS. A window on e-paper (<code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>)
+avoids what ghosts: blinking, animation and dithering, so <code class="docutils literal notranslate"><span class="pre">output_dither</span></code> is
+<code class="docutils literal notranslate"><span class="pre">0</span></code> there. For now custom shaders, the visual bell, pixel scrolling and the
+repaint timing are as on any display, and Silkie does not reduce images to the
+levels of gray of the panel: the monitor does that. A window on a display that shows only gray (<code class="docutils literal notranslate"><span class="pre">color=gray</span></code> or
+<code class="docutils literal notranslate"><span class="pre">mono</span></code>) gets black text on white, or white on black with an explicit dark
+color scheme. The two are independent. All of this follows the window from
+monitor to monitor, once a move has lasted a moment, as for the depth of the
+display below, and programs with the mode on get an event. <a class="reference internal" href="configuration.html#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a>
+treats every display as e-paper, taking a display whose colors nothing declares
+to show gray, and takes precedence over <code class="docutils literal notranslate"><span class="pre">kind=...</span></code> in the options. Runtime
+changes with <code class="docutils literal notranslate"><span class="pre">set_eink_mode</span></code> notify display subscribers immediately. The
+<a class="reference internal" href="configuration.html#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> option declares individual properties of every display,
+overriding the rest, but only in what programs are told: using only
+<code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> changes the report without changing what Silkie
+does. Nothing guesses whether an e-paper panel is grayscale or color. Silkie
+reports <code class="docutils literal notranslate"><span class="pre">kind</span></code> on macOS for built-in displays, as <code class="docutils literal notranslate"><span class="pre">lcd</span></code>, and for the
+monitors it knows, and <code class="docutils literal notranslate"><span class="pre">gamut</span></code> on macOS and on Wayland compositors that
+implement the color management protocol. There the compositor gives the
+primaries of the display, and <code class="docutils literal notranslate"><span class="pre">gamut</span></code> is the widest of the three whose area
+in the CIE 1931 chromaticity diagram the display covers at least nine tenths
+of, <code class="docutils literal notranslate"><span class="pre">srgb</span></code> when it covers neither of the wider two. <code class="docutils literal notranslate"><span class="pre">headroom</span></code> is the
+headroom of the <a class="reference internal" href="hdr-protocol.html"><span class="doc">HDR 亮度协议</span></a>, after the cap of <a class="reference internal" href="configuration.html#opt-hdr_max_headroom"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr_max_headroom</span></code></a>,
+so it is <code class="docutils literal notranslate"><span class="pre">1</span></code> unless <a class="reference internal" href="configuration.html#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> is enabled and the window is actually showing
+HDR, which that page says when to expect on macOS and on Wayland.</p>
 <p>For a known ten-bit RGB panel or a sixteen-level grayscale panel, configure:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">display_info</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span> <span class="n">red_bits</span><span class="o">=</span><span class="mi">10</span> <span class="n">green_bits</span><span class="o">=</span><span class="mi">10</span> <span class="n">blue_bits</span><span class="o">=</span><span class="mi">10</span>
 </pre></div>
@@ -468,6 +574,34 @@ system cannot supply them. Applications may query the fields with:</p>
 <p>Responses and subscribed events both carry the channel widths; moving to a
 display with a different width triggers an event even if its other properties
 are unchanged.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">output</span></code> fields are what OpenGL says about the surface of the window
+once it has been drawn, <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">unknown</span></code> before that, and are not
+affected by <a class="reference internal" href="configuration.html#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>. On e-paper nothing is dithered, whatever
+<code class="xref std std-opt docutils literal notranslate"><span class="pre">output_dither</span></code> says, and <code class="docutils literal notranslate"><span class="pre">output_dither</span></code> is <code class="docutils literal notranslate"><span class="pre">0</span></code>. Which surface a window gets is chosen with
+<code class="xref std std-opt docutils literal notranslate"><span class="pre">deep_color</span></code>, and whether and to which steps it is dithered with
+<code class="xref std std-opt docutils literal notranslate"><span class="pre">output_dither</span></code>. They change, with an event, when the window is moved to
+a display of another depth: the steps dithered to follow the display, and on
+macOS a window that has a floating point surface only for HDR, with
+<code class="xref std std-opt docutils literal notranslate"><span class="pre">deep_color</span></code> set to <code class="code docutils literal notranslate"><span class="pre">never</span></code>, switches between it and an 8 bit one. A move is acted on once it has lasted a moment, so a window dragged
+across the boundary between two displays does not flip back and forth.</p>
+<p>On macOS the system reports 8 bits per sample even for a MacBook Pro's 10 bit
+XDR panel, so <code class="docutils literal notranslate"><span class="pre">bits</span></code> stays <code class="docutils literal notranslate"><span class="pre">8</span></code> there while the window has a floating point
+surface, <code class="docutils literal notranslate"><span class="pre">output_bits=16</span> <span class="pre">:</span> <span class="pre">output_type=float</span></code>, and the system, not the
+terminal, quantizes what it shows for the panel. A screen that supports
+extended dynamic range is taken to be deep.</p>
+<p>What is known about the depth of a display, and when, differs. macOS and X11
+know it before a window exists: the screen a window opens on, and the depth of
+the X screen, which is the same for all its monitors, so on X11 nothing
+changes as a window moves. On Wayland a window is on no output until it is
+shown, and the compositor says which output governs it, the one whose image
+description it prefers for the window, only after that. Until then Silkie
+goes by the image descriptions of all outputs, which color management gives
+for every output from the start. No Wayland protocol gives the depth of an
+SDR output: an output is known to be deep only when its description is HDR
+(PQ, HLG or linear transfer, or a peak luminance above its reference white).
+A Wayland window therefore gets a 10 bit surface in any case, which costs no
+more than an 8 bit one, and is dithered to 8 bit steps until its output is
+known to be deep.</p>
 <p><code class="docutils literal notranslate"><span class="pre">scale</span></code> 是窗口系统提供给窗口的比例：macOS 的 backing scale factor、Wayland 表面的首选比例（合成器支持时可为小数），以及 X11 从 <code class="docutils literal notranslate"><span class="pre">Xft.dpi</span></code> 取得的桌面比例。在 X11 和能声明小数比例的 Wayland 合成器上，Silkie 绘制的像素对应面板像素。在 macOS 上，它们是系统为显示器保存的帧缓冲区像素，默认分辨率下对应面板原生像素。选择缩放分辨率（显示设置中的“更多空间”及相邻选项）时，系统会将帧缓冲区重采样到面板，类似 Wayland 合成器对只能提供整数缩放比例的窗口所做的处理。这时 Silkie 的像素不再严格对应面板像素，任何应用都无法避免；macOS 上的 <code class="docutils literal notranslate"><span class="pre">ppi</span></code> 统计的是 Silkie 绘制的像素。</p>
 <p>不提供物理尺寸的显示器（例如远程会话或虚拟机中的虚拟显示器），其 <code class="docutils literal notranslate"><span class="pre">ppi</span></code> 为 <code class="docutils literal notranslate"><span class="pre">0</span></code>。窗口系统可能假定每英寸 96 或 72 像素，但这是猜测，不会转发给程序。</p>
 </section>

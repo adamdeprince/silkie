@@ -90,8 +90,15 @@ bool historybuf_line_is_compressed(HistoryBuf *self, index_type lnum);
 // recompressed if changed.
 #define HISTORY_HAS_HYPERLINKS 1u
 #define HISTORY_HAS_TEXT_IDX 2u
+// a foreground, background or decoration color word of DEEP_COLOR_TYPE, see deep-colors.h
+#define HISTORY_HAS_DEEP_COLORS 4u
 typedef bool (*historybuf_cells_visitor)(void *data, CPUCell *cells, index_type xnum);
 void historybuf_rewrite_cpu_cells(HistoryBuf *self, unsigned needs, historybuf_cells_visitor visitor, void *data);
+// Call visitor with the GPU cells of every visible line, read only. Compressed
+// frames and encoded blocks that hold no cells with one of the given properties
+// (HISTORY_HAS_*) are skipped without being decompressed.
+typedef void (*historybuf_gpu_cells_visitor)(void *data, const GPUCell *cells, index_type xnum);
+void historybuf_visit_gpu_cells(HistoryBuf *self, unsigned needs, historybuf_gpu_cells_visitor visitor, void *data);
 // Apply a marker to the lines whose cells are in memory and drop the marks the
 // compressed lines carry, which are recomputed when those lines are rendered.
 void historybuf_apply_marker(HistoryBuf *self, PyObject *marker, ANSIBuf *buf);
