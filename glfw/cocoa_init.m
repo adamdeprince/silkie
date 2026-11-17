@@ -1109,8 +1109,31 @@ typedef struct {
     GLFWuserdatafun free_callback_data;
 } Timer;
 
-static Timer timers[128] = {{0}};
-static size_t num_timers = 0;
+// Grows as timers are added. Never keep a pointer into it across a call that
+// can add a timer, such as a timer callback, since that can move it.
+static Timer *timers = NULL;
+static size_t num_timers = 0, timers_capacity = 0;
+
+static bool
+grow_timers(void) {
+    size_t cap = timers_capacity ? timers_capacity : 64;
+    if (timers_capacity) {
+        if (cap > SIZE_MAX / 2) goto overflow;
+        cap *= 2;
+    }
+    if (cap > SIZE_MAX / sizeof(Timer)) goto overflow;
+    Timer *t = realloc(timers, cap * sizeof(Timer));
+    if (!t) {
+        _glfwInputError(GLFW_OUT_OF_MEMORY, "Out of memory adding a timer");
+        return false;
+    }
+    timers = t;
+    timers_capacity = cap;
+    return true;
+overflow:
+    _glfwInputError(GLFW_PLATFORM_ERROR, "Too many timers added, the timer count would overflow");
+    return false;
+}
 
 static void
 remove_timer_at(size_t idx) {
@@ -1146,11 +1169,9 @@ schedule_timer(Timer *t) {
 unsigned long long
 _glfwPlatformAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callback, void *callback_data, GLFWuserdatafun free_callback) {
     static unsigned long long timer_counter = 0;
-    if (num_timers >= sizeof(timers) / sizeof(timers[0]) - 1) {
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Too many timers added");
-        return 0;
-    }
+    if (num_timers >= timers_capacity && !grow_timers()) return 0;
     Timer *t = timers + num_timers++;
+    *t = (Timer){0};
     t->id = ++timer_counter;
     t->repeats = repeats;
     t->interval = interval;

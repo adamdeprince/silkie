@@ -69,6 +69,15 @@ typedef struct {
     bool repeats;
 } Timer;
 
+// What dispatchTimers() copies out of a due timer before calling it, since the
+// callback can add or remove timers and so move the timers array
+typedef struct {
+    timer_callback_func func;
+    id_type id;
+    void *data;
+    bool repeats;
+} TimerDispatch;
+
 #define MAX_NUM_OF_WATCHED_FDS 64
 
 typedef struct {
@@ -86,7 +95,11 @@ typedef struct {
     bool wakeup_data_read, wakeup_fd_ready, key_repeat_fd_ready;
     nfds_t watches_count, timers_count;
     Watch watches[MAX_NUM_OF_WATCHED_FDS];
-    Timer timers[128];
+    // Both arrays grow as timers are added and always have timers_capacity
+    // entries, so that dispatchTimers() never allocates
+    Timer *timers;
+    TimerDispatch *timer_dispatches;
+    size_t timers_capacity;
 } EventLoopData;
 
 
@@ -103,7 +116,7 @@ void changeTimerInterval(EventLoopData *eld, id_type timer_id, monotonic_t inter
 monotonic_t prepareForPoll(EventLoopData *eld, monotonic_t timeout);
 int pollWithTimeout(struct pollfd *fds, nfds_t nfds, monotonic_t timeout);
 int pollForEvents(EventLoopData *eld, monotonic_t timeout, watch_callback_func);
-unsigned dispatchTimers(EventLoopData *eld);
+size_t dispatchTimers(EventLoopData *eld);
 void finalizePollData(EventLoopData *eld);
 bool initPollData(EventLoopData *eld, int display_fd);
 void wakeupEventLoop(EventLoopData *eld);
