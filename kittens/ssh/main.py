@@ -239,6 +239,35 @@ active shared connections.
 )
 
 opt(
+    'shared_connection_timeout',
+    'auto',
+    option_type='seconds_or_auto',
+    long_text="""
+How long to wait, in seconds, for a shared connection (see
+:opt:`share_connections`) to respond before concluding that its connection to
+the server has died and making a new one. A shared connection can die without
+noticing, for example after a network change or suspend. When starting a session
+over an existing shared connection, the kitten checks the connection with a
+request that needs a round trip to the server. With the default value of
+:code:`auto` the timeout is derived from the round trip times measured over
+that connection: a connection is considered dead when a round trip takes ten
+times longer than the retransmission timeout TCP itself would use on it, so slow
+links such as satellite modems get correspondingly long timeouts and fast links
+detect a dead connection in well under a second. Until a round trip has been
+measured over a connection, no timeout is used. Set to :code:`0` to never time
+out. In all cases, shared connections started by the kitten use SSH's own
+keepalives (:code:`ServerAliveInterval=30` and :code:`ServerAliveCountMax=4`),
+so that a connection that has died is closed within a few minutes, unless you
+set :code:`ServerAliveInterval` in your SSH config or on the command line.
+To turn the keepalives off, use :code:`-o ServerAliveInterval=0` on the command
+line, since SSH does not report an explicit zero in its config files as being
+set. A session that has produced any output is never killed and a connection
+found to be dead is only told to stop accepting new sessions, so sessions in
+other windows using it are not interrupted.
+""",
+)
+
+opt(
     'askpass',
     'unless-set',
     choices=('unless-set', 'ssh', 'native'),

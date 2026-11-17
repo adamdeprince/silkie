@@ -3,7 +3,6 @@
 package ssh
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -199,6 +198,51 @@ func ParseSSHArgs(args []string, extra_args ...string) (ssh_args []string, serve
 
 type SSHConfig struct {
 	RemoteCommand string
+	// The resolved destination, used to identify the connection a
+	// ControlMaster makes
+	User, Hostname, Port, ProxyJump, ProxyCommand string
+	// The keepalive settings in effect, as resolved by ssh from its config
+	// files and command line. ssh -G always reports these, using the
+	// defaults ServerAliveInterval=0 (off) and ServerAliveCountMax=3 when
+	// they are not set.
+	ServerAliveInterval, ServerAliveCountMax string
+}
+
+// Parse the output of ssh -G
+func parse_ssh_config_dump(text string) *SSHConfig {
+	config := &SSHConfig{}
+	for line := range strings.SplitSeq(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		key, val, found := strings.Cut(line, " ")
+		if !found || key == "" {
+			continue
+		}
+		switch key {
+		case "remotecommand":
+			if val != "none" {
+				config.RemoteCommand = val
+			}
+		case "user":
+			config.User = val
+		case "hostname":
+			config.Hostname = val
+		case "port":
+			config.Port = val
+		case "proxyjump":
+			if val != "none" {
+				config.ProxyJump = val
+			}
+		case "proxycommand":
+			if val != "none" {
+				config.ProxyCommand = val
+			}
+		case "serveraliveinterval":
+			config.ServerAliveInterval = val
+		case "serveralivecountmax":
+			config.ServerAliveCountMax = val
+		}
+	}
+	return config
 }
 
 // ReadSSHConfig Asynchronously read ssh configuration
@@ -218,31 +262,7 @@ func ReadSSHConfig(ctx context.Context, ssh_args []string, hostname string) <-ch
 		if err := cmd.Run(); err != nil {
 			return
 		}
-
-		text := stdout.String()
-		scanner := bufio.NewScanner(strings.NewReader(text))
-
-		config := &SSHConfig{}
-		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			line := scanner.Text()
-			i := strings.IndexByte(line, ' ')
-			if i <= 0 {
-				continue
-			}
-
-			key, val := line[:i], line[i+1:]
-			switch key {
-			case "remotecommand":
-				if val != "none" {
-					config.RemoteCommand = val
-				}
-			}
-		}
+		config := parse_ssh_config_dump(stdout.String())
 		select {
 		case <-ctx.Done():
 			return
