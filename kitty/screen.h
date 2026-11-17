@@ -234,8 +234,8 @@ typedef struct ExtraCursor {
 } ExtraCursor;
 
 typedef struct { // see docs/display-protocol.rst
-    const char *kind, *color, *gamut, *precision;
-    int bits, red_bits, green_bits, blue_bits, gray_bits;
+    const char *kind, *color, *gamut, *precision, *output_type;
+    int bits, red_bits, green_bits, blue_bits, gray_bits, output_bits, output_dither;
     unsigned period_us;
     float headroom, scale, ppi;
 } DisplayInfo;

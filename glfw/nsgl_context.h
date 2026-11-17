@@ -33,6 +33,9 @@
 typedef struct _GLFWcontextNSGL {
     id pixelFormat;
     id object;
+    // What the context was made from, to make another with a different color format, see glfwCocoaSetWindowFloatSurface()
+    struct _GLFWctxconfig *ctxconfig;
+    struct _GLFWfbconfig *fbconfig;
 
 } _GLFWcontextNSGL;
 

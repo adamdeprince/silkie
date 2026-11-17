@@ -2817,6 +2817,7 @@ _glfwPlatformCreateWindow(
     _GLFWwindow *window, const _GLFWwndconfig *wndconfig, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig, const GLFWLayerShellConfig *lsc) {
     Visual *visual = NULL;
     int depth;
+    _GLFWfbconfig deep_fbconfig;
     if (lsc) {
         window->x11.layer_shell.is_active = true;
         window->x11.layer_shell.config = *lsc;
@@ -2825,6 +2826,7 @@ _glfwPlatformCreateWindow(
     if (ctxconfig->client != GLFW_NO_API) {
         if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API) {
             if (!_glfwInitGLX()) return false;
+            if (fbconfig->deepColor == GLFW_DEEP_COLOR_ALWAYS && _glfwDeepColorConfigGLX(fbconfig, &deep_fbconfig)) fbconfig = &deep_fbconfig;
             if (!_glfwChooseVisualGLX(wndconfig, ctxconfig, fbconfig, &visual, &depth)) return false;
         } else if (ctxconfig->source == GLFW_EGL_CONTEXT_API) {
             if (!_glfwInitEGL()) return false;
@@ -4715,6 +4717,13 @@ _glfwPlatformSetWindowHDRActive(_GLFWwindow *window UNUSED, bool active UNUSED) 
 bool
 _glfwPlatformGetWindowHDRDefault(_GLFWwindow *window UNUSED) {
     return false;
+}
+
+// The visual of a window is fixed and so is the depth of the screen it is on, the same for every monitor of the screen,
+// so whether the display is deep does not change as the window moves
+bool
+_glfwPlatformIsWindowOutputDeep(_GLFWwindow *window UNUSED) {
+    return DefaultDepth(_glfw.x11.display, _glfw.x11.screen) >= 30;
 }
 
 float

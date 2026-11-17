@@ -88,6 +88,8 @@ removePendingMonitor(_GLFWmonitor *monitor) {
 static void
 outputHandleDone(void *data, struct wl_output *output UNUSED) {
     struct _GLFWmonitor *monitor = data;
+    // The color manager can be bound after the output, before the output is in the list of monitors
+    _glfwWaylandColorManagementCreateOutput(monitor);
     // Only monitors still pending need to be announced, done is re-sent
     // whenever output properties change.
     if (removePendingMonitor(monitor)) _glfwInputMonitor(monitor, GLFW_CONNECTED, _GLFW_INSERT_LAST);
@@ -447,6 +449,7 @@ _glfwAddOutputWayland(uint32_t name, uint32_t version) {
 
     wl_output_add_listener(output, &outputListener, monitor);
     _glfwCreateXdgOutputWayland(monitor);
+    _glfwWaylandColorManagementCreateOutput(monitor);
 }
 
 // Handle removal of the wl_output global with the specified registry name.
@@ -509,6 +512,7 @@ _glfwPlatformFreeMonitor(_GLFWmonitor *monitor) {
     // Covers the removal of the output's global, the usual reason for the
     // geometry never arriving, and termination
     cancelXdgGeometryRetryTimer(monitor);
+    _glfwWaylandColorManagementDestroyOutput(monitor);
     if (monitor->wl.xdg_output) zxdg_output_v1_destroy(monitor->wl.xdg_output);
     if (monitor->wl.output) wl_output_destroy(monitor->wl.output);
 }

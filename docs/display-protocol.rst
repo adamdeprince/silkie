@@ -39,7 +39,7 @@ A program asks about the display its window is on::
 the reply so replies can be matched to queries. A supporting terminal
 answers::
 
-    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer <ST>
+    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=16 : output_type=float : output_dither=0 <ST>
 
 A terminal that does not support the protocol ignores the query, so a program
 must time out and fall back to assuming an ordinary color display.
@@ -83,10 +83,36 @@ The fields of the reply are:
     change what is finally shown. These fields describe available color
     representation, not a measurement of calibration or color error.
 
-The individual widths and ``precision`` are additive version-1 fields. Clients
-must ignore unknown fields and treat missing individual widths as unknown;
-an older terminal's nonzero ``bits`` still applies equally to its active
-channels.
+``output_bits``
+    Bits per color channel of the surface the terminal itself draws into and
+    hands to the system, ``0`` when unknown or its channels have different
+    widths. The fields above describe the display; this one describes how
+    finely the terminal keeps what a program sends, a gradient in an image
+    with 16 bits per channel for example, on its way there. What finally
+    reaches the panel is the lesser of the two.
+
+``output_type``
+    What the channels of that surface hold: ``fixed``, integers standing for
+    fractions of full intensity, ``float``, floating point numbers, or
+    ``unknown``. A ``float`` surface with ``output_bits=16`` holds half floats,
+    with 11 significant bits, in linear light; the system quantizes it for the
+    display.
+
+``output_dither``
+    The bits of the steps the terminal dithers what it draws to, of the
+    narrowest channel, ``0`` when it does not dither. Colors between those
+    steps show as a fine pattern rather than being rounded into bands; colors
+    that are exactly a step are never dithered. This can be less than
+    ``output_bits``: a deep surface on a display that is not known to show
+    more than 8 bits is dithered to the steps of 8 bits, as the system rounds
+    it to such a display without dithering. A program that dithers its own
+    output can tell from this to which steps, and whether the terminal would
+    do it again.
+
+The individual widths, ``precision`` and the ``output`` fields are additive
+version-1 fields. Clients must ignore unknown fields and treat missing
+individual widths as unknown; an older terminal's nonzero ``bits`` still
+applies equally to its active channels.
 
 ``gamut``
     One of ``srgb``, ``p3``, ``rec2020`` and ``unknown``: the widest color
@@ -170,7 +196,7 @@ one event whenever any field changes: the window was moved to a display with
 a different scale or refresh rate, the display's brightness setting changed
 the headroom, its color profile was switched::
 
-    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer <ST>
+    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=10 : output_type=fixed : output_dither=8 <ST>
 
 The fields are those of the ``cap`` reply, without ``id`` and ``mode``, and
 ``t``, the time the terminal learnt of the change, in milliseconds on the
@@ -245,6 +271,36 @@ system cannot supply them. Applications may query the fields with::
 Responses and subscribed events both carry the channel widths; moving to a
 display with a different width triggers an event even if its other properties
 are unchanged.
+
+The ``output`` fields are what OpenGL says about the surface of the window
+once it has been drawn, ``0`` and ``unknown`` before that, and are not
+affected by :opt:`display_info`. Which surface a window gets is chosen with
+:opt:`deep_color`, and whether and to which steps it is dithered with
+:opt:`output_dither`. They change, with an event, when the window is moved to
+a display of another depth: the steps dithered to follow the display, and on
+macOS a window that has a floating point surface only for HDR, with
+:opt:`deep_color` set to :code:`never`, switches between it and an 8 bit one. A move is acted on once it has lasted a moment, so a window dragged
+across the boundary between two displays does not flip back and forth.
+
+On macOS the system reports 8 bits per sample even for a MacBook Pro's 10 bit
+XDR panel, so ``bits`` stays ``8`` there while the window has a floating point
+surface, ``output_bits=16 : output_type=float``, and the system, not the
+terminal, quantizes what it shows for the panel. A screen that supports
+extended dynamic range is taken to be deep.
+
+What is known about the depth of a display, and when, differs. macOS and X11
+know it before a window exists: the screen a window opens on, and the depth of
+the X screen, which is the same for all its monitors, so on X11 nothing
+changes as a window moves. On Wayland a window is on no output until it is
+shown, and the compositor says which output governs it, the one whose image
+description it prefers for the window, only after that. Until then Silkie
+goes by the image descriptions of all outputs, which color management gives
+for every output from the start. No Wayland protocol gives the depth of an
+SDR output: an output is known to be deep only when its description is HDR
+(PQ, HLG or linear transfer, or a peak luminance above its reference white).
+A Wayland window therefore gets a 10 bit surface in any case, which costs no
+more than an 8 bit one, and is dithered to 8 bit steps until its output is
+known to be deep.
 
 ``scale`` is the scale the window system gives the window: the backing scale
 factor on macOS, the preferred scale of the surface on Wayland, fractional

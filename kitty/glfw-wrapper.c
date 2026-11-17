@@ -257,6 +257,9 @@ load_glfw(const char* path) {
     *(void **) (&glfwGetWindowHDRDefault_impl) = dlsym(handle, "glfwGetWindowHDRDefault");
     if (glfwGetWindowHDRDefault_impl == NULL) fail("Failed to load glfw function glfwGetWindowHDRDefault with error: %s", dlerror());
 
+    *(void **) (&glfwIsWindowOutputDeep_impl) = dlsym(handle, "glfwIsWindowOutputDeep");
+    if (glfwIsWindowOutputDeep_impl == NULL) fail("Failed to load glfw function glfwIsWindowOutputDeep with error: %s", dlerror());
+
     *(void **) (&glfwSetWindowHDRActive_impl) = dlsym(handle, "glfwSetWindowHDRActive");
     if (glfwSetWindowHDRActive_impl == NULL) fail("Failed to load glfw function glfwSetWindowHDRActive with error: %s", dlerror());
 
@@ -541,6 +544,9 @@ load_glfw(const char* path) {
 
     *(void **) (&glfwCocoaRecreateGLDrawable_impl) = dlsym(handle, "glfwCocoaRecreateGLDrawable");
     if (glfwCocoaRecreateGLDrawable_impl == NULL) dlerror(); // clear error indicator
+
+    *(void **) (&glfwCocoaSetWindowFloatSurface_impl) = dlsym(handle, "glfwCocoaSetWindowFloatSurface");
+    if (glfwCocoaSetWindowFloatSurface_impl == NULL) dlerror(); // clear error indicator
 
     *(void **) (&glfwCocoaSetWindowResizeCallback_impl) = dlsym(handle, "glfwCocoaSetWindowResizeCallback");
     if (glfwCocoaSetWindowResizeCallback_impl == NULL) dlerror(); // clear error indicator

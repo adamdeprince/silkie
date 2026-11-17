@@ -188,6 +188,123 @@ backbuffer_is_float(void) {
     return component_type == GL_FLOAT;
 }
 
+static void
+set_os_window_output(OSWindow *w, int r, int g, int b, bool is_float) {
+    w->linear_output = is_float;
+    w->output.is_float = is_float;
+    w->output.red_bits = MAX(0, r);
+    w->output.green_bits = MAX(0, g);
+    w->output.blue_bits = MAX(0, b);
+    const int shallowest = MIN(w->output.red_bits, MIN(w->output.green_bits, w->output.blue_bits));
+    w->output.encode_in_shader = !w->output.is_float && shallowest > 8;
+    w->linear_output_checked = true;
+}
+
+// Reads what the surface of the window, whose context is current, holds. A floating point one holds linear values: it
+// is the surface of an HDR window or of a deep color one on macOS. Any other one holds sRGB encoded values, encoded by
+// OpenGL when it is 8 bits deep and by the final blit otherwise, as there are no sRGB formats deeper than that
+void
+check_os_window_output(OSWindow *w) {
+    GLint bound = 0, type = 0, r = 0, g = 0, b = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &bound);
+    if (bound) glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE, &type);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &r);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, &g);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &b);
+    if (bound) glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)bound);
+    set_os_window_output(w, r, g, b, type == GL_FLOAT);
+    debug_rendering("The surface of the window %llu has %d:%d:%d bits of %s color%s\n", w->id, w->output.red_bits, w->output.green_bits,
+        w->output.blue_bits, w->output.is_float ? "floating point" : "normalized", w->output.encode_in_shader ? ", encoded to sRGB in the shader" : "");
+}
+
+// Whether what is drawn into the window is dithered, and if so to how many steps above zero in each channel. A surface
+// of 8 bits or fewer is dithered to its own steps. A deeper one is dithered to the steps of 8 bits unless the system
+// says the display the window is on shows more, as compositors and the system round a deep surface to an 8 bit display
+// without dithering it; then a surface of normalized integers is dithered to its own steps and a floating point one
+// not at all.
+bool
+output_dither_levels(const OSWindow *w, float levels[3]) {
+    const int bits[3] = {w->output.red_bits, w->output.green_bits, w->output.blue_bits};
+    if (!OPT(output_dither) || bits[0] <= 0 || bits[1] <= 0 || bits[2] <= 0) return false;
+    const bool shallow = !w->output.is_float && bits[0] <= 8 && bits[1] <= 8 && bits[2] <= 8;
+    if (!shallow && w->output.display_deep && w->output.is_float) return false;
+    for (int i = 0; i < 3; i++) {
+        // normalized integer channels have at most 16 bits in OpenGL, what is above that is not a step any display has
+        const int b = shallow || w->output.display_deep ? MIN(bits[i], 16) : 8;
+        if (levels) levels[i] = (float)((1u << b) - 1u);
+    }
+    return true;
+}
+
+// The bits of the steps dithered to, of the narrowest channel, 0 when not dithering
+int
+output_dither_bits(const OSWindow *w) {
+    float levels[3];
+    if (!output_dither_levels(w, levels)) return 0;
+    const float narrowest = MIN(levels[0], MIN(levels[1], levels[2]));
+    return (int)lroundf(log2f(narrowest + 1.f));
+}
+
+// How long a change in the depth of the display has to last before it is acted on
+#define OUTPUT_DEPTH_DEBOUNCE ms_to_monotonic_t(300ll)
+
+// Takes in whether the system says the display of the window is deep now and returns whether what was acted on
+// changed. The first answer is acted on at once, later ones once they have lasted, as a window dragged across the
+// boundary between displays can be on either for a moment. wait is how long until a change seen will have lasted, or -1
+bool
+update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wait) {
+    if (wait) *wait = -1;
+    if (!w->output.display_depth_known) {
+        w->output.display_depth_known = true;
+        w->output.display_deep = w->output.display_deep_seen = deep_now;
+        w->output.display_deep_seen_at = now;
+        return true;
+    }
+    if (deep_now != w->output.display_deep_seen) {
+        w->output.display_deep_seen = deep_now;
+        w->output.display_deep_seen_at = now;
+    }
+    if (w->output.display_deep_seen == w->output.display_deep) return false;
+    const monotonic_t lasted = now - w->output.display_deep_seen_at;
+    if (lasted < OUTPUT_DEPTH_DEBOUNCE) {
+        if (wait) *wait = OUTPUT_DEPTH_DEBOUNCE - lasted;
+        return false;
+    }
+    w->output.display_deep = deep_now;
+    w->output.refused_switch = 0;
+    return true;
+}
+
+// Whether a window whose surface can be switched, on macOS, should have a floating point one. For deep color it has
+// one on every display: one that is not known to show more than 8 bits gets dithered to the steps of 8 bits instead,
+// see output_dither_levels(). With deep color off, or for a window whose colors are passed to the display unmanaged,
+// which cannot have one for deep color, see wants_deep_color() in cocoa_window.m, it has one only for HDR while that is
+// active, which needs a display that shows more than 8 bits, as every display with HDR does. The change from one
+// display to another is acted on once it has lasted, see update_output_depth().
+bool
+os_window_wants_float_surface(const OSWindow *w) {
+    if (OPT(deep_color) == DEEP_COLOR_ALWAYS && OPT(macos_colorspace) != 0) return true;
+    return w->output.display_deep && hdr_should_be_active(w);
+}
+
+// The window has a new surface, with a new OpenGL context that shares all objects with the old one, except those that
+// hold others, framebuffers among them, which are made again from the textures they held
+void
+os_window_surface_switched(OSWindow *w) {
+#define F(x) if (w->indirect_output.x) free_framebuffer(&w->indirect_output.x);
+    F(framebuffer_id) F(extra_fbo_id) F(fbo_a_id) F(fbo_b_id)
+#undef F
+    w->indirect_output.attached_texture_generation = 0;
+    w->indirect_output.extra_fbo_generation = 0;
+    w->indirect_output.fbo_a_generation = 0;
+    w->indirect_output.fbo_b_generation = 0;
+    if (w->persist_fbo_id) free_framebuffer(&w->persist_fbo_id);
+    if (w->persist_texture_id) free_texture(&w->persist_texture_id);
+    w->persist_texture_generation = 0;
+    w->viewport_size_dirty = true;
+}
+
 float
 effective_hdr_headroom(const OSWindow *w) {
     if (OPT(hdr) == HDR_OFF || (OPT(hdr) == HDR_DETECT && !w->hdr_enabled_by_default)) return 1.f;
@@ -3864,6 +3981,10 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
     GLint convert_to_srgb_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "convert_to_srgb");
     GLint wide_gamut_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "wide_gamut");
     if (custom_shaders.end.has_pointer_map && group_loc >= 0) update_pointer_map(os_window, group_loc);
+    GLint dither_levels_loc = try_program_uniform_location(CUSTOM_END_PROGRAM, "dither_levels");
+    float dither_levels[3] = {0};
+    output_dither_levels(os_window, dither_levels);
+    static const float no_dither[3] = {0};
     const unsigned num_groups = (unsigned)custom_shaders.end.num_groups;
     const unsigned textures_mask = custom_shaders.end.textures;
     const int vw = os_window->viewport_width, vh = os_window->viewport_height;
@@ -3982,6 +4103,8 @@ run_custom_end_shader(OSWindow *os_window, float sx, float sy, monotonic_t now) 
         // shaders: encoded, unless the window is an HDR one, and in the primaries of the window
         glUniform1i(convert_to_srgb_loc, is_last && !os_window->linear_output ? 1 : 0);
         glUniform1ui(wide_gamut_loc, is_last ? os_window->wide_gamut : 0);
+        // and dithered to its steps, as the blit does
+        if (dither_levels_loc >= 0) glUniform3fv(dither_levels_loc, 1, is_last ? dither_levels : no_dither);
         // debug_rendering("Custom shader draw group %u: anim_progress=%.4f viewport=(%.2f,%.2f,%.2f,%.2f)\n", g, anim_progress[g], vp_x, vp_y, vp_w, vp_h);
         draw_quad(false, 0);
     }
@@ -4011,6 +4134,9 @@ stop_os_window_rendering(OSWindow *os_window, Tab *tab, Window *active_window, m
             glUniform4f(program_uniform_location(BLIT_PROGRAM, "src_rect"), 0, sy, sx, 0);
             glUniform4f(program_uniform_location(BLIT_PROGRAM, "dest_rect"), -1, 1, 1, -1);
             glUniform1f(program_uniform_location(BLIT_PROGRAM, "encode_srgb"), os_window->linear_output ? 0.f : 1.f);
+            float dither_levels[3] = {0};
+            output_dither_levels(os_window, dither_levels);
+            glUniform3fv(program_uniform_location(BLIT_PROGRAM, "dither_levels"), 1, dither_levels);
             restore_viewport();
             if (os_window->spatial.mode) {
                 const bool red_blue = os_window->spatial.red_blue;
@@ -4074,21 +4200,30 @@ take_screenshot_of_rectangular_region(OSWindow *os_window, Region region, unsign
     unsigned src_width = region.right - region.left;
     const bool is_float = backbuffer_is_float();
 
-    if (is_float && global_state.debug_rendering) {
-        // A screenshot holds nothing brighter than SDR white, so say what the frame it is taken of holds
-        const size_t count = (size_t)src_width * src_height * 4;
-        float *buf = malloc(count * sizeof(float));
+    if (global_state.debug_rendering && src_width && src_height) {
+        // A screenshot holds 8 bits per channel and nothing brighter than SDR white, so say what the frame it is
+        // taken of holds: how bright it gets and how many of its color values lie between the steps of 8 bits,
+        // after the sRGB encoding a floating point frame does not have yet
+        const bool fits = (size_t)src_width <= SIZE_MAX / (4 * sizeof(float)) / src_height;
+        const size_t count = fits ? (size_t)src_width * src_height * 4 : 0;
+        float *buf = fits ? malloc(count * sizeof(float)) : NULL;
         if (buf) {
             float peak = 0;
+            size_t between = 0;
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels((GLint)region.left, (GLint)(vh - region.bottom), (GLsizei)src_width, (GLsizei)src_height, GL_RGBA, GL_FLOAT, buf);
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
             for (size_t i = 0; i < count; i++) {
-                if (i % 4 != 3 && buf[i] > peak) peak = buf[i];
+                if (i % 4 == 3) continue;
+                if (buf[i] > peak) peak = buf[i];
+                float v = MAX(0.f, MIN(buf[i], 1.f));
+                if (is_float) v = v <= 0.0031308f ? 12.92f * v : 1.055f * powf(v, 1.f / 2.4f) - 0.055f;
+                if (fabsf(v * 255.f - roundf(v * 255.f)) > 1.f / 16.f) between++;
             }
             free(buf);
-            debug_rendering("Screenshot of a floating point frame, the brightest value in it is %g times SDR white\n", peak);
-        }
+            if (is_float) debug_rendering("Screenshot of a floating point frame, the brightest value in it is %g times SDR white\n", peak);
+            debug_rendering("Screenshot: %zu of the %zu color values of the frame lie between the steps of 8 bits\n", between, count / 4 * 3);
+        } else debug_rendering("Screenshot: no memory to read the frame back at full precision\n");
     }
 
     if (no_scaling) {
@@ -4594,6 +4729,67 @@ pysimulate_hdr_render_ticks(PyObject *self UNUSED, PyObject *states) {
     return Py_NewRef(ans);
 }
 
+static PyObject *
+os_window_output_state(OSWindow *w, bool switched) {
+    float levels[3] = {0};
+    const bool dither = output_dither_levels(w, levels);
+    DisplayInfo d;
+    os_window_display_info(w, &d);
+    return Py_BuildValue("{sOsOsOsOs(fff)sisssisOsOsO}", "linear", w->linear_output ? Py_True : Py_False, "encode_in_shader",
+        w->output.encode_in_shader ? Py_True : Py_False, "needs_layers", w->output.encode_in_shader || dither ? Py_True : Py_False, "dither",
+        dither ? Py_True : Py_False, "levels", levels[0], levels[1], levels[2], "output_bits", d.output_bits, "output_type", d.output_type,
+        "output_dither", d.output_dither, "display_deep", w->output.display_deep ? Py_True : Py_False, "switched", switched ? Py_True : Py_False,
+        "layers_float", layers_are_float(w) ? Py_True : Py_False);
+}
+
+// test only: what is done with, and reported about, a window surface with the given bits per channel on a display that
+// is deep or not
+static PyObject *
+pysimulate_os_window_output(PyObject *self UNUSED, PyObject *args) {
+    int r, g, b, is_float, display_deep = 0;
+    if (!PyArg_ParseTuple(args, "iiip|p", &r, &g, &b, &is_float, &display_deep)) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    set_os_window_output(w, r, g, b, is_float);
+    update_output_depth(w, display_deep, 0, NULL);
+    return os_window_output_state(w, false);
+}
+
+// test only: a window moved between displays, as a sequence of (milliseconds, display is deep, HDR is enabled by
+// default on it). A switchable surface, as on macOS, follows os_window_wants_float_surface() between 8 bit and floating
+// point, a fixed one, as elsewhere, keeps the bits it starts with
+static PyObject *
+pysimulate_output_depth_changes(PyObject *self UNUSED, PyObject *args) {
+    int r, g, b, is_float, switchable;
+    PyObject *ticks;
+    if (!PyArg_ParseTuple(args, "iiippO", &r, &g, &b, &is_float, &switchable, &ticks)) return NULL;
+    RAII_PyObject(seq, PySequence_Fast(ticks, "expected a sequence of display states"));
+    if (!seq) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    set_os_window_output(w, r, g, b, is_float);
+    RAII_PyObject(ans, PyList_New(0));
+    if (!ans) return NULL;
+    for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(seq); i++) {
+        long long ms;
+        int deep, hdr_default;
+        if (!PyArg_ParseTuple(PySequence_Fast_GET_ITEM(seq, i), "Lpp", &ms, &deep, &hdr_default)) return NULL;
+        w->hdr_enabled_by_default = hdr_default;
+        update_output_depth(w, deep, ms_to_monotonic_t(ms), NULL);
+        bool switched = false;
+        const bool want = os_window_wants_float_surface(w);
+        if (switchable && want != w->output.is_float) {
+            if (want) set_os_window_output(w, 16, 16, 16, true);
+            else set_os_window_output(w, 8, 8, 8, false);
+            os_window_surface_switched(w);
+            switched = true;
+        }
+        RAII_PyObject(state, os_window_output_state(w, switched));
+        if (!state || PyList_Append(ans, state) != 0) return NULL;
+    }
+    return Py_NewRef(ans);
+}
+
 // test only wrapper for decorations_map_new_size
 static PyObject *
 pydecorations_map_new_size(PyObject *self UNUSED, PyObject *args) {
@@ -4861,6 +5057,8 @@ static PyMethodDef module_methods[] = {
     MW(sample_pointer_map, METH_VARARGS),
     MW(fire_custom_shader_event, METH_VARARGS),
     MW(simulate_custom_shader_animation, METH_VARARGS),
+    MW(simulate_os_window_output, METH_VARARGS),
+    MW(simulate_output_depth_changes, METH_VARARGS),
 
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

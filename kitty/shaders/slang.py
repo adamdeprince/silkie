@@ -2143,9 +2143,14 @@ def active_group_words(pipeline: Pipeline) -> int:
 
 
 def module_wrapper_for_slot(slot: str, group_words: int) -> bytes:
+    # The last group writes what the surface of the window holds, dithered to its steps as the blit does, with the
+    # dithering of dither.slang, which is not among the modules a custom shader can import, so it is copied in
+    dither = '\n'.join(
+        line for line in get_shader_src('dither').splitlines() if not line.startswith(('#language', 'module ')))
     return """
 #language slang 2026
 import MODULE;
+DITHER
 
 struct VertexOutput {
     float2 texcoord : TEXCOORD;
@@ -2161,16 +2166,23 @@ VertexOutput vmain_wrap(uint vertex_id : SV_VertexID) {
 [shader("fragment")]
 float4 fmain_wrap(
     float2 texcoord : TEXCOORD,
+    float4 frag_coord : SV_Position,
     uniform int group,
     uniform float4 viewport,
     uniform float animation_progress,
     uniform bool convert_to_srgb,
     uniform uint wide_gamut,
-    uniform uint active_groups[GROUP_WORDS]
+    uniform uint active_groups[GROUP_WORDS],
+    uniform float3 dither_levels
 ) : SV_Target {
-    return pipeline_fragment_main(texcoord, group, viewport, animation_progress, convert_to_srgb, wide_gamut, active_groups);
+    float4 c = pipeline_fragment_main(texcoord, group, viewport, animation_progress, convert_to_srgb, wide_gamut, active_groups);
+    if (dither_levels.x > 0.f && c.a > 0.f) {
+        if (convert_to_srgb) return dither_premultiplied(clamp(c.rgb / c.a, 0.f, 1.f), c.a, frag_coord.xy, dither_levels);
+        return dither_linear_premultiplied(c, frag_coord.xy, dither_levels);
+    }
+    return c;
 }
-        """.replace('MODULE', slot.replace('-', '_')).replace('GROUP_WORDS', str(group_words)).encode()
+        """.replace('MODULE', slot.replace('-', '_')).replace('GROUP_WORDS', str(group_words)).replace('DITHER', dither).encode()
 
 
 def build_custom_shader_pipeline_glsl(
@@ -2195,7 +2207,16 @@ def build_custom_shader_pipeline_glsl(
         vertex = os.path.join(glsl_dir, f'{slot}.vert.glsl')
         fragment = os.path.join(glsl_dir, f'{slot}.frag.glsl')
         metadata = os.path.join(glsl_dir, f'{slot}.glsl.json')
-        if module_mtime > safe_mtime(metadata):
+        src = module_wrapper_for_slot(slot, active_group_words(pipeline))
+        # The wrapper is part of what the GLSL is made from, so a change to it, by a new version, remakes it
+        wrapper_key_path = os.path.join(glsl_dir, f'{slot}.wrapper.key')
+        wrapper_key = key(src)
+        try:
+            with open(wrapper_key_path, 'rb') as wf:
+                wrapper_changed = wf.read() != wrapper_key
+        except FileNotFoundError:
+            wrapper_changed = True
+        if wrapper_changed or module_mtime > safe_mtime(metadata):
             inc = []
             for x in import_dirs:
                 inc.extend(('-I', x))
@@ -2217,7 +2238,6 @@ def build_custom_shader_pipeline_glsl(
             )
             vcmd = cmd + ['-stage', 'vertex', '-entry', 'vmain_wrap', '-o', vertex, '--', '-']
             fcmd = cmd + ['-stage', 'fragment', '-entry', 'fmain_wrap', '-o', fragment, '--', '-']
-            src = module_wrapper_for_slot(slot, active_group_words(pipeline))
             invocation_tracker.add(tuple(vcmd))
             invocation_tracker.add(tuple(fcmd))
             v = subprocess.Popen(vcmd, stderr=subprocess.PIPE, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
@@ -2235,6 +2255,8 @@ def build_custom_shader_pipeline_glsl(
                 v.stderr.close()
                 f.stderr.close()
             fixup_opengl_files((fragment, vertex))
+            with open(wrapper_key_path, 'wb') as wf:
+                wf.write(wrapper_key)
         with open(vertex) as vf, open(fragment) as ff:
             m = glsl_metadata_for_shader(metadata)
             m['pipeline'] = pipeline

@@ -1020,6 +1020,23 @@ typedef struct GLFWTabletPadEvent {
  *  Framebuffer double buffering [hint](@ref GLFW_DOUBLEBUFFER).
  */
 #define GLFW_DOUBLEBUFFER 0x00021010
+/*! @brief Framebuffer deep color hint.
+ *
+ *  Whether to try for a framebuffer with more than 8 bits per color channel,
+ *  GLFW_DEEP_COLOR_ALWAYS or GLFW_DEEP_COLOR_NEVER. It is a wish: where there
+ *  is none to be had the window gets an ordinary one. On macOS it is the
+ *  floating point, extended linear framebuffer of GLFW_COCOA_HDR, except for a
+ *  window in DEFAULT_COLORSPACE, whose values are not color managed. On
+ *  Wayland and X11 it has 10 bits per channel and at most 2 bits of alpha, so a
+ *  window with a transparent framebuffer gets a floating point one instead on
+ *  Wayland, where the compositor can be told it holds linear values, and an
+ *  ordinary one otherwise. On X11 it needs a visual of depth 30. Query what the
+ *  window got with glGetFramebufferAttachmentParameteriv(), and whether the
+ *  display it is on can show it with glfwIsWindowOutputDeep().
+ */
+#define GLFW_DEEP_COLOR 0x00021011
+#define GLFW_DEEP_COLOR_NEVER 0
+#define GLFW_DEEP_COLOR_ALWAYS 2
 
 /*! @brief Context client API hint and attribute.
  *
@@ -2679,6 +2696,10 @@ typedef bool (*glfwGetWindowHDRDefault_func)(GLFWwindow*);
 GFW_EXTERN glfwGetWindowHDRDefault_func glfwGetWindowHDRDefault_impl;
 #define glfwGetWindowHDRDefault glfwGetWindowHDRDefault_impl
 
+typedef bool (*glfwIsWindowOutputDeep_func)(GLFWwindow*);
+GFW_EXTERN glfwIsWindowOutputDeep_func glfwIsWindowOutputDeep_impl;
+#define glfwIsWindowOutputDeep glfwIsWindowOutputDeep_impl
+
 typedef void (*glfwSetWindowHDRActive_func)(GLFWwindow*, bool);
 GFW_EXTERN glfwSetWindowHDRActive_func glfwSetWindowHDRActive_impl;
 #define glfwSetWindowHDRActive glfwSetWindowHDRActive_impl
@@ -3058,6 +3079,10 @@ GFW_EXTERN glfwCocoaRequestRenderFrame_func glfwCocoaRequestRenderFrame_impl;
 typedef bool (*glfwCocoaRecreateGLDrawable_func)(GLFWwindow*);
 GFW_EXTERN glfwCocoaRecreateGLDrawable_func glfwCocoaRecreateGLDrawable_impl;
 #define glfwCocoaRecreateGLDrawable glfwCocoaRecreateGLDrawable_impl
+
+typedef bool (*glfwCocoaSetWindowFloatSurface_func)(GLFWwindow*, bool);
+GFW_EXTERN glfwCocoaSetWindowFloatSurface_func glfwCocoaSetWindowFloatSurface_impl;
+#define glfwCocoaSetWindowFloatSurface glfwCocoaSetWindowFloatSurface_impl
 
 typedef GLFWcocoarenderframefun (*glfwCocoaSetWindowResizeCallback_func)(GLFWwindow*, GLFWcocoarenderframefun);
 GFW_EXTERN glfwCocoaSetWindowResizeCallback_func glfwCocoaSetWindowResizeCallback_impl;

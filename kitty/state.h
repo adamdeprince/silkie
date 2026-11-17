@@ -29,6 +29,7 @@ typedef enum { LEFT_EDGE = 1, TOP_EDGE = 2, RIGHT_EDGE = 4, BOTTOM_EDGE = 8 } Ed
 typedef enum { REPEAT_MIRROR, REPEAT_CLAMP, REPEAT_DEFAULT } RepeatStrategy;
 typedef enum { WINDOW_NORMAL, WINDOW_FULLSCREEN, WINDOW_MAXIMIZED, WINDOW_MINIMIZED, WINDOW_HIDDEN } WindowState;
 typedef enum { HDR_OFF, HDR_AUTO, HDR_ALWAYS, HDR_DETECT } HDRMode;
+typedef enum { DEEP_COLOR_NEVER, DEEP_COLOR_ALWAYS } DeepColorMode;
 
 typedef struct UrlPrefix {
     char_type string[16];
@@ -178,6 +179,8 @@ typedef struct Options {
     long macos_menubar_title_max_length;
     int macos_colorspace, wayland_colorspace;
     HDRMode hdr;
+    DeepColorMode deep_color;
+    bool output_dither;
     struct {
         float val;
         AdjustmentUnit unit;
@@ -664,6 +667,21 @@ typedef struct OSWindow {
     } background_opacity;
     float hdr_headroom, hdr_white_level;
     bool hdr_active, hdr_content, hdr_enabled_by_default, linear_output, linear_output_checked;
+    // What the surface of the window holds, read from OpenGL along with linear_output, see check_os_window_output()
+    struct {
+        int red_bits, green_bits, blue_bits;  // bits per channel, 0 when OpenGL does not say
+        bool is_float;                        // floating point rather than normalized integers
+        // A surface deeper than 8 bits has no sRGB encoding done for it by OpenGL, so what is drawn is encoded in
+        // the final blit, as is a surface that is dithered
+        bool encode_in_shader;
+        // Whether the system says the display the window is on shows more than 8 bits, see update_output_depth(),
+        // which applies a change once it has lasted, like a resize, so a drag across displays does not thrash
+        bool display_deep, display_deep_seen, display_depth_known;
+        monotonic_t display_deep_seen_at;
+        // A switch of the surface the system refused, 1 for to 8 bits and 2 for to floating point, not tried again
+        // until something else is wanted
+        int refused_switch;
+    } output;
     FONTS_DATA_HANDLE fonts_data;
     bool hosted_in_native_window; // shown inside a native window, whose state is the state of this window
     unsigned int font_set; // non-zero when this window does not use the global fonts, see font_set_for_options()
@@ -882,6 +900,12 @@ void update_image_on_gpu(uint32_t, const void *, int32_t, int32_t, int32_t, int3
 void copy_surface_texture_to_texture(bool, uint32_t, uint32_t *, int32_t, int32_t);
 float effective_hdr_headroom(const OSWindow *w);
 bool hdr_should_be_active(const OSWindow *w);
+void check_os_window_output(OSWindow *w);
+bool output_dither_levels(const OSWindow *w, float levels[3]);
+int output_dither_bits(const OSWindow *w);
+bool update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wait);
+bool os_window_wants_float_surface(const OSWindow *w);
+void os_window_surface_switched(OSWindow *w);
 void scale_output_to_hdr_white_level(const OSWindow *w);
 bool backbuffer_is_float(void);
 void send_indexed_image_to_gpu(uint32_t *, const void *, int32_t, int32_t, unsigned, bool);

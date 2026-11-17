@@ -928,7 +928,8 @@ prepare_to_render_os_window(
     // A window in a wide gamut is converted to it as a whole, after everything is drawn
     os_window->needs_layers =
         (!global_state.supports_framebuffer_srgb || effective_os_window_alpha(os_window) < 1.f || os_window->live_resize.in_progress ||
-         (background_image_for_os_window(os_window) != NULL) || os_window->shader_anim.has_active_shaders || os_window->wide_gamut || os_window->spatial.mode);
+         (background_image_for_os_window(os_window) != NULL) || os_window->shader_anim.has_active_shaders || os_window->wide_gamut || os_window->spatial.mode ||
+         os_window->output.encode_in_shader || output_dither_levels(os_window, NULL));
     if (TD.screen && os_window->num_tabs && !os_window->has_too_few_tabs) {
         if (!os_window->tab_bar_data_updated) {
             call_boss(update_tab_bar_data, "K", os_window->id);
@@ -1240,7 +1241,7 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
     }
     w->render_calls++;
     make_os_window_context_current(w);
-    if (!w->linear_output_checked) { w->linear_output = backbuffer_is_float(); w->linear_output_checked = true; }
+    if (!w->linear_output_checked) check_os_window_output(w);
     const float previous_headroom = effective_hdr_headroom(w);
     w->hdr_enabled_by_default = glfwGetWindowHDRDefault(w->handle);
     w->hdr_headroom = glfwGetWindowHDRHeadroom(w->handle);
@@ -1252,6 +1253,26 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
         w->viewport_size_dirty = false;
         needs_render = true;
     }
+    // The depth of the display is taken in like its size: when it changes, the window gets what suits the new display
+    monotonic_t depth_wait;
+    if (update_output_depth(w, glfwIsWindowOutputDeep(w->handle), now, &depth_wait)) needs_render = true;
+    set_maximum_wait(depth_wait);
+#ifdef __APPLE__
+    // A floating point surface costs twice what an 8 bit one does, so a window has one only while it is of use
+    const bool want_float = os_window_wants_float_surface(w);
+    if (want_float != w->output.is_float && w->output.refused_switch != (want_float ? 2 : 1)) {
+        if (glfwCocoaSetWindowFloatSurface && glfwCocoaSetWindowFloatSurface(w->handle, want_float)) {
+            check_os_window_output(w);
+            os_window_surface_switched(w);
+            bind_shader_globals_to_current_context();
+            set_gpu_viewport(w->viewport_width, w->viewport_height);
+            w->viewport_size_dirty = false;
+            w->output.refused_switch = 0;
+            debug_rendering("The window %llu now has %s surface\n", w->id, want_float ? "a floating point" : "an 8 bit");
+        } else w->output.refused_switch = want_float ? 2 : 1;
+        needs_render = true;
+    }
+#endif
     unsigned int active_window_id = 0, num_visible_windows = 0;
     bool all_windows_have_same_bg;
     color_type active_window_bg = 0;
@@ -1295,11 +1316,26 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
         set_maximum_wait(interval - (now - os_window->display_info_at));
         return;
     }
+    // The depth of the display can change without anything being drawn
+    if (os_window->handle) {
+        monotonic_t depth_wait;
+        const bool depth_changed = update_output_depth(os_window, glfwIsWindowOutputDeep(os_window->handle), now, &depth_wait);
+        set_maximum_wait(depth_wait);
+        if (depth_changed && os_window->display_info_at) {
+            // The window takes in the change when it is next drawn, perhaps with another surface, and that is what
+            // the next report is of, so that programs get one event with the outcome
+            os_window->needs_render = true;
+            os_window->display_info_at = now;
+            set_maximum_wait(interval);
+            return;
+        }
+    }
     DisplayInfo d, *o = &os_window->display_info;
     os_window_display_info(os_window, &d);
     const bool color_changed = os_window->display_info_at && (d.kind != o->kind || d.color != o->color || d.gamut != o->gamut || d.bits != o->bits ||
         d.red_bits != o->red_bits || d.green_bits != o->green_bits || d.blue_bits != o->blue_bits || d.gray_bits != o->gray_bits ||
-        strcmp(d.precision, o->precision) || d.headroom != o->headroom);
+        strcmp(d.precision, o->precision) || d.headroom != o->headroom || d.output_bits != o->output_bits || strcmp(d.output_type, o->output_type) ||
+        d.output_dither != o->output_dither);
     const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi));
     *o = d;
     os_window->display_info_at = now;

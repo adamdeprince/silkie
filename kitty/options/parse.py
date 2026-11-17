@@ -998,6 +998,14 @@ class Parser:
     def custom_shaders(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['custom_shaders'] = custom_shaders(val)
 
+    def deep_color(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_deep_color:
+            raise ValueError(f"The value {val} is not a valid choice for deep_color")
+        ans["deep_color"] = val
+
+    choices_for_deep_color = frozenset(('always', 'never'))
+
     def default_pointer_shape(self, val: str, ans: dict[str, typing.Any]) -> None:
         val = val.lower()
         if val not in self.choices_for_default_pointer_shape:
@@ -1276,6 +1284,9 @@ class Parser:
 
     def open_url_with(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['open_url_with'] = to_cmdline(val)
+
+    def output_dither(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['output_dither'] = to_bool(val)
 
     def padding_fill_strategy(self, val: str, ans: dict[str, typing.Any]) -> None:
         val = val.lower()

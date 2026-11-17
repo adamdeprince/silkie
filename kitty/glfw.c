@@ -2721,6 +2721,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     }
     if (OPT(hide_window_decorations) & 1) glfwWindowHint(GLFW_DECORATED, false);
 
+    glfwWindowHint(GLFW_DEEP_COLOR, OPT(deep_color) == DEEP_COLOR_NEVER ? GLFW_DEEP_COLOR_NEVER : GLFW_DEEP_COLOR_ALWAYS);
     const bool set_blur = OPT(background_blur) > 0 && OPT(background_opacity) < 1.f;
     glfwWindowHint(GLFW_BLUR_RADIUS, set_blur ? OPT(background_blur) : 0);
 #ifdef __APPLE__
@@ -3697,7 +3698,14 @@ os_window_display_info(OSWindow *w, DisplayInfo *d) {
     *d = (DisplayInfo){.kind = display_kinds[g.kind], .color = display_colors[g.color], .gamut = display_gamuts[g.gamut],
         .bits = g.bits, .red_bits = g.red_bits, .green_bits = g.green_bits, .blue_bits = g.blue_bits, .gray_bits = g.gray_bits,
         .precision = g.bits || g.red_bits || g.green_bits || g.blue_bits || g.gray_bits ? "framebuffer" : "unknown",
-        .period_us = g.period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g.scale, .ppi = g.ppi};
+        .period_us = g.period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g.scale, .ppi = g.ppi, .output_type = "unknown"};
+    // What the surface Silkie draws into holds, as OpenGL says once the window has been drawn
+    if (w && w->linear_output_checked) {
+        const int r = w->output.red_bits, gr = w->output.green_bits, b = w->output.blue_bits;
+        d->output_bits = r == gr && r == b ? r : 0;
+        if (r > 0 && gr > 0 && b > 0) d->output_type = w->output.is_float ? "float" : "fixed";
+        d->output_dither = output_dither_bits(w);
+    }
     // Overrides for what the OS cannot tell us
     if (OPT(eink_mode)) d->kind = display_kinds[GLFW_DISPLAY_KIND_EINK];
     if (!OPT(display_info) || !OPT(display_info)[0]) return;

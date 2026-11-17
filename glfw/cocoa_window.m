@@ -3131,8 +3131,8 @@ createNativeWindow(_GLFWwindow *window, const _GLFWwndconfig *wndconfig, const _
 //////////////////////////////////////////////////////////////////////////
 
 static NSColorSpace *
-colorspace_for(int color_space, bool hdr) {
-    if (hdr) {
+colorspace_for(int color_space, bool float_surface) {
+    if (float_surface) {
         // linear so that the float framebuffer is displayed as is, 1.0 being SDR white
         CGColorSpaceRef cg = CGColorSpaceCreateWithName(color_space == DISPLAY_P3_COLORSPACE ? kCGColorSpaceExtendedLinearDisplayP3 : kCGColorSpaceExtendedLinearSRGB);
         NSColorSpace *ans = [[[NSColorSpace alloc] initWithCGColorSpace:cg] autorelease];
@@ -3145,6 +3145,37 @@ colorspace_for(int color_space, bool hdr) {
         case DEFAULT_COLORSPACE: break; // using deviceRGBColorSpace causes a hang when transitioning to fullscreen
     }
     return nil;
+}
+
+// Deep color is a floating point framebuffer in an extended linear color space, the one HDR uses, without extended
+// dynamic range being asked for, so that the system shows nothing above SDR white. It has twice the memory and
+// bandwidth of an 8 bit one. The system says how deep a screen is only through NSWindowDepth, which is 8 bits per
+// sample even on panels with 10 (a MacBook Pro's XDR display, for one), so a screen that supports extended dynamic
+// range, which needs more than 8 bits, counts as deep too; that decides how finely the application dithers. A window
+// asked to have deep color has the framebuffer on every screen. Otherwise it has one only for HDR, and the
+// application switches it as the window moves between screens, see glfwCocoaSetWindowFloatSurface(). A window in the
+// native color space of the display, DEFAULT_COLORSPACE, passes its values on unmanaged, which a linear framebuffer
+// cannot do, so it gets one only for HDR
+static bool
+screen_is_deep(NSScreen *screen) {
+    return NSBitsPerSampleFromDepth([screen depth]) > 8 || [screen maximumPotentialExtendedDynamicRangeColorComponentValue] > 1.0;
+}
+
+static bool
+wants_deep_color(int deep_color, int color_space) {
+    return deep_color == GLFW_DEEP_COLOR_ALWAYS && color_space != DEFAULT_COLORSPACE;
+}
+
+bool
+_glfwPlatformIsWindowOutputDeep(_GLFWwindow *window) {
+    NSScreen *screen = [window->ns.object screen];
+    return screen && screen_is_deep(screen);
+}
+
+// Gives the window the color space for the framebuffer it now has, see glfwCocoaSetWindowFloatSurface()
+void
+_glfwCocoaUpdateColorSpaceForSurface(_GLFWwindow *window) {
+    [window->ns.object setColorSpace:colorspace_for(window->ns.color_space, window->ns.float_surface)];
 }
 
 float
@@ -3193,8 +3224,10 @@ _glfwPlatformCreateWindow(
     }
 
     window->ns.hdr = wndconfig->ns.hdr;
+    window->ns.color_space = wndconfig->ns.color_space;
+    window->ns.float_surface = window->ns.hdr || wants_deep_color(fbconfig->deepColor, wndconfig->ns.color_space);
     if (!createNativeWindow(window, wndconfig, fbconfig)) return false;
-    NSColorSpace *cs = colorspace_for(wndconfig->ns.color_space, window->ns.hdr);
+    NSColorSpace *cs = colorspace_for(wndconfig->ns.color_space, window->ns.float_surface);
     if (cs) [window->ns.object setColorSpace:cs];
     if (window->ns.hdr) [window->ns.view setWantsLayer:YES];
 
@@ -3442,7 +3475,8 @@ _glfwPlatformSetLayerShellConfig(_GLFWwindow *window, const GLFWLayerShellConfig
     [nswindow setTitlebarAppearsTransparent:false];
     [nswindow setHasShadow:false];
     [nswindow setTitleVisibility:NSWindowTitleHidden];
-    [nswindow setColorSpace:colorspace_for(config.related.color_space, window->ns.hdr)];
+    window->ns.color_space = config.related.color_space;
+    [nswindow setColorSpace:colorspace_for(config.related.color_space, window->ns.float_surface)];
     [[nswindow standardWindowButton:NSWindowCloseButton] setHidden:true];
     [[nswindow standardWindowButton:NSWindowMiniaturizeButton] setHidden:true];
     [[nswindow standardWindowButton:NSWindowZoomButton] setHidden:true];
@@ -4871,7 +4905,8 @@ glfwCocoaSetWindowChrome(
         [nsw setTitlebarAppearsTransparent:window->ns.last_applied_titlebar_settings.transparent];
         [nsw setHasShadow:has_shadow];
         [nsw setTitleVisibility:(show_text_in_titlebar) ? NSWindowTitleVisible : NSWindowTitleHidden];
-        NSColorSpace *cs = colorspace_for(color_space, window->ns.hdr);
+        NSColorSpace *cs = colorspace_for(color_space, window->ns.float_surface);
+        window->ns.color_space = color_space;
         window->resizable = resizable;
         debug(
             "Window Chrome state:\n\tbackground: %s\n\tappearance: %s color_space: %s\n\t"

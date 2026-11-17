@@ -228,6 +228,7 @@ bool _glfwInitEGL(void);
 void _glfwTerminateEGL(void);
 bool _glfwCreateContextEGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig);
 bool _glfwHasFloatColorEGL(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig);
+bool _glfwCreateDeepColorContextEGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig);
 #if defined(_GLFW_X11)
 bool _glfwChooseVisualEGL(const _GLFWwndconfig *wndconfig, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig, Visual **visual, int *depth);
 #endif /*_GLFW_X11*/

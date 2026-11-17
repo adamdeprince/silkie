@@ -377,6 +377,7 @@ struct _GLFWfbconfig {
     int samples;
     bool sRGB;
     bool floatColor;  // 16 bit floating point color components, EGL only
+    int deepColor;    // GLFW_DEEP_COLOR_*: whether more than 8 bits per color channel are wanted
     bool doublebuffer;
     bool transparent;
     uintptr_t handle;
@@ -900,6 +901,7 @@ void _glfwPlatformRemoveTimer(unsigned long long timer_id);
 int _glfwPlatformSetWindowBlur(_GLFWwindow *handle, int value);
 float _glfwPlatformGetWindowHDRHeadroom(_GLFWwindow *window);
 bool _glfwPlatformGetWindowHDRDefault(_GLFWwindow *window);
+bool _glfwPlatformIsWindowOutputDeep(_GLFWwindow *window);
 void _glfwPlatformSetWindowHDRActive(_GLFWwindow *window, bool active);
 float _glfwPlatformSetWindowHDRRange(_GLFWwindow *window, float peak);
 bool _glfwPlatformSetWindowHDRPrimaries(_GLFWwindow *window, GLFWcolorprimaries primaries);

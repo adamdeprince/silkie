@@ -332,6 +332,7 @@ glfwWindowHint(int hint, int value) {
         case GLFW_TRANSPARENT_FRAMEBUFFER: _glfw.hints.framebuffer.transparent = value ? true : false; return;
         case GLFW_SAMPLES: _glfw.hints.framebuffer.samples = value; return;
         case GLFW_SRGB_CAPABLE: _glfw.hints.framebuffer.sRGB = value ? true : false; return;
+        case GLFW_DEEP_COLOR: _glfw.hints.framebuffer.deepColor = value; return;
         case GLFW_RESIZABLE: _glfw.hints.window.resizable = value ? true : false; return;
         case GLFW_DECORATED: _glfw.hints.window.decorated = value ? true : false; return;
         case GLFW_FOCUSED: _glfw.hints.window.focused = value ? true : false; return;
@@ -868,6 +869,15 @@ glfwGetWindowHDRDefault(GLFWwindow *handle) {
 
     _GLFW_REQUIRE_INIT_OR_RETURN(false);
     return _glfwPlatformGetWindowHDRDefault(window);
+}
+
+GLFWAPI bool
+glfwIsWindowOutputDeep(GLFWwindow *handle) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    assert(window != NULL);
+
+    _GLFW_REQUIRE_INIT_OR_RETURN(false);
+    return _glfwPlatformIsWindowOutputDeep(window);
 }
 
 GLFWAPI float
