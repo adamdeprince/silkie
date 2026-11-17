@@ -2,6 +2,7 @@
 # License: GPL v3 Copyright: 2026, kitty contributors
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, Mock
 
 from kitty.launch import find_existing, launch, parse_launch_args
@@ -187,3 +188,62 @@ class TestTabWorkspaces(BaseTest):
         boss.match_windows.side_effect = lambda q, w=None: iter((w1, w3))
         run(match='all', target_tab='@title', tab_title='z', create_if_missing=True)
         self.ae([c.kwargs['target_tab_id'] for c in boss._move_window_to.call_args_list], ['new', 3])
+
+    def test_native_tabs(self):
+        # With native tabs every tab is an OS Window of its own, a member of the
+        # native tab group of the OS Window it was opened from
+        from unittest.mock import patch
+
+        from kitty.tabs import TabManager, tabs_for_title_match
+
+        w1, w2, w3 = fake_window(1, 'one'), fake_window(2, 'two'), fake_window(3, 'three')
+        tabs = {10: FakeTab(1, 'b', (w1,)), 11: FakeTab(2, 'd', (w2,)), 12: FakeTab(3, 'f', (w3,))}
+        members = [10, 11, 12]
+
+        def tab_manager(os_window_id: int) -> SimpleNamespace:
+            # each member's own tab bar would only show its single tab
+            return SimpleNamespace(os_window_id=os_window_id, native_tabs=True, active_tab=tabs.get(os_window_id),
+                                   tabs=[tabs[os_window_id]] if os_window_id in tabs else [],
+                                   tabs_to_be_shown_in_tab_bar=[tabs[os_window_id]] if os_window_id in tabs else [])
+
+        boss = FakeBoss(list(tabs.values()), w1)
+        boss.os_window_map = {wid: tab_manager(wid) for wid in members}
+        tm = boss.active_tab_manager = boss.os_window_map[10]
+        moved, created = [], []
+
+        def new_native_tab_manager(parent, location='last', profile=None):
+            ans = tab_manager(20 + len(created))
+            ans.new_tab = Mock(side_effect=lambda **kw: created.append((location, kw)) or FakeTab(9, kw.get('title', '')))
+            boss.os_window_map[ans.os_window_id] = ans
+            return ans
+
+        boss.new_native_tab_manager = new_native_tab_manager
+        with (
+            patch('kitty.tabs.get_boss', return_value=boss),
+            patch('kitty.tabs.native_tabs_members', side_effect=lambda oswid: tuple(members)),
+            patch('kitty.tabs.native_tabs_move', side_effect=lambda oswid, delta: moved.append((oswid, delta))),
+            patch('kitty.tabs.is_tab_bar_visible', return_value=False),
+        ):
+            self.ae(tabs_for_title_match(tm), tuple(tabs.values()))
+            self.ae(tabs_for_title_match(None), ())
+
+            # launch --focus-existing=@title and detach-window --target-tab=@title see the other native tabs
+            def find(*args: str):
+                return find_existing(boss, parse_launch_args(list(args))[0], None, tm)  # type: ignore[arg-type]
+
+            self.assertIs(find('--type=tab', '--tab-title=f', '--focus-existing=@title'), tabs[12])
+            self.assertIs(find('--window-title=two', '--focus-existing=@title'), w2)
+            detach_window.response_from_kitty(boss, w1, PayloadGetter(detach_window, {'target_tab': '@title', 'tab_title': 'd'}))  # type: ignore
+            boss._move_window_to.assert_called_once_with(window=w1, target_tab_id=2, new_tab_title='d', new_tab_location='default')
+
+            # a new tab keeps its title and, by title, is moved to its place among the native tabs
+            fake_tm = cast(TabManager, SimpleNamespace(native_tabs=True, tabs=[tabs[10]], os_window_id=10, tab_bar_should_be_visible=False))
+            TabManager.new_tab(fake_tm, empty_tab=True, location='by-title', title='c')
+            self.ae(created[-1], ('last', {'special_window': None, 'cwd_from': None, 'empty_tab': True, 'title': 'c'}))
+            self.ae(moved, [(20, -2)])
+            # the last place needs no move, and other locations go to the native tab group as they are
+            TabManager.new_tab(fake_tm, empty_tab=True, location='by-title', title='z')
+            TabManager.new_tab(fake_tm, empty_tab=True, location='first', title='a')
+            TabManager.new_tab(fake_tm, empty_tab=True, as_neighbor=True)
+            self.ae(moved, [(20, -2)])
+            self.ae([(loc, kw['title']) for loc, kw in created[1:]], [('last', 'z'), ('first', 'a'), ('after', '')])

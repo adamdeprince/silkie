@@ -105,7 +105,9 @@ can be used to send windows to a named tab, creating it if needed. For example::
                         raise ValueError('--target-tab=@title requires --tab-title to also be specified')
                     # only tabs visible in the tab bar of the active OS Window, so as to respect tab_bar_filter
                     atm = boss.active_tab_manager
-                    tabs = tuple(t for t in (atm.tabs_to_be_shown_in_tab_bar if atm is not None else ()) if t.effective_title == tab_title)
+                    from kitty.tabs import tabs_for_title_match
+
+                    tabs = tuple(t for t in tabs_for_title_match(atm) if t.effective_title == tab_title)
                 else:
                     tabs = tuple(boss.match_tabs(match))
                 if tabs:

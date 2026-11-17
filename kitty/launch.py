@@ -16,7 +16,7 @@ from .clipboard import set_clipboard_string, set_primary_selection
 from .constants import is_wayland
 from .fast_data_types import COLOR_LAYER_WINDOW, add_timer, get_boss, get_options, get_os_window_title, patch_color_profiles
 from .options.utils import env as parse_env
-from .tabs import Tab, TabManager
+from .tabs import Tab, TabManager, tabs_for_title_match
 from .types import DockSpec, LayerShellConfig, OverlayType, dock_edges, parse_dock_spec, run_once
 from .utils import get_editor, log_error, resolve_custom_file, which
 from .window import CwdRequest, CwdRequestType, Watchers, Window
@@ -732,7 +732,7 @@ def find_existing(boss: Boss, opts: LaunchCLIOptions, rc_from_window: Window | N
     q = opts.focus_existing
     if not q:
         return None
-    visible_tabs: tuple[Tab, ...] = tuple(tm.tabs_to_be_shown_in_tab_bar) if tm is not None else ()
+    visible_tabs: tuple[Tab, ...] = tabs_for_title_match(tm)
     if opts.type == 'tab':
         if q == '@title':
             if not opts.tab_title:

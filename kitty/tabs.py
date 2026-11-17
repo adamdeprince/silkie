@@ -244,6 +244,25 @@ def index_for_new_tab(existing_titles: Sequence[str], active_idx: int, location:
     return n
 
 
+def tabs_for_title_match(tm: 'TabManager | None') -> tuple['Tab', ...]:
+    """
+    The tabs the special value @title of launch --focus-existing and detach-window
+    --target-tab considers: those shown in the tab bar of tm. With native tabs each
+    tab is an OS Window of its own, in a native tab group, so these are the active
+    tabs of the members of that group, in the order they are shown.
+    """
+    if tm is None:
+        return ()
+    if not getattr(tm, 'native_tabs', False):
+        return tuple(tm.tabs_to_be_shown_in_tab_bar)
+    boss = get_boss()
+    ans = []
+    for wid in native_tabs_members(tm.os_window_id):
+        if (member := boss.os_window_map.get(wid)) is not None and (t := member.active_tab) is not None:
+            ans.append(t)
+    return tuple(ans)
+
+
 class DetachedGroup(NamedTuple):
     "The windows of a group removed from a tab, along with its docks"
 
@@ -2159,8 +2178,16 @@ class TabManager:  # {{{
         title: str = '',
     ) -> Tab:
         if self.native_tabs and self.tabs:
-            tm = get_boss().new_native_tab_manager(self, location='after' if as_neighbor else location)
-            return tm.new_tab(special_window=special_window, cwd_from=cwd_from, empty_tab=empty_tab)
+            # Each tab is an OS Window of its own in the native tab group of this one
+            if as_neighbor:
+                location = 'after'
+            others = tabs_for_title_match(self) if location == 'by-title' else ()
+            tm = get_boss().new_native_tab_manager(self, location='last' if location == 'by-title' else location)
+            ans = tm.new_tab(special_window=special_window, cwd_from=cwd_from, empty_tab=empty_tab, title=title)
+            if location == 'by-title' and (insert_at := index_for_new_tab(tuple(t.effective_title for t in others), 0, location, title)) < len(others):
+                # it was added last, after the others
+                native_tabs_move(tm.os_window_id, insert_at - len(others))
+            return ans
         idx = len(self.tabs)
         tabs = tuple(self.tabs_to_be_shown_in_tab_bar)
         orig_active_tab_idx = 0
