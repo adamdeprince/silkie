@@ -123,9 +123,11 @@ typedef struct _GLFWWaylandBufferPair {
     struct {
         uint8_t *a, *b, *front, *back;
     } data;
+    // The back buffer could not be rendered into as it was busy
     bool has_pending_update;
     size_t size_in_bytes, width, height, viewport_width, viewport_height, stride;
-    bool a_needs_to_be_destroyed, b_needs_to_be_destroyed;
+    // Busy means attached to a surface and not yet released by the compositor
+    bool a_busy, b_busy;
 } _GLFWWaylandBufferPair;
 
 typedef struct _GLFWWaylandCSDSurface {
@@ -285,7 +287,8 @@ typedef struct _GLFWwindowWayland {
     } pointerLock;
 
     struct {
-        bool serverSide, buffer_destroyed, titlebar_needs_update, dragging, titlebar_hidden;
+        int pressed_button; // a GLFWTitlebarButton
+        bool serverSide, titlebar_needs_update, dragging, titlebar_hidden;
         _GLFWCSDSurface focus;
 
         _GLFWWaylandCSDSurface titlebar, shadow_left, shadow_right, shadow_top, shadow_bottom, shadow_upper_left, shadow_upper_right, shadow_lower_left,
@@ -479,6 +482,14 @@ typedef struct _GLFWlibraryWayland {
         // The compositor has sent the shape of a contact, which not every one does
         bool shape_seen;
     } touch_state;
+    struct {
+        bool active;
+        int32_t id;
+        GLFWid window_id;
+        struct wl_surface *surface;
+        int button; // a GLFWTitlebarButton
+        double x, y;
+    } decoration_touch;
     struct wl_data_device_manager *dataDeviceManager;
     struct wl_data_device *dataDevice;
     struct xdg_wm_base *wmBase;
@@ -706,6 +717,7 @@ void _glfwWaylandBeforeBufferSwap(_GLFWwindow *window);
 void _glfwWaylandAfterBufferSwap(_GLFWwindow *window);
 void _glfwWaylandSurfaceOutputsChanged(_GLFWwindow *window);
 void _glfwWaylandMonitorGeometryArrived(_GLFWmonitor *monitor);
+void _glfwWaylandKeyboardFocusChanged(id_type window_id);
 void _glfwSetupWaylandDataDevice(void);
 void _glfwSetupWaylandPrimarySelectionDevice(void);
 double _glfwWaylandWindowScale(_GLFWwindow *);

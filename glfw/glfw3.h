@@ -1720,6 +1720,12 @@ typedef struct GLFWLayerShellConfig {
     } related;
 } GLFWLayerShellConfig;
 
+typedef struct GLFWTitlebarFont {
+    const char *family; // NULL means use the default font
+    double point_size, text_scale;
+    bool bold, italic;
+} GLFWTitlebarFont;
+
 typedef struct GLFWDBUSNotificationData {
     const char *app_name, *icon, *summary, *body, *category, *desktop_entry, **actions;
     size_t num_actions;
@@ -4797,6 +4803,10 @@ GLFWAPI GLFWapplicationclosefun glfwSetApplicationCloseCallback(GLFWapplicationc
 GLFWAPI GLFWsystemcolorthemechangefun glfwSetSystemColorThemeChangeCallback(GLFWsystemcolorthemechangefun callback);
 GLFWAPI GLFWclipboardlostfun glfwSetClipboardLostCallback(GLFWclipboardlostfun callback);
 GLFWAPI GLFWColorScheme glfwGetCurrentSystemColorTheme(bool query_if_unintialized);
+
+/*! @brief Returns the font to use for client side decoration titlebars, as
+ * configured in the desktop settings. */
+GLFWAPI GLFWTitlebarFont glfwGetTitlebarFont(void);
 
 /*! @brief Sets the refresh callback for the specified window.
  *
