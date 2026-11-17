@@ -206,8 +206,12 @@ fill_menubar(GtkWidget *bar) {
 #ifdef GDK_WINDOWING_X11
 struct Page;
 typedef struct HostWindow {
-    GtkWidget *window, *menubar, *notebook;
+    GtkWidget *window, *topbar, *menubar, *notebook;
     bool fullscreen, maximized;
+    // The find bar, at the end of the menu bar so that showing it does not resize the terminal. It shows the find
+    // state of the current page, see find_bar(). find_keyboard is set while its entry has the keyboard.
+    GtkWidget *find_revealer, *find_keys, *find_entry, *find_status, *find_up, *find_down, *find_case, *find_regex;
+    bool find_keyboard, find_updating;
     // The size asked for is that of the terminal, to which the menu bar has to be added once it has content
     int wanted_width, wanted_height;
     bool initial_size_done;
@@ -231,6 +235,8 @@ typedef struct Page {
     char *badge_indicator_for; // the state and kind that badge_indicator shows
     bool wants_gear; // the gear that opens the settings of the tab, see tab_settings_button()
     GtkWidget *gear;
+    // The find bar of this tab, see find_bar(): the model to show and where to report, NULL when it is hidden
+    PyObject *find_model, *find_callback;
 } Page;
 
 static struct OSWindow *
@@ -244,8 +250,11 @@ static GtkWidget *tab_settings_popover = NULL;
 static gboolean
 swallow_key_event(GtkWidget *w, GdkEventKey *e, gpointer data) {
     // On Wayland the toolkit also gets the keys typed in the terminal, which is the keyboard focus of its window. They
-    // are for the terminal: without this F10 would open the menu bar. Not while the tab settings popover is open.
-    (void)e; (void)data;
+    // are for the terminal: without this F10 would open the menu bar. Not while the tab settings popover is open, nor
+    // while the find bar has the keyboard, then the terminal drops them, see handle_key() in kitty/find.py.
+    (void)e;
+    HostWindow *hw = data;
+    if (hw && hw->find_keyboard) return FALSE;
     return !(tab_settings_popover && gtk_widget_get_toplevel(tab_settings_popover) == w);
 }
 
@@ -294,8 +303,9 @@ give_input_focus(Page *p) {
 static gboolean
 focus_current_page(gpointer data) {
     HostWindow *hw = data;
-    // The popover has the keyboard while it is open, it hands it back when it closes
+    // The popover has the keyboard while it is open, it hands it back when it closes, and so does the find bar
     if (tab_settings_popover && gtk_widget_get_toplevel(tab_settings_popover) == hw->window) return G_SOURCE_REMOVE;
+    if (g_list_find(host_windows, hw) && hw->find_keyboard) return G_SOURCE_REMOVE;
     if (g_list_find(host_windows, hw) && gtk_window_is_active(GTK_WINDOW(hw->window))) {
         Page *p = current_page(hw);
         if (p) give_input_focus(p);
@@ -314,7 +324,273 @@ update_chrome(HostWindow *hw) {
     const gint n = gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook));
     gtk_notebook_set_show_tabs(GTK_NOTEBOOK(hw->notebook), n > 1 && !hw->fullscreen);
     gtk_widget_set_visible(hw->menubar, !hw->fullscreen);
+    // in full screen the bar row is there only while the find bar is shown
+    gtk_widget_set_visible(hw->topbar, !hw->fullscreen || gtk_revealer_get_reveal_child(GTK_REVEALER(hw->find_revealer)));
 }
+
+// Find bar {{{
+// The find bar of kitty/find.py. It is at the end of the menu bar row: GTK cannot draw over the terminal, which
+// is an X window or a Wayland subsurface of its own, and a bar above it would resize it whenever it is shown.
+static void
+find_emit(HostWindow *hw, const char *verb, PyObject *value) {
+    if (hw->find_updating) return;
+    Page *p = current_page(hw);
+    if (!p || !p->find_callback) return;
+    PyObject *cb = Py_NewRef(p->find_callback);  // the callback can hide the bar
+    PyObject *ret = PyObject_CallFunction(cb, "sO", verb, value ? value : Py_None);
+    if (!ret) PyErr_Print();
+    Py_XDECREF(ret);
+    Py_DECREF(cb);
+}
+
+// The terminal window has the X input focus. Giving it to the toplevel is not enough: X sends the keys to the
+// window under the pointer when that is inside the focus window, which the terminal usually is. So the find bar
+// has an X window of its own, beside the terminal, that gets the focus, once it is mapped. GTK sends the keys of
+// any of its windows to the focus widget, the entry.
+static void
+focus_find_window(HostWindow *hw) {
+    GdkWindow *gw = gtk_widget_get_window(hw->find_keys);
+    if (!gw || !gdk_window_is_viewable(gw)) return;  // see on_find_mapped()
+    GdkDisplay *d = gdk_display_get_default();
+    gdk_x11_display_error_trap_push(d);
+    XSetInputFocus(gdk_xdisplay(), gdk_x11_window_get_xid(gw), RevertToParent, CurrentTime);
+    XSync(gdk_xdisplay(), False);
+    gdk_x11_display_error_trap_pop_ignored(d);
+}
+
+// The bar has a window of its own, which is not painted by its parent: paint it as the menu bar beside it
+static gboolean
+on_find_draw(GtkWidget *w, cairo_t *cr, gpointer data) {
+    HostWindow *hw = data;
+    const int width = gtk_widget_get_allocated_width(w), height = gtk_widget_get_allocated_height(w);
+    gtk_render_background(gtk_widget_get_style_context(hw->window), cr, 0, 0, width, height);
+    gtk_render_background(gtk_widget_get_style_context(hw->menubar), cr, 0, 0, width, height);
+    return FALSE;
+}
+
+static gboolean
+on_find_mapped(GtkWidget *w, GdkEvent *e, gpointer data) {
+    (void)w; (void)e;
+    HostWindow *hw = data;
+    if (hw->find_keyboard && !host->is_wayland) focus_find_window(hw);
+    return FALSE;
+}
+
+static void
+take_keyboard(HostWindow *hw) {
+    hw->find_keyboard = true;
+    if (!host->is_wayland) {
+        gtk_widget_realize(hw->find_keys);
+        GdkWindow *gw = gtk_widget_get_window(hw->find_keys);
+        if (gw && gdk_window_ensure_native(gw)) focus_find_window(hw);
+    }
+    gtk_widget_grab_focus(hw->find_entry);
+}
+
+static void
+give_keyboard_back(HostWindow *hw) {
+    const bool had = hw->find_keyboard;
+    hw->find_keyboard = false;
+    if (had) find_emit(hw, "focus", Py_False);
+    Page *p = current_page(hw);
+    if (p && !host->is_wayland && gtk_window_is_active(GTK_WINDOW(hw->window))) give_input_focus(p);
+}
+
+static void on_find_changed(GtkEditable *e, gpointer data) {
+    HostWindow *hw = data;
+    PyObject *q = PyUnicode_FromString(gtk_entry_get_text(GTK_ENTRY(e)));
+    if (q) find_emit(hw, "query", q);
+    else PyErr_Print();
+    Py_XDECREF(q);
+}
+static void on_find_up(GtkButton *b, gpointer data) { (void)b; find_emit(data, "next", NULL); }
+static void on_find_down(GtkButton *b, gpointer data) { (void)b; find_emit(data, "previous", NULL); }
+static void on_find_case(GtkToggleButton *b, gpointer data) { find_emit(data, "case_sensitive", gtk_toggle_button_get_active(b) ? Py_True : Py_False); }
+static void on_find_regex(GtkToggleButton *b, gpointer data) { find_emit(data, "regex", gtk_toggle_button_get_active(b) ? Py_True : Py_False); }
+static void on_find_close(GtkButton *b, gpointer data) { (void)b; find_emit(data, "close", NULL); }
+
+static gboolean
+on_find_key(GtkWidget *w, GdkEventKey *e, gpointer data) {
+    (void)w;
+    HostWindow *hw = data;
+    const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
+    switch (e->keyval) {
+        case GDK_KEY_Return: case GDK_KEY_KP_Enter: case GDK_KEY_F3: find_emit(hw, shift ? "previous" : "next", NULL); return TRUE;
+        case GDK_KEY_Up: find_emit(hw, "next", NULL); return TRUE;
+        case GDK_KEY_Down: find_emit(hw, "previous", NULL); return TRUE;
+        case GDK_KEY_Escape: find_emit(hw, "close", NULL); return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean
+on_find_focus(GtkWidget *w, GdkEvent *e, gpointer data) {
+    (void)w;
+    HostWindow *hw = data;
+    if (e->type == GDK_FOCUS_CHANGE && e->focus_change.in && !hw->find_keyboard && !hw->find_updating) {
+        // clicked: the keys must come here, not to the terminal
+        take_keyboard(hw);
+        find_emit(hw, "focus", Py_True);
+    }
+    return FALSE;
+}
+
+static GtkWidget *
+find_button(const char *icon, const char *tip, GCallback cb, HostWindow *hw) {
+    GtkWidget *b = gtk_button_new_from_icon_name(icon, GTK_ICON_SIZE_MENU);
+    gtk_widget_set_tooltip_text(b, tip);
+    gtk_widget_set_can_focus(b, FALSE);
+    g_signal_connect(b, "clicked", cb, hw);
+    return b;
+}
+
+static GtkWidget *
+find_toggle(const char *label, const char *tip, GCallback cb, HostWindow *hw) {
+    GtkWidget *b = gtk_toggle_button_new_with_label(label);
+    gtk_widget_set_tooltip_text(b, tip);
+    gtk_widget_set_can_focus(b, FALSE);
+    g_signal_connect(b, "toggled", cb, hw);
+    return b;
+}
+
+static void
+build_find_bar(HostWindow *hw) {
+    hw->find_revealer = gtk_revealer_new();
+    // At once: the window of the bar must be mapped when it takes the keyboard. With a horizontal transition the
+    // row keeps the height of the bar while it is hidden, so that showing it does not resize the terminal.
+    gtk_revealer_set_transition_type(GTK_REVEALER(hw->find_revealer), GTK_REVEALER_TRANSITION_TYPE_SLIDE_LEFT);
+    gtk_revealer_set_transition_duration(GTK_REVEALER(hw->find_revealer), 0);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    gtk_widget_set_margin_start(box, 6);
+    gtk_widget_set_margin_end(box, 4);
+    hw->find_entry = gtk_search_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(hw->find_entry), "Find");
+    gtk_entry_set_width_chars(GTK_ENTRY(hw->find_entry), 24);
+    g_signal_connect(hw->find_entry, "changed", G_CALLBACK(on_find_changed), hw);
+    g_signal_connect(hw->find_entry, "key-press-event", G_CALLBACK(on_find_key), hw);
+    g_signal_connect(hw->find_entry, "focus-in-event", G_CALLBACK(on_find_focus), hw);
+    hw->find_status = gtk_label_new("");
+    gtk_label_set_width_chars(GTK_LABEL(hw->find_status), 11);
+    gtk_label_set_xalign(GTK_LABEL(hw->find_status), 1);
+    gtk_style_context_add_class(gtk_widget_get_style_context(hw->find_status), "dim-label");
+    GtkWidget *arrows = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(arrows), "linked");
+    hw->find_up = find_button("go-up-symbolic", "Find Next: the match above, older output", G_CALLBACK(on_find_up), hw);
+    hw->find_down = find_button("go-down-symbolic", "Find Previous: the match below, newer output", G_CALLBACK(on_find_down), hw);
+    gtk_box_pack_start(GTK_BOX(arrows), hw->find_up, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(arrows), hw->find_down, FALSE, FALSE, 0);
+    hw->find_case = find_toggle("Aa", "Match case", G_CALLBACK(on_find_case), hw);
+    hw->find_regex = find_toggle(".*", "Regular expression", G_CALLBACK(on_find_regex), hw);
+    GtkWidget *close = find_button("window-close-symbolic", "Done (Escape)", G_CALLBACK(on_find_close), hw);
+    gtk_button_set_relief(GTK_BUTTON(close), GTK_RELIEF_NONE);
+    gtk_box_pack_start(GTK_BOX(box), hw->find_entry, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(box), hw->find_status, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), arrows, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), hw->find_case, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), hw->find_regex, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), close, FALSE, FALSE, 0);
+    hw->find_keys = gtk_event_box_new();
+    gtk_event_box_set_visible_window(GTK_EVENT_BOX(hw->find_keys), TRUE);  // an InputOnly window cannot have the focus
+    gtk_widget_set_has_window(hw->find_keys, TRUE);
+    gtk_container_add(GTK_CONTAINER(hw->find_keys), box);
+    gtk_widget_add_events(hw->find_keys, GDK_STRUCTURE_MASK | GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK);
+    g_signal_connect(hw->find_keys, "map-event", G_CALLBACK(on_find_mapped), hw);
+    g_signal_connect(hw->find_keys, "draw", G_CALLBACK(on_find_draw), hw);
+    gtk_container_add(GTK_CONTAINER(hw->find_revealer), hw->find_keys);
+    gtk_widget_show_all(hw->find_revealer);
+    gtk_revealer_set_reveal_child(GTK_REVEALER(hw->find_revealer), FALSE);
+}
+
+static const char *
+model_str(PyObject *m, const char *key) {
+    PyObject *v = PyDict_GetItemString(m, key);
+    const char *ans = v && PyUnicode_Check(v) ? PyUnicode_AsUTF8(v) : NULL;
+    if (!ans) PyErr_Clear();
+    return ans ? ans : "";
+}
+
+static bool
+model_bool(PyObject *m, const char *key) {
+    PyObject *v = PyDict_GetItemString(m, key);
+    return v && PyObject_IsTrue(v) == 1;
+}
+
+// Show the find bar of page p, which became the current page of hw, or hide it
+static void
+show_find_bar_of(HostWindow *hw, Page *p) {
+    if (!hw->find_revealer) return;
+    PyObject *m = p ? p->find_model : NULL;
+    hw->find_updating = true;
+    if (!m) {
+        if (hw->find_keyboard && p) give_input_focus(p);
+        hw->find_keyboard = false;
+        gtk_revealer_set_reveal_child(GTK_REVEALER(hw->find_revealer), FALSE);
+    } else {
+        const char *q = model_str(m, "query");
+        if (strcmp(gtk_entry_get_text(GTK_ENTRY(hw->find_entry)), q) != 0) gtk_entry_set_text(GTK_ENTRY(hw->find_entry), q);
+        gtk_label_set_text(GTK_LABEL(hw->find_status), q[0] ? model_str(m, "status") : "");
+        GtkStyleContext *sc = gtk_widget_get_style_context(hw->find_entry);
+        const bool not_found = q[0] && (model_bool(m, "error") || strcmp(model_str(m, "status"), "Not found") == 0);
+        if (not_found) gtk_style_context_add_class(sc, "error");
+        else gtk_style_context_remove_class(sc, "error");
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hw->find_case), model_bool(m, "case_sensitive"));
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(hw->find_regex), model_bool(m, "regex"));
+        PyObject *total = PyDict_GetItemString(m, "total");
+        const bool any = total && PyLong_Check(total) && PyLong_AsLong(total) > 0;
+        gtk_widget_set_sensitive(hw->find_up, any);
+        gtk_widget_set_sensitive(hw->find_down, any);
+        gtk_revealer_set_reveal_child(GTK_REVEALER(hw->find_revealer), TRUE);
+    }
+    hw->find_updating = false;
+    update_chrome(hw);
+}
+
+static bool
+find_bar(struct OSWindow *w, PyObject *model, PyObject *callback) {
+    Page *p = page_of(w);
+    // without a native tab the terminal draws a bar of its own
+    if (!p || !p->hw) return false;
+    HostWindow *hw = p->hw;
+    const bool current = current_page(hw) == p;
+    if (model == Py_None) {
+        if (current && hw->find_keyboard) give_keyboard_back(hw);
+        Py_CLEAR(p->find_model);
+        Py_CLEAR(p->find_callback);
+        if (current) show_find_bar_of(hw, p);
+        return true;
+    }
+    Py_XSETREF(p->find_model, Py_NewRef(model));
+    if (p->find_callback != callback) Py_XSETREF(p->find_callback, Py_NewRef(callback));
+    if (!current) return true;
+    show_find_bar_of(hw, p);
+    if (model_bool(model, "focus")) {
+        hw->find_updating = true;
+        take_keyboard(hw);
+        if (model_bool(model, "select_all")) gtk_editable_select_region(GTK_EDITABLE(hw->find_entry), 0, -1);
+        hw->find_updating = false;
+        find_emit(hw, "focus", Py_True);
+    } else if (model_bool(model, "focus_terminal") && hw->find_keyboard) give_keyboard_back(hw);
+    return true;
+}
+
+// For tests: draw the bar row, with the find bar, to a PNG file
+static bool
+snapshot_find_bar(struct OSWindow *w, const char *path) {
+    Page *p = page_of(w);
+    if (!p || !p->hw) return false;
+    GtkWidget *bar = p->hw->find_revealer;
+    const int width = gtk_widget_get_allocated_width(bar), height = gtk_widget_get_allocated_height(bar);
+    if (width < 1 || height < 1) return false;
+    cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    cairo_t *cr = cairo_create(s);
+    gtk_render_background(gtk_widget_get_style_context(p->hw->window), cr, 0, 0, width, height);
+    gtk_widget_draw(bar, cr);
+    cairo_destroy(cr);
+    const bool ok = cairo_surface_write_to_png(s, path) == CAIRO_STATUS_SUCCESS;
+    cairo_surface_destroy(s);
+    return ok;
+}
+// }}}
 
 static void
 apply_initial_size(HostWindow *hw) {
@@ -322,7 +598,7 @@ apply_initial_size(HostWindow *hw) {
     hw->initial_size_done = true;
     const int scale = gtk_widget_get_scale_factor(hw->window);
     gint bar = 0;
-    gtk_widget_get_preferred_height(hw->menubar, NULL, &bar);
+    gtk_widget_get_preferred_height(hw->topbar, NULL, &bar);
     gtk_window_resize(GTK_WINDOW(hw->window), hw->wanted_width / scale, hw->wanted_height / scale + bar);
 }
 
@@ -413,6 +689,7 @@ on_switch_page(GtkNotebook *nb, GtkWidget *child, guint n, gpointer data) {
     HostWindow *hw = data;
     Page *p = g_object_get_data(G_OBJECT(child), "page");
     if (p) gtk_window_set_title(GTK_WINDOW(hw->window), gtk_label_get_text(GTK_LABEL(p->label)));
+    show_find_bar_of(hw, p);
     if (host->is_wayland) {
         // A subsurface is shown whatever the toolkit thinks of the page it is on
         if (hw->shown_page && hw->shown_page != p) host->wayland_set_mapped(os_window_of_page(hw->shown_page), false);
@@ -444,9 +721,13 @@ new_host_window(struct OSWindow *size_from) {
         gtk_window_set_default_size(GTK_WINDOW(hw->window), hw->wanted_width / scale, hw->wanted_height / scale);
     }
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    hw->topbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     hw->menubar = gtk_menu_bar_new();
     fill_menubar(hw->menubar);
-    gtk_box_pack_start(GTK_BOX(vbox), hw->menubar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hw->topbar), hw->menubar, TRUE, TRUE, 0);
+    build_find_bar(hw);
+    gtk_box_pack_end(GTK_BOX(hw->topbar), hw->find_revealer, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), hw->topbar, FALSE, FALSE, 0);
     hw->notebook = gtk_notebook_new();
     GtkNotebook *nb = GTK_NOTEBOOK(hw->notebook);
     gtk_notebook_set_scrollable(nb, TRUE);
@@ -460,8 +741,8 @@ new_host_window(struct OSWindow *size_from) {
     gtk_box_pack_start(GTK_BOX(vbox), hw->notebook, TRUE, TRUE, 0);
     gtk_container_add(GTK_CONTAINER(hw->window), vbox);
     if (host->is_wayland) {
-        g_signal_connect(hw->window, "key-press-event", G_CALLBACK(swallow_key_event), NULL);
-        g_signal_connect(hw->window, "key-release-event", G_CALLBACK(swallow_key_event), NULL);
+        g_signal_connect(hw->window, "key-press-event", G_CALLBACK(swallow_key_event), hw);
+        g_signal_connect(hw->window, "key-release-event", G_CALLBACK(swallow_key_event), hw);
     }
     g_signal_connect(hw->window, "delete-event", G_CALLBACK(on_window_delete), hw);
     g_signal_connect(hw->window, "window-state-event", G_CALLBACK(on_window_state), hw);
@@ -995,6 +1276,8 @@ static void
 os_window_closing(struct OSWindow *w) {
     Page *p = page_of(w);
     if (!p) return;
+    Py_CLEAR(p->find_model);
+    Py_CLEAR(p->find_callback);
     unembed_page(p);
     g_hash_table_remove(pages, &p->id);
     free_badge(&p->badge);
@@ -1963,6 +2246,8 @@ native_ui_gtk_backend(const NativeUIHost *h) {
         .window_op = window_op,
         .window_query = window_query,
         .saved_height_adjustment = saved_height_adjustment,
+        .find_bar = find_bar,
+        .snapshot_find_bar = snapshot_find_bar,
 #endif
         .wayland_display = wayland_display,
         .show_settings = show_settings,

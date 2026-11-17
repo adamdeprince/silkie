@@ -17,6 +17,35 @@ same definitions that document them. What is changed there goes to
 :file:`kitty.conf`, so what is set in the window wins and :file:`kitty.conf`
 itself is never rewritten. The arrow next to a control removes the setting again.
 
+Find
+--------
+
+:guilabel:`Edit › Find › Find…` (:kbd:`⌘+F` on macOS, :sc:`find` everywhere)
+searches the screen and the scrollback of the active window, as Find does in
+iTerm2. Every match is highlighted as you type, in :opt:`find_match_background`,
+and the current match in :opt:`find_current_background`. :guilabel:`Find Next`
+(:kbd:`⌘+G`, :sc:`find_next`, or :kbd:`Enter` in the field) moves up to older
+output and :guilabel:`Find Previous` (:kbd:`⇧+⌘+G`, :sc:`find_previous`,
+:kbd:`⇧+Enter`) down, scrolling the match into view and wrapping around at the
+ends. :guilabel:`Use Selection for Find` (:kbd:`⌘+E`, :sc:`find_selection`)
+finds the selected text. Matches are found across soft line wraps, in wide,
+combining and scaled text, with full Unicode case folding unless
+:guilabel:`Aa` is on. :guilabel:`.*` searches for a Python regular expression,
+in which ``^`` and ``$`` are the start and end of a line. :kbd:`Esc` closes it.
+
+The bar is native: on macOS a panel over the top right of the terminal, on Linux
+at the end of the menu bar, so that opening it never resizes the terminal. Without
+native tabs on Linux a line in place of the window title is used, which takes the
+keys while it is open: :kbd:`Enter` and :kbd:`F3`, with :kbd:`Shift` to go back,
+:kbd:`Alt+C` for case sensitivity and :kbd:`Alt+R` for regular expressions.
+
+The scrollback, however long and whether compressed or not, is searched in the
+background, newest lines first, a few milliseconds at a time, so that the terminal
+stays responsive; the counter shows ``…`` until every line was searched. Output
+that arrives while Find is open is searched as it comes. A program that uses the
+keys of Find itself can have them with :opt:`find_keys_to_terminal`, for all windows,
+a profile, a tab or a single window; the menu items keep working.
+
 .. _profiles:
 
 Profiles

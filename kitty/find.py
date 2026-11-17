@@ -320,6 +320,19 @@ def on_window_focused(w: 'Window') -> None:
         b.window_changed(w)
 
 
+def terminal_clicked(w: 'Window') -> None:
+    ' A click in the terminal gives it the keyboard back from the native find bar '
+    b = find_bars.get(w.os_window_id)
+    if b is not None and b.native and b.native_has_focus:
+        from .fast_data_types import native_find_bar
+        b.native_has_focus = False
+        native_find_bar(b.os_window_id, {**b.model(), 'focus_terminal': True}, b.on_native_event)
+    if b is not None and b.prompt is not None and b.window_id == w.id:
+        # the drawn bar keeps showing the matches, the keys go to the program again
+        b.prompt.focused = False
+        b.prompt.update()
+
+
 def on_os_window_closed(os_window_id: int) -> None:
     b = find_bars.pop(os_window_id, None)
     if b is not None and b.wrap_timer:

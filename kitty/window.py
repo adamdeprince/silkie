@@ -1785,6 +1785,10 @@ class Window:
                 self.clear_progress_timer = add_timer(self.clear_progress_if_needed, 1.0, False)
 
     def on_mouse_event(self, event: dict[str, Any]) -> bool:
+        if event.get('repeat_count', 0) > 0 and event.get('button', -1) >= 0 and event.get('button') not in mouse_wheel_buttons:
+            from .find import find_bars, terminal_clicked
+            if find_bars:
+                terminal_clicked(self)
         event['mods'] = event.get('mods', 0) & mod_mask
         steps = 1
         if event['button'] in mouse_wheel_buttons:  # repeat_count is the number of wheel steps
