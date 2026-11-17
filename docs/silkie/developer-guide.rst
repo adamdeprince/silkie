@@ -122,7 +122,8 @@ and implementation details. The :doc:`reference` also lists them by category.
      - :doc:`vector-protocol`; :doc:`ink-protocol`; :doc:`gpu-surface-protocol`
      - kitty graphics; tablet input for ink
    * - Color and transparency
-     - :doc:`hdr-protocol`; :doc:`wide-gamut-protocol`; :doc:`cell-alpha-protocol`
+     - :doc:`hdr-protocol`; :doc:`wide-gamut-protocol`; :doc:`deep-color-protocol`;
+       :doc:`cell-alpha-protocol`
      - SGR, kitty graphics, display information
    * - Font families and typography
      - :doc:`font-protocol`

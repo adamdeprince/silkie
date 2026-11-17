@@ -77,6 +77,11 @@ static const char *const media[] = {"d", "f", "t", "s",
     "g",
 #endif
 };
+// The extensions of SGR this terminal understands: the gamut id of
+// docs/wide-gamut-protocol.rst, the brightness of docs/hdr-protocol.rst, the
+// cell background alpha of docs/cell-alpha-protocol.rst and the 16 bit colors
+// of docs/deep-color-protocol.rst. A branch that adds one adds it here too.
+static const char *const sgr_extensions[] = {"alpha", "deep", "gamut", "hdr"};
 static const char *const formats[] = {"8", "16", "24", "32", "64", "100", "200", "301", "302", "304", "308", "316", "401", "402", "404", "408", "516", "632", "664"};
 
 static bool
@@ -136,7 +141,7 @@ screen_caps_query(Screen *self, const char *data, size_t sz) {
     RAII_PyObject(reply, PyUnicode_FromFormat("777;caps;v=1:op=cap:id=%lld:caps=3:ext=", id));
     for (size_t i = 0; reply && i < arraysz(extensions); i++)
         PyUnicode_AppendAndDel(&reply, PyUnicode_FromFormat("%s%s.%u", i ? "," : "", extensions[i].selector, extensions[i].version));
-    if (reply && append_list(&reply, "media", media, arraysz(media)) && append_list(&reply, "format", formats, arraysz(formats))) {
+    if (reply && append_list(&reply, "sgr", sgr_extensions, arraysz(sgr_extensions)) && append_list(&reply, "media", media, arraysz(media)) && append_list(&reply, "format", formats, arraysz(formats))) {
         const char *data = PyUnicode_AsUTF8(reply);
         if (data) write_escape_code_to_child(self, ESC_OSC, data);
     }

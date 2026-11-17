@@ -7,6 +7,7 @@
 
 #include "line.h"
 #include "fonts.h"
+#include "deep-colors.h"
 
 #include <structmember.h>
 
@@ -74,8 +75,35 @@ bg_alpha_code(int percent) {
     return MAX(1, MIN((100 - MAX(0, percent) + 1) / 2, 50));
 }
 
+// The deep color form, <type>:<id>:<r>:<g>:<b> with 16 bit components, see
+// docs/deep-color-protocol.rst. Only the colon form has it: in the semicolon
+// form the parameters after the type are unrelated attributes. A malformed
+// group sets nothing.
 static void
-parse_color(int *params, unsigned int *i, unsigned int count, bool is_group, uint32_t *result, uint8_t *gamut) {
+parse_deep_color(int *params, unsigned int *i, unsigned int count, TextCache *tc, uint32_t *result, uint8_t *gamut) {
+    if (*i + 3 >= count) {
+        *i = count;
+        return;
+    }
+    const int id = params[*i], r = params[*i + 1], g = params[*i + 2], b = params[*i + 3];
+    *i += 4;
+    if (r < 0 || r > UINT16_MAX || g < 0 || g > UINT16_MAX || b < 0 || b > UINT16_MAX) return;
+    const uint8_t cs = (id == GAMUT_DISPLAY_P3 || id == GAMUT_REC2020) ? id : 0;
+    const DeepColor d = {.r = r, .g = g, .b = b, .gamut = cs};
+    const color_type c = tc ? deep_colors_intern(tc_deep_colors(tc), d) : 0;
+    if (c) {
+        // the gamut is in the table
+        *result = c;
+        if (gamut) *gamut = 0;
+    } else {
+        // the table is full of live colors or out of memory, the nearest color a cell holds by itself
+        *result = deep_color_to_rgb(d) << 8 | 2;
+        if (gamut) *gamut = cs;
+    }
+}
+
+static void
+parse_color(int *params, unsigned int *i, unsigned int count, bool is_group, TextCache *tc, uint32_t *result, uint8_t *gamut) {
     unsigned int attr;
     uint8_t r, g, b, cs = 0;
     if (*i < count) {
@@ -103,15 +131,18 @@ parse_color(int *params, unsigned int *i, unsigned int count, bool is_group, uin
                     if (gamut) *gamut = cs;
                 }
                 break;
+            case DEEP_COLOR_SGR_TYPE:
+                if (is_group) parse_deep_color(params, i, count, tc, result, gamut);
+                break;
         }
     }
 }
 
 
 void
-cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group) {
-#define SET_COLOR(which, gamut)                                          \
-    { parse_color(params, &i, count, is_group, &self->sgr.which, gamut); } \
+cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group, TextCache *tc) {
+#define SET_COLOR(which, gamut)                                              \
+    { parse_color(params, &i, count, is_group, tc, &self->sgr.which, gamut); } \
     break;
 #define PALETTE(which, val)      \
     self->sgr.which = (val);     \
@@ -176,7 +207,7 @@ cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group) {
             case 40 ... 47: PALETTE(bg, (self->sgr.bg & BG_ALPHA_BITS) | ((attr - 40) << 8) | 1);
             case 48: {
                 const color_type alpha = self->sgr.bg & BG_ALPHA_BITS;
-                parse_color(params, &i, count, is_group, &self->sgr.bg, &self->sgr.gamut_bg);
+                parse_color(params, &i, count, is_group, tc, &self->sgr.bg, &self->sgr.gamut_bg);
                 self->sgr.bg |= alpha;
             } break;
             case 49: PALETTE(bg, self->sgr.bg & BG_ALPHA_BITS);
@@ -201,13 +232,13 @@ cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group) {
 }
 
 void
-apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, unsigned int count, bool is_group) {
+apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, unsigned int count, bool is_group, TextCache *tc) {
 #define RANGE for (unsigned c = 0; c < cell_count; c++, cell++)
 #define SET_COLOR(which, set_gamut)                               \
     {                                                             \
         color_type color = 0;                                     \
         uint8_t gamut = 0;                                        \
-        parse_color(params, &i, count, is_group, &color, &gamut); \
+        parse_color(params, &i, count, is_group, tc, &color, &gamut); \
         if (color) {                                              \
             RANGE {                                               \
                 cell->which = color;                              \
@@ -302,7 +333,7 @@ apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, un
             case 48: {
                 color_type color = 0;
                 uint8_t gamut = 0;
-                parse_color(params, &i, count, is_group, &color, &gamut);
+                parse_color(params, &i, count, is_group, tc, &color, &gamut);
                 if (color) {
                     RANGE {
                         cell->bg = (cell->bg & BG_ALPHA_BITS) | color;
@@ -335,14 +366,14 @@ apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, un
 }
 
 const char *
-cursor_as_sgr(const Cursor *self) {
+cursor_as_sgr(const Cursor *self, const TextCache *tc) {
     GPUCell blank_cell = {0}, cursor_cell = {
                                   .attrs = cursor_to_attrs(self),
                                   .fg = self->sgr.fg & COL_MASK,
                                   .bg = self->sgr.bg & COL_MASK,
                                   .decoration_fg = self->sgr.decoration_fg & COL_MASK,
                               };
-    return cell_as_sgr(&cursor_cell, &blank_cell);
+    return cell_as_sgr(&cursor_cell, &blank_cell, tc, false);
 }
 
 static PyObject *

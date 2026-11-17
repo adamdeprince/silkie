@@ -12,6 +12,7 @@
 #include "charsets.h"
 #include "control-codes.h"
 #include "fonts.h"
+#include "deep-colors.h"
 
 extern PyTypeObject Cursor_Type;
 static_assert(sizeof(char_type) == sizeof(Py_UCS4), "Need to perform conversion to Py_UCS4");
@@ -531,11 +532,11 @@ sprite_at(Line *self, PyObject *x) {
 }
 
 static void
-write_sgr(const char *val, ANSIBuf *output) {
+write_sgr(const char *val, size_t len, ANSIBuf *output) {
 #define W(c) output->buf[output->len++] = c
     W(0x1b);
     W('[');
-    for (size_t i = 0; val[i] != 0 && i < 122; i++) W(val[i]);
+    for (size_t i = 0; i < len; i++) W(val[i]);
     W('m');
 #undef W
 }
@@ -587,9 +588,10 @@ write_mark(const char *mark, ANSIBuf *output) {
 static void
 write_sgr_to_ansi_buf(ANSILineState *s, const char *val) {
     close_multicell(s);
-    ensure_space_in_ansi_output_buf(s, 128);
+    const size_t len = strlen(val);
+    ensure_space_in_ansi_output_buf(s, len + 3);
     s->escape_code_written = true;
-    write_sgr(val, s->output_buf);
+    write_sgr(val, len, s->output_buf);
 }
 
 static void
@@ -665,7 +667,7 @@ line_as_ansi(Line *self, ANSILineState *s, index_type start_at, index_type stop_
             if (PyErr_Occurred()) PyErr_Print();
         }
         if (CMP_ATTRS || CMP(fg) || CMP(bg) || CMP(decoration_fg)) {
-            const char *sgr = cell_as_sgr(cell, s->prev_gpu_cell);
+            const char *sgr = cell_as_sgr(cell, s->prev_gpu_cell, self->text_cache, true);
             if (*sgr) write_sgr_to_ansi_buf(s, sgr);
         }
         if (CMP(depth) || CMP(depth_pixels) || CMP(phase)) {
@@ -901,10 +903,16 @@ apply_cursor(Line *self, PyObject *args) {
 }
 
 static color_type
-resolve_color(const ColorProfile *cp, color_type val, color_type defval) {
+resolve_color(const ColorProfile *cp, const TextCache *tc, color_type val, color_type defval) {
     switch (val & COLOR_TYPE_MASK) {
         case 1: return cp->color_table[(val >> 8) & 0xff];
         case 2: return val >> 8;
+        case DEEP_COLOR_TYPE: {
+            // only 8 bits are needed here, for the colors of the window edges
+            DeepColor d;
+            if (deep_colors_get(tc_deep_colors_if_present(tc), val & ~BG_ALPHA_BITS, &d)) return deep_color_to_rgb(d);
+            return defval;
+        }
         default: return defval;
     }
 }
@@ -913,8 +921,8 @@ bool
 colors_for_cell(Line *self, const ColorProfile *cp, index_type *x, color_type *fg, color_type *bg, bool *reversed) {
     if (*x >= self->xnum) return false;
     while (self->cpu_cells[*x].is_multicell && self->cpu_cells[*x].x && *x) (*x)--;
-    *fg = resolve_color(cp, self->gpu_cells[*x].fg, *fg);
-    *bg = resolve_color(cp, self->gpu_cells[*x].bg, *bg);
+    *fg = resolve_color(cp, self->text_cache, self->gpu_cells[*x].fg, *fg);
+    *bg = resolve_color(cp, self->text_cache, self->gpu_cells[*x].bg, *bg);
     if (self->gpu_cells[*x].attrs.reverse) {
         color_type t = *fg;
         *fg = *bg;
@@ -1008,32 +1016,49 @@ color_as_sgr(char *buf, size_t sz, unsigned long val, unsigned gamut, unsigned s
     }
 }
 
+// A color word of any type as SGR parameters. A deep color goes into *deep,
+// for its deep form to be written after everything else, see
+// docs/deep-color-protocol.rst, and, with fallback, is also written here as
+// its nearest 8 bit RGB color, which every terminal understands.
+static int
+any_color_as_sgr(
+    char *buf, size_t sz, color_type val, unsigned gamut, unsigned simple_code, unsigned aix_code, unsigned complex_code, const TextCache *tc, bool fallback,
+    DeepColor *deep, bool *is_deep) {
+    *is_deep = false;
+    if ((val & COLOR_TYPE_MASK) == DEEP_COLOR_TYPE) {
+        if (!deep_colors_get(tc_deep_colors_if_present(tc), val & ~BG_ALPHA_BITS, deep)) return snprintf(buf, sz, "%u;", complex_code + 1);
+        *is_deep = true;
+        if (!fallback) return 0;
+        val = (deep_color_to_rgb(*deep) << 8) | 2;
+        gamut = deep->gamut;
+    }
+    return color_as_sgr(buf, sz, val, gamut, simple_code, aix_code, complex_code);
+}
+
 static const char *
 decoration_as_sgr(uint8_t decoration) {
     switch (decoration) {
         case 1: return "4;";
         case 2: return "4:2;";
         case 3: return "4:3;";
-        case 4: return "4:4";
-        case 5: return "4:5";
+        case 4: return "4:4;";
+        case 5: return "4:5;";
         default: return "24;";
     }
 }
 
 
 const char *
-cell_as_sgr(const GPUCell *cell, const GPUCell *prev) {
-    static char buf[128];
-#define SZ sizeof(buf) - (p - buf) - 2
-#define P(s)                    \
-    {                           \
-        size_t len = strlen(s); \
-        if (SZ > len) {         \
-            memcpy(p, s, len);  \
-            p += len;           \
-        }                       \
-    }
+cell_as_sgr(const GPUCell *cell, const GPUCell *prev, const TextCache *tc, bool deep_in_own_sequence) {
+    static char buf[CELL_AS_SGR_MAX];
     char *p = buf;
+#define SZ (sizeof(buf) - (size_t)(p - buf) - 2)
+#define ADV(expr)                                   \
+    {                                               \
+        int _n = (expr);                            \
+        if (_n > 0) p += MIN((size_t)_n, SZ);       \
+    }
+#define P(s) ADV(snprintf(p, SZ, "%s", s))
 #define CA cell->attrs
 #define PA prev->attrs
     bool intensity_differs = CA.bold != PA.bold || CA.dim != PA.dim;
@@ -1051,16 +1076,34 @@ cell_as_sgr(const GPUCell *cell, const GPUCell *prev) {
     if (CA.reverse != PA.reverse) P(CA.reverse ? "7;" : "27;");
     if (CA.strike != PA.strike) P(CA.strike ? "9;" : "29;");
     if (CA.blink != PA.blink) P(CA.blink ? "5;" : "25;");
-    if (CA.hdr_fg != PA.hdr_fg) p += snprintf(p, SZ, "%u:%u;", HDR_FG_CODE, 100 + 25 * CA.hdr_fg);
-    if (CA.hdr_bg != PA.hdr_bg) p += snprintf(p, SZ, "%u:%u;", HDR_BG_CODE, 100 + 25 * CA.hdr_bg);
-    if (cell->fg != prev->fg || CA.gamut_fg != PA.gamut_fg) p += color_as_sgr(p, SZ, cell->fg, CA.gamut_fg, 30, 90, 38);
-    if ((cell->bg & ~BG_ALPHA_BITS) != (prev->bg & ~BG_ALPHA_BITS) || CA.gamut_bg != PA.gamut_bg) p += color_as_sgr(p, SZ, cell->bg, CA.gamut_bg, 40, 100, 48);
-    if ((cell->bg & BG_ALPHA_BITS) != (prev->bg & BG_ALPHA_BITS)) p += snprintf(p, SZ, "%u:%u;", BG_ALPHA_CODE, 100 - 2 * ((cell->bg & BG_ALPHA_BITS) >> BG_ALPHA_SHIFT));
-    if (cell->decoration_fg != prev->decoration_fg) p += color_as_sgr(p, SZ, cell->decoration_fg, 0, 0, 0, DECORATION_FG_CODE);
+    if (CA.hdr_fg != PA.hdr_fg) ADV(snprintf(p, SZ, "%u:%u;", HDR_FG_CODE, 100 + 25 * CA.hdr_fg));
+    if (CA.hdr_bg != PA.hdr_bg) ADV(snprintf(p, SZ, "%u:%u;", HDR_BG_CODE, 100 + 25 * CA.hdr_bg));
+    // fg, bg, decoration
+    DeepColor deep[3];
+    bool is_deep[3] = {0};
+    const unsigned deep_codes[3] = {38, 48, DECORATION_FG_CODE};
+    if (cell->fg != prev->fg || CA.gamut_fg != PA.gamut_fg) ADV(any_color_as_sgr(p, SZ, cell->fg, CA.gamut_fg, 30, 90, 38, tc, deep_in_own_sequence, deep, is_deep));
+    if ((cell->bg & ~BG_ALPHA_BITS) != (prev->bg & ~BG_ALPHA_BITS) || CA.gamut_bg != PA.gamut_bg)
+        ADV(any_color_as_sgr(p, SZ, cell->bg & ~BG_ALPHA_BITS, CA.gamut_bg, 40, 100, 48, tc, deep_in_own_sequence, deep + 1, is_deep + 1));
+    if ((cell->bg & BG_ALPHA_BITS) != (prev->bg & BG_ALPHA_BITS)) ADV(snprintf(p, SZ, "%u:%u;", BG_ALPHA_CODE, 100 - 2 * ((cell->bg & BG_ALPHA_BITS) >> BG_ALPHA_SHIFT)));
+    if (cell->decoration_fg != prev->decoration_fg) ADV(any_color_as_sgr(p, SZ, cell->decoration_fg, 0, 0, 0, DECORATION_FG_CODE, tc, deep_in_own_sequence, deep + 2, is_deep + 2));
     if (CA.decoration != PA.decoration) P(decoration_as_sgr(CA.decoration));
+    // The deep forms come last: a terminal that does not know them may drop
+    // the rest of the sequence, so for output meant for any terminal each one
+    // is a sequence of its own, after the 8 bit color it refines. A DECRQSS
+    // report is a single list of parameters, for a program asking Silkie, and
+    // has only the deep form.
+    for (unsigned i = 0; i < 3; i++) {
+        if (!is_deep[i]) continue;
+        if (deep_in_own_sequence) {
+            if (p > buf) p--; // the trailing semi-colon
+            ADV(snprintf(p, SZ, "m\x1b[%u:%d:%u:%u:%u:%u;", deep_codes[i], DEEP_COLOR_SGR_TYPE, deep[i].gamut, deep[i].r, deep[i].g, deep[i].b));
+        } else ADV(snprintf(p, SZ, "%u:%d:%u:%u:%u:%u;", deep_codes[i], DEEP_COLOR_SGR_TYPE, deep[i].gamut, deep[i].r, deep[i].g, deep[i].b));
+    }
 #undef PA
 #undef CA
 #undef P
+#undef ADV
 #undef SZ
     if (p > buf) *(p - 1) = 0; // remove trailing semi-colon
     *p = 0;                    // ensure string is null-terminated

@@ -37,7 +37,7 @@ A program asks which selectors the terminal speaks::
 ``id`` is a non-negative 31 bit integer of the program's choosing, echoed in
 the reply so replies can be matched to queries. The terminal answers::
 
-    <OSC> 777 ; caps ; v=1 : op=cap : id=42 : caps=3 : ext=caps.1,frame.1,gesture.1 : media=d,f,t,s : format=24,32,100 <ST>
+    <OSC> 777 ; caps ; v=1 : op=cap : id=42 : caps=3 : ext=caps.1,frame.1,gesture.1 : sgr=deep,gamut,hdr : media=d,f,t,s : format=24,32,100 <ST>
 
 ``caps`` is a bit set of what the terminal does with this selector: ``1``
 the listing, ``2`` the reset request described below. ``ext`` is a comma
@@ -53,6 +53,18 @@ The answer is the same for every window of a terminal and does not change
 while the terminal runs, so a program needs it once. A terminal that does not
 support this protocol ignores the query, so a program must time out and may
 then fall back to probing the selectors it needs one at a time.
+
+SGR extensions
+-----------------
+
+The same reply lists, in ``sgr``, the extensions of the SGR attributes that
+the terminal understands, which a program cannot otherwise detect since a
+terminal that does not know them ignores them: ``alpha``, the cell background
+alpha of :doc:`cell-alpha-protocol`; ``deep``, the sixteen bit colors of
+:doc:`deep-color-protocol`; ``gamut``, the color space id of
+:doc:`wide-gamut-protocol`; and ``hdr``, the brightness of :doc:`hdr-protocol`.
+The order is not significant and a program ignores names it does not know. A
+terminal that understands none of them omits the field.
 
 Graphics media and formats
 -----------------------------

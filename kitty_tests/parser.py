@@ -944,6 +944,13 @@ class TestParser(BaseTest):
         pb('\033[38:2:1:1:2:3;48:2:2:4:5:6m', ('select_graphic_rendition', '38:2:1:1:2:3'), ('select_graphic_rendition', '48:2:2:4:5:6'))
         self.ae((s.cursor.gamut_fg, s.cursor.gamut_bg), (1, 2))
         pb('\033[1001:2:1:2:3m', ('select_graphic_rendition', '1001:2:1:2:3'))
+        # the deep colors of docs/deep-color-protocol.rst are colon groups of their own
+        pb('\033[38:0:1:1:2:3;1;48:0:0:4:5:6:7;58:0:2:1:1:1m',
+           ('select_graphic_rendition', '38:0:1:1:2:3'), ('select_graphic_rendition', '1'),
+           ('select_graphic_rendition', '48:0:0:4:5:6:7'), ('select_graphic_rendition', '58:0:2:1:1:1'))
+        self.assertTrue(s.cursor.bold)
+        self.ae((s.deep_color(s.cursor.fg), s.deep_color(s.cursor.bg), s.deep_color(s.cursor.decoration_fg)), ((1, 2, 3, 1), (4, 5, 6, 0), (1, 1, 1, 2)))
+        pb('\033[38;0;1;2;3;4m', ('SGR escape code has a deep color in the semicolon form ignoring the full code',))
         pb('\033[56:200;57m', ('select_graphic_rendition', '56:200'), ('select_graphic_rendition', '57'))
         self.ae((s.cursor.hdr_fg, s.cursor.hdr_bg), (4, 0))
         pb('\033[70:50;49m', ('select_graphic_rendition', '70:50'), ('select_graphic_rendition', '49'))

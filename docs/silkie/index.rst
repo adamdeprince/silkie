@@ -112,11 +112,12 @@ sRGB, linear, PQ or HLG, so that HDR10 frames go to the GPU as they are; see
 Color beyond ordinary SDR
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Use wider color spaces and request brightness above SDR white on supported
-displays. Query the available headroom and control transparency at the cell level.
+Use wider color spaces, request brightness above SDR white on supported
+displays, and give text colors with sixteen bits per channel. Query the
+available headroom and control transparency at the cell level.
 
 :doc:`HDR <hdr-protocol>` · :doc:`Wide gamut <wide-gamut-protocol>` ·
-:doc:`Cell alpha <cell-alpha-protocol>`
+:doc:`Deep colors <deep-color-protocol>` · :doc:`Cell alpha <cell-alpha-protocol>`
 
 Display and presentation feedback
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

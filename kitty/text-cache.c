@@ -6,6 +6,7 @@
  */
 
 #include "data-types.h"
+#include "deep-colors.h"
 typedef struct Chars {
     const char_type *chars;
     size_t count;
@@ -36,6 +37,7 @@ typedef struct TextCache {
     unsigned refcnt;
     CharsMonotonicArena arena;
     unsigned adds_since_last_gc, adds_between_gcs;
+    DeepColors *deep_colors;
 } TextCache;
 static uint64_t
 hash_chars(Chars k) {
@@ -67,6 +69,7 @@ tc_alloc(void) {
 
 static void
 free_text_cache(TextCache *self) {
+    deep_colors_free(self->deep_colors);
     vt_cleanup(&self->map);
     Chars_free_all(&self->arena);
     free(self->array.items);
@@ -168,6 +171,17 @@ tc_get_or_insert_chars(TextCache *self, const ListOfChars *chars) {
         return copy_and_insert(self, key);
     }
     return i.data->val;
+}
+
+DeepColors *
+tc_deep_colors(TextCache *self) {
+    if (!self->deep_colors) self->deep_colors = deep_colors_alloc();
+    return self->deep_colors;
+}
+
+const DeepColors *
+tc_deep_colors_if_present(const TextCache *self) {
+    return self ? self->deep_colors : NULL;
 }
 
 char_type

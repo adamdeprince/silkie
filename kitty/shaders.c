@@ -19,6 +19,7 @@
 #include "srgb_gamma.h"
 #include "state.h"
 #include "spatial.h"
+#include "deep-colors.h"
 
 enum {
     CELL_PROGRAM,
@@ -52,7 +53,8 @@ enum {
     CUSTOM_END_TEXTURE_A_UNIT,
     CUSTOM_END_TEXTURE_B_UNIT,
     CUSTOM_END_TEXTURE_PERSIST_UNIT,
-    GRAPHICS_PALETTE_UNIT
+    GRAPHICS_PALETTE_UNIT,
+    DEEP_COLORS_UNIT
 };
 
 typedef struct UIRenderData {
@@ -210,6 +212,95 @@ clear_current_framebuffer(void) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+// Deep colors {{{
+// The deep color table of a screen, see deep-colors.h, is drawn from an
+// RGBA16UI texture with one texel per color, in rows of this many texels
+static GLint
+deep_colors_texture_width(void) {
+    return MIN(4096, max_texture_size);
+}
+
+// The most colors a texture can hold, the limit of every deep color table
+static size_t
+deep_colors_texture_capacity(void) {
+    return (size_t)deep_colors_texture_width() * (size_t)max_texture_size;
+}
+
+static void
+upload_deep_colors(const DeepColor *items, size_t start, size_t end, GLint width) {
+    // [start, end) as at most three rectangles: the tail of the first row,
+    // whole rows, and the head of the last row
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
+    while (start < end) {
+        const GLint x = start % width, y = start / width;
+        size_t n = MIN(end - start, (size_t)(width - x));
+        GLsizei rows = 1;
+        if (x == 0 && n == (size_t)width) {
+            rows = (GLsizei)((end - start) / width);
+            n = (size_t)rows * width;
+        }
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, rows > 1 ? width : (GLsizei)n, rows, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, items + start);
+        start += n;
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+}
+
+static void
+send_deep_colors_to_gpu(Screen *screen) {
+    DeepColors *dc = (DeepColors *)tc_deep_colors_if_present(screen->text_cache);
+    size_t start = 0, end = 0;
+    const bool has_dirty = deep_colors_dirty_range(dc, &start, &end);
+    if (!has_dirty && !(screen->reload_all_gpu_data && deep_colors_slots(dc))) return;
+#define G screen->deep_colors_gpu
+    const GLint width = deep_colors_texture_width();
+    const size_t slots = MIN(deep_colors_slots(dc), deep_colors_texture_capacity());
+    const size_t rows = (slots + width - 1) / width;
+    bool full = screen->reload_all_gpu_data;
+    if (!G.texture_id || G.width != (unsigned)width || rows > G.height) {
+        if (G.texture_id) free_texture(&G.texture_id);
+        G.width = width;
+        G.height = MIN((size_t)max_texture_size, MAX(rows, (size_t)G.height * 2));
+        glGenTextures(1, &G.texture_id);
+        glBindTexture(GL_TEXTURE_2D, G.texture_id);
+        // integer textures are incomplete unless sampled without filtering
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16UI, G.width, G.height, 0, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, NULL);
+        full = true;
+    } else glBindTexture(GL_TEXTURE_2D, G.texture_id);
+    if (full) {
+        start = 0;
+        end = slots;
+    }
+    upload_deep_colors(deep_colors_data(dc), start, MIN(end, slots), width);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    deep_colors_clear_dirty(dc);
+#undef G
+}
+
+static void
+bind_deep_colors(const Screen *screen) {
+    // A screen without deep colors still needs a texture of the right type
+    // bound, so that the sampler is valid, but never reads from it
+    static GLuint empty_texture = 0;
+    if (!screen->deep_colors_gpu.texture_id && !empty_texture) {
+        static const uint16_t texel[4] = {0};
+        glGenTextures(1, &empty_texture);
+        glBindTexture(GL_TEXTURE_2D, empty_texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16UI, 1, 1, 0, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, texel);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    }
+    glActiveTexture(GL_TEXTURE0 + DEEP_COLORS_UNIT);
+    glBindTexture(GL_TEXTURE_2D, screen->deep_colors_gpu.texture_id ? screen->deep_colors_gpu.texture_id : empty_texture);
+    glActiveTexture(GL_TEXTURE0);
+}
+// }}}
+
 // Must be called as soon as there is a current OpenGL context, see
 // initialize_gpu(). Font groups are created before that happens and size their
 // sprite layout using these limits, so the sooner they are known the better.
@@ -225,6 +316,7 @@ query_gpu_texture_limits(void) {
     max_array_texture_layers = MIN(512, max_array_texture_layers);
 #endif
     sprite_tracker_set_limits(max_texture_size, max_array_texture_layers);
+    deep_colors_set_max_entries(deep_colors_texture_capacity());
 }
 
 SPRITE_MAP_HANDLE
@@ -775,6 +867,13 @@ init_cell_program(void) {
         glUniformBlockBinding(program_id(PADDING_PROGRAM), crd.index, CELL_RENDER_DATA_BINDING_POINT);
         UniformBlock ct = program_uniform_block(PADDING_PROGRAM, "ColorTable");
         glUniformBlockBinding(program_id(PADDING_PROGRAM), ct.index, COLOR_TABLE_BINDING_POINT);
+        // and the deep colors, bound by draw_cells()
+        GLint loc = try_program_uniform_location(PADDING_PROGRAM, "deep_colors");
+        if (loc >= 0) {
+            bind_program(PADDING_PROGRAM);
+            glUniform1i(loc, DEEP_COLORS_UNIT);
+            unbind_program();
+        }
     }
 #define C(name, expected)                                                                                                                     \
     {                                                                                                                                         \
@@ -1663,6 +1762,7 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
         changed = true;                                                                                \
     }
 
+    send_deep_colors_to_gpu(screen);
     if (screen->paused_rendering.expires_at) {
         if (!screen->paused_rendering.cell_data_updated) update_cell_data;
     } else if (screen->reload_all_gpu_data || screen->scroll_changed || screen->is_dirty || screen_resized || (disable_ligatures && cursor_pos_changed))
@@ -1835,6 +1935,7 @@ set_cell_uniforms(bool force) {
             bind_program(i);
             set_optional(glUniform1i, "sprites", SPRITE_MAP_UNIT);
             set_optional(glUniform1i, "sprite_decorations_map", SPRITE_DECORATIONS_MAP_UNIT);
+            set_optional(glUniform1i, "deep_colors", DEEP_COLORS_UNIT);
             set_optional(glUniform1f, "text_contrast", text_contrast);
             set_optional(glUniform1f, "text_gamma_adjustment", text_gamma_adjustment);
         }
@@ -2822,6 +2923,7 @@ draw_cells(
     color_type default_bg = cell_update_uniform_block(
         srd->vao_idx, screen, uniform_buffer, color_table_buffer, &screen->cursor_render_info, os_window, current_inactive_text_alpha, bg_alpha);
     set_cell_uniforms(screen->reload_all_gpu_data);
+    bind_deep_colors(screen);
     WindowLogoRenderData *wl;
     if (window && (wl = &window->window_logo) && wl->id && (wl->instance = find_window_logo(global_state.all_window_logos, wl->id)) &&
         wl->instance->load_from_disk_ok) {

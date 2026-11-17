@@ -1145,7 +1145,7 @@ class TestScreen(BaseTest):
         s = self.create_screen()
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-        self.ae(c.wtcbuf, f'\x1b]777;caps;v=1:op=cap:id=7:caps=3:ext=depth.1,ssh-agent.1,caps.1,display.1,font.1,frame.1,gesture.1,haptic.1,ink.1,latency.1,scroll.1,tablet-pointer.1:media=d,f,t,s{g}:format=8,16,24,32,64,100,200,301,302,304,308,316,401,402,404,408,516,632,664\x1b\\'.encode())
+        self.ae(c.wtcbuf, f'\x1b]777;caps;v=1:op=cap:id=7:caps=3:ext=depth.1,ssh-agent.1,caps.1,display.1,font.1,frame.1,gesture.1,haptic.1,ink.1,latency.1,scroll.1,tablet-pointer.1:sgr=alpha,deep,gamut,hdr:media=d,f,t,s{g}:format=8,16,24,32,64,100,200,301,302,304,308,316,401,402,404,408,516,632,664\x1b\\'.encode())
         c.clear()
         parse_bytes(s, b'\x1b]777;caps;v=2:op=query:id=7\x1b\\')
         parse_bytes(s, b'\x1b]777;caps;v=1:op=query\x1b\\')
@@ -1155,6 +1155,185 @@ class TestScreen(BaseTest):
         self.ae(str(s.line(0)), '')
         # A frame from a program follows the rules every extension shares, see docs/extension-framing.rst
         assert_extension_frames(self, s, 'caps')
+
+    def test_deep_colors(self):
+        # 16 bit text colors, see docs/deep-color-protocol.rst
+        from kitty.fast_data_types import DEEP_COLOR_TYPE, deep_colors_max_entries
+
+        s = self.create_screen(cols=10, lines=5, scrollback=20)
+        c = s.callbacks
+
+        def deep(color):
+            return s.deep_color(color)
+
+        def sgr(params):
+            parse_bytes(s, f'\x1b[{params}m'.encode())
+
+        # fg, bg and decoration, with the gamut id
+        sgr('38:0:1:65535:32768:1')
+        self.ae(s.cursor.fg & 3, DEEP_COLOR_TYPE)
+        self.ae(deep(s.cursor.fg), (65535, 32768, 1, 1))
+        self.ae(s.cursor.gamut_fg, 0)  # the gamut is in the table
+        sgr('70:50;48:0:2:1:2:3;58:0:0:4:5:6')
+        self.ae(deep(s.cursor.bg), (1, 2, 3, 2))
+        self.ae(s.cursor.bg_alpha, 50)  # the cell alpha is kept
+        self.ae(deep(s.cursor.decoration_fg), (4, 5, 6, 0))
+        # an unknown gamut id is sRGB
+        sgr('38:0:7:1:1:1')
+        self.ae(deep(s.cursor.fg), (1, 1, 1, 0))
+        # equal colors share an entry
+        sgr('38:0:7:1:1:1')
+        first = s.cursor.fg
+        sgr('48:0:0:1:1:1')
+        self.ae(s.cursor.bg & ~(63 << 2), first)
+        # the other SGR parameters of the sequence still apply after it
+        sgr('0;38:0:0:10:20:30;1;4:3;7')
+        self.ae(deep(s.cursor.fg), (10, 20, 30, 0))
+        self.assertTrue(s.cursor.bold)
+        self.assertTrue(s.cursor.reverse)
+        self.ae(s.cursor.decoration, 3)
+        # combined with an ordinary color, HDR and the wide gamut id
+        sgr('0;38:0:2:100:200:300;56:200;48:2:1:1:2:3')
+        self.ae(deep(s.cursor.fg), (100, 200, 300, 2))
+        self.ae((s.cursor.hdr_fg, s.cursor.gamut_bg), (4, 1))
+        self.ae(s.cursor.bg, 1 << 24 | 2 << 16 | 3 << 8 | 2)
+        sgr('38:2:1:9:9:9')
+        self.ae((s.cursor.fg, s.cursor.gamut_fg), (9 << 24 | 9 << 16 | 9 << 8 | 2, 1))
+        sgr('38:0:0:9:9:9')
+        self.ae((deep(s.cursor.fg), s.cursor.gamut_fg), ((9, 9, 9, 0), 0))
+        sgr('39')
+        self.ae((s.cursor.fg, s.cursor.gamut_fg), (0, 0))
+
+        # malformed groups set nothing and the parameters after them apply
+        for bad in ('38:0:0:1:2', '38:0:0:65536:0:0', '38:0::1:2:3', '38:0', '48:0:1'):
+            sgr('0')
+            sgr(f'{bad};1')
+            self.ae((s.cursor.fg, s.cursor.bg, s.cursor.bold), (0, 0, True), bad)
+        # there is no semicolon form, it is ignored like any unknown color type
+        sgr('0')
+        sgr('38;0;0;1;2;3;1')
+        self.ae((s.cursor.fg, s.cursor.bold), (0, False))
+
+        # cells, as_ansi with an 8 bit fallback, and DECRQSS
+        s.reset()
+        sgr('38:0:1:65535:32768:1;1')
+        s.draw('ab')
+        sgr('48:0:0:257:514:771')
+        s.draw('c')
+        self.ae(deep(s.line(0).cursor_from(0).fg), (65535, 32768, 1, 1))
+        self.ae(deep(s.line(0).cursor_from(2).bg), (257, 514, 771, 0))
+        ansi = s.line(0).as_ansi()
+        self.ae(ansi, '\x1b[22;1;38:2:1:255:128:0m\x1b[38:0:1:65535:32768:1mab\x1b[48:2:1:2:3m\x1b[48:0:0:257:514:771mc')
+        c.clear()
+        parse_bytes(s, b'\x1bP$qm\x1b\\')
+        self.ae(c.wtcbuf, b'\x1bP1$r0;22;1;38:0:1:65535:32768:1;48:0:0:257:514:771m\x1b\\')
+        # the longest report is not truncated
+        c.clear()
+        sgr('1;2;3;4:5;5;7;9;56:1675;57:1675;70:2;38:0:2:65535:65535:65535;48:0:2:65535:65535:65535;58:0:2:65535:65535:65535')
+        parse_bytes(s, b'\x1bP$qm\x1b\\')
+        self.assertTrue(c.wtcbuf.endswith(b';4:5;38:0:2:65535:65535:65535;48:0:2:65535:65535:65535;58:0:2:65535:65535:65535m\x1b\\'), c.wtcbuf)
+        ansi_long = s.line(0).as_ansi()
+        s.draw('d')
+        long_ansi = s.line(0).as_ansi()
+        self.assertTrue(long_ansi.endswith('\x1b[38:0:2:65535:65535:65535m\x1b[48:0:2:65535:65535:65535m\x1b[58:0:2:65535:65535:65535md'), long_ansi)
+        self.ae(long_ansi[:len(ansi_long)], ansi_long)
+        sgr('0')
+        # as_ansi round trips
+        s2 = self.create_screen(cols=10, lines=5)
+        parse_bytes(s2, ansi.encode())
+        for x in range(3):
+            a, b = s.line(0).cursor_from(x), s2.line(0).cursor_from(x)
+            self.ae((s.deep_color(a.fg), s.deep_color(a.bg)), (s2.deep_color(b.fg), s2.deep_color(b.bg)))
+            self.ae(a.bold, b.bold)
+        self.ae(s2.line(0).as_ansi(), ansi)
+
+        # reverse video swaps them like any other color, the edges of the
+        # window take the 8 bit colors nearest to them
+        s.reset()
+        sgr('48:0:0:0:65535:0')
+        s.draw(' ')
+        self.ae(s.line_edge_colors()[0], 0x00ff00)
+        s.reset()
+        sgr('7;38:0:0:65535:0:0')
+        s.draw(' ')
+        self.ae(s.line_edge_colors()[0], 0xff0000)
+
+        # DECCARA
+        s.reset()
+        s.draw('abcd')
+        parse_bytes(s, b'\x1b[1;1;1;3;38:0:0:1:2:3$r')
+        self.ae([deep(s.line(0).cursor_from(x).fg) for x in range(4)], [(1, 2, 3, 0)] * 3 + [None])
+
+        # rewrap keeps the colors with the text
+        s.reset()
+        for i, ch in enumerate('abcdefghij'):
+            sgr(f'38:0:0:{i}:{1000 + i}:{60000 + i}')
+            s.draw(ch)
+        sgr('0')
+        for cols in (4, 7, 10, 3, 10):
+            s.resize(5, cols)
+            text = ''.join(str(s.line(y)) for y in range(s.lines))
+            seen = {}
+            for y in range(s.lines):
+                line = s.line(y)
+                for x in range(s.columns):
+                    ch = str(line)[x:x + 1]
+                    if ch:
+                        seen[ch] = deep(line.cursor_from(x).fg)
+            self.assertIn('abcdefghij', text.replace(' ', ''))
+            self.ae(seen, {ch: (i, 1000 + i, 60000 + i, 0) for i, ch in enumerate('abcdefghij')}, cols)
+
+        # garbage collection: colors nothing refers to are freed, the rest
+        # keep their values, under sustained use
+        s = self.create_screen(cols=10, lines=5, scrollback=20)
+        for i in range(40000):
+            sgr(f'38:0:{i % 3}:{i & 0xffff}:{i >> 16}:7')
+            s.draw('x')
+        live, slots = s.deep_colors_stats()
+        self.assertLessEqual(slots, 4096 + 10 * 25 + 8)
+        for i in range(40000 - 10 * 5, 40000):
+            y, x = divmod(i - (40000 - 10 * 5), 10)
+            self.ae(deep(s.line(y).cursor_from(x).fg), (i & 0xffff, i >> 16, 7, i % 3))
+        for y in range(s.historybuf.count):
+            line = s.historybuf.line(y)
+            for x in range(10):
+                i = 40000 - 10 * 5 - 10 * (y + 1) + x
+                self.ae(deep(line.cursor_from(x).fg), (i & 0xffff, i >> 16, 7, i % 3))
+        s.garbage_collect_deep_colors()
+        live, slots = s.deep_colors_stats()
+        self.ae(live, 10 * 25)
+        # what the saved cursor and the main screen hold while the alternate
+        # screen is active survives, what nothing holds goes
+        sgr('38:0:0:8:8:8')
+        parse_bytes(s, b'\x1b[?1049h')  # saves the cursor
+        sgr('38:0:0:9:9:9')
+        s.draw('y')
+        sgr('0')
+        s.garbage_collect_deep_colors()
+        self.ae(s.deep_colors_stats()[0], 10 * 25 + 2)
+        parse_bytes(s, b'\x1b[?1049l')
+        self.ae(deep(s.cursor.fg), (8, 8, 8, 0))
+        self.ae(deep(s.line(4).cursor_from(9).fg), (39999 & 0xffff, 39999 >> 16, 7, 39999 % 3))
+        # and a reset leaves nothing
+        s = self.create_screen(cols=10, lines=5, scrollback=0)
+        sgr('38:0:0:1:2:3')
+        s.draw('abc')
+        s.reset()
+        s.garbage_collect_deep_colors()
+        self.ae(s.deep_colors_stats(), (0, 0))
+
+        # a table full of live colors falls back to the nearest 8 bit color
+        prev = deep_colors_max_entries(2)
+        try:
+            s = self.create_screen(cols=10, lines=5, scrollback=0)
+            for i in range(2):
+                sgr(f'38:0:0:{i}:0:0')
+                s.draw('x')
+            sgr('38:0:1:65535:0:32896')
+            self.ae((s.cursor.fg, s.cursor.gamut_fg), (0xff << 24 | 0x80 << 8 | 2, 1))
+            self.ae(s.deep_colors_stats(), (2, 2))
+        finally:
+            deep_colors_max_entries(prev)
 
     def test_caps_reset(self):
         # The request and a shell prompt both turn every extension mode off

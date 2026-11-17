@@ -40,6 +40,7 @@ from kitty.fast_data_types import (
     COLOR_NOT_SET,
     COLOR_TYPE_MASK,
     CUSTOM_END_PROGRAM,
+    DEEP_COLOR_TYPE,
     DECORATION,
     DECORATION_MASK,
     DIM,
@@ -797,6 +798,7 @@ class SlangFile(NamedTuple):
                 ans['GAMUT_BG_SHIFT'] = str(GAMUT_BG)
                 ans['GAMUT_MASK'] = str(GAMUT_MASK)
                 ans['COLOR_TYPE_MASK'] = str(COLOR_TYPE_MASK)
+                ans['DEEP_COLOR_TYPE'] = str(DEEP_COLOR_TYPE)
                 ans['BG_ALPHA_SHIFT'] = str(BG_ALPHA_SHIFT)
                 ans['BG_ALPHA_MASK'] = str(BG_ALPHA_MASK)
                 ans['COLOR_NOT_SET'] = str(COLOR_NOT_SET)

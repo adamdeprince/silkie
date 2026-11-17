@@ -172,6 +172,13 @@ typedef struct ImageAnchorPosition {
 // The type of a color is in the low two bits of its lowest byte, the alpha of
 // a cell background is in the high six bits of its bg color, 0 being opaque
 #define COLOR_TYPE_MASK 3u
+// The color types: 0 default, 1 palette index, 2 RGB and DEEP_COLOR_TYPE, a
+// 16 bit per channel color whose index in the deep color table of the screen
+// is the payload, see deep-colors.h
+#define DEEP_COLOR_TYPE 3u
+// The ITU T.416 color space type, implementation defined, of the deep color
+// SGR form 38:0:<id>:<r>:<g>:<b>, see docs/deep-color-protocol.rst
+#define DEEP_COLOR_SGR_TYPE 0
 #define BG_ALPHA_SHIFT 2
 #define BG_ALPHA_MASK 63u
 #define BG_ALPHA_BITS (BG_ALPHA_MASK << BG_ALPHA_SHIFT)
@@ -386,8 +393,6 @@ void cursor_reset(Cursor *);
 Cursor *cursor_copy(Cursor *);
 void cursor_copy_to(Cursor *src, Cursor *dest);
 void cursor_reset_display_attrs(Cursor *);
-void cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group);
-const char *cursor_as_sgr(const Cursor *);
 
 PyObject *cm_thread_write(PyObject *self, PyObject *args);
 bool schedule_write_to_child(id_type id, unsigned int num, ...);

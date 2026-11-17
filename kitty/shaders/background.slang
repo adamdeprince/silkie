@@ -9,6 +9,7 @@ module background;
 
 import utils;
 import gamut;
+import linear2srgb;
 
 #define NUM_COLORS 256
 
@@ -55,6 +56,10 @@ public struct ColorTable {
 
 public ConstantBuffer<ColorTable> ctb;
 #define color_table ctb.color_table
+
+// The deep color table of the screen, see deep-colors.h: one texel per color,
+// r, g and b encoded with the sRGB curve in 16 bits and a the gamut id.
+public uniform Sampler2D<uint4> deep_colors;
 
 // The gamma LUT is a compile time constant and, unlike every other block
 // here, it is emitted into the default uniform block for OpenGL rather than
@@ -147,6 +152,29 @@ resolve_color(uint c, uint defval) {
 public float3
 to_color(uint c, uint defval) {
     return color_to_vec(resolve_color(c, defval));
+}
+
+// A color word of DEEP_COLOR_TYPE: the linear color at full precision and its gamut
+public struct DeepColorValue {
+    public float3 rgb;
+    public uint gamut;
+};
+
+public bool
+is_deep_color(uint c) {
+    return (c & COLOR_TYPE_MASK) == DEEP_COLOR_TYPE;
+}
+
+public DeepColorValue
+load_deep_color(uint c) {
+    uint idx = c >> 8;
+    int width, height;
+    deep_colors.GetDimensions(width, height);
+    uint4 t = deep_colors[int2(int(idx % uint(width)), int(idx / uint(width)))];
+    DeepColorValue ans;
+    ans.rgb = srgb2linear(float3(t.rgb) * (1.f / 65535.f));
+    ans.gamut = t.a & GAMUT_MASK;
+    return ans;
 }
 
 [ForceInline]
@@ -290,11 +318,31 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     float cell_has_default_bg = 1.f - step(1.f, abs(float(bg_as_uint - crd.bg_colors0))); // 1 if has default bg else 0
     cell_has_default_bg *= 1.f - step(1.01f, bg_gain);
     cell_has_default_bg *= step(1.f, cell_alpha);
-    float3 bg = convert_gamut(color_to_vec(bg_as_uint), gamut[bg_index]) * bg_gain;
+    // A deep color carries its own gamut and is read at full precision, the
+    // table is only read for the cells that have one. It is never the default
+    // background nor one of the transparent background colors, which are 8 bit.
+    float3 bg_vec = color_to_vec(bg_as_uint);
+    uint bg_gamut = gamut[bg_index];
+    float bg_is_deep = 0.f;
+    if (has_mark == 0u && is_deep_color(colors[bg_index])) {
+        DeepColorValue d = load_deep_color(colors[bg_index]);
+        bg_vec = d.rgb;
+        bg_gamut = d.gamut;
+        bg_is_deep = 1.f;
+        cell_has_default_bg = 0.f;
+    }
+    float3 bg = convert_gamut(bg_vec, bg_gamut) * bg_gain;
     float3 cell_bg = bg; // preserve original bg for the selection foreground color
     uint fg_as_uint = resolve_color(colors[fg_index], default_colors[fg_index]);
     fg_as_uint = has_mark * color_table[NUM_COLORS + MARK_MASK + mark] + (1u - has_mark) * fg_as_uint;
-    float3 foreground = convert_gamut(color_to_vec(fg_as_uint), gamut[fg_index]) * fg_gain;
+    float3 fg_vec = color_to_vec(fg_as_uint);
+    uint fg_gamut = gamut[fg_index];
+    if (has_mark == 0u && is_deep_color(colors[fg_index])) {
+        DeepColorValue d = load_deep_color(colors[fg_index]);
+        fg_vec = d.rgb;
+        fg_gamut = d.gamut;
+    }
+    float3 foreground = convert_gamut(fg_vec, fg_gamut) * fg_gain;
     // }}}
 
     // Cell position {{{
@@ -352,7 +400,7 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     // }}}
 
     // Background {{{
-    float bg_alpha = calc_background_opacity(bg_as_uint) * cell_alpha;
+    float bg_alpha = lerp(calc_background_opacity(bg_as_uint), 1.f, bg_is_deep) * cell_alpha;
     // we use max so that opacity of the block cursor cell background goes from bg_alpha to 1
     float effective_cursor_opacity = max(crd.cursor_opacity, bg_alpha);
     // is_special_cell is either 0 or 1
@@ -365,7 +413,7 @@ compute_background(uint3 colors, uint2 sprite_idx, uint is_selected, uint instan
     bg_alpha = if_one_then(is_special_cell, 1.f, bg_alpha);
     // Selection and cursor
     bg_alpha = if_one_then(cell_data.has_block_cursor, effective_cursor_opacity, bg_alpha);
-    bg = if_one_then(float(is_selected & BIT_MASK), if_one_then(crd.use_cell_for_selection_bg, color_to_vec(fg_as_uint), crd.highlight_bg_lin.rgb), bg);
+    bg = if_one_then(float(is_selected & BIT_MASK), if_one_then(crd.use_cell_for_selection_bg, fg_vec, crd.highlight_bg_lin.rgb), bg);
     float3 background_rgb = if_one_then(cell_data.has_block_cursor, lerp(bg, cell_data.cursor.bg, crd.cursor_opacity), bg);
     // }}}
 
