@@ -172,17 +172,24 @@ swap_buffers(_GLFWWaylandBufferPair *pair) {
     SWAP(pair->data.front, pair->data.back);
 }
 
-static size_t
-init_buffer_pair(_GLFWWaylandBufferPair *pair, size_t width, size_t height, double scale) {
+static bool
+init_buffer_pair(_GLFWWaylandBufferPair *pair, size_t width, size_t height, double scale, size_t *total) {
     memset(pair, 0, sizeof(_GLFWWaylandBufferPair));
+    // wl_shm takes the width, height and stride of a buffer, the offset of it and the size of the pool as int32,
+    // so every buffer and the pool holding all of them must fit in that range
+    const double w = round(width * scale), h = round(height * scale);
+    if (!(w <= INT32_MAX / 4) || !(h <= INT32_MAX)) return false;
     // wl_shm buffers must have non-zero size
-    pair->width = MAX(1, (int)round(width * scale));
-    pair->height = MAX(1, (int)round(height * scale));
+    pair->width = MAX(1, (int)w);
+    pair->height = MAX(1, (int)h);
     pair->viewport_width = width;
     pair->viewport_height = height;
     pair->stride = 4 * pair->width;
+    if (pair->height > INT32_MAX / pair->stride) return false;
     pair->size_in_bytes = pair->stride * pair->height;
-    return 2 * pair->size_in_bytes;
+    if (pair->size_in_bytes > (INT32_MAX - *total) / 2) return false;
+    *total += 2 * pair->size_in_bytes;
+    return true;
 }
 
 #define all_shadow_surfaces(Q) \
@@ -638,8 +645,15 @@ static bool
 create_shm_buffers(_GLFWwindow *window) {
     decs.mapping.size = 0;
     const bool has_titlebar = !decs.titlebar_hidden;
-    const int side_height = window->wl.height + (has_titlebar ? decs.metrics.visible_titlebar_height : 0);
-#define bp(which, width, height) decs.mapping.size += init_buffer_pair(&decs.which.buffer, width, height, decs.for_window_state.fscale);
+    const size_t side_height = (size_t)MAX(0, window->wl.height) + (has_titlebar ? decs.metrics.visible_titlebar_height : 0);
+#define bp(which, width, height)                                                                                      \
+    do {                                                                                                              \
+        if (!init_buffer_pair(&decs.which.buffer, width, height, decs.for_window_state.fscale, &decs.mapping.size)) { \
+            _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: The window decorations are too large for wl_shm buffers");  \
+            decs.mapping.size = 0;                                                                                    \
+            return false;                                                                                             \
+        }                                                                                                             \
+    } while (0)
     if (has_titlebar) bp(titlebar, window->wl.width, decs.metrics.visible_titlebar_height);
     bp(shadow_top, window->wl.width, decs.metrics.width);
     bp(shadow_bottom, window->wl.width, decs.metrics.width);

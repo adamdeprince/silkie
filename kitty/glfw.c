@@ -1489,7 +1489,7 @@ freetype_render_ctx(bool bold) {
 
 static FreeTypeRenderCtx csd_title_render_ctx = NULL;
 static struct {
-    char family[256];
+    char *family; // allocated to fit, the font the context above was created for
     bool bold, italic, initialized;
 } csd_title_render_ctx_key;
 
@@ -1503,10 +1503,12 @@ csd_title_render_ctx_for(const GLFWTitlebarFont *font) {
     release_freetype_render_context(csd_title_render_ctx);
     csd_title_render_ctx = create_freetype_render_context(family[0] ? family : NULL, font->bold, font->italic);
     if (!csd_title_render_ctx && PyErr_Occurred()) PyErr_Print();
-    snprintf(csd_title_render_ctx_key.family, sizeof(csd_title_render_ctx_key.family), "%s", family);
+    free(csd_title_render_ctx_key.family);
+    // Out of memory leaves the key unset, so the context is made again on the next redraw
+    csd_title_render_ctx_key.family = strdup(family);
     csd_title_render_ctx_key.bold = font->bold;
     csd_title_render_ctx_key.italic = font->italic;
-    csd_title_render_ctx_key.initialized = true;
+    csd_title_render_ctx_key.initialized = csd_title_render_ctx_key.family != NULL;
     return csd_title_render_ctx;
 }
 
@@ -1530,8 +1532,8 @@ draw_text_callback(
     const GLFWTitlebarFont font = glfwGetTitlebarFont();
     FreeTypeRenderCtx ctx = csd_title_render_ctx_for(&font);
     if (!ctx && !(ctx = freetype_render_ctx(true))) return false;
-    unsigned px_sz = (unsigned)round(font.point_size * ydpi / 72. * font.text_scale);
-    px_sz = MIN(px_sz, (unsigned)(height * 3 / 4));
+    // Limited to the titlebar in floating point, as the font size from the desktop has no upper bound
+    const unsigned px_sz = (unsigned)fmin(round(font.point_size * ydpi / 72. * font.text_scale), (double)(height * 3 / 4));
     // Center the title
     size_t text_width = freetype_text_width_for_single_line(ctx, text, px_sz);
     size_t available = width > right_margin + (size_t)x_offset ? width - right_margin - (size_t)x_offset : 0;
@@ -4081,6 +4083,10 @@ cleanup_glfw(void) {
     release_freetype_render_context(bold_render_ctx);
     release_freetype_render_context(normal_render_ctx);
     release_freetype_render_context(csd_title_render_ctx);
+    csd_title_render_ctx = NULL;
+    free(csd_title_render_ctx_key.family);
+    csd_title_render_ctx_key.family = NULL;
+    csd_title_render_ctx_key.initialized = false;
 #endif
 }
 

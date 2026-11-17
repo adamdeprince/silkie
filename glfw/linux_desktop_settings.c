@@ -6,6 +6,7 @@
  */
 
 #include "linux_desktop_settings.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <string.h>
@@ -22,9 +23,10 @@ static const char *supported_namespaces[3] = {FDO_DESKTOP_NAMESPACE, GNOME_DESKT
 
 
 static char theme_name[128] = {0};
-static char interface_font[256];
+// Pango font descriptions from the desktop, allocated to fit, NULL until the desktop sends one
+static char *interface_font = NULL;
 
-static char titlebar_font[256];
+static char *titlebar_font = NULL;
 static bool titlebar_uses_system_font = true;
 static double titlebar_text_scale = 1.;
 static GLFWTitlebarAction titlebar_actions[TITLEBAR_GESTURE_COUNT] = {TITLEBAR_ACTION_MAXIMIZE, TITLEBAR_ACTION_NONE, TITLEBAR_ACTION_MENU};
@@ -39,7 +41,8 @@ glfw_current_titlebar_button_layout(void) {
     return &button_layout;
 }
 
-static char current_titlebar_family[256];
+// The family of current_titlebar_font, owned here, NULL for the default font
+static char *current_titlebar_family = NULL;
 static GLFWTitlebarFont current_titlebar_font = {.point_size = 11, .text_scale = 1, .bold = true};
 
 static bool
@@ -62,7 +65,7 @@ last_word(char *buf, char *end) {
 }
 
 static void
-parse_font_description(const char *description, bool default_bold, char *family, size_t family_sz, GLFWTitlebarFont *ans) {
+parse_font_description(const char *description, bool default_bold, char **family, GLFWTitlebarFont *ans) {
     // Parses the subset of Pango font descriptions used in practice:
     // "[FAMILY-LIST] [STYLE-OPTIONS] [SIZE[px]]"
     static const char *bold_weights[] = {
@@ -113,11 +116,15 @@ parse_font_description(const char *description, bool default_bold, char *family,
         "ultra-expanded",
         "small-caps",
         NULL};
-    char buf[256];
-    snprintf(buf, sizeof(buf), "%s", description ? description : "");
     ans->point_size = 11;
     ans->bold = default_bold;
     ans->italic = false;
+    free(*family);
+    *family = NULL;
+    ans->family = NULL;
+    // Parsed in place, what is left at the end is the family
+    char *buf = _glfw_strdup(description ? description : "");
+    if (!buf) return; // out of memory: the default font at the default size
     char *end = rstrip_font_description(buf, buf + strlen(buf));
     char *word = last_word(buf, end);
     if (*word) {
@@ -126,7 +133,7 @@ parse_font_description(const char *description, bool default_bold, char *family,
         const bool is_px = strcmp(num_end, "px") == 0;
         if (num_end != word && (!*num_end || is_px)) {
             if (is_px) size *= 72. / 96.;
-            if (isfinite(size) && size >= 1 && size <= 200) ans->point_size = size;
+            if (isfinite(size) && size > 0) ans->point_size = size;
             *word = 0;
             end = rstrip_font_description(buf, word);
         }
@@ -145,8 +152,9 @@ parse_font_description(const char *description, bool default_bold, char *family,
         *comma = 0;
         rstrip_font_description(buf, comma);
     }
-    snprintf(family, family_sz, "%s", buf);
-    ans->family = family[0] ? family : NULL;
+    if (buf[0]) *family = buf;
+    else free(buf);
+    ans->family = *family;
 }
 
 const GLFWTitlebarFont *
@@ -158,7 +166,11 @@ unsigned
 glfw_current_titlebar_height(void) {
     const double scale = current_titlebar_font.text_scale;
     const double text_height = current_titlebar_font.point_size * scale * 96. / 72.;
-    return (unsigned)ceil(fmax(38. * fmax(1, scale), text_height + 18));
+    const double height = ceil(fmax(38. * fmax(1, scale), text_height + 18));
+    // xdg-shell window geometry is int32 and the titlebar is added to the height of the window, so
+    // a titlebar taller than half that range would leave no representable window height for the sum
+    const double max_height = INT32_MAX / 2;
+    return (unsigned)(height <= max_height ? height : max_height);
 }
 
 static bool titlebar_settings_dirty = false;
@@ -167,10 +179,9 @@ static unsigned long long titlebar_redraw_timer = 0;
 static void
 redraw_titlebars(void) {
     titlebar_settings_dirty = false;
-    const bool use_system_font = titlebar_uses_system_font || !titlebar_font[0];
+    const bool use_system_font = titlebar_uses_system_font || !titlebar_font;
     // GNOME uses a bold version of the interface font for titles
-    parse_font_description(
-        use_system_font ? interface_font : titlebar_font, use_system_font, current_titlebar_family, sizeof(current_titlebar_family), &current_titlebar_font);
+    parse_font_description(use_system_font ? interface_font : titlebar_font, use_system_font, &current_titlebar_family, &current_titlebar_font);
     current_titlebar_font.text_scale = titlebar_text_scale;
 #ifndef _GLFW_X11
     _glfwPlatformTitlebarSettingsChanged();
@@ -199,9 +210,9 @@ schedule_titlebar_redraw(void) {
 
 static bool
 parse_button_layout(const char *value, GLFWTitlebarButtonLayout *out) {
-    if (!value || strlen(value) >= 256) return false;
-    char copy[256];
-    snprintf(copy, sizeof(copy), "%s", value);
+    if (!value) return false;
+    char *copy = _glfw_strdup(value);
+    if (!copy) return false; // out of memory: keep the current layout
     // Same semantics as GTK: buttons before the colon are on the left, after it
     // on the right, no colon means all buttons are on the left.
     char *colon = strchr(copy, ':');
@@ -228,23 +239,27 @@ parse_button_layout(const char *value, GLFWTitlebarButtonLayout *out) {
             token = next;
         }
     }
+    free(copy);
     return true;
 }
 
 static bool
-read_string_setting(DBusMessageIter *value, char *dest, size_t capacity) {
+read_string_setting(DBusMessageIter *value, char **dest) {
     if (dbus_message_iter_get_arg_type(value) != DBUS_TYPE_STRING) return false;
     const char *text;
     dbus_message_iter_get_basic(value, &text);
-    if (!text || !text[0] || strlen(text) >= capacity || strcmp(dest, text) == 0) return false;
-    snprintf(dest, capacity, "%s", text);
+    if (!text || !text[0] || (*dest && strcmp(*dest, text) == 0)) return false;
+    char *copy = _glfw_strdup(text);
+    if (!copy) return false; // out of memory: keep the current value
+    free(*dest);
+    *dest = copy;
     return true;
 }
 
 static void
 process_wm_setting(const char *key, DBusMessageIter *value) {
     bool changed = false;
-    if (strcmp(key, "titlebar-font") == 0) changed = read_string_setting(value, titlebar_font, sizeof(titlebar_font));
+    if (strcmp(key, "titlebar-font") == 0) changed = read_string_setting(value, &titlebar_font);
     else if (strcmp(key, "titlebar-uses-system-font") == 0 && dbus_message_iter_get_arg_type(value) == DBUS_TYPE_BOOLEAN) {
         dbus_bool_t flag;
         dbus_message_iter_get_basic(value, &flag);
@@ -438,7 +453,7 @@ process_gnome_setting(const char *key, DBusMessageIter *value) {
             }
         }
     } else if (strcmp(key, "font-name") == 0) {
-        if (read_string_setting(value, interface_font, sizeof(interface_font))) titlebar_settings_dirty = true;
+        if (read_string_setting(value, &interface_font)) titlebar_settings_dirty = true;
     } else if (strcmp(key, "text-scaling-factor") == 0 && dbus_message_iter_get_arg_type(value) == DBUS_TYPE_DOUBLE) {
         double factor;
         dbus_message_iter_get_basic(value, &factor);
