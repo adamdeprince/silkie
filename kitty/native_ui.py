@@ -239,13 +239,14 @@ def native_menu_model() -> list[dict[str, Any]]:
 class SettingsController:
     reload_timer: int = 0
 
-    def model(self, page: str = '') -> dict[str, Any]:
+    def model(self, page: str = '', profile: str = '') -> dict[str, Any]:
         pages = settings_pages()
         pages.insert(2, profile_model())
         return {
             'pages': pages,
             'families': monospace_families(),
             'select_page': page,
+            'select_profile': profile,
             'notice': self.notice(),
             'default_profile': get_options().default_profile,
         }
@@ -256,7 +257,9 @@ class SettingsController:
         return ''
 
     def show(self, page: str = '') -> None:
-        native_settings_show(self.model(page), self.on_event)
+        ' page is the id of a page, profiles:<profile id> for a profile on the Profiles page '
+        page, _, profile = page.partition(':')
+        native_settings_show(self.model(page, profile if page == 'profiles' else ''), self.on_event)
 
     def refresh(self) -> None:
         native_settings_update(self.model())

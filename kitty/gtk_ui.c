@@ -229,6 +229,8 @@ typedef struct Page {
     Badge badge;
     GtkWidget *badge_box, *badge_indicator, *badge_label;
     char *badge_indicator_for; // the state and kind that badge_indicator shows
+    bool wants_gear; // the gear that opens the settings of the tab, see tab_settings_button()
+    GtkWidget *gear;
 } Page;
 
 static struct OSWindow *
@@ -236,12 +238,15 @@ os_window_of_page(const Page *p) {
     return host->os_window_for_id(p->id);
 }
 
+// The open tab settings popover, only one is open at a time, see show_tab_settings()
+static GtkWidget *tab_settings_popover = NULL;
+
 static gboolean
 swallow_key_event(GtkWidget *w, GdkEventKey *e, gpointer data) {
     // On Wayland the toolkit also gets the keys typed in the terminal, which is the keyboard focus of its window. They
-    // are for the terminal: without this F10 would open the menu bar.
-    (void)w; (void)e; (void)data;
-    return TRUE;
+    // are for the terminal: without this F10 would open the menu bar. Not while the tab settings popover is open.
+    (void)e; (void)data;
+    return !(tab_settings_popover && gtk_widget_get_toplevel(tab_settings_popover) == w);
 }
 
 static GHashTable *pages = NULL;   // of Page by OS window id
@@ -289,6 +294,8 @@ give_input_focus(Page *p) {
 static gboolean
 focus_current_page(gpointer data) {
     HostWindow *hw = data;
+    // The popover has the keyboard while it is open, it hands it back when it closes
+    if (tab_settings_popover && gtk_widget_get_toplevel(tab_settings_popover) == hw->window) return G_SOURCE_REMOVE;
     if (g_list_find(host_windows, hw) && gtk_window_is_active(GTK_WINDOW(hw->window))) {
         Page *p = current_page(hw);
         if (p) give_input_focus(p);
@@ -605,6 +612,264 @@ snapshot_tab(struct OSWindow *w, const char *path) {
 }
 // }}}
 
+// Tab settings {{{
+static void
+on_gear_clicked(GtkButton *b, gpointer data) {
+    (void)b;
+    Page *p = data;
+    char action[64];  // the name of the action and a 64 bit number fit in 64 bytes
+    snprintf(action, sizeof(action), "open_tab_settings %llu", p->id);
+    host->run_action(action);
+}
+
+static void
+show_gear(Page *p) {
+    if (!p->tab) return; // made when the page is next embedded
+    if (p->wants_gear && !p->gear) {
+        p->gear = gtk_button_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_MENU);
+        gtk_button_set_relief(GTK_BUTTON(p->gear), GTK_RELIEF_NONE);
+        gtk_widget_set_focus_on_click(p->gear, FALSE);
+        gtk_widget_set_tooltip_text(p->gear, "Tab Settings");
+        AtkObject *a = gtk_widget_get_accessible(p->gear);
+        if (a) atk_object_set_name(a, "Tab Settings");
+        g_signal_connect(p->gear, "clicked", G_CALLBACK(on_gear_clicked), p);
+        // Before the close button, which is packed at the end
+        gtk_box_pack_end(GTK_BOX(p->tab), p->gear, FALSE, FALSE, 0);
+        gtk_widget_show(p->gear);
+    } else if (!p->wants_gear && p->gear) {
+        gtk_widget_destroy(p->gear);
+        p->gear = NULL;
+    }
+}
+
+static void
+tab_settings_button(struct OSWindow *w, bool show) {
+    Page *p = page_of(w);
+    if (!p) return;
+    p->wants_gear = show;
+    show_gear(p);
+}
+
+// Each popover holds the Python callback that its fields report to
+
+static void
+tab_settings_emit(GtkWidget *source, const char *verb, const char *name, const char *value) {
+    GtkWidget *popover = gtk_widget_get_ancestor(source, GTK_TYPE_POPOVER);
+    PyObject *callback = popover ? g_object_get_data(G_OBJECT(popover), "callback") : NULL;
+    GtkWidget *error = popover ? g_object_get_data(G_OBJECT(popover), "error-label") : NULL;
+    if (!callback) return;
+    PyObject *ret = PyObject_CallFunction(callback, "sss", verb, name, value);
+    const char *err = "";
+    if (!ret) PyErr_Print();
+    else if (PyUnicode_Check(ret)) {
+        err = PyUnicode_AsUTF8(ret);
+        if (!err) { PyErr_Clear(); err = ""; }
+    }
+    if (error) {
+        gtk_label_set_text(GTK_LABEL(error), err);
+        gtk_widget_set_visible(error, err[0] != 0);
+    }
+    Py_XDECREF(ret);
+}
+
+static const char *
+widget_field(gpointer w) {
+    const char *n = g_object_get_data(G_OBJECT(w), "field-name");
+    return n ? n : "";
+}
+
+static void
+on_tab_choice_changed(GtkComboBox *c, gpointer data) {
+    (void)data;
+    const char *id = gtk_combo_box_get_active_id(c);
+    if (id) tab_settings_emit(GTK_WIDGET(c), "set", widget_field(c), id);
+}
+
+static void
+commit_tab_text(GtkWidget *w) {
+    // An entry, or the entry of a combo box, which carries the name of the field
+    GtkWidget *owner = g_object_get_data(G_OBJECT(w), "field-owner");
+    tab_settings_emit(w, "set", widget_field(owner ? owner : w), gtk_entry_get_text(GTK_ENTRY(w)));
+}
+
+static void on_tab_entry_activate(GtkEntry *e, gpointer data) { (void)data; commit_tab_text(GTK_WIDGET(e)); }
+static gboolean on_tab_entry_focus_out(GtkWidget *e, GdkEvent *ev, gpointer data) { (void)ev; (void)data; commit_tab_text(e); return FALSE; }
+
+static void
+on_tab_combo_changed(GtkComboBox *c, gpointer data) {
+    (void)data;
+    // Typing changes the text too, that is committed with Enter or when the field loses the focus
+    if (gtk_combo_box_get_active(c) >= 0) commit_tab_text(gtk_bin_get_child(GTK_BIN(c)));
+}
+
+static void
+on_tab_button_clicked(GtkButton *b, gpointer data) {
+    (void)data;
+    tab_settings_emit(GTK_WIDGET(b), "activate", widget_field(b), "");
+}
+
+static GtkWidget *
+tab_settings_control(PyObject *f) {
+    const char *kind = str_item(f, "kind"), *value = str_item(f, "value");
+    GtkWidget *c = NULL;
+    if (strcmp(kind, "choice") == 0 || strcmp(kind, "combo") == 0) {
+        const bool editable = strcmp(kind, "combo") == 0;
+        c = editable ? gtk_combo_box_text_new_with_entry() : gtk_combo_box_text_new();
+        PyObject *choices = list_item(f, "choices");
+        for (Py_ssize_t i = 0; choices && i < PyList_GET_SIZE(choices); i++) {
+            PyObject *ch = PyList_GET_ITEM(choices, i);
+            if (!PyList_Check(ch) || PyList_GET_SIZE(ch) < 2) continue;
+            PyObject *v = PyList_GET_ITEM(ch, 0), *t = PyList_GET_ITEM(ch, 1);
+            const char *vs = PyUnicode_Check(v) ? PyUnicode_AsUTF8(v) : NULL, *ts = PyUnicode_Check(t) ? PyUnicode_AsUTF8(t) : NULL;
+            if (!vs || !ts) { PyErr_Clear(); continue; }
+            gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(c), vs, ts);
+        }
+        if (editable) {
+            GtkWidget *entry = gtk_bin_get_child(GTK_BIN(c));
+            gtk_entry_set_text(GTK_ENTRY(entry), value);
+            g_object_set_data(G_OBJECT(entry), "field-owner", c);
+            g_signal_connect(entry, "activate", G_CALLBACK(on_tab_entry_activate), NULL);
+            g_signal_connect(entry, "focus-out-event", G_CALLBACK(on_tab_entry_focus_out), NULL);
+            g_signal_connect(c, "changed", G_CALLBACK(on_tab_combo_changed), NULL);
+        } else {
+            gtk_combo_box_set_active_id(GTK_COMBO_BOX(c), value);
+            g_signal_connect(c, "changed", G_CALLBACK(on_tab_choice_changed), NULL);
+        }
+    } else if (strcmp(kind, "text") == 0) {
+        c = gtk_entry_new();
+        gtk_entry_set_text(GTK_ENTRY(c), value);
+        gtk_entry_set_placeholder_text(GTK_ENTRY(c), str_item(f, "placeholder"));
+        gtk_entry_set_width_chars(GTK_ENTRY(c), 24);
+        g_signal_connect(c, "activate", G_CALLBACK(on_tab_entry_activate), NULL);
+        g_signal_connect(c, "focus-out-event", G_CALLBACK(on_tab_entry_focus_out), NULL);
+    } else if (strcmp(kind, "button") == 0) {
+        c = gtk_button_new_with_label(str_item(f, "title"));
+        g_signal_connect(c, "clicked", G_CALLBACK(on_tab_button_clicked), NULL);
+    } else return NULL;
+    g_object_set_data_full(G_OBJECT(c), "field-name", g_strdup(str_item(f, "name")), g_free);
+    gtk_widget_set_tooltip_text(c, str_item(f, "help"));
+    AtkObject *a = gtk_widget_get_accessible(c);
+    if (a) atk_object_set_name(a, str_item(f, "title"));
+    PyObject *enabled = PyDict_GetItemString(f, "enabled");
+    if (enabled && !PyObject_IsTrue(enabled)) gtk_widget_set_sensitive(c, FALSE);
+    return c;
+}
+
+static gboolean
+destroy_later(gpointer data) {
+    // Holds a reference, as the widget can be destroyed with the tab in the meantime, which makes this do nothing
+    gtk_widget_destroy(data);
+    g_object_unref(data);
+    return G_SOURCE_REMOVE;
+}
+
+static void
+on_tab_settings_destroyed(GtkWidget *popover, gpointer data) {
+    (void)data;
+    if (tab_settings_popover == popover) tab_settings_popover = NULL;
+}
+
+static void
+on_tab_settings_closed(GtkPopover *popover, gpointer data) {
+    (void)data;
+    // Commit what is being typed, closing does not always take the focus from the field first
+    GtkWidget *focus = gtk_window_get_focus(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(popover))));
+    if (focus && GTK_IS_ENTRY(focus) && gtk_widget_is_ancestor(focus, GTK_WIDGET(popover))) commit_tab_text(focus);
+    GtkWidget *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(popover));
+    on_tab_settings_destroyed(GTK_WIDGET(popover), NULL);
+    // Back to the terminal, which reads the keyboard itself
+    for (GList *x = host_windows; x; x = x->next) {
+        HostWindow *hw = x->data;
+        if (hw->window == toplevel && !host->is_wayland) g_idle_add(focus_current_page, hw);
+    }
+    // Not from within its own signal
+    g_idle_add(destroy_later, g_object_ref(popover));
+}
+
+static void
+show_tab_settings(struct OSWindow *w, PyObject *model, PyObject *callback) {
+    Page *p = page_of(w);
+    if (!p || !p->hw) return;
+    if (tab_settings_popover) gtk_popover_popdown(GTK_POPOVER(tab_settings_popover));
+    // At the gear of the tab when it is visible, otherwise at the top of the terminal, as with a single tab
+    const bool at_gear = p->gear && gtk_widget_get_mapped(p->gear) && gtk_notebook_get_show_tabs(GTK_NOTEBOOK(p->hw->notebook));
+    GtkWidget *popover = gtk_popover_new(at_gear ? p->gear : p->area);
+    if (!at_gear) {
+        GtkAllocation a;
+        gtk_widget_get_allocation(p->area, &a);
+        gtk_popover_set_pointing_to(GTK_POPOVER(popover), &(GdkRectangle){.x = a.width / 2, .y = 0, .width = 1, .height = 1});
+    }
+    gtk_popover_set_position(GTK_POPOVER(popover), GTK_POS_BOTTOM);
+    // On Wayland the terminal is a subsurface above the window of the toolkit, a popover drawn in that window would be under it
+    if (host->is_wayland) gtk_popover_set_constrain_to(GTK_POPOVER(popover), GTK_POPOVER_CONSTRAINT_NONE);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(box), 12);
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+    gint row = 0;
+    GtkWidget *first = NULL;
+    PyObject *fields = list_item(model, "fields");
+    for (Py_ssize_t i = 0; fields && i < PyList_GET_SIZE(fields); i++) {
+        PyObject *f = PyList_GET_ITEM(fields, i);
+        if (!PyDict_Check(f)) continue;
+        const char *kind = str_item(f, "kind");
+        if (strcmp(kind, "section") == 0) {
+            GtkWidget *l = gtk_label_new(NULL);
+            char *markup = g_markup_printf_escaped("<b>%s</b>", str_item(f, "title"));
+            gtk_label_set_markup(GTK_LABEL(l), markup);
+            g_free(markup);
+            gtk_widget_set_halign(l, GTK_ALIGN_START);
+            if (row) gtk_widget_set_margin_top(l, 6);
+            gtk_grid_attach(GTK_GRID(grid), l, 0, row++, 2, 1);
+            continue;
+        }
+        GtkWidget *c = tab_settings_control(f);
+        if (!c) continue;
+        gtk_widget_set_hexpand(c, TRUE);
+        if (strcmp(kind, "button") == 0) {
+            gtk_widget_set_halign(c, GTK_ALIGN_START);
+            gtk_grid_attach(GTK_GRID(grid), c, 1, row++, 1, 1);
+        } else {
+            GtkWidget *l = gtk_label_new(str_item(f, "title"));
+            gtk_widget_set_halign(l, GTK_ALIGN_END);
+            // Names the control for assistive technology too
+            gtk_label_set_mnemonic_widget(GTK_LABEL(l), c);
+            gtk_grid_attach(GTK_GRID(grid), l, 0, row, 1, 1);
+            gtk_grid_attach(GTK_GRID(grid), c, 1, row++, 1, 1);
+        }
+        if (!first && gtk_widget_get_sensitive(c)) first = c;
+    }
+    gtk_box_pack_start(GTK_BOX(box), grid, FALSE, FALSE, 0);
+    GtkWidget *error = gtk_label_new("");
+    gtk_label_set_line_wrap(GTK_LABEL(error), TRUE);
+    gtk_label_set_max_width_chars(GTK_LABEL(error), 40);
+    gtk_style_context_add_class(gtk_widget_get_style_context(error), "error");
+    gtk_box_pack_start(GTK_BOX(box), error, FALSE, FALSE, 0);
+    g_object_set_data(G_OBJECT(popover), "error-label", error);
+    gtk_container_add(GTK_CONTAINER(popover), box);
+    AtkObject *a = gtk_widget_get_accessible(popover);
+    if (a) atk_object_set_name(a, str_item(model, "title"));
+    tab_settings_popover = popover;
+    g_object_set_data_full(G_OBJECT(popover), "callback", Py_NewRef(callback), drop_ref);
+    g_signal_connect(popover, "closed", G_CALLBACK(on_tab_settings_closed), NULL);
+    g_signal_connect(popover, "destroy", G_CALLBACK(on_tab_settings_destroyed), NULL);
+    gtk_widget_show_all(box);
+    gtk_widget_hide(error);
+    gtk_window_present(GTK_WINDOW(p->hw->window));
+    gtk_popover_popup(GTK_POPOVER(popover));
+    if (first) gtk_widget_grab_focus(first);
+    if (!host->is_wayland) {
+        // The terminal has the X input focus, which the keys typed in the popover must go to the toolkit window for
+        GdkDisplay *gd = gdk_display_get_default();
+        gdk_x11_display_error_trap_push(gd);
+        XSetInputFocus(gdk_xdisplay(), gdk_x11_window_get_xid(gtk_widget_get_window(p->hw->window)), RevertToParent, CurrentTime);
+        XSync(gdk_xdisplay(), False);
+        gdk_x11_display_error_trap_pop_ignored(gd);
+    }
+}
+// }}}
+
 static gint
 insert_position(HostWindow *hw, const char *location) {
     const gint n = gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook)), cur = gtk_notebook_get_current_page(GTK_NOTEBOOK(hw->notebook));
@@ -639,6 +904,7 @@ embed_page(Page *p, HostWindow *hw, const char *location) {
     gtk_box_pack_end(GTK_BOX(p->tab), close, FALSE, FALSE, 0);
     gtk_widget_show_all(p->tab);
     show_badge(p);
+    show_gear(p);
 
     GtkNotebook *nb = GTK_NOTEBOOK(hw->notebook);
     const gint pos = gtk_notebook_insert_page(nb, p->area, p->tab, insert_position(hw, location));
@@ -697,6 +963,7 @@ unembed_page(Page *p) {
     p->hw = NULL; p->area = NULL; p->label = NULL; p->tab = NULL;
     // The badge went with the tab, it is made again from p->badge when the page is next embedded
     p->badge_box = p->badge_indicator = p->badge_label = NULL;
+    p->gear = NULL;
     g_clear_pointer(&p->badge_indicator_for, g_free);
     if (gtk_notebook_get_n_pages(GTK_NOTEBOOK(hw->notebook)) == 0) destroy_host_window(hw);
     else {
@@ -1606,6 +1873,12 @@ take_model(PyObject *model) {
         settings.page_id = g_strdup(page);
         settings.sidebar_index = 0;
         settings.profile_tab = 0;
+        // A profile asked for, such as the profile of a tab that its settings popover edits
+        const char *wanted = str_item(model, "select_profile");
+        PyObject *items = wanted[0] && is_profiles_page() ? sidebar_items() : NULL;
+        for (Py_ssize_t i = 0; items && i < PyList_GET_SIZE(items); i++) {
+            if (strcmp(str_item(PyList_GET_ITEM(items, i), "id"), wanted) == 0) settings.sidebar_index = (gint)i;
+        }
     }
 }
 
@@ -1684,6 +1957,8 @@ native_ui_gtk_backend(const NativeUIHost *h) {
         .tab_members = tab_members,
         .title_changed = title_changed,
         .tab_status = tab_status,
+        .tab_settings_button = tab_settings_button,
+        .show_tab_settings = show_tab_settings,
         .snapshot_tab = snapshot_tab,
         .window_op = window_op,
         .window_query = window_query,

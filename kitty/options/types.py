@@ -448,6 +448,7 @@ option_names = (
     'mouse_hide_wait',
     'mouse_map',
     'narrow_symbols',
+    'native_tab_settings_button',
     'native_tab_status_badge',
     'native_tabs',
     'notify_on_cmd_finish',
@@ -707,6 +708,7 @@ class Options:
     minimum_contrast: float = 0.0
     momentum_scroll: float = 0.96
     mouse_hide_wait: MouseHideWait = MouseHideWait(hide_wait=0.0, show_wait=0.0, show_threshold=40, scroll_show=True) if is_macos else MouseHideWait(hide_wait=3.0, show_wait=0.0, show_threshold=40, scroll_show=True)
+    native_tab_settings_button: bool = True
     native_tab_status_badge: bool = True
     native_tabs: bool = True
     notify_on_cmd_finish: NotifyOnCmdFinish = NotifyOnCmdFinish(when='never', duration=5.0, action='notify', cmdline=(), clear_on=('focus', 'next'))

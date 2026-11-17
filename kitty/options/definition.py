@@ -2481,6 +2481,19 @@ changed. Has no effect when :opt:`native_tabs` are not in use, there
 )
 
 opt(
+    'native_tab_settings_button',
+    'yes',
+    option_type='to_bool',
+    long_text="""
+Show a gear on each native tab that opens the settings of that tab in a
+popover: its :ref:`profile <profiles>`, its name and its scrollback. The
+popover can also be opened with the :ac:`open_tab_settings` action, for example
+from a keyboard shortcut, and then works without the gear and in windows whose
+tab bar is hidden. Has no effect when :opt:`native_tabs` are not in use.
+""",
+)
+
+opt(
     'dock_status_badge',
     'yes',
     option_type='to_bool',

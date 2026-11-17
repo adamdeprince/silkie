@@ -154,7 +154,8 @@ class TestNativeTabStatus(BaseTest):
         tm = TabManager.__new__(TabManager)
         tm.os_window_id, tm.tabs, tm._active_tab_idx, tm.tab_bar_hidden = 11, [], 0, True
         tm.native_tabs = False
-        with patch('kitty.tabs.mark_tab_bar_dirty'), patch('kitty.tabs.global_watchers', return_value=SimpleNamespace(on_tab_bar_dirty=())):
+        with patch('kitty.tabs.mark_tab_bar_dirty'), patch('kitty.tabs.global_watchers', return_value=SimpleNamespace(on_tab_bar_dirty=())), \
+                patch('kitty.tabs.update_native_tab_settings_button'):
             tm.tabs = [FakeTab([w])]  # type: ignore
             tm.mark_tab_bar_dirty()
             self.ae(self.pushed, [], 'the tab bar drawn by the terminal shows {tab.program_status} instead')

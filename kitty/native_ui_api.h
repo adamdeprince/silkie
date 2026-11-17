@@ -42,6 +42,11 @@ typedef struct NativeUIBackend {
     // The program status badge of the native tab of w: a dict made by update_native_tab_status() in
     // kitty/native_ui.py, None to remove the badge. Called on the main thread with the GIL held.
     void (*tab_status)(struct OSWindow *w, PyObject *status);
+    // Show or hide the gear on the native tab of w that runs the open_tab_settings action for it
+    void (*tab_settings_button)(struct OSWindow *w, bool show);
+    // Show the settings of the native tab of w in a popover, anchored to its gear when that is visible. model is
+    // made by tab_settings_model() in kitty/tab_settings.py. callback(verb, name, value) returns an error message.
+    void (*show_tab_settings)(struct OSWindow *w, PyObject *model, PyObject *callback);
     void (*window_op)(struct OSWindow *w, enum NativeWindowOp op);
     bool (*window_query)(struct OSWindow *w, enum NativeWindowQuery q);
     int (*saved_height_adjustment)(struct OSWindow *w);
