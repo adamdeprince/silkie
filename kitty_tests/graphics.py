@@ -511,12 +511,12 @@ class TestGraphics(BaseTest):
         self.assertEqual(g.disk_cache.total_size, 0)
 
     def test_inflate_failures(self):
-        from kitty.fast_data_types import fail_next_inflate_allocation
+        from kitty.fast_data_types import fail_next_graphics_allocation
         s, g, pl, sl = load_helpers(self)
         data = byte_block(4 * 16 * 8)
         z = zlib.compress(data)
         # Out of memory fails the command and nothing else
-        fail_next_inflate_allocation()
+        fail_next_graphics_allocation('inflate')
         self.assertTrue(pl(z, s=16, v=8, o='z').startswith('ENOMEM:'))
         sl(z, s=16, v=8, o='z', expecting_data=data)
         # more or less data than the size of the image, and data that is not zlib
@@ -529,6 +529,74 @@ class TestGraphics(BaseTest):
         c = zlib.compressobj()
         many = b''.join(c.compress(data[i:i + 7]) + c.flush(zlib.Z_FULL_FLUSH) for i in range(0, len(data), 7)) + c.flush()
         sl(many, s=16, v=8, o='z', expecting_data=data)
+
+    def test_out_of_memory(self):
+        # Running out of memory fails the command, or skips what is being
+        # drawn, and leaves everything else as it was
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        s, g, pl, sl = load_helpers(self)
+        self.assertRaises(KeyError, fail_next_graphics_allocation, 'nonsense')
+
+        # a new image, and its texture
+        for which in 'image', 'texture':
+            fail_next_graphics_allocation(which)
+            self.assertTrue(pl('abc', s=1, v=1, f=24, i=3).startswith('ENOMEM:'), which)
+            self.ae(g.image_count, 0)
+        sl('abc', s=1, v=1, f=24, i=3)
+        # the texture of an image sent again, whose old pixels are gone already
+        fail_next_graphics_allocation('texture')
+        self.assertTrue(pl('def', s=1, v=1, f=24, i=3).startswith('ENOMEM:'))
+        self.ae(g.image_count, 0)
+        sl('def', s=1, v=1, f=24, i=3)
+        # a free id for an image sent by number
+        fail_next_graphics_allocation('client_ids')
+        self.assertTrue(pl('ghi', s=1, v=1, f=24, i=0, I=17).startswith('ENOMEM:'))
+        self.ae(g.image_count, 1)
+        self.ae(pl('ghi', s=1, v=1, f=24, i=0, I=17), 'OK')
+        self.ae(g.image_count, 2)
+        self.ae(g.image_for_client_number(17)['client_id'], 1)
+        # a placement
+        fail_next_graphics_allocation('ref')
+        self.assertTrue(pl('', a='p', i=3).startswith('ENOMEM:'))
+        self.ae(g.image_for_client_id(3)['refs.count'], 0)
+        self.ae(pl('', a='p', i=3), 'OK')
+        self.ae(g.image_for_client_id(3)['refs.count'], 1)
+
+    def test_out_of_memory_for_render_data(self):
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        cw, ch = 10, 20
+        s, dx, dy, put_image, put_ref, layers, rect_eq = put_helpers(self, cw, ch, cols=100, lines=10)
+        self.ae(put_image(s, cw, ch, cursor_movement=1)[1], 'OK')
+        # more placements than the render data has room for at first
+        n = 70
+        for i in range(1, n):
+            self.ae(put_ref(s, id=1, placement_id=i + 1, cursor_movement=1)[1][0], 'OK')
+        fail_next_graphics_allocation('render_data')
+        self.assertLess(len(layers(s)), n)
+        self.ae(len(layers(s)), n)
+
+    def test_out_of_memory_enforcing_the_storage_quota(self):
+        # Without the memory to sort the images the same ones are removed
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        s = self.create_screen()
+        g = s.grman
+        g.storage_limit = 36 * 2
+        li = make_send_command(s)
+        self.assertEqual(li(a='T', i=1).code, 'OK')
+        self.assertEqual(li(a='T', i=2, N=1).code, 'OK')
+        fail_next_graphics_allocation('sorted')
+        self.assertEqual(li(a='T', i=3).code, 'OK')
+        self.assertEqual(g.image_count, 2)
+        self.assertEqual(g.disk_cache.total_size, g.storage_limit)
+        self.assertIsNotNone(g.image_for_client_id(1))
+        self.assertIsNotNone(g.image_for_client_id(3))
+        self.assertEqual(g.image_count, 2)
+        fail_next_graphics_allocation('sorted')
+        self.assertEqual(li(a='T', i=4).code, 'OK')
+        self.assertEqual(g.image_count, 2)
+        self.assertIsNotNone(g.image_for_client_id(3))
+        self.assertIsNotNone(g.image_for_client_id(4))
+        self.assertEqual(g.image_count, 2)
 
     def test_load_images_from_file_edge_cases(self):
         s, g, pl, sl = load_helpers(self)
