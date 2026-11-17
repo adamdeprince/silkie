@@ -146,6 +146,7 @@ class TestFind(BaseTest):
                 s.carriage_return()
                 s.linefeed()
             if compression == 3:
+                s.historybuf.wait_for_compression()
                 self.assertGreater(s.historybuf.compression_stats()['compressed_lines'], 100)
             results.append((self.find(s, 'needle wrapped'), self.find(s, 'AROUND'), self.find(s, r'0\d3 hay', regex=True)))
         self.ae(results[0], results[1])

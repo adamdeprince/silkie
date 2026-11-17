@@ -2603,6 +2603,9 @@ class Window:
             close_event = {'reason': 'window', 'cause': 'closed', 'confirmed': self.close_confirmed}
         self.call_watchers(self.watchers.on_close, dict(close_event))
         self.destroyed = True
+        from .find import find_bars, on_window_closed
+        if find_bars:
+            on_window_closed(self)
         if self.program_status:
             schedule_dock_status_update()
         abort_active_streams_from(window_id=self.id)

@@ -76,7 +76,7 @@ class TestTabSettings(BaseTest):
         model = ts.tab_settings_model(tm)  # type: ignore
         self.ae(model['title'], 'Tab Settings')
         kinds = [f['kind'] for f in model['fields']]
-        self.ae(kinds, ['choice', 'button', 'section', 'text', 'section', 'combo', 'choice', 'section', 'combo'])
+        self.ae(kinds, ['choice', 'button', 'section', 'text', 'section', 'combo', 'choice', 'section', 'combo', 'section', 'choice'])
         f = fields_by_name(model)
         self.ae(f['profile']['value'], 'work')
         self.ae(f['profile']['choices'], [['default', 'Default'], ['work', 'Work']])

@@ -342,7 +342,10 @@ def on_os_window_closed(os_window_id: int) -> None:
 def on_window_closed(w: 'Window') -> None:
     b = find_bars.get(w.os_window_id)
     if b is not None and b.window_id == w.id:
+        if b.prompt is not None and b.prompt.window_id == w.id:
+            b.prompt.window_id = 0
         b.window_id = 0
+        b.refresh()
 # }}}
 
 

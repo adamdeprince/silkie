@@ -2764,6 +2764,8 @@ class Boss:
         tm = self.os_window_map.pop(os_window_id, None)
         from .spatial import controller
         controller.close(os_window_id)
+        from .find import on_os_window_closed as find_closed
+        find_closed(os_window_id)
         opts = get_options()
         if not is_layer_shell:
             if opts.remember_window_position and not is_wayland() and not self.os_window_map:

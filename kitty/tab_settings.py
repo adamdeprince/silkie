@@ -101,6 +101,11 @@ def find_keys_text(value: bool | None) -> str:
     return 'default' if value is None else ('yes' if value else 'no')
 
 
+def find_keys_to_terminal_of(tab: 'Tab') -> bool:
+    ans = getattr(tab, 'find_keys_to_terminal', None)
+    return bool(getattr(get_options(), 'find_keys_to_terminal', False)) if ans is None else bool(ans)
+
+
 def section(title: str) -> dict[str, Any]:
     return {'name': '', 'title': title, 'kind': 'section'}
 
@@ -136,8 +141,8 @@ def tab_settings_model(tm: 'TabManager') -> dict[str, Any]:
              'this tab or the minimum_contrast option.'},
             section('Find'),
             {'name': 'find_keys_to_terminal', 'title': 'Send Find shortcuts to the terminal', 'kind': 'choice',
-             'value': find_keys_text(tab.find_keys_to_terminal_override),
-             'choices': [['default', f'{DEFAULT_CONTRAST} ({"yes" if tab.find_keys_to_terminal else "no"})'], ['yes', 'Yes'], ['no', 'No']],
+             'value': find_keys_text(getattr(tab, 'find_keys_to_terminal_override', None)),
+             'choices': [['default', f'{DEFAULT_CONTRAST} ({"yes" if find_keys_to_terminal_of(tab) else "no"})'], ['yes', 'Yes'], ['no', 'No']],
              'help': 'Send the keys of Find, such as Cmd+F, to the programs of this tab instead of opening Find. The Find items of the Edit menu '
              f'work either way. {DEFAULT_CONTRAST} follows the profile of this tab or the find_keys_to_terminal option.'},
         ]
