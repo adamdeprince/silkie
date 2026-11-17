@@ -134,6 +134,10 @@ typedef struct Options {
     // all remapped source bits, used as a fast path.
     int modifier_remap[8];
     int modifier_remap_mask;
+    // Bit i of wheel_mappings[button][grabbed] is set when mouse_map maps the
+    // wheel with the modifiers i, button is 0 for wheel_up, 1 for wheel_down,
+    // 2 for wheel_left and 3 for wheel_right
+    uint64_t wheel_mappings[4][2];
     bool window_alert_on_bell;
     bool macos_dock_badge_on_bell;
     bool debug_keyboard;
@@ -665,6 +669,19 @@ typedef struct OSWindow {
     struct {
         double pending_pixels_x, pending_pixels_y;
         int last_v120_dir_x, last_v120_dir_y;
+        // mouse_map wheel state: the partial steps and the window, modifiers
+        // and mouse mode they belong to, and whether the current gesture fired
+        // a mapping, so that its momentum is swallowed. mapped_last_event_at
+        // bounds the gesture in time, as there is no end-of-gesture event for a
+        // classic wheel.
+        double mapped_pending_pixels_x, mapped_pending_pixels_y;
+        id_type mapped_window_id;
+        int mapped_modifiers;
+        monotonic_t mapped_last_event_at;
+        bool mapped_gesture, mapped_grabbed;
+        // The window whose scroll reports last left a finger gesture or
+        // coasting in progress, see docs/scroll-protocol.rst
+        id_type reported_gesture_window_id;
     } scroll;
     ShaderAnimEventMask shader_anim_event_registry;
     // Time up to which command and alternate screen changes in the active window have been turned into shader events
@@ -898,6 +915,7 @@ void update_ime_position(Window *w, Screen *screen);
 bool update_ime_position_for_window(id_type window_id, bool force, int update_focus);
 void set_ignore_os_keyboard_processing(bool enabled);
 void push_modifier_remap_to_glfw(void);
+bool set_wheel_mappings(PyObject *py_opts, Options *opts);
 void update_menu_bar_title(PyObject *title UNUSED);
 void change_live_resize_state(OSWindow *, bool);
 bool render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images);

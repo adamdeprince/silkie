@@ -127,6 +127,13 @@ for x in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
     character_key_name_aliases_with_ascii_lowercase[x] = x.lower()
 sequence_sep = '>'
 mouse_button_map = {'left': 'b1', 'middle': 'b3', 'right': 'b2'}
+mouse_wheel_map = {
+    'wheel_up': defines.MOUSE_WHEEL_UP,
+    'wheel_down': defines.MOUSE_WHEEL_DOWN,
+    'wheel_left': defines.MOUSE_WHEEL_LEFT,
+    'wheel_right': defines.MOUSE_WHEEL_RIGHT,
+}
+mouse_wheel_buttons = frozenset(mouse_wheel_map.values())
 mouse_trigger_count_map = {'doubleclick': -3, 'click': -2, 'release': -1, 'press': 1, 'doublepress': 2, 'triplepress': 3}
 FuncArgsType = tuple[str, Sequence[Any]]
 func_with_args = KeyFuncWrapper[FuncArgsType]()
@@ -1729,8 +1736,11 @@ def parse_mouse_map(val: str) -> Iterable[MouseMapping]:
         obutton = parts[0].lower()
         mods = 0
     try:
-        b = mouse_button_map.get(obutton, obutton)[1:]
-        button = getattr(defines, f'GLFW_MOUSE_BUTTON_{b}')
+        if obutton in mouse_wheel_map:
+            button = mouse_wheel_map[obutton]
+        else:
+            b = mouse_button_map.get(obutton, obutton)[1:]
+            button = getattr(defines, f'GLFW_MOUSE_BUTTON_{b}')
     except Exception:
         log_error(f'Mouse button: {xbutton} not recognized, ignoring')
         return
@@ -1738,6 +1748,9 @@ def parse_mouse_map(val: str) -> Iterable[MouseMapping]:
         count = mouse_trigger_count_map[event.lower()]
     except KeyError:
         log_error(f'Mouse event type: {event} not recognized, ignoring')
+        return
+    if obutton in mouse_wheel_map and count != 1:
+        log_error(f'Mouse event type for {obutton} must be press, ignoring: {val}')
         return
     specified_modes = frozenset(modes.lower().split(','))
     if specified_modes - {'grabbed', 'ungrabbed'}:
