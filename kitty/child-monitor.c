@@ -343,34 +343,59 @@ add_child(ChildMonitor *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
-static const unsigned write_buf_limit = 100 * 1024 * 1024;
+// Data queued for a child (keyboard input, pastes, replies to queries) is never refused for being too much: the queue
+// grows for as long as memory lasts. Only writers that can wait and retry, such as drag and drop transfers, pause
+// once this much is pending, so that they do not queue a whole transfer in memory ahead of a slow child.
+static const size_t write_buf_flow_control_threshold = 100 * 1024 * 1024;
 
-static bool
-ensure_write_buf_space(Screen *screen, size_t sz, size_t limit) {
-    if (screen->write_buf_sz - screen->write_buf_used >= sz) return true;
+typedef enum { WRITE_BUF_OK, WRITE_BUF_OVER_THRESHOLD, WRITE_BUF_NO_MEMORY } WriteBufSpace;
+
+static WriteBufSpace
+ensure_write_buf_space(Screen *screen, size_t sz, size_t threshold) {
+    if (screen->write_buf_sz - screen->write_buf_used >= sz) return WRITE_BUF_OK;
     const size_t pending = screen->write_buf_used - screen->write_buf_start;
-    if (pending + sz > limit) return false;
+    size_t needed;
+    if (__builtin_add_overflow(pending, sz, &needed)) return WRITE_BUF_NO_MEMORY;
+    if (needed > threshold) return WRITE_BUF_OVER_THRESHOLD;
     if (screen->write_buf_start) {
         memmove(screen->write_buf, screen->write_buf + screen->write_buf_start, pending);
         screen->write_buf_start = 0;
         screen->write_buf_used = pending;
     }
-    if (screen->write_buf_sz - pending < sz) {
-        screen->write_buf_sz = pending + sz;
-        screen->write_buf = PyMem_RawRealloc(screen->write_buf, screen->write_buf_sz);
-        if (screen->write_buf == NULL) { fatal("Out of memory."); }
+    if (screen->write_buf_sz < needed) {
+        // Grow geometrically so that a stream of small writes to a child that is slow to read costs amortized O(1)
+        size_t new_sz = screen->write_buf_sz;
+        if (__builtin_mul_overflow(new_sz, (size_t)2, &new_sz) || new_sz < needed) new_sz = needed;
+        uint8_t *buf = PyMem_RawRealloc(screen->write_buf, new_sz);
+        if (!buf && new_sz > needed) buf = PyMem_RawRealloc(screen->write_buf, (new_sz = needed));
+        if (!buf) return WRITE_BUF_NO_MEMORY;
+        screen->write_buf = buf;
+        screen->write_buf_sz = new_sz;
     }
-    return true;
+    return WRITE_BUF_OK;
 }
 
-#define schedule_write_to_child_generic(id, num, va_start, get_next_arg, va_end, found, too_much_data) \
+// Returns the buffer to its usual size once a burst of data has been written out; keeps the larger one if that fails
+static void
+shrink_write_buf(Screen *screen) {
+    if (screen->write_buf_sz > BUFSIZ && screen->write_buf_used < BUFSIZ) {
+        uint8_t *buf = PyMem_RawRealloc(screen->write_buf, BUFSIZ);
+        if (buf) {
+            screen->write_buf = buf;
+            screen->write_buf_sz = BUFSIZ;
+        }
+    }
+}
+
+#define schedule_write_to_child_generic(id, num, va_start, get_next_arg, va_end, found, out_of_memory) \
     ChildMonitor *self = the_monitor;                                                                  \
     const char *data;                                                                                  \
     size_t szval, sz = 0;                                                                              \
+    bool sz_overflow = false;                                                                          \
     va_start(ap, num);                                                                                 \
     for (unsigned int i = 0; i < num; i++) {                                                           \
         get_next_arg(ap);                                                                              \
-        sz += szval;                                                                                   \
+        if (__builtin_add_overflow(sz, szval, &sz)) sz_overflow = true;                                \
     }                                                                                                  \
     va_end(ap);                                                                                        \
     children_mutex(lock);                                                                              \
@@ -378,8 +403,8 @@ ensure_write_buf_space(Screen *screen, size_t sz, size_t limit) {
         if (children[i].id == id) {                                                                    \
             Screen *screen = children[i].screen;                                                       \
             screen_mutex(lock, write);                                                                 \
-            if (!ensure_write_buf_space(screen, sz, write_buf_limit)) {                                \
-                too_much_data = true;                                                                  \
+            if (sz_overflow || ensure_write_buf_space(screen, sz, SIZE_MAX) != WRITE_BUF_OK) {         \
+                out_of_memory = true;                                                                  \
                 screen_mutex(unlock, write);                                                           \
                 break;                                                                                 \
             }                                                                                          \
@@ -391,11 +416,7 @@ ensure_write_buf_space(Screen *screen, size_t sz, size_t limit) {
                 screen->write_buf_used += szval;                                                       \
             }                                                                                          \
             va_end(ap);                                                                                \
-            if (screen->write_buf_sz > BUFSIZ && screen->write_buf_used < BUFSIZ) {                    \
-                screen->write_buf_sz = BUFSIZ;                                                         \
-                screen->write_buf = PyMem_RawRealloc(screen->write_buf, screen->write_buf_sz);         \
-                if (screen->write_buf == NULL) { fatal("Out of memory."); }                            \
-            }                                                                                          \
+            shrink_write_buf(screen);                                                                  \
             if (screen->write_buf_used) wakeup_io_loop(self, false);                                   \
             screen_mutex(unlock, write);                                                               \
             break;                                                                                     \
@@ -409,12 +430,13 @@ schedule_write_to_child_if_possible(id_type id, const char *data, size_t sz, boo
     ChildMonitor *self = the_monitor;
     *found = false;
     *too_much_data = false;
-    size_t limit = write_buf_limit > keep_space ? write_buf_limit - keep_space : 0;
+    size_t threshold = write_buf_flow_control_threshold > keep_space ? write_buf_flow_control_threshold - keep_space : 0;
     for (size_t i = 0; i < self->count; i++) {
         if (children[i].id == id) {
             Screen *screen = children[i].screen;
             screen_mutex(lock, write);
-            if (!ensure_write_buf_space(screen, sz, limit)) {
+            // Out of memory is reported like being over the threshold: the caller waits and tries again
+            if (ensure_write_buf_space(screen, sz, threshold) != WRITE_BUF_OK) {
                 *too_much_data = true;
                 screen_mutex(unlock, write);
                 break;
@@ -422,11 +444,7 @@ schedule_write_to_child_if_possible(id_type id, const char *data, size_t sz, boo
             *found = true;
             memcpy(screen->write_buf + screen->write_buf_used, data, sz);
             screen->write_buf_used += sz;
-            if (screen->write_buf_sz > BUFSIZ && screen->write_buf_used < BUFSIZ) {
-                screen->write_buf_sz = BUFSIZ;
-                screen->write_buf = PyMem_RawRealloc(screen->write_buf, screen->write_buf_sz);
-                if (screen->write_buf == NULL) { fatal("Out of memory."); }
-            }
+            shrink_write_buf(screen);
             if (screen->write_buf_used) wakeup_io_loop(self, false);
             screen_mutex(unlock, write);
             break;
@@ -438,13 +456,13 @@ schedule_write_to_child_if_possible(id_type id, const char *data, size_t sz, boo
 bool
 schedule_write_to_child(id_type id, unsigned num, ...) {
     va_list ap;
-    bool too_much_data = false, found = false;
+    bool out_of_memory = false, found = false;
 #define get_next_arg(ap)             \
     data = va_arg(ap, const char *); \
     szval = va_arg(ap, size_t);
-    schedule_write_to_child_generic(id, num, va_start, get_next_arg, va_end, found, too_much_data);
+    schedule_write_to_child_generic(id, num, va_start, get_next_arg, va_end, found, out_of_memory);
 #undef get_next_arg
-    if (too_much_data) log_error("Too much data being written to child with id: %llu dropping it", id);
+    if (out_of_memory) log_error("Out of memory queueing data to be written to child with id: %llu, dropping it", id);
     return found;
 }
 
@@ -482,9 +500,9 @@ schedule_write_to_child_python(id_type id, const char *prefix, PyObject *ap, con
             }                                                                                                \
         }                                                                                                    \
     }
-    bool found = false, too_much_data = false;
-    schedule_write_to_child_generic(id, num, py_start, get_next_arg, py_end, found, too_much_data);
-    if (too_much_data) log_error("Too much data being written to child with id: %llu dropping it", id);
+    bool found = false, out_of_memory = false;
+    schedule_write_to_child_generic(id, num, py_start, get_next_arg, py_end, found, out_of_memory);
+    if (out_of_memory) log_error("Out of memory queueing data to be written to child with id: %llu, dropping it", id);
     return found;
 #undef py_start
 #undef py_end
