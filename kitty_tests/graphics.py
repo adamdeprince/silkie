@@ -611,6 +611,42 @@ class TestGraphics(BaseTest):
         finally:
             os.close(dmabuf), os.close(mfd)
 
+    @unittest.skipUnless(sys.platform == 'darwin', 'IOSurfaces are macOS only')
+    def test_surface_image_with_paused_rendering(self):
+        # The copy of the images made while rendering is paused must not take
+        # the GPU surface of a t=g image along, freeing the copy released it
+        # a second time.
+        from kitty.fast_data_types import iosurface_create_for_tests, iosurface_held_count
+        s, g, pl, sl = load_helpers(self)
+        base = iosurface_held_count()
+        sid, handle = iosurface_create_for_tests(4, 2)
+        self.ae(pl(f'iosurface:{sid}', t='g', i=5), 'OK')
+        img = g.image_for_client_id(5)
+        self.ae((img['width'], img['height']), (4, 2))
+        self.ae(iosurface_held_count(), base + 1)
+        # paused and resumed, which frees the copies
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(iosurface_held_count(), base + 1)
+        self.assertTrue(s.pause_rendering(False))
+        self.ae(iosurface_held_count(), base + 1)
+        self.ae(pl('', a='r', i=5), 'OK')
+        # the image deleted while its copy is shown, then the copy freed
+        self.assertTrue(s.pause_rendering(True, 5000))
+        pl('', a='d', d='I', i=5)
+        self.assertIsNone(g.image_for_client_id(5))
+        self.ae(iosurface_held_count(), base)
+        self.assertTrue(s.pause_rendering(False))
+        self.ae(iosurface_held_count(), base)
+        # a screen freed while paused frees its copies too
+        self.ae(pl(f'iosurface:{sid}', t='g', i=6), 'OK')
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(iosurface_held_count(), base + 1)
+        del s, g, pl, sl
+        import gc
+        gc.collect()
+        self.ae(iosurface_held_count(), base)
+        del handle
+
     def test_load_images_from_file_edge_cases(self):
         s, g, pl, sl = load_helpers(self)
         random_data = byte_block(32 * 1024)

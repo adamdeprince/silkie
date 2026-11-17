@@ -313,6 +313,12 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
         memset(&clone->refs_by_internal_id, 0, sizeof(clone->refs_by_internal_id));
         vt_init(&clone->refs_by_internal_id);
         clone->extra_frames = NULL;
+        // The GPU surface of a t=g image stays with the image: what is drawn
+        // while paused is the texture, shared by reference count below. A
+        // clone holding the surface too would release it a second time when
+        // it is freed, whether or not the image still exists.
+        clone->surface = NULL;
+        clone->surface_texture = 0;
         iter_refs(img) {
             ImageRef *cr = malloc(sizeof(ImageRef));
             if (cr) {
@@ -3174,10 +3180,46 @@ py_dmabuf_take_fds(PyObject *self UNUSED, PyObject *args) {
 }
 #endif
 
+#ifdef __APPLE__
+static void
+release_test_iosurface(PyObject *capsule) {
+    iosurface_release_for_tests(PyCapsule_GetPointer(capsule, "iosurface"));
+}
+
+// For the tests: an IOSurface of this process, as a client would share one, as (id, handle). The surface lives as long
+// as the handle.
+static PyObject *
+py_iosurface_create_for_tests(PyObject *self UNUSED, PyObject *args) {
+    unsigned int width, height;
+    if (!PyArg_ParseTuple(args, "II", &width, &height)) return NULL;
+    uint32_t id;
+    void *surface = iosurface_create_for_tests(width, height, &id);
+    if (!surface) {
+        PyErr_SetString(PyExc_OSError, "Failed to create an IOSurface");
+        return NULL;
+    }
+    PyObject *handle = PyCapsule_New(surface, "iosurface", release_test_iosurface);
+    if (!handle) {
+        iosurface_release_for_tests(surface);
+        return NULL;
+    }
+    return Py_BuildValue("IN", (unsigned int)id, handle);
+}
+
+// For the tests: how many surfaces the terminal holds
+static PyObject *
+py_iosurface_held_count(PyObject *self UNUSED, PyObject *args UNUSED) {
+    return PyLong_FromLong(iosurface_held_count());
+}
+#endif
+
 static PyMethodDef module_methods[] = {
     M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS),
 #ifdef __linux__
     {"dmabuf_parse_spec", py_dmabuf_parse_spec, METH_VARARGS, ""}, {"dmabuf_take_fds", py_dmabuf_take_fds, METH_VARARGS, ""},
+#endif
+#ifdef __APPLE__
+    {"iosurface_create_for_tests", py_iosurface_create_for_tests, METH_VARARGS, ""}, {"iosurface_held_count", py_iosurface_held_count, METH_NOARGS, ""},
 #endif
     {NULL, NULL, 0, NULL} /* Sentinel */
 };
