@@ -226,6 +226,9 @@ class Tab:  # {{{
             raise Exception(f'No OS window with id {self.os_window_id} found, or tab counter has wrapped')
         self.args = tab_manager.args
         self.name = getattr(session_tab, 'name', '')
+        if self.name:
+            # A session's new_tab <name>
+            self.show_name_in_native_tab()
         self.enabled_layouts = [
             x.lower() for x in getattr(session_tab, 'enabled_layouts', None) or parsed_options(tab_manager.profile).get('enabled_layouts') or get_options().enabled_layouts
         ]
@@ -298,6 +301,8 @@ class Tab:  # {{{
 
     def take_over_from(self, other_tab: 'Tab') -> None:
         self.name, self.cwd = other_tab.name, other_tab.cwd
+        if self.name:
+            self.show_name_in_native_tab()
         self.enabled_layouts = list(other_tab.enabled_layouts)
         self._last_used_layout = other_tab._last_used_layout
         if clname := other_tab._current_layout_name:
@@ -583,13 +588,19 @@ class Tab:  # {{{
         tm = self.tab_manager_ref()
         return tm.profile if tm is not None else profile_for_new_os_window()
 
+    def show_name_in_native_tab(self) -> None:
+        # A native tab is an OS window of its own and shows the title of that OS window, like the tab bar shows
+        # the tab name when there is one and the title of the active window otherwise. So the name overrides the
+        # OS window title, and an empty name removes the override, after which the title of the active window is
+        # shown and followed again.
+        tm = self.tab_manager_ref()
+        if tm is not None and tm.native_tabs:
+            set_os_window_title(self.os_window_id, self.name)
+
     def set_title(self, title: str) -> None:
         self.name = title or ''
         self.mark_tab_bar_dirty()
-        tm = self.tab_manager_ref()
-        if tm is not None and tm.native_tabs:
-            # The native tab shows the title of the window that is the tab
-            set_os_window_title(self.os_window_id, self.name)
+        self.show_name_in_native_tab()
 
     def update_window_title_bars(self) -> None:
         active_group = self.windows.active_group
