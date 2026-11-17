@@ -118,6 +118,45 @@ class TestScrollbackCompression(BaseTest):
         self.ae(ha.pagerhist_as_text(), hb.pagerhist_as_text(), msg)
         self.ae(scrollback_for_restore(a), scrollback_for_restore(b), msg)
 
+    def test_erase_last_command_with_compressed_history(self):
+        # Erasing the last command while the live prompt has scrolled into the
+        # scrollback deletes lines from the middle of the history, which may be
+        # compressed or waiting to be, multicell chars cut by it included
+        a, b = self.screen_pair(cols=10, lines=5, scrollback=40)
+        for s in (a, b):
+            for i in range(12):
+                s.draw(f'h{i}\r\n')
+            draw_multicell(s, 'A', scale=2), s.draw('a\r\n')
+            parse_bytes(s, b'\x1b]133;A\a'), s.draw('$ p1\r\n'), parse_bytes(s, b'\x1b]133;C\a')
+            for i in range(6):
+                s.draw(f'o{i}\r\n')
+            draw_multicell(s, 'B', scale=2), s.draw('\r\n')
+            parse_bytes(s, b'\x1b]133;A\a')
+            for i in range(8):
+                s.draw(('\r\n' if i else '') + (f'$ l{i}' if i == 0 else f'l{i}'))
+        a.historybuf.wait_for_compression()
+        self.assertGreater(a.historybuf.compression_stats()['frames'], 0)
+        self.assert_same(a, b, 'before')
+        self.assertTrue(a.erase_last_command())
+        self.assertTrue(b.erase_last_command())
+        self.assert_same(a, b, 'after erasing')
+        self.assertIn('$ l0', str(a.historybuf))
+
+    def test_deep_colors_in_compressed_history(self):
+        # Garbage collecting the 16 bit colors keeps those of compressed lines
+        a, b = self.screen_pair(cols=10, lines=5, scrollback=40)
+        for s in (a, b):
+            for i in range(30 * 10):
+                parse_bytes(s, f'\x1b[38:0:0:{i}:1:2m'.encode())
+                s.draw('x')
+        a.historybuf.wait_for_compression()
+        self.assertGreater(a.historybuf.compression_stats()['frames'], 0)
+        for s in (a, b):
+            s.garbage_collect_deep_colors()
+        self.ae(a.deep_colors_stats()[0], b.deep_colors_stats()[0])
+        self.ae(a.deep_colors_stats()[0], 30 * 10)
+        self.assert_same(a, b, 'after garbage collection')
+
     def test_historybuf_round_trip(self):
         hb = HistoryBuf(100, 10, **TINY)
         ref = HistoryBuf(100, 10, compress=False)
