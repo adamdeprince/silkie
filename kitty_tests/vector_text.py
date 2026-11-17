@@ -195,6 +195,16 @@ class VectorText(BaseTest):
         data = list(struct.iter_unpack('ffff', self.pixels(s)))
         self.ae(data[5*120+75][3], 0)
 
+    def test_vector_does_not_draw_indexed_images(self):
+        # the pixels of an indexed color image are palette indices, not colors,
+        # reading them as RGB or RGBA would read past their end
+        s = self.create_screen()
+        for f, px in ((8, b'\x01' * 4), (16, b'\x01\xff' * 4)):
+            self.ae(parse_full_response(send_command(s, f'a=t,f={f},i=9,s=2,v=2', px)).code, 'OK')
+            self.ae(self.scene(s, 'i id=6 img=9 t=10,0,0,10,70,0\n').code, 'OK')
+            data = list(struct.iter_unpack('ffff', self.pixels(s)))
+            self.ae(data[5*120+75][3], 0)
+
     def test_vector_sustained_text_and_fonts(self):
         s = self.create_screen()
         self.upload(s)

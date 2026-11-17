@@ -2515,7 +2515,9 @@ static bool
 vector_lookup(void *ctx, uint32_t image_id, bool with_pixels, VectorImageData *out) {
     GraphicsManager *self = ctx;
     Image *img = img_by_client_id(self, image_id);
-    if (!img || img->vector || !img->root_frame_data_loaded) return false;
+    // The pixels of an indexed color image are indices into the palette of a
+    // window, not colors, so a vector image cannot draw one
+    if (!img || img->vector || img->indexed_px_sz || !img->root_frame_data_loaded) return false;
     out->width = img->width;
     out->height = img->height;
     out->is_float = img->root_frame.is_float;
@@ -3227,7 +3229,8 @@ grman_image_version(GraphicsManager *self, uint32_t client_id, id_type *image, u
 uint8_t *
 grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uint32_t *height) {
     Image *img = client_id ? img_by_client_id(self, client_id) : NULL;
-    Frame *f = img && img->root_frame_data_loaded ? current_frame(img) : NULL;
+    // The pixels of an indexed color image are indices into the palette of a window, not colors
+    Frame *f = img && img->root_frame_data_loaded && !img->indexed_px_sz ? current_frame(img) : NULL;
     if (!f) return NULL;
     RAII_CoalescedFrameData(cfd, get_coalesced_frame_data(self, img, f));
     if (!cfd.buf) {
