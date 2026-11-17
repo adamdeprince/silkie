@@ -78,7 +78,7 @@ class TestNotificationRoutes(BaseTest):
         desktop = FreeDesktopIntegration.__new__(FreeDesktopIntegration)
         closed = []
         desktop.notification_manager = SimpleNamespace(notification_created=lambda n: None, notification_closed=closed.append)
-        desktop.desktop_to_dbus, desktop.dbus_to_desktop = {}, {}
+        desktop.desktop_to_dbus, desktop.dbus_to_desktop, desktop.pending_closes = {}, {}, set()
         for i in range(1, 1025):
             desktop.created(i, 10000 + i)
         self.ae(len(desktop.dbus_to_desktop), 1024)

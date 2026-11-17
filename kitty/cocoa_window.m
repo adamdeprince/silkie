@@ -22,6 +22,8 @@
 #include <AvailabilityMacros.h>
 // Needed for _NSGetProgname
 #include <crt_externs.h>
+#include <libproc.h>
+#include <sys/param.h>
 #include <objc/runtime.h>
 
 static inline void
@@ -424,6 +426,8 @@ get_dock_menu(id self UNUSED, SEL _cmd UNUSED, NSApplication *sender UNUSED) {
 }
 
 static PyObject *notification_activated_callback = NULL;
+static monotonic_t last_notification_response_at = 0;
+static struct { pid_t pid; monotonic_t at; } last_other_instance_activation = {0};
 
 static PyObject *
 set_notification_activated_callback(PyObject *self UNUSED, PyObject *callback) {
@@ -462,6 +466,7 @@ do_notification_callback(const char *identifier, const char *event, const char *
     didReceiveNotificationResponse:(UNNotificationResponse *)response
              withCompletionHandler:(void (^)(void))completionHandler {
     (void)(center);
+    last_notification_response_at = monotonic();
     char *identifier = strdup(response.notification.request.identifier.UTF8String);
     char *action_identifier = strdup(response.actionIdentifier.UTF8String);
     const char *event = "button";
@@ -829,17 +834,86 @@ add_user_global_menu_entry(struct MenuItem *e, NSMenu *bar, size_t action_index)
 }
 
 static void
+add_user_global_menu_entries(NSMenu *bar) {
+    if (OPT(global_menu.entries)) {
+        for (size_t i = 0; i < OPT(global_menu.count); i++) {
+            struct MenuItem *e = OPT(global_menu.entries) + i;
+            if (e->definition && e->location && e->location_count > 1) { add_user_global_menu_entry(e, bar, i); }
+        }
+    }
+}
+
+static void
+remove_user_global_menu_entries(NSMenu *menu) {
+    for (NSInteger i = [menu numberOfItems] - 1; i >= 0; i--) {
+        NSMenuItem *item = [menu itemAtIndex:i];
+        if ([item isKindOfClass:[UserMenuItem class]]) [menu removeItem:item];
+        else if ([item hasSubmenu]) remove_user_global_menu_entries([item submenu]);
+    }
+}
+
+static GlobalShortcut*
+global_shortcut_for_action(GlobalShortcuts *shortcuts, SEL action) {
+#define Q(x) if (action == @selector(x:)) return &shortcuts->x;
+    Q(new_os_window); Q(close_os_window); Q(close_tab); Q(edit_config_file); Q(open_settings); Q(reload_config);
+    Q(previous_tab); Q(next_tab); Q(new_tab); Q(new_window); Q(split_pane_vertically); Q(close_window); Q(kill_window); Q(reset_terminal);
+    Q(clear_terminal_and_scrollback); Q(clear_screen); Q(clear_scrollback); Q(clear_last_command);
+    Q(toggle_macos_secure_keyboard_entry); Q(toggle_fullscreen); Q(open_kitty_website);
+    Q(hide_macos_app); Q(hide_macos_other_apps); Q(minimize_macos_window); Q(quit); Q(search_scrollback);
+    Q(macos_cycle_through_os_windows); Q(macos_cycle_through_os_windows_backwards);
+    Q(paste_from_clipboard); Q(copy_or_noop);
+#undef Q
+    return NULL;
+}
+
+// The menu items we create that have global shortcuts and the shortcuts
+// that were applied to them.
+static NSMutableArray<NSMenuItem*> *global_shortcut_menu_items = nil;
+static GlobalShortcuts applied_global_shortcuts;
+
+static bool
+menu_item_has_shortcut(NSMenuItem *item, const GlobalShortcut *gs) {
+    return [item.keyEquivalent isEqualToString:@(gs->key)] && item.keyEquivalentModifierMask == gs->mods;
+}
+
+static void
+update_global_shortcuts_in_menu(void) {
+    // Cocoa modifies some of our menu items, for example, it gives Enter Full
+    // Screen the Globe+F shortcut and moves our shortcut to a hidden copy of the
+    // item. So only change shortcuts that were actually changed in the config
+    // and change them on whichever item has the old shortcut, see
+    // https://github.com/kovidgoyal/kitty/issues/10793
+    for (NSMenuItem *item in global_shortcut_menu_items) {
+        GlobalShortcut *gs = global_shortcut_for_action(&global_shortcuts, item.action);
+        GlobalShortcut *old = global_shortcut_for_action(&applied_global_shortcuts, item.action);
+        if (!gs || !old || (strcmp(gs->key, old->key) == 0 && gs->mods == old->mods)) continue;
+        NSMenuItem *target_item = item;
+        if (!menu_item_has_shortcut(item, old)) {
+            for (NSMenuItem *q in [item.menu itemArray]) {
+                if (q != item && q.action == item.action && q.target == item.target && menu_item_has_shortcut(q, old)) { target_item = q; break; }
+            }
+        }
+        [target_item setKeyEquivalent:@(gs->key)];
+        [target_item setKeyEquivalentModifierMask:gs->mods];
+    }
+    applied_global_shortcuts = global_shortcuts;
+}
+
+static void
 cocoa_create_global_menu(void) {
     NSString *app_name = find_app_name();
     NSMenu *bar = [[NSMenu alloc] init];
     GlobalMenuTarget *global_menu_target = [GlobalMenuTarget shared_instance];
     [NSApp setMainMenu:bar];
+    if (global_shortcut_menu_items) [global_shortcut_menu_items removeAllObjects];
+    else global_shortcut_menu_items = [[NSMutableArray alloc] init];
 
 #define MENU_ITEM(menu, title, name)                                                                                         \
     {                                                                                                                        \
         NSMenuItem *__mi = [menu addItemWithTitle:title action:@selector(name:) keyEquivalent:@(global_shortcuts.name.key)]; \
         [__mi setKeyEquivalentModifierMask:global_shortcuts.name.mods];                                                      \
         [__mi setTarget:global_menu_target];                                                                                 \
+        [global_shortcut_menu_items addObject:__mi];                                                                         \
     }
 
     NSMenuItem *appMenuItem = [bar addItemWithTitle:@"" action:NULL keyEquivalent:@""];
@@ -937,13 +1011,9 @@ cocoa_create_global_menu(void) {
     [NSApp setHelpMenu:helpMenu];
     [helpMenu release];
 
-    if (OPT(global_menu.entries)) {
-        for (size_t i = 0; i < OPT(global_menu.count); i++) {
-            struct MenuItem *e = OPT(global_menu.entries) + i;
-            if (e->definition && e->location && e->location_count > 1) { add_user_global_menu_entry(e, bar, i); }
-        }
-    }
+    add_user_global_menu_entries(bar);
     [bar release];
+    applied_global_shortcuts = global_shortcuts;
 
 
     class_addMethod(object_getClass([NSApp delegate]), @selector(applicationDockMenu:), (IMP)get_dock_menu, "@@:@");
@@ -1002,7 +1072,15 @@ cocoa_recreate_global_menu(void) {
         [bar removeItem:secure_input_title_menu];
     }
     secure_input_title_menu = NULL;
-    cocoa_create_global_menu();
+    // Update the existing menu in place rather than replacing it, as replacing
+    // the main menu and windows menu breaks the Globe key shortcuts that
+    // Cocoa injects into the windows menu, see https://github.com/kovidgoyal/kitty/issues/10793
+    NSMenu *bar = [NSApp mainMenu];
+    if (bar) {
+        update_global_shortcuts_in_menu();
+        remove_user_global_menu_entries(bar);
+        add_user_global_menu_entries(bar);
+    } else cocoa_create_global_menu();
     SecureKeyboardEntryController *k = [SecureKeyboardEntryController sharedInstance];
     update_secure_input_menu_bar_indicator(k.isDesired);
 }
@@ -1755,5 +1833,58 @@ init_cocoa(PyObject *module) {
                                                       object:nil
                                                        queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(NSNotification *note UNUSED) { cocoa_set_dock_badge(NULL); }];
+    [[[NSWorkspace sharedWorkspace] notificationCenter] addObserverForName:NSWorkspaceDidActivateApplicationNotification
+                                                                    object:nil
+                                                                     queue:[NSOperationQueue mainQueue]
+                                                                usingBlock:^(NSNotification *note) {
+        NSRunningApplication *app = note.userInfo[NSWorkspaceApplicationKey];
+        // LaunchServices activates us before sending the reopen event, so ignore our own activation
+        if (!app || app.processIdentifier == getpid()) return;
+        NSString *our_id = [[NSBundle mainBundle] bundleIdentifier];
+        if (our_id && [app.bundleIdentifier isEqualToString:our_id]) {
+            last_other_instance_activation.pid = app.processIdentifier;
+            last_other_instance_activation.at = monotonic();
+        } else {
+            last_other_instance_activation.pid = 0;
+        }
+    }];
+    return true;
+}
+
+bool
+cocoa_yield_reopen_to_other_instance(void) {
+    // When a notification is clicked, macOS delivers the response to the kitty
+    // instance that posted it, which brings itself forward. Then usernoted asks
+    // LaunchServices to bring the application forward by bundle URL, which
+    // picks an arbitrary running instance and sends it a reopen event, stealing
+    // focus. Detect that and hand activation back to the posting instance.
+    NSAppleEventDescriptor *event = [[NSAppleEventManager sharedAppleEventManager] currentAppleEvent];
+    if (!event) return false;
+    NSData *token = [[event attributeDescriptorForKeyword:keySenderAuditTokenAttr] data];
+    if (!token || token.length != sizeof(audit_token_t)) return false;
+    audit_token_t t; memcpy(&t, token.bytes, sizeof(t));
+    // proc_name() copies the kernel's process name, which is at most
+    // 2 * MAXCOMLEN bytes (pbi_name in struct proc_bsdinfo), so this size
+    // comes from the OS and never truncates a name.
+    char name[2 * MAXCOMLEN + 1] = {0};
+    // val[5] is the pid, see audit_token_to_pid() in libbsm
+    if (proc_name((pid_t)t.val[5], name, sizeof(name)) <= 0 || strcmp(name, "usernoted") != 0) return false;
+    const monotonic_t now = monotonic(), threshold = s_double_to_monotonic_t(2.0);
+    // We received the notification response so this reopen is for us
+    if (last_notification_response_at && now - last_notification_response_at < threshold) return false;
+    if (!last_other_instance_activation.pid || now - last_other_instance_activation.at > threshold) return false;
+    NSRunningApplication *app = [NSRunningApplication runningApplicationWithProcessIdentifier:last_other_instance_activation.pid];
+    if (!app || app.terminated) return false;
+    debug_rendering("Yielding activation to the Silkie instance: %d that owns the clicked notification\n", app.processIdentifier);
+    // yieldActivationToApplication was introduced in macOS 14 (Sonoma)
+    SEL selector = NSSelectorFromString(@"yieldActivationToApplication:");
+    if ([NSApp respondsToSelector:selector]) {
+        [NSApp performSelector:selector withObject:app];
+        [app activateWithOptions:0];
+    } else {
+#define NSApplicationActivateIgnoringOtherApps 2
+        [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+#undef NSApplicationActivateIgnoringOtherApps
+    }
     return true;
 }

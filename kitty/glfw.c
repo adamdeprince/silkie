@@ -401,6 +401,9 @@ cocoa_out_of_sequence_render(OSWindow *window) {
             request_tick_callback();
             return;
         }
+        // Recreation creates a new context, which does not inherit per-context
+        // state such as uniform buffer binding points
+        bind_shader_globals_to_current_context();
     }
 
     bool rendered = false;
@@ -2235,6 +2238,7 @@ filter_option(int key UNUSED, int mods, unsigned int native_key UNUSED, unsigned
 
 static bool
 on_application_reopen(int has_visible_windows) {
+    if (cocoa_yield_reopen_to_other_instance()) return false;
     if (has_visible_windows) return true;
     set_cocoa_pending_action(NEW_OS_WINDOW, NULL);
     return false;
@@ -2717,6 +2721,8 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     glfwWindowHintString(GLFW_X11_INSTANCE_NAME, wm_class_name);
     glfwWindowHintString(GLFW_X11_CLASS_NAME, wm_class_class);
     glfwWindowHintString(GLFW_WAYLAND_APP_ID, wm_class_class);
+    // wm_class_name defaults to wm_class_class when not specified, only set the tag when it was specified
+    glfwWindowHintString(GLFW_WAYLAND_WINDOW_TAG, strcmp(wm_class_name, wm_class_class) == 0 ? "" : wm_class_name);
 #endif
 
     if (global_state.num_os_windows >= MAX_CHILDREN) {
@@ -4081,12 +4087,13 @@ dbus_send_notification(PyObject *self UNUSED, PyObject *args, PyObject *kw) {
     int timeout = -1, urgency = 1;
     unsigned int replaces = 0;
     GLFWDBUSNotificationData d = {0};
-    static const char *kwlist[] = {"app_name", "app_icon", "title", "body", "actions", "timeout", "urgency", "replaces", "category", "muted", NULL};
+    static const char *kwlist[] = {
+        "app_name", "app_icon", "title", "body", "actions", "timeout", "urgency", "replaces", "category", "muted", "desktop_entry", NULL};
     PyObject *actions = NULL;
     if (!PyArg_ParseTupleAndKeywords(
             args,
             kw,
-            "ssssO!|iiIsp",
+            "ssssO!|iiIsps",
             (char **)kwlist,
             &d.app_name,
             &d.icon,
@@ -4098,7 +4105,8 @@ dbus_send_notification(PyObject *self UNUSED, PyObject *args, PyObject *kw) {
             &urgency,
             &replaces,
             &d.category,
-            &d.muted))
+            &d.muted,
+            &d.desktop_entry))
         return NULL;
     if (!glfwDBusUserNotify) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to load glfwDBusUserNotify, did you call glfw_init?");
