@@ -164,7 +164,8 @@ def configuration_reference(app: Sphinx, docname: str, source: list[str]) -> Non
         name_node = node.args[0]
         if not isinstance(name_node, ast.Constant) or not isinstance(name_node.value, str):
             continue
-        name = name_node.value
+        # A leading + marks an option that may be given more than once, such as monitor_info.
+        name = name_node.value.removeprefix('+')
         if name not in SILKIE_OPTIONS:
             continue
         default = ast.literal_eval(node.args[1])
