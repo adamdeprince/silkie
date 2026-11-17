@@ -2218,6 +2218,9 @@ class Window:
         self.call_watchers(self.watchers.on_close, {})
         self.destroyed = True
         abort_active_streams_from(window_id=self.id)
+        if self.clear_progress_timer:
+            remove_timer(self.clear_progress_timer)
+            self.clear_progress_timer = 0
         self.clipboard_request_manager.close()
         del self.kitten_result_processors
         if hasattr(self, 'screen'):
