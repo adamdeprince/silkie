@@ -11,8 +11,10 @@ from kitty.fast_data_types import shm_unlink, shm_write
 from .base import BaseTest, parse_bytes
 from .graphics import parse_full_response, send_command
 
-# The packed formats are 300 plus their bits per pixel, see docs/silkie/packed-image-protocol.rst
+# The packed formats are the base of their family plus their bits per pixel,
+# 300 for gray and 500 for RGB, see docs/silkie/packed-image-protocol.rst
 PACKED_FORMAT_BASE = 300
+RGB565 = 516
 
 
 class TestPackedGraphics(BaseTest):
@@ -80,7 +82,7 @@ class TestPackedGraphics(BaseTest):
             (((word >> 5) & 63) * 255 + 31) // 63,
             ((word & 31) * 255 + 15) // 31,
         ))
-        image = self.image(screen, encoded, expected, f=316, s=256, v=256, G=1)
+        image = self.image(screen, encoded, expected, f=RGB565, s=256, v=256, G=1)
         self.ae(image['gamut'], 1)
         image = self.image(screen, b'\x7f\xff', b'\x7f' * 3 + b'\xff' * 3, f=308, s=2, v=1, G=2)
         self.ae(image['gamut'], 0)
@@ -90,11 +92,11 @@ class TestPackedGraphics(BaseTest):
             screen = self.create_screen(options={'display_info': display})
             screen.callbacks.clear()
             parse_bytes(screen, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-            self.assertIn(b':format=8,16,24,32,64,100,200,301,302,304,308,316,401,402,404,408\x1b\\', screen.callbacks.wtcbuf)
+            self.assertIn(b':format=8,16,24,32,64,100,200,301,302,304,308,316,401,402,404,408,516,632,664\x1b\\', screen.callbacks.wtcbuf)
             for fmt, encoded, expected in (
                 (301, b'\x40', b'\x00' * 3 + b'\xff' * 3),
                 (308, b'\x00\xff', b'\x00' * 3 + b'\xff' * 3),
-                (316, b'\x00\xf8\x1f\x00', b'\xff\0\0\0\0\xff'),
+                (RGB565, b'\x00\xf8\x1f\x00', b'\xff\0\0\0\0\xff'),
                 (24, b'\xff\0\0\0\0\xff', b'\xff\0\0\0\0\xff'),
                 (32, b'\xff\0\0\xff\0\0\xff\x80', b'\xff\0\0\xff\0\0\xff\x80'),
                 (64, struct.pack('eeeeeeee', 2, .25, -.1, .5, 0, 0, 1, 1),
@@ -106,7 +108,7 @@ class TestPackedGraphics(BaseTest):
 
     def test_packed_queries_sizes_and_recovery(self):
         screen = self.create_screen()
-        for fmt, size in ((301, 4), (302, 6), (304, 10), (308, 18), (316, 36)):
+        for fmt, size in ((301, 4), (302, 6), (304, 10), (308, 18), (RGB565, 36)):
             response = self.transmit(screen, bytes(size), a='q', f=fmt, s=9, v=2)
             self.ae(response.code, 'OK', response.msg)
             self.ae(screen.grman.image_count, 0)

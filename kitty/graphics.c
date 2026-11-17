@@ -842,13 +842,16 @@ get_free_client_id(const GraphicsManager *self) {
     }
 
 #define MAX_DATA_SZ (4u * 100000000u)
-// Silkie's packed formats (docs/silkie/packed-image-protocol.rst) are 300 plus
-// their bits per pixel, which keeps them clear of the formats of the kitty
-// graphics protocol, such as its indexed color formats f=8 and f=16
+// Silkie's raw formats (docs/silkie/packed-image-protocol.rst,
+// docs/silkie/palette-image-protocol.rst and
+// docs/silkie/precision-image-protocol.rst) are the base of their family plus
+// their bits per pixel: 300 for gray, 400 for palette images (the bits of each
+// index), 500 for RGB and 600 for RGBA. That keeps them clear of the formats
+// of the kitty graphics protocol, such as its indexed color formats f=8 and f=16.
 #define PACKED_FORMAT_BASE 300u
-// Silkie's palette formats (docs/silkie/palette-image-protocol.rst) are 400
-// plus the bits of each index
 #define PALETTE_FORMAT_BASE 400u
+#define RGB_FORMAT_BASE 500u
+#define RGBA_FORMAT_BASE 600u
 enum FORMATS {
     INDEXED = 8,
     INDEXED_ALPHA = 16,
@@ -861,11 +864,14 @@ enum FORMATS {
     GRAY2 = PACKED_FORMAT_BASE + 2,
     GRAY4 = PACKED_FORMAT_BASE + 4,
     GRAY8 = PACKED_FORMAT_BASE + 8,
-    RGB565 = PACKED_FORMAT_BASE + 16,
+    GRAY16 = PACKED_FORMAT_BASE + 16,
     PALETTE1 = PALETTE_FORMAT_BASE + 1,
     PALETTE2 = PALETTE_FORMAT_BASE + 2,
     PALETTE4 = PALETTE_FORMAT_BASE + 4,
-    PALETTE8 = PALETTE_FORMAT_BASE + 8
+    PALETTE8 = PALETTE_FORMAT_BASE + 8,
+    RGB565 = RGB_FORMAT_BASE + 16,
+    RGB10A2 = RGBA_FORMAT_BASE + 32,
+    RGBA16 = RGBA_FORMAT_BASE + 64,
 };
 
 static bool
@@ -873,6 +879,7 @@ is_gray_format(uint32_t format) {
     return format == GRAY1 || format == GRAY2 || format == GRAY4 || format == GRAY8;
 }
 
+// The formats expanded to eight bit RGB when they are loaded
 static bool
 is_packed_format(uint32_t format) {
     return is_gray_format(format) || format == RGB565;
@@ -890,12 +897,23 @@ palette_size_of_format(uint32_t format) {
     return (size_t)4 << (format - PALETTE_FORMAT_BASE);
 }
 
+// The formats kept at their own precision, see docs/silkie/precision-image-protocol.rst
+static uint8_t
+deep_storage_of_format(uint32_t format) {
+    switch (format) {
+        case GRAY16: return DEEP_GRAY16;
+        case RGB10A2: return DEEP_RGB10A2;
+        case RGBA16: return DEEP_RGBA16;
+        default: return DEEP_NONE;
+    }
+}
+
 // The bits per pixel of a raw format, 0 for one that is not raw pixels. For a
 // palette format, the bits of the indices after the palette.
 static unsigned
 bits_per_pixel(uint32_t format) {
-    if (is_packed_format(format)) return format - PACKED_FORMAT_BASE;
-    if (is_palette_format(format)) return format - PALETTE_FORMAT_BASE;
+    // the number of a Silkie raw format is the base of its family plus its bits per pixel
+    if (is_packed_format(format) || is_palette_format(format) || deep_storage_of_format(format)) return format % 100;
     switch (format) {
         // the value of these formats is their bits per pixel
         case INDEXED: case INDEXED_ALPHA: case RGB: case RGBA: case RGBA16F: return format;
@@ -925,6 +943,12 @@ raw_image_data_size(uint32_t format, uint32_t width, uint32_t height, size_t *si
 static inline unsigned
 pixel_size(const bool is_opaque, const bool is_float) {
     return is_opaque ? 3 : is_float ? 8 : 4;
+}
+
+// The bytes per pixel of the stored data of a frame
+static inline unsigned
+stored_pixel_size(const bool is_opaque, const bool is_float, const uint8_t deep) {
+    return deep ? deep_pixel_size(deep) : pixel_size(is_opaque, is_float);
 }
 
 static inline float
@@ -1128,6 +1152,31 @@ gamut_of_command(const GraphicsCommand *g) {
     return g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020 ? g->gamut : 0;
 }
 
+// The transfer function a command says its pixels are encoded with, the E key,
+// see docs/silkie/precision-image-protocol.rst. False when the format does not
+// take that value: only the formats of RGB, RGBA and gray values with a curve
+// take the key. Half float pixels are linear by definition, which E=8 may
+// repeat. PNG images say what they are themselves, indexed color images are in
+// the colors of the terminal and vector images give each paint its own.
+static bool
+transfer_of_command(const GraphicsCommand *g, uint32_t format, uint8_t *transfer) {
+    *transfer = TRANSFER_SRGB;
+    switch (format) {
+        case RGB:
+        case RGBA:
+        case GRAY1:
+        case GRAY2:
+        case GRAY4:
+        case GRAY8:
+        case GRAY16:
+        case RGB565:
+        case RGB10A2:
+        case RGBA16: return transfer_from_code_point(g->transfer, transfer);
+        case RGBA16F: return g->transfer == 0 || g->transfer == 8;
+        default: return g->transfer == 0;
+    }
+}
+
 // Packed wire formats do not depend on the display. Expand only after reading
 // and decompressing their small payload, then use the existing RGB cache/GPU path.
 static Image *
@@ -1228,8 +1277,9 @@ process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, 
     }
     bool needs_processing = g->compressed || data_fmt == PNG;
     // An HDR image is linear extended sRGB whatever the command says, see docs/hdr-protocol.rst. The colors of an
-    // indexed color image are those of the terminal, which are untagged, as are the colors of cells.
-    self->currently_loading.gamut = data_fmt == RGBA16F || is_gray_format(data_fmt) || data_fmt == INDEXED || data_fmt == INDEXED_ALPHA ? 0 : gamut_of_command(g);
+    // indexed color image are those of the terminal, which are untagged, as are the colors of cells. Gray has no gamut.
+    self->currently_loading.gamut =
+        data_fmt == RGBA16F || is_gray_format(data_fmt) || data_fmt == GRAY16 || data_fmt == INDEXED || data_fmt == INDEXED_ALPHA ? 0 : gamut_of_command(g);
     if (needs_processing) {
         uint8_t *buf;
         size_t bufsz;
@@ -1294,15 +1344,21 @@ initialize_load_data(
         case GRAY2:
         case GRAY4:
         case GRAY8:
+        case GRAY16:
         case RGB565:
+        case RGB10A2:
+        case RGBA16:
         case RGB:
         case RGBA:
         case RGBA16F:
             if (!g->data_width || !g->data_height) ABRT("EINVAL", "Zero width/height not allowed");
             if (!raw_image_data_size(data_fmt, g->data_width, g->data_height, &self->currently_loading.data_sz))
                 ABRT("EOVERFLOW", "Image dimensions overflow address space");
-            self->currently_loading.is_opaque = data_fmt == RGB || is_packed_format(data_fmt);
-            self->currently_loading.is_4byte_aligned = !self->currently_loading.is_opaque || self->currently_loading.width % 4 == 0;
+            self->currently_loading.deep = deep_storage_of_format(data_fmt);
+            self->currently_loading.is_opaque = data_fmt == RGB || data_fmt == GRAY16 || is_packed_format(data_fmt);
+            // the rows of a texture upload start at a multiple of four bytes, unless told otherwise
+            self->currently_loading.is_4byte_aligned = data_fmt == GRAY16 ? self->currently_loading.width % 2 == 0
+                                                                          : !self->currently_loading.is_opaque || self->currently_loading.width % 4 == 0;
             self->currently_loading.is_float = data_fmt == RGBA16F;
             break;
         case PALETTE1:
@@ -1330,6 +1386,8 @@ initialize_load_data(
             break;
         default: ABRT("EINVAL", "Unknown image format: %u", data_fmt);
     }
+    if (!transfer_of_command(g, data_fmt, &self->currently_loading.transfer))
+        ABRT("EINVAL", "The transfer function %u is not supported for images of format %u", g->transfer, data_fmt);
     self->currently_loading.loading_for.image_id = img->internal_id;
     self->currently_loading.loading_for.frame_id = frame_id;
     if (transmission_type == 'd') {
@@ -1356,16 +1414,25 @@ initialize_load_data(
         fmt = g->format ? g->format : RGBA;                               \
     }
 
+typedef struct {
+    uint8_t *buf;
+    bool is_4byte_aligned, is_opaque, transient, is_float;
+    uint8_t deep;
+} CoalescedFrameData;
+
 static void
-upload_to_gpu(GraphicsManager *self, Image *img, const bool is_opaque, const bool is_float, const bool is_4byte_aligned, const uint8_t *data) {
+upload_to_gpu(GraphicsManager *self, Image *img, const CoalescedFrameData *data) {
     if (!self->context_made_current_for_this_command) {
         if (!self->window_id) return;
         if (!make_window_context_current(self->window_id)) return;
         self->context_made_current_for_this_command = true;
     }
     if (!img->texture) return;
-    if (img->indexed_px_sz) send_indexed_image_to_gpu(&img->texture->id, data, img->width, img->height, img->indexed_px_sz, is_4byte_aligned);
-    else send_image_to_gpu(&img->texture->id, data, img->width, img->height, is_opaque, is_float, is_4byte_aligned, true, REPEAT_CLAMP);
+    if (img->indexed_px_sz) send_indexed_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, img->indexed_px_sz, data->is_4byte_aligned);
+    // high precision pixels, and eight bit ones with another transfer function than sRGB, are decoded by the shader
+    else if (data->deep || (img->transfer != TRANSFER_SRGB && !data->is_float))
+        send_encoded_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, data->deep, data->is_opaque, data->is_4byte_aligned);
+    else send_image_to_gpu(&img->texture->id, data->buf, img->width, img->height, data->is_opaque, data->is_float, data->is_4byte_aligned, true, REPEAT_CLAMP);
 }
 
 // Sends count slots of the palette of a palette image from first on to the
@@ -1458,6 +1525,7 @@ static Image *
 load_surface_image(GraphicsManager *self, const GraphicsCommand *g, Image *img, const uint8_t *payload, bool is_query) {
 #if defined(__APPLE__) || defined(__linux__)
     if (g->more || g->compressed) ABRT("EINVAL", "Chunking and compression are not supported for GPU surfaces");
+    if (g->transfer) ABRT("EINVAL", "Transfer functions are not supported for GPU surfaces");
     char spec[256], err[256];
     if (g->payload_sz >= sizeof(spec)) ABRT("EINVAL", "GPU surface specification too long");
     snprintf(spec, sizeof(spec), "%.*s", (int)g->payload_sz, payload);
@@ -1512,6 +1580,7 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             img->texture = new_texture_ref();
             img->root_frame_data_loaded = false;
             img->indexed_px_sz = 0;
+            img->transfer = TRANSFER_SRGB;
             img->is_drawn = false;
             img->current_frame_shown_at = 0;
             img->extra_framecnt = 0;
@@ -1586,8 +1655,9 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->root_frame_data_loaded = true;
         return img;
     }
-    const size_t px_sz = self->currently_loading.indexed_px_sz ? self->currently_loading.indexed_px_sz
-                                                               : pixel_size(self->currently_loading.is_opaque, self->currently_loading.is_float);
+    const size_t px_sz = self->currently_loading.indexed_px_sz
+                             ? self->currently_loading.indexed_px_sz
+                             : stored_pixel_size(self->currently_loading.is_opaque, self->currently_loading.is_float, self->currently_loading.deep);
     size_t required_sz = px_sz * self->currently_loading.width * self->currently_loading.height;
     if (self->currently_loading.data_sz != required_sz)
         ABRT(
@@ -1601,6 +1671,7 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->width = self->currently_loading.width;
         img->height = self->currently_loading.height;
         img->gamut = self->currently_loading.gamut;
+        img->transfer = self->currently_loading.transfer;
         img->indexed_px_sz = self->currently_loading.indexed_px_sz;
         release_palette(&img->palette);
         img->palette = self->currently_loading.palette;
@@ -1614,12 +1685,21 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             .width = img->width,
             .height = img->height,
             .transient = (g->usage_hints & GRAPHICS_USAGE_HINT_TRANSIENT) != 0,
+            .deep = self->currently_loading.deep,
         };
         img->tone_map = g->tone_map == 1;
-        img->peak = img->root_frame.is_float ? peak_of_half_data(self->currently_loading.data, required_sz) : 0;
+        if (img->root_frame.is_float) img->peak = peak_of_half_data(self->currently_loading.data, required_sz);
+        else if (transfer_is_hdr(img->transfer)) {
+            PixelDecoder d;
+            if (!pixel_decoder_init(&d, img->root_frame.deep, img->root_frame.is_opaque, img->transfer, img->gamut)) ABRT("ENOMEM", "Out of memory");
+            img->peak = pixel_decoder_peak(&d, self->currently_loading.data, (size_t)img->width * img->height);
+            pixel_decoder_free(&d);
+        } else img->peak = 0;
         if (!is_query) {
             // Upload before caching, the cache takes ownership of the data
-            upload_to_gpu(self, img, img->root_frame.is_opaque, img->root_frame.is_float, img->root_frame.is_4byte_aligned, self->currently_loading.data);
+            upload_to_gpu(self, img, &(const CoalescedFrameData){
+                .buf = self->currently_loading.data, .is_opaque = img->root_frame.is_opaque, .is_float = img->root_frame.is_float,
+                .is_4byte_aligned = img->root_frame.is_4byte_aligned, .deep = img->root_frame.deep});
             if (img->palette) upload_palette_to_gpu(self, img, 0, img->palette->slots);
             if (!add_load_data_to_cache(self, (const ImageAndFrame){.image_id = img->internal_id, .frame_id = img->root_frame.id}, img->root_frame.transient)) {
                 if (PyErr_Occurred()) PyErr_Print();
@@ -1642,7 +1722,7 @@ supported_keys_for_query(const GraphicsCommand *g) {
     // action, so that clients can detect support for protocol features. A
     // leading e=<action> tells the client that the action itself is supported.
     // The reply is bounded by the protocol, not by the input: each key is
-    // echoed at most once and the longest action (T) echoes 26 keys and e, each at
+    // echoed at most once and the longest action (T) echoes 27 keys and e, each at
     // most 14 bytes (",k=" and a 32 bit integer with its sign), so 512 bytes
     // always fits. Grow it if keys are added.
     static char buf[512];
@@ -1683,13 +1763,18 @@ supported_keys_for_query(const GraphicsCommand *g) {
             // float RGBA (hdr-protocol) and vector images, which cannot have
             // animation frames (vector-protocol)
             // and kitty's indexed color formats, which cannot have animation frames either
-            // and Silkie's palette images (palette-image-protocol), which cannot have animation frames either
+            // and Silkie's palette images (palette-image-protocol) and high precision images (precision-image-protocol),
+            // which cannot have animation frames either
             const bool is_indexed = fmt == INDEXED || fmt == INDEXED_ALPHA, is_palette = is_palette_format(fmt);
+            const bool is_deep = deep_storage_of_format(fmt) != DEEP_NONE;
             const bool has_frames = fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt);
-            if (has_frames || ((fmt == VECTOR || is_indexed || is_palette) && action != 'f')) print(",f=%u", fmt);
+            if (has_frames || ((fmt == VECTOR || is_indexed || is_palette || is_deep) && action != 'f')) print(",f=%u", fmt);
             // The colors of an indexed color image are those of the terminal, it has no gamut of its own and is never HDR.
             // The palette of a palette image can be in a gamut, but is never HDR.
             if (!is_indexed && (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020)) print(",G=%u", g->gamut);
+            // A transfer function other than sRGB, for the formats that take it, see transfer_of_command(). Frames are sRGB.
+            uint8_t transfer;
+            if (g->transfer && !surface && transfer_of_command(g, fmt ? fmt : RGBA, &transfer) && (action != 'f' || transfer == TRANSFER_SRGB)) print(",E=%u", g->transfer);
             if (action != 'f' && !is_indexed && !is_palette) ECHO_ONE('T', tone_map);
             if (g->data_width <= MAX_IMAGE_DIMENSION) ECHO_UINT('s', data_width);
             if (g->data_height <= MAX_IMAGE_DIMENSION) ECHO_UINT('v', data_height);
@@ -2354,7 +2439,7 @@ grman_update_layers(
             zero_at_ptr(rd);
             rd->dest_rect = r;
             rd->src_rect = ref->src_rect;
-            self->render_data.has_hdr |= img->root_frame.is_float;
+            self->render_data.has_hdr |= img->root_frame.is_float || transfer_is_hdr(img->transfer);
             self->render_data.count++;
             rd->z_index = ref->z_index;
             rd->depth = ref->depth;
@@ -2366,6 +2451,8 @@ grman_update_layers(
             rd->peak = img->peak;
             rd->tone_map = img->tone_map;
             rd->gamut = img->gamut;
+            rd->decode = img->vector || img->surface ? IMAGE_DECODE_NONE : image_decode_for(img->root_frame.deep, img->transfer);
+            rd->is_gray = img->root_frame.deep == DEEP_GRAY16;
             rd->indexed_px_sz = img->indexed_px_sz;
             rd->palette_texture_id = img->palette ? img->palette->texture : 0;
             if (img->indexed_px_sz) {
@@ -2468,11 +2555,6 @@ change_gap(Image *img, Frame *f, int32_t gap) {
 }
 
 typedef struct {
-    uint8_t *buf;
-    bool is_4byte_aligned, is_opaque, transient, is_float;
-} CoalescedFrameData;
-
-typedef struct {
     bool needs_blending;
     uint32_t over_px_sz, under_px_sz;
     uint32_t over_width, over_height, under_width, under_height, over_offset_x, over_offset_y, under_offset_x, under_offset_y;
@@ -2562,6 +2644,7 @@ get_coalesced_frame_data_standalone(const Image *img, const Frame *f, uint8_t *f
         ans.is_4byte_aligned = f->is_4byte_aligned;
         ans.is_opaque = f->is_opaque;
         ans.is_float = f->is_float;
+        ans.deep = f->deep;  // only the root frame, which is always a full frame, can be high precision
         return ans;
     }
     const unsigned bytes_per_pixel = pixel_size(f->is_opaque, f->is_float);
@@ -2654,6 +2737,77 @@ get_coalesced_frame_data(GraphicsManager *self, Image *img, const Frame *f) {
     return get_coalesced_frame_data_impl(self, img, f, 0);
 }
 
+// Whether the pixels of a frame are something other than eight bit sRGB or
+// half float, which the GPU decodes by itself, see docs/silkie/precision-image-protocol.rst
+static bool
+needs_decoding(const Image *img, const CoalescedFrameData *cfd) {
+    return cfd->deep || (img->transfer != TRANSFER_SRGB && !cfd->is_float);
+}
+
+// Decodes the pixels of a frame that needs_decoding() a row at a time into
+// linear RGBA floats in the sRGB primaries, where 1.0 is SDR white, as the
+// graphics shader does, handing each row to emit
+static bool
+decode_frame_rows(const Image *img, const CoalescedFrameData *cfd, void (*emit)(void *ctx, uint32_t y, const float *rgba), void *ctx) {
+    PixelDecoder d;
+    if (!pixel_decoder_init(&d, cfd->deep, cfd->is_opaque, img->transfer, img->gamut)) return false;
+    float *row = malloc((size_t)img->width * 4 * sizeof(float));
+    if (!row) {
+        pixel_decoder_free(&d);
+        return false;
+    }
+    const size_t stride = (size_t)img->width * stored_pixel_size(cfd->is_opaque, cfd->is_float, cfd->deep);
+    for (uint32_t y = 0; y < img->height; y++) {
+        pixel_decoder_decode(&d, cfd->buf + y * stride, img->width, true, row);
+        emit(ctx, y, row);
+    }
+    free(row);
+    pixel_decoder_free(&d);
+    return true;
+}
+
+typedef struct {
+    uint16_t *out;
+    uint32_t width;
+} HalfRows;
+
+static void
+emit_half_row(void *ctx, uint32_t y, const float *rgba) {
+    HalfRows *h = ctx;
+    uint16_t *dest = h->out + (size_t)y * h->width * 4;
+    for (size_t i = 0; i < (size_t)h->width * 4; i++) dest[i] = float_to_half(rgba[i]);
+}
+
+typedef struct {
+    uint8_t *out;
+    uint32_t width;
+} Srgb8Rows;
+
+static void
+emit_srgb8_row(void *ctx, uint32_t y, const float *rgba) {
+    Srgb8Rows *h = ctx;
+    uint8_t *dest = h->out + (size_t)y * h->width * 4;
+    for (size_t i = 0; i < (size_t)h->width * 4; i++) {
+        float v = rgba[i];
+        v = v > 0.f ? (v < 1.f ? v : 1.f) : 0.f;  // also takes NaN to zero
+        if (i % 4 != 3) v = v <= 0.0031308f ? v * 12.92f : 1.055f * powf(v, 1.f / 2.4f) - 0.055f;
+        dest[i] = (uint8_t)lrintf(v * 255.f);
+    }
+}
+
+// The pixels of a frame that needs_decoding() as half float RGBA, the f=64 representation, or NULL when out of memory
+static uint8_t *
+decode_frame_to_half(const Image *img, const CoalescedFrameData *cfd) {
+    if ((size_t)img->width * img->height > SIZE_MAX / 8) return NULL;
+    HalfRows h = {.out = malloc((size_t)img->width * img->height * 8), .width = img->width};
+    if (!h.out) return NULL;
+    if (!decode_frame_rows(img, cfd, emit_half_row, &h)) {
+        free(h.out);
+        return NULL;
+    }
+    return (uint8_t *)h.out;
+}
+
 // Vector images {{{
 
 // The pixels of a palette image as RGBA: its colors, straight alpha, in the gamut of the image
@@ -2679,8 +2833,10 @@ vector_lookup(void *ctx, uint32_t image_id, bool with_pixels, VectorImageData *o
     if (!img || img->vector || (img->indexed_px_sz && !img->palette) || !img->root_frame_data_loaded) return false;
     out->width = img->width;
     out->height = img->height;
-    out->is_float = img->root_frame.is_float;
-    out->gamut = img->gamut;
+    // High precision pixels, and those with a transfer function other than sRGB, are drawn as linear half floats
+    const bool decoded = img->root_frame.deep || (img->transfer != TRANSFER_SRGB && !img->root_frame.is_float);
+    out->is_float = img->root_frame.is_float || decoded;
+    out->gamut = decoded ? 0 : img->gamut;
     if (!with_pixels) return true;
     if (img->palette) {
         if (!(out->data = palette_image_rgba(self, img))) return false;
@@ -2690,6 +2846,12 @@ vector_lookup(void *ctx, uint32_t image_id, bool with_pixels, VectorImageData *o
     }
     CoalescedFrameData cfd = get_coalesced_frame_data(self, img, &img->root_frame);
     if (!cfd.buf) return false;
+    if (needs_decoding(img, &cfd)) {
+        uint8_t *half = decode_frame_to_half(img, &cfd);
+        free(cfd.buf);
+        if (!half) return false;
+        cfd = (CoalescedFrameData){.buf = half, .is_float = true};
+    }
     out->data = cfd.buf;
     out->is_opaque = cfd.is_opaque;
     out->is_float = cfd.is_float;
@@ -3003,7 +3165,7 @@ update_current_frame(GraphicsManager *self, Image *img, const CoalescedFrameData
         }
         data = &cfd;
     }
-    upload_to_gpu(self, img, data->is_opaque, data->is_float, data->is_4byte_aligned, data->buf);
+    upload_to_gpu(self, img, data);
     if (needs_load) free(data->buf);
     img->current_frame_shown_at = monotonic();
 }
@@ -3043,6 +3205,9 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     }
     if (img->palette || is_palette_format(fmt)) ABRT("EINVAL", "Animation is not supported for palette images");
     if (img->indexed_px_sz || fmt == INDEXED || fmt == INDEXED_ALPHA) ABRT("EINVAL", "Animation is not supported for indexed color images");
+    // Frames are blended on the CPU in eight bit sRGB or in half float, see docs/silkie/precision-image-protocol.rst
+    if (img->root_frame.deep || img->transfer != TRANSFER_SRGB || deep_storage_of_format(fmt) || (fmt != RGBA16F && g->transfer != 0 && g->transfer != 13))
+        ABRT("EINVAL", "Animation is not supported for high precision images or images with a transfer function other than sRGB");
     uint32_t frame_number = g->frame_number;
     if (!frame_number || frame_number > img->extra_framecnt + 2) frame_number = img->extra_framecnt + 2;
     bool is_new_frame = frame_number == img->extra_framecnt + 2;
@@ -3466,6 +3631,17 @@ grman_image_rgba(GraphicsManager *self, uint32_t client_id, uint32_t *width, uin
     *width = img->width;
     *height = img->height;
     uint8_t *ans = cfd.buf;
+    if (needs_decoding(img, &cfd)) {
+        // A pointer image is SDR: what is brighter than SDR white is shown at SDR white
+        if ((size_t)img->width * img->height > SIZE_MAX / 4) return NULL;
+        Srgb8Rows rows = {.out = malloc((size_t)img->width * img->height * 4), .width = img->width};
+        if (!rows.out) return NULL;
+        if (!decode_frame_rows(img, &cfd, emit_srgb8_row, &rows)) {
+            free(rows.out);
+            return NULL;
+        }
+        return rows.out;
+    }
     if (cfd.is_opaque) {
         const size_t num = (size_t)img->width * img->height;
         if (!(ans = malloc(num * 4))) return NULL;
@@ -3486,6 +3662,10 @@ handle_compose_command(GraphicsManager *self, bool *is_dirty, const GraphicsComm
     if (img->indexed_px_sz) {
         if (img->palette) set_command_failed_response("EINVAL", "Composition is not supported for palette images");
         else set_command_failed_response("EINVAL", "Composition is not supported for indexed color images");
+        return;
+    }
+    if (img->root_frame.deep || img->transfer != TRANSFER_SRGB) {
+        set_command_failed_response("EINVAL", "Composition is not supported for high precision images or images with a transfer function other than sRGB");
         return;
     }
     Frame *src_frame = frame_for_number(img, g->frame_number);
@@ -4172,7 +4352,9 @@ image_as_dict(GraphicsManager *self, Image *img) {
         PyTuple_SET_ITEM(
             frames,
             i,
-            Py_BuildValue("{sI sI sy#}", "gap", f->gap, "id", f->id, "data", cfd.buf, (Py_ssize_t)(pixel_size(cfd.is_opaque, cfd.is_float) * img->width * img->height)));
+            Py_BuildValue(
+                "{sI sI sy#}", "gap", f->gap, "id", f->id, "data", cfd.buf,
+                (Py_ssize_t)(stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep) * img->width * img->height)));
         free(cfd.buf);
         if (PyErr_Occurred()) {
             Py_CLEAR(frames);
@@ -4190,7 +4372,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         "{sI sI sI sI sI sI sI "
         "sO sI sO "
         "sI sI sI "
-        "sI sI sy# sN sO sf sI sI sN}",
+        "sI sI sy# sN sO sf sI sI sN sI sI}",
         "texture_id",
         texture_id_for_img(img),
         U(client_id),
@@ -4215,7 +4397,7 @@ image_as_dict(GraphicsManager *self, Image *img) {
         U(gamut),
         "data",
         cfd.buf,
-        (Py_ssize_t)(cfd.buf ? (img->indexed_px_sz ? img->indexed_px_sz : pixel_size(cfd.is_opaque, cfd.is_float)) * img->width * img->height : 0),
+        (Py_ssize_t)(cfd.buf ? (img->indexed_px_sz ? img->indexed_px_sz : stored_pixel_size(cfd.is_opaque, cfd.is_float, cfd.deep)) * img->width * img->height : 0),
         "extra_frames",
         frames,
         B(tone_map),
@@ -4225,7 +4407,10 @@ image_as_dict(GraphicsManager *self, Image *img) {
         (unsigned int)(img->vector ? vector_doc_element_count(img->vector) : 0),
         U(indexed_px_sz),
         "palette",
-        img->palette ? PyBytes_FromStringAndSize((const char *)img->palette->rgba, (Py_ssize_t)img->palette->slots * 4) : Py_NewRef(Py_None));
+        img->palette ? PyBytes_FromStringAndSize((const char *)img->palette->rgba, (Py_ssize_t)img->palette->slots * 4) : Py_NewRef(Py_None),
+        U(transfer),
+        "deep",
+        (unsigned int)img->root_frame.deep);
     free(cfd.buf);
     return ans;
 #undef B
@@ -4383,6 +4568,44 @@ W(render_vector_image) {
     return ans;
 }
 
+typedef struct {
+    PyObject *ans;
+    uint32_t width;
+} FloatRows;
+
+static void
+emit_float_row(void *ctx, uint32_t y, const float *rgba) {
+    FloatRows *r = ctx;
+    memcpy(PyBytes_AS_STRING(r->ans) + (size_t)y * r->width * 4 * sizeof(float), rgba, (size_t)r->width * 4 * sizeof(float));
+}
+
+// For tests: the root frame of an image that has to be decoded on the CPU,
+// see needs_decoding(), as linear RGBA floats in the sRGB primaries
+W(decoded_image_pixels) {
+    unsigned long id = PyLong_AsUnsignedLong(args);
+    if (PyErr_Occurred()) return NULL;
+    Image *img = img_by_client_id(self, id);
+    if (!img || !img->root_frame_data_loaded || img->vector || img->surface || img->indexed_px_sz) {
+        PyErr_SetString(PyExc_KeyError, "No raster image with that id");
+        return NULL;
+    }
+    RAII_CoalescedFrameData(cfd, get_coalesced_frame_data(self, img, &img->root_frame));
+    if (!cfd.buf) return PyErr_NoMemory();
+    if (!needs_decoding(img, &cfd)) {
+        PyErr_SetString(PyExc_ValueError, "The image is decoded by the GPU alone");
+        return NULL;
+    }
+    if ((size_t)img->width * img->height > (size_t)PY_SSIZE_T_MAX / (4 * sizeof(float))) return PyErr_NoMemory();
+    FloatRows rows = {.width = img->width};
+    rows.ans = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)img->width * img->height * 4 * sizeof(float));
+    if (!rows.ans) return NULL;
+    if (!decode_frame_rows(img, &cfd, emit_float_row, &rows)) {
+        Py_DECREF(rows.ans);
+        return PyErr_NoMemory();
+    }
+    return rows.ans;
+}
+
 // Native floats for checking the same unclipped output sent to the GPU.
 W(render_vector_linear) {
     unsigned long id;
@@ -4461,6 +4684,7 @@ static PyMethodDef methods[] = {
     M(update_layers, METH_VARARGS),
     M(render_vector_image, METH_VARARGS),
     M(render_vector_linear, METH_VARARGS),
+    M(decoded_image_pixels, METH_O),
     M(update_vector_pixels, METH_VARARGS),
     M(render_vector_view, METH_VARARGS),
     M(choose_vector_view, METH_VARARGS),

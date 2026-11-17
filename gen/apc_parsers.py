@@ -340,6 +340,7 @@ def parsers() -> None:
         'V': ('offset_from_parent_y', 'int'),
         'T': ('tone_map', 'uint'),
         'G': ('gamut', 'uint'),
+        'E': ('transfer', 'uint'),
         # any letter is accepted so that queries for unknown actions get a reply
         'e': ('report_supported', flag(string.ascii_letters)),
     }

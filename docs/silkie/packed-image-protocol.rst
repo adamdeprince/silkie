@@ -17,7 +17,7 @@ Discovery
 ---------
 
 The :doc:`capabilities-protocol` lists accepted graphics formats in its
-``format`` field, including ``301,302,304,308,316`` for the formats below. This listing
+``format`` field, including ``301,302,304,308,516`` for the formats below. This listing
 does not depend on the display's color model or precision. The graphics
 protocol's ``a=q`` action also probes support for a particular image::
 
@@ -33,14 +33,27 @@ pixels.
 Format numbers
 --------------
 
-Each packed format is ``300`` plus its number of bits per pixel, so that the
-numbers stay clear of those of the kitty graphics protocol, which uses ``f=8``
-and ``f=16`` for its `indexed color formats
+Silkie numbers its raw formats by family, the base of the family plus the
+number of bits per pixel: ``300`` for gray, ``400`` for :doc:`palette images <palette-image-protocol>`,
+``500`` for RGB without alpha and ``600`` for RGBA. Eight-bit gray is
+``f=308``, RGB565 is ``f=516`` and RGB10A2 is ``f=632``. The numbers stay
+clear of those of the kitty graphics protocol, which uses ``f=8`` and ``f=16``
+for its `indexed color formats
 <https://sw.kovidgoyal.net/kitty/graphics-protocol/#indexed-color-data>`_,
 whose pixels are indices into the terminal's color palette. Silkie supports
-those formats as well. Earlier development versions of Silkie used ``f=1``,
-``f=2``, ``f=4``, ``f=8`` and ``f=16`` for the packed formats; those numbers
-are no longer accepted for them.
+those formats as well. The formats of more than eight bits per channel,
+``f=316``, ``f=632`` and ``f=664``, are described in
+:doc:`precision-image-protocol`. ``f=64`` (half float RGBA, see
+:doc:`hdr-protocol`) and ``f=200`` (vector images) keep the numbers they were
+released with.
+
+The numbers have moved twice during development. Versions before
+2026-11-16 used ``f=1``, ``f=2``, ``f=4``, ``f=8`` and ``f=16`` for the packed
+formats; those numbers are no longer accepted for them. Versions from then
+until the high precision formats were added used ``f=316`` for RGB565, which
+is now ``f=516``; ``f=316`` is now 16-bit gray, so an RGB565 image sent with
+the old number is shown as gray instead of being refused. A program can tell
+the two apart with a feature query for ``f=516``.
 
 Grayscale: ``f=301``, ``f=302``, ``f=304``, ``f=308``
 -----------------------------------------------------
@@ -49,7 +62,9 @@ The number of bits per grayscale pixel, ``bits``, is ``f - 300``: one, two,
 four or eight. Values are unsigned
 intensities: zero is black, and the largest value is white. Pixels are opaque;
 there is no alpha channel or palette. The values have the sRGB transfer curve,
-not linear-light intensity. The ``G`` gamut key is ignored for grayscale.
+not linear-light intensity, unless the ``E`` key of
+:doc:`precision-image-protocol` names another curve. The ``G`` gamut key is
+ignored for grayscale.
 
 Pixels run left to right, rows top to bottom. Within each byte the leftmost
 pixel uses the most significant bits. Each row starts at a byte boundary;
@@ -71,15 +86,16 @@ For these four formats, the exact byte value is
 ``sample * (255 / ((1 << bits) - 1))``. No output-dependent quantization is
 applied to the stored image.
 
-RGB565: ``f=316``
+RGB565: ``f=516``
 -----------------
 
 Each opaque pixel is a little-endian 16-bit word: red occupies bits 15–11,
 green bits 10–5, and blue bits 4–0. Each row is exactly ``s * 2`` bytes, with
 no padding. Pixel and row order are the same as grayscale.
 
-Channels use the sRGB transfer curve. The ``G`` gamut key has the same meaning
-as for ``f=24``. Expansion to the existing eight-bit RGB representation uses
+Channels use the sRGB transfer curve, unless the ``E`` key of
+:doc:`precision-image-protocol` names another one. The ``G`` gamut key has the
+same meaning as for ``f=24``. Expansion to the existing eight-bit RGB representation uses
 round-to-nearest independently for each channel::
 
     red   = (r5 * 255 + 15) / 31

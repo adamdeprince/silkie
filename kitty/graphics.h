@@ -8,6 +8,7 @@
 #include "data-types.h"
 #include "monotonic.h"
 #include "vector.h"
+#include "image-transfer.h"
 
 // Bitmask values for GraphicsCommand.usage_hints
 #define GRAPHICS_USAGE_HINT_TRANSIENT 1u
@@ -15,6 +16,7 @@
 typedef struct {
     unsigned char action, transmission_type, compressed, delete_action, report_supported;
     uint32_t format, more, id, image_number, data_sz, data_offset, placement_id, quiet, parent_id, parent_placement_id, usage_hints, tone_map, gamut;
+    uint32_t transfer;  // the E key, an ITU-T H.273 transfer characteristic, see docs/silkie/precision-image-protocol.rst
     uint32_t width, height, x_offset, y_offset;
     union {
         uint32_t cursor_movement, compose_mode;
@@ -67,6 +69,10 @@ typedef struct {
     float peak; // of HDR images, see docs/hdr-protocol.rst
     bool tone_map;
     uint32_t gamut;  // the gamut of the pixels, see docs/wide-gamut-protocol.rst
+    // What the shader does to the values it samples, an ImageDecode, and
+    // whether the texture holds gray in its red channel alone
+    uint8_t decode;
+    bool is_gray;
 } ImageRenderData;
 
 typedef struct {
@@ -109,6 +115,7 @@ typedef struct {
 typedef struct {
     uint32_t gap, id, width, height, x, y, base_frame_id, bgcolor;
     bool is_opaque, is_4byte_aligned, alpha_blend, transient, is_float;
+    uint8_t deep;  // a DeepStorage, the pixels of a high precision image
 } Frame;
 
 typedef enum { ANIMATION_STOPPED = 0, ANIMATION_LOADING = 1, ANIMATION_RUNNING = 2 } AnimationState;
@@ -166,6 +173,7 @@ typedef struct {
     VectorDoc *vector;  // f=200 images are rasterized on demand at the size they are shown at, the document tracks what changed
     VectorView vector_view;  // the part of the image, at the size it is shown at, that its texture holds
     uint8_t gamut;  // the gamut the pixels of every frame are in, see docs/wide-gamut-protocol.rst
+    uint8_t transfer;  // the TransferFunction the pixels are encoded with, see docs/silkie/precision-image-protocol.rst
 } Image;
 
 typedef struct {
@@ -185,6 +193,7 @@ typedef struct {
     ImagePalette *palette;  // of a palette image being loaded
     uint32_t width, height;
     uint8_t gamut;  // of the loaded pixels
+    uint8_t deep, transfer;  // the DeepStorage and TransferFunction of the loaded pixels
     GraphicsCommand start_command;
     ImageAndFrame loading_for;
 } LoadData;

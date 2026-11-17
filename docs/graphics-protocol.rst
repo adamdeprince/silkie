@@ -287,6 +287,10 @@ floating point RGBA data for HDR images, see the :doc:`hdr-protocol`, and
 rasterizes itself, see `Vector images`_.
 Additionally, ``f=8`` and ``f=16`` indicate :ref:`indexed color data
 <indexed_color_data>`, whose colors come from the terminal color scheme.
+Silkie also accepts compact gray and RGB565 pixels, see
+:doc:`packed-image-protocol`, and pixels of more than eight bits per channel,
+``f=316`` (16-bit gray), ``f=632`` (RGB10A2) and ``f=664`` (16-bit RGBA),
+with a transfer function of their own, see :doc:`precision-image-protocol`.
 
 RGB and RGBA data
 ~~~~~~~~~~~~~~~~~~~
@@ -715,7 +719,8 @@ formats of the :doc:`packed-image-protocol`, the palette formats and the
 ``x`` and ``w`` keys of palette updates of the :doc:`palette-image-protocol`, ``f=64`` of the
 :doc:`hdr-protocol` and the ``T`` key, ``f=200`` and the ``e`` and ``v``
 actions of the :doc:`vector-protocol`, the ``G`` key of the
-:doc:`wide-gamut-protocol` and GPU surfaces, ``t=g``, with the ``r`` action.
+:doc:`wide-gamut-protocol`, the high precision formats and the ``E`` key of the
+:doc:`precision-image-protocol` and GPU surfaces, ``t=g``, with the ``r`` action.
 For example, ``<ESC>_Ga=q,i=31,e=T,f=64,T=1<ESC>\`` asks whether half float
 images can be shown with tone mapping.
 
@@ -1356,7 +1361,8 @@ Key      Value                 Default    Description
 **Keys for image transmission**
 -----------------------------------------------------------
 ``f``    Positive integer.     ``32``     The format in which the image data is sent.
-         ``(8, 16, 24, 32, 100, 200)``.
+         ``(8, 16, 24, 32,``              Silkie adds the packed, palette and high precision formats ``301, 302,``
+         ``64, 100, 200)``.               ``304, 308, 316, 401, 402, 404, 408, 516, 632, 664``.
 ``t``    Single character.     ``d``      The transmission medium used.
          ``(d, f, t, s, g)``.
 ``s``    Positive integer.     ``0``      The width of the image being sent.
@@ -1378,6 +1384,9 @@ Key      Value                 Default    Description
                                           display can show, see the :doc:`hdr-protocol`.
 ``G``    ``0, 1, 2``           ``0``      The gamut the pixel data is in: sRGB, Display P3 or Rec. 2020, see
                                           :doc:`wide-gamut-protocol`. Ignored for ``f=64``, ``f=100`` and ``f=200``.
+``E``    ``0, 8, 13, 16, 18``  ``0``      The transfer function of the pixel data, an ITU-T H.273 code point: sRGB
+                                          (``0`` or ``13``), linear (``8``), PQ (``16``) or HLG (``18``), see
+                                          :doc:`precision-image-protocol`. Raw RGB, RGBA and gray formats only.
 **Keys for image display**
 -----------------------------------------------------------
 ``x``    Positive integer      ``0``      The left edge (in pixels) of the image area to display

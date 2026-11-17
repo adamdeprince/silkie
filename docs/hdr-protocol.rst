@@ -95,6 +95,11 @@ so that everything up to the knee is unchanged, *P* lands exactly at *H*, the
 curve is continuous at the knee and the hue of a pixel is preserved. When *P*
 is within the headroom nothing is changed. ``T=0``, the default, clips.
 
+In Silkie, ``f=64`` is not the only way to send an HDR image: raw images
+encoded with PQ or HLG, among them HDR10 frames, can be sent with the ``E``
+key, see :doc:`precision-image-protocol`. They are decoded into the same
+linear values, with SDR white at 203 nits, and ``T=1`` works for them too.
+
 To check whether a terminal supports ``f=64``, use the query action described
 in the graphics protocol with ``f=64`` and a single pixel of data, a terminal
 that does not know the format responds with ``EINVAL``.
