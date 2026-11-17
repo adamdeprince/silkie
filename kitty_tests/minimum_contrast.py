@@ -173,6 +173,11 @@ class TestMinimumContrast(BaseTest):
             self.ae(opts.minimum_contrast, 40)
             self.ae(opts.text_fg_override_threshold, (4.5, 'ratio'))
             self.ae(load_config().minimum_contrast, 0)
+        # the set_minimum_contrast action takes its argument in mappings
+        from kitty.options.utils import parse_key_action
+        for arg in ('40', '+10', '-5%', 'default'):
+            self.ae(parse_key_action(f'set_minimum_contrast {arg}'), ('set_minimum_contrast', (arg,)))
+        self.ae(parse_key_action('set_minimum_contrast'), ('set_minimum_contrast', ()))
 
     def test_renderer_precedence_with_kitty_option(self):
         s = self.create_screen()

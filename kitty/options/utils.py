@@ -286,6 +286,7 @@ def detach_tab_parse(func: str, rest: str) -> FuncArgsType:
     'set_eink_mode',
     'set_spatial_mode',
     'set_spatial_output',
+    'set_minimum_contrast',
 )
 def simple_parse(func: str, rest: str) -> FuncArgsType:
     return func, (rest,)
