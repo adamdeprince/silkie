@@ -375,6 +375,8 @@ class TestScrollbackCompression(BaseTest):
             for d in data:
                 parse_bytes(a, f'{i} {d}\r\n'.encode())
                 parse_bytes(b, f'{i} {d}\r\n'.encode())
+        # the compressor runs at low priority, on a busy machine it may not have caught up yet
+        a.historybuf.wait_for_compression()
         self.assertGreater(a.historybuf.compression_stats()['compressed_lines'], 40)
         self.assert_same(a, b)
         # the hyperlinks survive compression
