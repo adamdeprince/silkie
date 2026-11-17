@@ -731,6 +731,7 @@ void run_with_activation_token_in_os_window(OSWindow *w, PyObject *callback);
 void set_os_window_title(OSWindow *w, const char *title);
 OSWindow *os_window_for_kitty_window(id_type);
 OSWindow *os_window_for_id(id_type);
+bool reserve_os_window_slot(void);
 OSWindow *add_os_window(void);
 OSWindow *current_os_window(void);
 void os_window_regions(const OSWindow *, Region *main, Region *tab_bar);

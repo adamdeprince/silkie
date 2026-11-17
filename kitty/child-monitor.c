@@ -50,7 +50,7 @@ typedef struct {
 
         PyObject *dump_callback,
         *update_screen, *death_notify;
-    unsigned int count;
+    size_t count;
     bool shutting_down;
     pthread_t io_thread, talk_thread;
 
@@ -81,11 +81,17 @@ static const Child EMPTY_CHILD = {0};
 #define talk_mutex(op) pthread_mutex_##op(&talk_lock);
 
 
-static Child children[MAX_CHILDREN] = {{0}};
-static Child scratch[MAX_CHILDREN] = {{0}};
-static Child add_queue[MAX_CHILDREN] = {{0}}, remove_queue[MAX_CHILDREN] = {{0}}, remove_notify[MAX_CHILDREN] = {{0}};
+// A child goes from add_queue to children, in the I/O thread, and from there to remove_queue, from which the main thread
+// takes it to remove_notify; scratch is the main thread's copy of children. All of them grow as children are added,
+// see reserve_child_slot(), so that a child can always move on once it has been added, without the memory for it
+// having to be found in the I/O thread. Only children_fds, which poll() uses without the lock, is grown by the I/O
+// thread, which polls it, see add_children(). Children are referred to by id, never by pointer or index, as these
+// arrays move and the entries in children shift when one is removed.
+static Child *children = NULL, *scratch = NULL, *add_queue = NULL, *remove_queue = NULL, *remove_notify = NULL;
+static size_t children_capacity = 0, scratch_capacity = 0, add_queue_capacity = 0, remove_queue_capacity = 0, remove_notify_capacity = 0;
 static size_t add_queue_count = 0, remove_queue_count = 0;
-static struct pollfd children_fds[MAX_CHILDREN + EXTRA_FDS] = {{0}};
+static struct pollfd *children_fds = NULL;
+static size_t children_fds_capacity = 0;
 static pthread_mutex_t children_lock, talk_lock;
 static bool kill_signal_received = false, reload_config_signal_received = false;
 static ChildMonitor *the_monitor = NULL;
@@ -95,10 +101,45 @@ typedef struct {
     int status;
 } ReapedPID;
 
-static pid_t monitored_pids[256] = {0};
-static size_t monitored_pids_count = 0;
-static ReapedPID reaped_pids[arraysz(monitored_pids)] = {{0}};
-static size_t reaped_pids_count = 0;
+// A pid goes from monitored_pids to reaped_pids when it dies, so reserving room in both when one is monitored means
+// one that dies can always be recorded, see monitor_pid()
+static pid_t *monitored_pids = NULL;
+static size_t monitored_pids_count = 0, monitored_pids_capacity = 0;
+static ReapedPID *reaped_pids = NULL;
+static size_t reaped_pids_count = 0, reaped_pids_capacity = 0;
+
+// Makes *items, an array of entries of size bytes, room for at least needed entries, the new ones zeroed. Returns
+// false, changing nothing, when that much memory cannot be had.
+static bool
+grow_array(void **items, size_t *capacity, size_t needed, size_t size) {
+    if (needed <= *capacity) return true;
+    size_t new_capacity = *capacity < 16 ? 16 : *capacity;
+    while (new_capacity < needed) {
+        if (new_capacity > SIZE_MAX / 2) {
+            new_capacity = needed;
+            break;
+        }
+        new_capacity *= 2;
+    }
+    if (new_capacity > SIZE_MAX / size) return false;
+    void *grown = realloc(*items, new_capacity * size);
+    if (!grown) return false;
+    memset((char *)grown + *capacity * size, 0, (new_capacity - *capacity) * size);
+    *items = grown;
+    *capacity = new_capacity;
+    return true;
+}
+#define GROW(name, needed) grow_array((void **)&name, &name##_capacity, needed, sizeof(name[0]))
+
+// Room for one more child in every array it can be in, with the children lock held. The number of children in all
+// of them together grows only here.
+static bool
+reserve_child_slot(size_t count) {
+    if (count > SIZE_MAX - add_queue_count - remove_queue_count - 1) return false;
+    const size_t total = count + add_queue_count + remove_queue_count + 1;
+    return GROW(add_queue, add_queue_count + 1) && GROW(children, total) && GROW(remove_queue, total) && GROW(scratch, total) &&
+           GROW(remove_notify, total);
+}
 
 
 // Main thread functions {{{
@@ -166,6 +207,8 @@ new_childmonitor_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwd
         return NULL;
     }
     if (!PyArg_ParseTuple(args, "OO|ii", &death_notify, &dump_callback, &talk_fd, &listen_fd)) return NULL;
+    // the fds polled before any child is added, the wakeup and signal fds
+    if (!GROW(children_fds, EXTRA_FDS + 1)) return PyErr_NoMemory();
     if ((ret = pthread_mutex_init(&children_lock, NULL)) != 0) {
         PyErr_Format(PyExc_RuntimeError, "Failed to create children_lock mutex: %s", strerror(ret));
         return NULL;
@@ -324,9 +367,9 @@ static PyObject *
 add_child(ChildMonitor *self, PyObject *args) {
 #define add_child_doc "add_child(id, pid, fd, screen) -> Add a child."
     children_mutex(lock);
-    if (self->count + add_queue_count >= MAX_CHILDREN) {
-        PyErr_SetString(PyExc_ValueError, "Too many children");
+    if (!reserve_child_slot(self->count)) {
         children_mutex(unlock);
+        PyErr_SetString(PyExc_MemoryError, "Out of memory adding a child");
         return NULL;
     }
     add_queue[add_queue_count] = EMPTY_CHILD;
@@ -712,7 +755,7 @@ resize_pty(ChildMonitor *self, PyObject *args) {
     if (fd == -1) FIND(add_queue, add_queue_count);
     if (fd != -1) {
         if (!pty_resize(fd, &dim)) PyErr_SetFromErrno(PyExc_OSError);
-    } else log_error("Failed to send resize signal to child with id: %lu (children count: %u) (add queue: %zu)", window_id, self->count, add_queue_count);
+    } else log_error("Failed to send resize signal to child with id: %lu (children count: %zu) (add queue: %zu)", window_id, self->count, add_queue_count);
     children_mutex(unlock);
     if (PyErr_Occurred()) return NULL;
     Py_RETURN_NONE;
@@ -740,7 +783,7 @@ pyset_iutf8(ChildMonitor *self, PyObject *args) {
     for (size_t i = 0; i < self->count; i++) {
         if (children[i].id == window_id) {
             found = Py_True;
-            if (!set_iutf8(children_fds[EXTRA_FDS + i].fd, on & 1)) PyErr_SetFromErrno(PyExc_OSError);
+            if (!set_iutf8(children[i].fd, on & 1)) PyErr_SetFromErrno(PyExc_OSError);
             break;
         }
     }
@@ -1205,17 +1248,39 @@ sig_queue(PyObject *self UNUSED, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+// With the children lock held
+static bool
+add_monitored_pid(pid_t pid) {
+    const size_t total = monitored_pids_count + reaped_pids_count;
+    if (total == SIZE_MAX || !GROW(monitored_pids, monitored_pids_count + 1) || !GROW(reaped_pids, total + 1)) return false;
+    monitored_pids[monitored_pids_count++] = pid;
+    return true;
+}
+
+// With the children lock held
+static void
+record_reaped_pid(pid_t pid, int status) {
+    for (ssize_t i = monitored_pids_count - 1; i >= 0; i--) {
+        if (pid == monitored_pids[i]) {
+            // room for it was reserved when it was monitored
+            if (reaped_pids_count < reaped_pids_capacity) {
+                reaped_pids[reaped_pids_count].status = status;
+                reaped_pids[reaped_pids_count++].pid = pid;
+            }
+            remove_i_from_array(monitored_pids, (size_t)i, monitored_pids_count);
+        }
+    }
+}
+
 static PyObject *
 monitor_pid(PyObject *self UNUSED, PyObject *args) {
     int pid;
     bool ok = true;
     if (!PyArg_ParseTuple(args, "i", &pid)) return NULL;
     children_mutex(lock);
-    if (monitored_pids_count >= arraysz(monitored_pids)) {
-        PyErr_SetString(PyExc_RuntimeError, "Too many monitored pids");
+    if (!add_monitored_pid(pid)) {
+        PyErr_SetString(PyExc_MemoryError, "Out of memory monitoring a pid");
         ok = false;
-    } else {
-        monitored_pids[monitored_pids_count++] = pid;
     }
     children_mutex(unlock);
     if (!ok) return NULL;
@@ -1224,15 +1289,22 @@ monitor_pid(PyObject *self UNUSED, PyObject *args) {
 
 static void
 report_reaped_pids(void) {
-    static ReapedPID pids[64];
-    size_t i = 0;
+    // All of them are reported, the boss is called without the lock held. Without memory to copy them they are left
+    // for the next time.
+    ReapedPID *pids = NULL;
+    size_t count = 0;
     children_mutex(lock);
     if (reaped_pids_count) {
-        for (; i < reaped_pids_count && i < arraysz(pids); i++) { pids[i] = reaped_pids[i]; }
-        reaped_pids_count = 0;
+        pids = malloc(reaped_pids_count * sizeof(ReapedPID));
+        if (pids) {
+            memcpy(pids, reaped_pids, reaped_pids_count * sizeof(ReapedPID));
+            count = reaped_pids_count;
+            reaped_pids_count = 0;
+        }
     }
     children_mutex(unlock);
-    for (size_t n = 0; n < i; n++) { call_boss(on_monitored_pid_death, "li", (long)pids[n].pid, pids[n].status); }
+    for (size_t n = 0; n < count; n++) { call_boss(on_monitored_pid_death, "li", (long)pids[n].pid, pids[n].status); }
+    free(pids);
 }
 
 static void *
@@ -1600,9 +1672,18 @@ main_loop(ChildMonitor *self, PyObject *a UNUSED) {
 
 // I/O thread functions {{{
 
+// Moves the children added since the last time to those polled, with the children lock held. Room for them in children
+// was reserved when they were added; the room in children_fds, which poll() uses without the lock, is made here, in
+// the thread that polls. Without memory for it a child stays queued, and is tried again the next time round
 static void
 add_children(ChildMonitor *self) {
-    for (; add_queue_count > 0 && self->count < MAX_CHILDREN;) {
+    if (add_queue_count && !GROW(children_fds, EXTRA_FDS + self->count + add_queue_count)) {
+        static bool reported = false;
+        if (!reported) log_error("Out of memory starting to read from new children, will try again");
+        reported = true;
+        return;
+    }
+    for (; add_queue_count > 0;) {
         add_queue_count--;
         children[self->count] = add_queue[add_queue_count];
         add_queue[add_queue_count] = EMPTY_CHILD;
@@ -1636,13 +1717,13 @@ cleanup_child(ssize_t i) {
 
 
 static void
-remove_children(ChildMonitor *self) {
+remove_marked_children(ChildMonitor *self, bool cleanup) {
     if (self->count > 0) {
         size_t count = 0;
         for (ssize_t i = self->count - 1; i >= 0; i--) {
             if (children[i].needs_removal) {
                 count++;
-                cleanup_child(i);
+                if (cleanup) cleanup_child(i);
                 remove_queue[remove_queue_count] = children[i];
                 remove_queue_count++;
                 children[i] = EMPTY_CHILD;
@@ -1656,6 +1737,12 @@ remove_children(ChildMonitor *self) {
         }
         self->count -= count;
     }
+}
+
+// remove_queue has room for every child, reserved when it was added
+static void
+remove_children(ChildMonitor *self) {
+    remove_marked_children(self, true);
 }
 
 
@@ -1746,15 +1833,7 @@ mark_child_for_removal(ChildMonitor *self, pid_t pid, int exit_status) {
 static void
 mark_monitored_pids(pid_t pid, int status) {
     children_mutex(lock);
-    for (ssize_t i = monitored_pids_count - 1; i >= 0; i--) {
-        if (pid == monitored_pids[i]) {
-            if (reaped_pids_count < arraysz(reaped_pids)) {
-                reaped_pids[reaped_pids_count].status = status;
-                reaped_pids[reaped_pids_count++].pid = pid;
-            }
-            remove_i_from_array(monitored_pids, (size_t)i, monitored_pids_count);
-        }
-    }
+    record_reaped_pid(pid, status);
     children_mutex(unlock);
 }
 
@@ -2393,7 +2472,74 @@ send_data_to_peer(PyObject *self UNUSED, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+// test only: adds count children, as add_child() does, moves them to those polled, as the I/O thread does, removes
+// every remove_every-th one and takes the removed ones as the main thread does, without any child process, file
+// descriptor or thread, so it must not be called while a ChildMonitor exists. Returns the ids of the children left,
+// those removed, in the order taken, and the capacity of children.
+static PyObject *
+test_child_arrays(PyObject *self UNUSED, PyObject *args) {
+    unsigned long count, remove_every;
+    if (!PyArg_ParseTuple(args, "kk", &count, &remove_every)) return NULL;
+    if (the_monitor) {
+        PyErr_SetString(PyExc_RuntimeError, "Cannot test the child arrays while a ChildMonitor exists");
+        return NULL;
+    }
+    ChildMonitor fake = {0};
+    for (unsigned long n = 0; n < count; n++) {
+        if (!reserve_child_slot(fake.count)) return PyErr_NoMemory();
+        add_queue[add_queue_count++] = (Child){.id = n + 1, .fd = -1};
+        // the I/O thread takes them in batches of whatever was added since it last looked
+        if (n % 97 == 96) add_children(&fake);
+    }
+    add_children(&fake);
+    if (add_queue_count) return PyErr_NoMemory();
+    for (size_t i = 0; remove_every && i < fake.count; i++) {
+        if (children[i].id % remove_every == 0) children[i].needs_removal = true;
+    }
+    remove_marked_children(&fake, false);
+    RAII_PyObject(left, PyList_New(fake.count));
+    RAII_PyObject(removed, PyList_New(remove_queue_count));
+    if (!left || !removed) return NULL;
+    for (size_t i = 0; i < fake.count; i++) {
+        if (children_fds[EXTRA_FDS + i].fd != children[i].fd) {
+            PyErr_SetString(PyExc_AssertionError, "children_fds does not match children");
+            return NULL;
+        }
+        PyList_SET_ITEM(left, i, PyLong_FromUnsignedLong(children[i].id));
+    }
+    for (size_t i = 0; i < remove_queue_count; i++) PyList_SET_ITEM(removed, i, PyLong_FromUnsignedLong(remove_queue[i].id));
+    const size_t capacity = children_capacity;
+    for (size_t i = 0; i < fake.count; i++) children[i] = EMPTY_CHILD;
+    for (size_t i = 0; i < remove_queue_count; i++) remove_queue[i] = EMPTY_CHILD;
+    remove_queue_count = 0;
+    return Py_BuildValue("OOk", left, removed, (unsigned long)capacity);
+}
+
+// test only: monitors count pids, as monitor_pid() does, reaps every one of them, as the I/O thread does, and returns
+// how many were recorded as reaped, which must be all of them, and how many are still monitored
+static PyObject *
+test_monitored_pids(PyObject *self UNUSED, PyObject *args) {
+    unsigned long count;
+    if (!PyArg_ParseTuple(args, "k", &count)) return NULL;
+    if (the_monitor) {
+        PyErr_SetString(PyExc_RuntimeError, "Cannot test the monitored pids while a ChildMonitor exists");
+        return NULL;
+    }
+    for (unsigned long n = 0; n < count; n++) {
+        if (!add_monitored_pid((pid_t)(1000000 + n))) return PyErr_NoMemory();
+        // some die before others are monitored
+        if (n % 3 == 2) record_reaped_pid((pid_t)(1000000 + n - 1), 0);
+    }
+    for (unsigned long n = 0; n < count; n++) record_reaped_pid((pid_t)(1000000 + n), (int)(n & 0xff));
+    const size_t reaped = reaped_pids_count, monitored = monitored_pids_count;
+    reaped_pids_count = 0;
+    monitored_pids_count = 0;
+    return Py_BuildValue("kk", (unsigned long)reaped, (unsigned long)monitored);
+}
+
 static PyMethodDef module_methods[] = {
+    METHODB(test_child_arrays, METH_VARARGS),
+    METHODB(test_monitored_pids, METH_VARARGS),
     METHODB(safe_pipe, METH_VARARGS),
     {"add_timer", (PyCFunction)add_python_timer, METH_VARARGS, ""},
     {"remove_timer", (PyCFunction)remove_python_timer, METH_VARARGS, ""},

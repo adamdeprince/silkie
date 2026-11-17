@@ -154,6 +154,7 @@ typedef struct ImageAnchorPosition {
     float canvas_x, canvas_y, image_x, image_y;
 } ImageAnchorPosition;
 
+// Sizes only the fixed tables of VAOs and buffers in gl.c now; children and OS windows are not limited by it
 #define MAX_CHILDREN 512
 #define BLANK_CHAR 0
 #define COL_MASK 0xFFFFFFFF

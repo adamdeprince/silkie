@@ -2323,10 +2323,11 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     glfwWindowHintString(GLFW_WAYLAND_APP_ID, wm_class_class);
 #endif
 
-    if (global_state.num_os_windows >= MAX_CHILDREN) {
-        PyErr_SetString(PyExc_ValueError, "Too many windows");
+    if (!reserve_os_window_slot()) {
+        PyErr_SetString(PyExc_MemoryError, "Out of memory creating an OS window");
         return NULL;
     }
+    update_os_window_references();
     bool want_semi_transparent = (1.0 - OPT(background_opacity) >= 0.01) || OPT(dynamic_background_opacity);
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, want_semi_transparent);
     uint32_t bgcolor = OPT(background);

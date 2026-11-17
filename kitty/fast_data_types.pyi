@@ -532,6 +532,9 @@ def monitor_pid(pid: int) -> None:
 def add_window(os_window_id: int, tab_id: int, title: str) -> int:
     pass
 
+def test_child_arrays(count: int, remove_every: int) -> tuple[list[int], list[int], int]: ...
+def test_monitored_pids(count: int) -> tuple[int, int]: ...
+def test_reserve_os_windows(count: int) -> tuple[bool, int]: ...
 def compile_program(
     which: int, vertex_shaders: Tuple[str, ...], fragment_shaders: Tuple[str, ...], metadata: Dict[str, Any], allow_recompile: bool = False
 ) -> int:
