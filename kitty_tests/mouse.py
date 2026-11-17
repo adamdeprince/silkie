@@ -1691,3 +1691,50 @@ class TestMouse(BaseTest):
         ac([], 4)
         self.assertTrue(s.callbacks.wtcbuf, 'the wheel event was not reported to the program')
         parse_bytes(s, b'\x1b[?1000l')
+
+    def test_mapped_scroll_with_scroll_reports(self):
+        from kitty.config import load_config
+
+        HIGHRES = 2  # GLFWOffsetType
+        BEGAN, ACTIVE, ENDED = 1, 3, 4  # GLFWMomentumType, also the finger phase
+        s = self.create_screen(lines=5, scrollback=50)
+        errors = []
+        opts = load_config(
+            overrides=(
+                'pixel_scroll no',
+                'mouse_map ctrl+wheel_up press grabbed change_font_size all +1',
+                'mouse_map alt+wheel_up press ungrabbed change_font_size all -1',
+            ),
+            accumulate_bad_lines=errors,
+        )
+        self.ae(errors, [])
+        set_options(opts)
+        w = create_mock_window(s)
+        calls = []
+        s.callbacks.change_font_size = lambda *a: calls.append(a[1])
+        parse_bytes(s, b'\x1b]777;scroll;v=1:op=mode:mode=1\x1b\\')
+
+        def scroll(y, mods=0, phase=0, momentum=0):
+            s.callbacks.clear()
+            send_mock_scroll_event_to_window(w, HIGHRES, 0.0, float(y), mods, momentum, phase)
+            return re.findall(rb':phase=(\d)', s.callbacks.wtcbuf)
+
+        # Scroll reports grab the wheel, so ungrabbed mappings do not apply
+        self.ae(scroll(100, GLFW_MOD_ALT), [b'0'])
+        self.ae(calls, [])
+        # A grabbed mapping takes over a finger gesture the program saw begin,
+        # and the program is told the gesture was cancelled
+        self.ae(scroll(10, phase=BEGAN), [b'1'])
+        self.ae(scroll(10, phase=ACTIVE), [b'2'])
+        self.ae(scroll(100, GLFW_MOD_CONTROL, phase=ACTIVE), [b'7'])
+        self.ae(calls, ['+'])
+        # The rest of the mapped gesture and its coasting are not reported
+        self.ae(scroll(100, GLFW_MOD_CONTROL, phase=ACTIVE), [])
+        self.ae(scroll(100, GLFW_MOD_CONTROL, momentum=BEGAN), [])
+        self.ae(scroll(0, GLFW_MOD_CONTROL, momentum=ENDED), [])
+        self.ae(calls, ['+', '+'])
+        # A gesture that ended is not cancelled when a mapping fires later
+        self.ae(scroll(10, phase=BEGAN), [b'1'])
+        self.ae(scroll(0, phase=ENDED), [b'3'])
+        self.ae(scroll(100, GLFW_MOD_CONTROL, phase=BEGAN), [])
+        self.ae(calls, ['+', '+', '+'])
