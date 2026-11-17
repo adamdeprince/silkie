@@ -505,6 +505,15 @@ typedef struct _GLFWlibraryWayland {
     } drag;
 } _GLFWlibraryWayland;
 
+// The state of a monitor whose xdg_output logical geometry did not arrive
+// within one roundtrip, see wl_monitor.c
+typedef struct _GLFWxdgGeometryRetry {
+    bool pending;      // still missing: the monitor uses fallback values till it arrives
+    bool gave_up;      // every request went unanswered, no more are scheduled
+    unsigned requests; // get_xdg_output requests made for it, the first one included
+    id_type timer;     // the retry timer, 0 when none is scheduled
+} _GLFWxdgGeometryRetry;
+
 // Wayland-specific per-monitor data
 //
 typedef struct _GLFWmonitorWayland {
@@ -523,10 +532,9 @@ typedef struct _GLFWmonitorWayland {
     double fractional_scale;
     bool xdg_size_received;
     bool xdg_position_received;
-    // Set once we have given up waiting for xdg_output geometry for this
-    // monitor, so that we dont block repeatedly on a compositor that never
-    // sends it.
-    bool xdg_geometry_wait_abandoned;
+    // xdg_output logical geometry that was not there after one roundtrip, it
+    // is asked for again in the background, see wl_monitor.c
+    _GLFWxdgGeometryRetry xdg_geometry;
 
 } _GLFWmonitorWayland;
 
@@ -553,6 +561,7 @@ void _glfwCreateXdgOutputsWayland(void);
 void _glfwWaylandBeforeBufferSwap(_GLFWwindow *window);
 void _glfwWaylandAfterBufferSwap(_GLFWwindow *window);
 void _glfwWaylandSurfaceOutputsChanged(_GLFWwindow *window);
+void _glfwWaylandMonitorGeometryArrived(_GLFWmonitor *monitor);
 void _glfwSetupWaylandDataDevice(void);
 void _glfwSetupWaylandPrimarySelectionDevice(void);
 double _glfwWaylandWindowScale(_GLFWwindow *);
