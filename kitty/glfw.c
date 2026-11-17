@@ -744,6 +744,18 @@ key_callback(GLFWwindow *w, GLFWkeyevent *ev) {
     request_tick_callback();
 }
 
+// Sets the mouse position from window co-ordinates, converting to viewport
+// pixels and then to where the content under it actually is: through the
+// projection of a spatial display, or else to where custom shaders show it.
+// Custom shaders are not drawn on a spatial display.
+void
+set_os_window_mouse_position(OSWindow *window, double x, double y) {
+    window->mouse_x = x * window->viewport_x_ratio;
+    window->mouse_y = y * window->viewport_y_ratio;
+    if (window->spatial.mode) spatial_map_pointer(window, &window->mouse_x, &window->mouse_y);
+    else map_pointer_position(window, &window->mouse_x, &window->mouse_y);
+}
+
 static void
 cursor_enter_callback(GLFWwindow *w, int entered) {
     if (!set_callback_window(w)) return;
@@ -751,16 +763,14 @@ cursor_enter_callback(GLFWwindow *w, int entered) {
     glfwGetCursorPos(w, &x, &y);
     monotonic_t now = monotonic();
     global_state.callback_os_window->last_mouse_activity_at = now;
-    double new_mouse_x = x * global_state.callback_os_window->viewport_x_ratio;
-    double new_mouse_y = y * global_state.callback_os_window->viewport_y_ratio;
+    const double old_mouse_x = global_state.callback_os_window->mouse_x, old_mouse_y = global_state.callback_os_window->mouse_y;
+    set_os_window_mouse_position(global_state.callback_os_window, x, y);
     // focus_follows_mouse should react to the mouse moving, not to a window
     // appearing under a stationary cursor (such as when returning to this
     // desktop/space). Detect genuine motion by comparing against the last
     // known cursor position so an enter caused by mouse motion still switches
     // focus, while a stationary reappearance does not.
-    bool cursor_moved = new_mouse_x != global_state.callback_os_window->mouse_x || new_mouse_y != global_state.callback_os_window->mouse_y;
-    global_state.callback_os_window->mouse_x = new_mouse_x;
-    global_state.callback_os_window->mouse_y = new_mouse_y;
+    bool cursor_moved = old_mouse_x != global_state.callback_os_window->mouse_x || old_mouse_y != global_state.callback_os_window->mouse_y;
     if (entered) {
         debug_input("Mouse cursor entered window: %llu at %fx%f\n", global_state.callback_os_window->id, x, y);
         cursor_active_callback(now);
@@ -781,9 +791,7 @@ refresh_mouse_position_for_hit_test(GLFWwindow *w, OSWindow *window) {
         // Query the current position for discrete pointer events without emitting a move event.
         double x, y;
         glfwGetCursorPos(w, &x, &y);
-        window->mouse_x = x * window->viewport_x_ratio;
-        window->mouse_y = y * window->viewport_y_ratio;
-        spatial_map_pointer(window, &window->mouse_x, &window->mouse_y);
+        set_os_window_mouse_position(window, x, y);
         return true;
     }
 #else
@@ -821,9 +829,7 @@ mouse_button_callback(GLFWwindow *w, int button, int action, int mods) {
             if (!position_was_refreshed) {
                 double x, y;
                 glfwGetCursorPos(w, &x, &y);
-                window->mouse_x = x * window->viewport_x_ratio;
-                window->mouse_y = y * window->viewport_y_ratio;
-                spatial_map_pointer(window, &window->mouse_x, &window->mouse_y);
+                set_os_window_mouse_position(window, x, y);
             }
             if (is_window_ready_for_callbacks()) mouse_event(-1, mods, -1);
         }
@@ -841,8 +847,7 @@ on_mouse_position_update(double x, double y) {
     global_state.callback_os_window->cursor_blink_zero_time = now;
     global_state.callback_os_window->user_is_idle = false;
     global_state.callback_os_window->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_USER_ACTIVITY);
-    global_state.callback_os_window->mouse_x = x * global_state.callback_os_window->viewport_x_ratio;
-    global_state.callback_os_window->mouse_y = y * global_state.callback_os_window->viewport_y_ratio;
+    set_os_window_mouse_position(global_state.callback_os_window, x, y);
     global_state.callback_os_window->has_received_cursor_pos_event = true;
     if (is_window_ready_for_callbacks()) mouse_event(-1, global_state.mods_at_last_key_or_button_event, -1);
     request_tick_callback();
@@ -919,9 +924,7 @@ touch_move_mouse(OSWindow *osw, double x, double y, int mods) {
     osw->cursor_blink_zero_time = now;
     osw->user_is_idle = false;
     osw->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_USER_ACTIVITY);
-    osw->mouse_x = x * osw->viewport_x_ratio;
-    osw->mouse_y = y * osw->viewport_y_ratio;
-    spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
+    set_os_window_mouse_position(osw, x, y);
     osw->has_received_cursor_pos_event = true;
     if (is_window_ready_for_callbacks()) mouse_event(-1, mods, -1);
 }
@@ -1011,9 +1014,7 @@ gesture_callback(GLFWwindow *w, const GLFWGestureEvent *ev) {
     if (!set_callback_window(w)) return;
     OSWindow *osw = global_state.callback_os_window;
     osw->last_mouse_activity_at = monotonic();
-    osw->mouse_x = ev->x * osw->viewport_x_ratio;
-    osw->mouse_y = ev->y * osw->viewport_y_ratio;
-    spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
+    set_os_window_mouse_position(osw, ev->x, ev->y);
     const bool reported = is_window_ready_for_callbacks() && gesture_event(ev);
     debug_input(
         "\x1b[33mGesture\x1b[m kind: %d phase: %d x: %.1f y: %.1f delta: %.3f dx: %d dy: %d fingers: %u reported: %d\n",
@@ -1124,9 +1125,7 @@ tablet_callback(GLFWwindow *w, const GLFWTabletEvent *ev) {
     // are made from it. Elsewhere the tool is the pointer
     const double pointer_x = osw->mouse_x, pointer_y = osw->mouse_y;
     if (ev->type == GLFW_TABLET_POINT || (global_state.is_wayland && ev->type != GLFW_TABLET_ACTION)) {
-        osw->mouse_x = ev->x * osw->viewport_x_ratio;
-        osw->mouse_y = ev->y * osw->viewport_y_ratio;
-        spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
+        set_os_window_mouse_position(osw, ev->x, ev->y);
     }
     const bool consumed = is_window_ready_for_callbacks() && tablet_event(ev);
     if (global_state.is_wayland) {
@@ -1169,10 +1168,7 @@ window_focus_callback(GLFWwindow *w, int focused) {
     debug_input("\x1b[35mon_focus_change\x1b[m: window id: 0x%llu focused: %d\n", osw->id, focused);
     bool focus_changed = osw->is_focused != focused;
     osw->is_focused = focused ? true : false;
-    if (focus_changed) {
-        if (focused) osw->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_OS_WINDOW_FOCUS_IN) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_IN);
-        else osw->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_OS_WINDOW_FOCUS_OUT) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_OUT);
-    }
+    if (focus_changed) record_os_window_focus_change_for_shaders(osw, focused);
     monotonic_t now = monotonic();
     id_type wid = osw->id;
     if (focused) {
@@ -1363,9 +1359,9 @@ drop_dest_callback(GLFWwindow *window, GLFWDropEvent *ev) {
         case GLFW_DROP_MOVE:
             global_state.drop_dest.drop_has_happened = false;
             global_state.drop_dest.os_window_id = os_window->id;
-            os_window->last_drag_event.x = (int)(ev->xpos * os_window->viewport_x_ratio);
-            os_window->last_drag_event.y = (int)(ev->ypos * os_window->viewport_y_ratio);
             on_mouse_position_update(ev->xpos, ev->ypos);
+            os_window->last_drag_event.x = (int)os_window->mouse_x;
+            os_window->last_drag_event.y = (int)os_window->mouse_y;
             // Re-evaluate which kitty window is now under the cursor after the
             // position update, so that drag enter/leave events are sent to the
             // correct kitty window when the drag crosses a kitty window boundary
@@ -2826,7 +2822,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     glfwSetDropEventCallback(glfw_window, drop_dest_callback);
     monotonic_t now = monotonic();
     w->is_focused = true;
-    w->shader_anim_event_registry |= (1u << SHADER_ANIM_EVENT_OS_WINDOW_FOCUS_IN) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_IN);
+    record_os_window_focus_change_for_shaders(w, true);
     w->cursor_blink_zero_time = now;
     w->last_mouse_activity_at = now;
     w->mouse_activate_deadline = -1;

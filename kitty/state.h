@@ -510,7 +510,8 @@ typedef struct BackgroundImageRenderSettings {
     float opacity;
 } BackgroundImageRenderSettings;
 
-#define MAX_CUSTOM_SHADER_GROUPS 16
+// Passed to the custom shader pipeline as a preprocessor define by slang.py
+#define POINTER_MAP_SIZE 64
 
 // Summary of the custom shader animation state machine, cached once per frame
 // so the renderer can decide whether a new frame is needed without walking the
@@ -522,6 +523,22 @@ typedef struct ShaderAnimState {
     monotonic_t min_step;    // smallest animation_step across active groups, MONOTONIC_T_MAX if none want periodic redraws
     monotonic_t next_end_at; // earliest expiry of a duration bounded active animation, MONOTONIC_T_MAX if none
 } ShaderAnimState;
+
+typedef struct ShaderGroupAnimState {
+    bool active;
+    monotonic_t started_at;
+    // When animation_progress would have been zero, before applying the
+    // easing curve, had it been rising since then without interruption
+    monotonic_t ramp_started_at;
+    // Non-zero while the group is active only to play its animation in
+    // reverse after being stopped, the time at which that finishes
+    monotonic_t reverse_ends_at;
+    // How many more times to play the animation forwards and in reverse
+    // after the current reverse finishes
+    unsigned loops_left;
+    // true while playing the animation forwards in one of those loops
+    bool looping;
+} ShaderGroupAnimState;
 
 typedef enum {
     SHADER_ANIM_EVENT_POINTER_LEFT_BUTTON_PRESS,
@@ -541,8 +558,26 @@ typedef enum {
     SHADER_ANIM_EVENT_ALTERNATE_SCREEN_EXIT,
     NUM_SHADER_ANIM_EVENTS
 } ShaderAnimationEvent;
-// The registry of fired events is a bitmask in an unsigned int
-_Static_assert(NUM_SHADER_ANIM_EVENTS <= sizeof(unsigned) * 8, "Too many shader animation events for the event bitmask");
+// Bitmask of ShaderAnimationEvent values, the builtin events. Its width is set
+// by the number of builtin events, which only changes with the code. Events
+// named by the pipeline itself, with the user: prefix, and fired by the
+// shader_event action are kept in growable sets instead, as there can be any
+// number of them.
+typedef uint64_t ShaderAnimEventMask;
+_Static_assert(NUM_SHADER_ANIM_EVENTS <= sizeof(ShaderAnimEventMask) * 8, "Too many builtin shader animation events for ShaderAnimEventMask");
+
+// A growable set of bits, bit i is bit i % 32 of words[i / 32]. The words are
+// 32 bit as sets of groups are passed to the custom shader pipeline as arrays
+// of uint.
+typedef struct ShaderBitset {
+    uint32_t *words;
+    size_t num_words; // allocated words, bits beyond them are unset
+} ShaderBitset;
+
+static inline bool
+shader_bitset_has(const ShaderBitset *s, size_t i) {
+    return i / 32 < s->num_words && (s->words[i / 32] >> (i % 32)) & 1u;
+}
 
 typedef struct OSWindow {
     void *handle;
@@ -631,17 +666,34 @@ typedef struct OSWindow {
         double pending_pixels_x, pending_pixels_y;
         int last_v120_dir_x, last_v120_dir_y;
     } scroll;
-    unsigned shader_anim_event_registry;
-    id_type last_bell_window_id; // ID of the most recent window that received a bell event
+    ShaderAnimEventMask shader_anim_event_registry;
     // Time up to which command and alternate screen changes in the active window have been turned into shader events
     monotonic_t screen_state_checked_at;
+    // The user events of the current pipeline fired since the OS window was
+    // last rendered, by their index in the pipeline
     struct {
-        bool active;
-        monotonic_t started_at;
-    } shader_group_anim[MAX_CUSTOM_SHADER_GROUPS];
+        ShaderBitset fired;
+        bool pending; // any bit is set in fired
+    } shader_user_events;
+    id_type last_bell_window_id; // ID of the most recent window that received a bell event
+    // The animation state of each group of the current pipeline, with room for
+    // shader_group_anim_capacity groups. When that is less than the number of
+    // groups, as allocating more failed, the custom shaders are not drawn.
+    ShaderGroupAnimState *shader_group_anim;
+    size_t shader_group_anim_capacity;
     ShaderAnimState shader_anim;
     DisplayInfo display_info;
     monotonic_t display_info_at;
+    struct {
+        // POINTER_MAP_SIZE x POINTER_MAP_SIZE (x, y) pairs, rows from the bottom up, in viewport UV
+        float *data;
+        int viewport_width, viewport_height;
+        unsigned pipeline_generation;
+        // The groups whose pointer_map() functions data was computed from,
+        // when has_groups is set. Without any pointer events are not moved.
+        ShaderBitset groups;
+        bool has_groups;
+    } pointer_map;
 } OSWindow;
 
 static inline float
@@ -853,9 +905,24 @@ void dispatch_buffered_keys(Window *w);
 void free_buffered_keys(Window *w);
 bool screen_needs_rendering_in_layers(OSWindow *os_window, Window *w, Screen *screen);
 void setup_os_window_for_rendering(OSWindow *, Tab *, Window *, bool, monotonic_t);
-monotonic_t update_custom_shader_animations(unsigned event_mask, monotonic_t now, OSWindow *os_window);
+monotonic_t update_custom_shader_animations(ShaderAnimEventMask event_mask, monotonic_t now, OSWindow *os_window);
 void init_shader_animation_state(OSWindow *os_window);
-bool custom_shader_needs_render(const ShaderAnimState *before, const ShaderAnimState *after, unsigned event_mask, monotonic_t now);
+
+// Records an OS window focus change for the custom shader animation state
+// machine. The pending events are only consumed when the OS window is next
+// rendered, which can be much later, for instance, when the window is hidden
+// or occluded. So a focus change replaces any pending opposite focus change
+// rather than accumulating with it, as both together would be indistinguishable
+// from simultaneous events, where focus-out wins.
+static inline void
+record_os_window_focus_change_for_shaders(OSWindow *osw, bool focused) {
+    const ShaderAnimEventMask in = (1u << SHADER_ANIM_EVENT_OS_WINDOW_FOCUS_IN) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_IN);
+    const ShaderAnimEventMask out = (1u << SHADER_ANIM_EVENT_OS_WINDOW_FOCUS_OUT) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_OUT);
+    osw->shader_anim_event_registry = (osw->shader_anim_event_registry & ~(focused ? out : in)) | (focused ? in : out);
+}
+bool custom_shader_needs_render(const ShaderAnimState *before, const ShaderAnimState *after, bool had_events, monotonic_t now);
+void map_pointer_position(const OSWindow *os_window, double *x, double *y);
+void set_os_window_mouse_position(OSWindow *window, double x, double y);
 void swap_window_buffers(OSWindow *w);
 void take_screenshot_of_rectangular_region(OSWindow *os_window, Region region, unsigned char *dst_buf, unsigned *thumb_w, unsigned *thumb_h, bool no_scaling);
 bool current_framebuffer_is_ok(void);

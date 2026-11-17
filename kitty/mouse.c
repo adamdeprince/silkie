@@ -1709,9 +1709,7 @@ scroll_event(const GLFWScrollEvent *ev) {
     if (!osw->is_focused && osw->handle) {
         double mouse_x, mouse_y;
         glfwGetCursorPos((GLFWwindow *)osw->handle, &mouse_x, &mouse_y);
-        osw->mouse_x = mouse_x * osw->viewport_x_ratio;
-        osw->mouse_y = mouse_y * osw->viewport_y_ratio;
-        spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
+        set_os_window_mouse_position(osw, mouse_x, mouse_y);
     }
     MouseRegion r = mouse_region(false, true);
     Window *w = r.window;
@@ -2669,9 +2667,7 @@ touch_pointer_event(const GLFWTouchEvent *ev) {
             // Locate the window under the finger without moving the mouse
             const GLFWTouchPoint *first = meant ? meant : ev->points;
             const double mouse_x = osw->mouse_x, mouse_y = osw->mouse_y;
-            osw->mouse_x = first->x * osw->viewport_x_ratio;
-            osw->mouse_y = first->y * osw->viewport_y_ratio;
-            spatial_map_pointer(osw, &osw->mouse_x, &osw->mouse_y);
+            set_os_window_mouse_position(osw, first->x, first->y);
             w = pointer_window(POINTER_TOUCH);
             osw->mouse_x = mouse_x;
             osw->mouse_y = mouse_y;
