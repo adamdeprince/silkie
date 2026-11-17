@@ -3202,6 +3202,10 @@ typedef bool (*glfwDBusMonitorSessionState_func)(GLFWDBussessionstatefun);
 GFW_EXTERN glfwDBusMonitorSessionState_func glfwDBusMonitorSessionState_impl;
 #define glfwDBusMonitorSessionState glfwDBusMonitorSessionState_impl
 
+typedef bool (*glfwDBusSetLauncherEntry_func)(const char*, int64_t, bool);
+GFW_EXTERN glfwDBusSetLauncherEntry_func glfwDBusSetLauncherEntry_impl;
+#define glfwDBusSetLauncherEntry glfwDBusSetLauncherEntry_impl
+
 typedef int (*glfwSetX11LaunchCommand_func)(GLFWwindow*, char**, int);
 GFW_EXTERN glfwSetX11LaunchCommand_func glfwSetX11LaunchCommand_impl;
 #define glfwSetX11LaunchCommand glfwSetX11LaunchCommand_impl

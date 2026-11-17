@@ -873,6 +873,12 @@ def cocoa_set_dock_icon(icon_path: str) -> None:
 def cocoa_show_progress_bar_on_dock_icon(progress: float = -100) -> None:
     pass
 
+
+def cocoa_set_dock_status_badge(label: str) -> None: ...
+def cocoa_dock_badge_label() -> str: ...
+def dbus_set_launcher_entry(app_uri: str, count: int, urgent: bool) -> bool: ...
+
+
 def cocoa_hide_app() -> None:
     pass
 

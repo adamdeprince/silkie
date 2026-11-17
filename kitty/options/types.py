@@ -370,6 +370,8 @@ option_names = (
     'dim_opacity',
     'disable_ligatures',
     'display_info',
+    'dock_attention_on_blocked',
+    'dock_status_badge',
     'drag_threshold',
     'draw_minimal_borders',
     'draw_window_borders_for_single_window',
@@ -632,6 +634,8 @@ class Options:
     dim_opacity: float = 0.4
     disable_ligatures: int = 0
     display_info: str = ''
+    dock_attention_on_blocked: bool = False
+    dock_status_badge: bool = True
     drag_threshold: int = 5
     draw_minimal_borders: bool = True
     draw_window_borders_for_single_window: bool = False

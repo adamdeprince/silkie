@@ -3274,6 +3274,11 @@ glfwDBusMonitorSessionState(GLFWDBussessionstatefun callback) {
 }
 
 GLFWAPI bool
+glfwDBusSetLauncherEntry(const char *app_uri, int64_t count, bool urgent) {
+    return glfw_dbus_set_launcher_entry(app_uri, count, urgent);
+}
+
+GLFWAPI bool
 glfwWaylandSetTitlebarColor(GLFWwindow *handle, uint32_t color, bool use_system_color) {
     _GLFWwindow *window = (_GLFWwindow *)handle;
     if (!window->wl.decorations.serverSide) {

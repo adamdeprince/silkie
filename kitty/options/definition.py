@@ -2319,6 +2319,34 @@ changed. Has no effect when :opt:`native_tabs` are not in use, there
 )
 
 opt(
+    'dock_status_badge',
+    'yes',
+    option_type='to_bool',
+    long_text="""
+Show the status that programs report with the :ref:`program status protocol
+<program_status>` on the icon of Silkie: the number of windows blocked on you,
+otherwise a cross for windows whose program failed or a check mark for windows
+whose program finished, with their number if more than one. The window you are
+looking at is left out, as its status is in plain sight, and finished or failed
+programs no longer count once you have seen their window. On macOS this is the
+badge of the icon in the Dock. On Linux it is the count, and for blocked windows
+the urgent state, of the Unity launcher entry API, shown by Ubuntu Dock, Dash to
+Dock and KDE Plasma for a Silkie started from its :file:`silkie.desktop` file.
+""",
+)
+
+opt(
+    'dock_attention_on_blocked',
+    'no',
+    option_type='to_bool',
+    long_text="""
+Request your attention when a program reports that it is blocked on you while
+Silkie is in the background: on macOS the icon in the Dock bounces once, on
+Linux the window is marked urgent, as the window manager shows it.
+""",
+)
+
+opt(
     'default_profile',
     'default',
     long_text="""

@@ -4046,6 +4046,18 @@ dbus_close_notification(PyObject *self UNUSED, PyObject *args) {
     Py_RETURN_FALSE;
 }
 
+static PyObject *
+dbus_set_launcher_entry(PyObject *self UNUSED, PyObject *args) {
+    const char *app_uri;
+    long long count;
+    int urgent;
+    if (!PyArg_ParseTuple(args, "sLp", &app_uri, &count, &urgent)) return NULL;
+    // Not every build of GLFW has it, and without a session bus there is nobody to tell
+    if (!glfwDBusSetLauncherEntry) Py_RETURN_FALSE;
+    if (glfwDBusSetLauncherEntry(app_uri, count, urgent)) Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
+}
+
 
 #endif
 
@@ -4494,6 +4506,7 @@ static PyMethodDef module_methods[] = {
     METHODB(strip_csi, METH_O),
 #ifndef __APPLE__
     METHODB(dbus_close_notification, METH_VARARGS),
+    METHODB(dbus_set_launcher_entry, METH_VARARGS),
     METHODB(dbus_set_notification_callback, METH_O),
     METHODB(dbus_monitor_session_state, METH_O),
     {"dbus_send_notification", (PyCFunction)(void (*)(void))(dbus_send_notification), METH_KEYWORDS | METH_VARARGS, NULL},

@@ -18,6 +18,7 @@ from .borders import Border, Borders
 from .child import Child
 from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .constants import app_class, app_display_name, is_wayland
+from .dock_status import schedule_dock_status_update
 from .native_ui import native_tabs_active, update_native_tab_status
 from .profiles import Profile, apply_to_os_window, command_of, directory_of, environment_of, parsed_options, profile_for_new_os_window
 from .fast_data_types import (
@@ -2788,6 +2789,7 @@ class TabManager:  # {{{
         self.tab_bar.apply_options()
         if self.native_tabs:
             update_native_tab_status(self)
+        schedule_dock_status_update()
         self.update_tab_bar_data()
         self.layout_tab_bar()
 

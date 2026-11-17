@@ -1022,6 +1022,12 @@ class Parser:
     def display_info(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['display_info'] = str(val)
 
+    def dock_attention_on_blocked(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['dock_attention_on_blocked'] = to_bool(val)
+
+    def dock_status_badge(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['dock_status_badge'] = to_bool(val)
+
     def drag_threshold(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['drag_threshold'] = positive_int(val)
 

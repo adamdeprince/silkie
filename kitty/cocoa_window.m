@@ -1498,15 +1498,45 @@ cocoa_show_progress_bar_on_dock_icon(PyObject *self UNUSED, PyObject *args) {
 // Dock badge {{{
 
 static bool dock_badge_is_set = false;
+// The badge for the program status of the windows, see kitty/dock_status.py. The badge of the bell, which goes away
+// with the next key press, click or activation, is shown over it while set.
+static NSString *dock_status_badge = nil;
+
+static void
+show_dock_badge(NSString *bell_badge) {
+    NSDockTile *dockTile = [NSApp dockTile];
+    NSString *label = bell_badge ? bell_badge : dock_status_badge;
+    if (label == dockTile.badgeLabel || [label isEqualToString:dockTile.badgeLabel]) return;
+    [dockTile setBadgeLabel:label];
+    [dockTile display];
+}
 
 void
 cocoa_set_dock_badge(const char *label) {
     @autoreleasepool {
-        NSDockTile *dockTile = [NSApp dockTile];
-        [dockTile setBadgeLabel:label ? @(label) : nil];
-        [dockTile display];
+        show_dock_badge(label ? @(label) : nil);
         dock_badge_is_set = (label != NULL);
     }
+}
+
+static PyObject *
+cocoa_set_dock_status_badge(PyObject *self UNUSED, PyObject *label) {
+    if (!PyUnicode_Check(label)) { PyErr_SetString(PyExc_TypeError, "label must be a string"); return NULL; }
+    const char *text = PyUnicode_AsUTF8(label);
+    if (!text) return NULL;
+    @autoreleasepool {
+        [dock_status_badge release];
+        dock_status_badge = text[0] ? [@(text) retain] : nil;
+        if (!dock_badge_is_set) show_dock_badge(nil);
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+cocoa_dock_badge_label(PyObject *self UNUSED, PyObject *args UNUSED) {
+    // For tests: what the Dock shows
+    NSString *label = [NSApp dockTile].badgeLabel;
+    return PyUnicode_FromString(label ? label.UTF8String : "");
 }
 
 void
@@ -1742,6 +1772,8 @@ static PyMethodDef module_methods[] = {
     {"cocoa_set_app_icon", (PyCFunction)cocoa_set_app_icon, METH_VARARGS, ""},
     {"cocoa_set_dock_icon", (PyCFunction)cocoa_set_dock_icon, METH_VARARGS, ""},
     {"cocoa_show_progress_bar_on_dock_icon", (PyCFunction)cocoa_show_progress_bar_on_dock_icon, METH_VARARGS, ""},
+    {"cocoa_set_dock_status_badge", (PyCFunction)cocoa_set_dock_status_badge, METH_O, ""},
+    {"cocoa_dock_badge_label", (PyCFunction)cocoa_dock_badge_label, METH_NOARGS, ""},
     {"cocoa_bundle_image_as_png", (PyCFunction)(void (*)(void))bundle_image_as_png, METH_VARARGS | METH_KEYWORDS, ""},
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

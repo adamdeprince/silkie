@@ -594,6 +594,19 @@ class Boss:
     def debug_settings_snapshot(self, path: str) -> None:
         native_settings_snapshot(path)
 
+    @ac('debug', 'Write the program status shown on the icon of Silkie, as JSON, to the specified file. For tests.')
+    def debug_dock_status(self, path: str) -> None:
+        import json
+
+        from .dock_status import dock_status_controller
+        s = dock_status_controller.shown
+        ans = {'label': s.label, 'count': s.count, 'urgent': s.urgent, 'blocked': sorted(s.blocked)}
+        if is_macos:
+            from .fast_data_types import cocoa_dock_badge_label
+            ans['dock_badge_label'] = cocoa_dock_badge_label()
+        with open(path, 'w') as f:
+            json.dump(ans, f)
+
     @ac('debug', 'Draw the native window of the active tab, with its native tab bar, to the specified PNG file.')
     def debug_native_tab_snapshot(self, path: str) -> None:
         if (tm := self.active_tab_manager) is not None:
