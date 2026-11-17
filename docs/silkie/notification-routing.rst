@@ -12,7 +12,11 @@ OSC 9 and AI completion alerts
 
 Silkie also accepts the iTerm2-style ``OSC 9 ; message ST`` notification,
 terminated by either BEL or ``ESC \\``. The entire message, including any
-semicolons, becomes the notification title. Clicking it focuses the originating
+semicolons, becomes the notification title, unless it starts with a ConEmu
+sub-command number from 1 to 12 followed by ``;`` or the end of the message.
+``OSC 9 ; 2 ; text ST`` shows a notification titled *text*, with one pair of
+surrounding double quotes removed. The other ConEmu sub-commands are described
+in :ref:`conemu_osc9`. Clicking a notification focuses the originating
 terminal without sending input to the application. See the `iTerm2 escape-code
 manual <https://iterm2.com/documentation-escape-codes.html>`_ for the wire format.
 
@@ -28,6 +32,38 @@ On macOS, allow Silkie notifications when prompted. If no banner appears,
 check System Settings → Notifications → Silkie, banner settings, and Focus.
 Notification permission failures are logged to Silkie's standard error.
 Configured notification filters also apply to OSC 9.
+
+.. _conemu_osc9:
+
+ConEmu OSC 9 sub-commands
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`ConEmu <https://conemu.github.io/en/AnsiEscapeCodes.html>`__ uses OSC 9 for
+numbered sub-commands, ``OSC 9 ; number ; arguments ST``. An OSC 9 payload is a
+ConEmu sub-command when it starts with a number from 1 to 12 followed by ``;``
+or the end of the payload; any other payload, including ``13;text``, is shown as
+an iTerm2 style notification. Text arguments may be enclosed in double quotes,
+which are removed.
+
+======  =============================  =========================================================
+Number  ConEmu                         Silkie
+======  =============================  =========================================================
+1       Sleep for some milliseconds    Not implemented
+2       Show a message box             Shows a desktop notification with the text as its title
+3       Set the tab title              Sets the tab title, empty text restores the default title
+4       Set the progress state         Shows progress, as ``OSC 9 ; 4`` above
+5       Wait for a key press           Not implemented
+6       Run a GuiMacro                 Not implemented
+7       Run a process                  Not implemented
+8       Print an environment variable  Not implemented
+9       Report the working directory   Records the directory, like OSC 7
+10      Control xterm emulation        Not implemented
+11      Comment                        Ignored
+12      Mark the start of a prompt     Marks the prompt exactly as ``OSC 133 ; A`` does
+======  =============================  =========================================================
+
+Sub-commands that are not implemented are ignored, and logged only when Silkie
+is run with ``--dump-commands``.
 
 Claude Code must emit a notification sequence for Silkie to display one.
 If automatic terminal detection does not select a compatible protocol, set
