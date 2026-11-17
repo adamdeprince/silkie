@@ -63,6 +63,7 @@ option_names = (
     'allow_hyperlinks',
     'allow_remote_control',
     'auto_reload_config',
+    'automatic_light_theme',
     'background',
     'background_blur',
     'background_image',
@@ -583,6 +584,7 @@ class Options:
     allow_hyperlinks: int = 1
     allow_remote_control: choices_for_allow_remote_control = 'no'
     auto_reload_config: float = 0.1
+    automatic_light_theme: bool = True
     background: Color = Color(0, 0, 0)
     background_blur: int = 0
     background_image: tuple[str, ...] = ()

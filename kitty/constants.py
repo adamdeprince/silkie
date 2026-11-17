@@ -139,6 +139,19 @@ config_dir = _get_config_dir()
 del _get_config_dir
 defconf = os.path.join(config_dir, f'{config_name}.conf')
 settings_conf = os.path.join(config_dir, 'settings.conf')
+# When True, auxiliary files in config_dir that Silkie loads implicitly, such as
+# the automatic color theme files, settings.conf, the profiles, open-actions.conf,
+# etc. are ignored. Set when Silkie is run with --config=NONE.
+_ignore_config_dir_files = False
+
+
+def set_ignore_config_dir_files(val: bool) -> None:
+    global _ignore_config_dir_files
+    _ignore_config_dir_files = val
+
+
+def config_dir_files_ignored() -> bool:
+    return _ignore_config_dir_files
 
 
 @run_once
