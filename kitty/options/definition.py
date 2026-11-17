@@ -2832,7 +2832,8 @@ backgrounds (SGR :code:`56` and :code:`57`) is applied, and the brightness of th
 text then applies to the adjusted color, so it does not change as the HDR headroom
 of the display does. Underline and
 strikethrough colors are adjusted the same way. Emoji and other colored glyphs,
-images and backgrounds are never changed. On an e-paper or grayscale display,
+images and backgrounds are never changed, nor are the tab bar and window title
+bars, which are drawn in the colors set for them. On an e-paper or grayscale display,
 where only lightness can be seen, this is what keeps colored text visible.
 
 Block elements, shades, the legacy computing mosaics and Powerline separators
@@ -2845,7 +2846,8 @@ setting is the cause.
 The setting can differ per terminal. It can be set in a :ref:`profile
 <profiles>`, for a tab in a session file with :code:`minimum_contrast 40`, for a
 window with :option:`launch --minimum-contrast`, and at runtime with
-:ref:`kitten @ set-minimum-contrast <at-set-minimum-contrast>`. A window's own
+:ref:`kitten @ set-minimum-contrast <at-set-minimum-contrast>` or the
+:ac:`set_minimum_contrast` action, for example :code:`map f5 set_minimum_contrast +10`. A window's own
 setting wins over its tab's, which wins over its profile's, which wins over this
 option.
 

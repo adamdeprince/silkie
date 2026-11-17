@@ -320,6 +320,22 @@ class TestMinimumContrast(BaseTest):
         with self.assertRaises(Exception):
             run(value='-5')
 
+        # the set_minimum_contrast action
+        from kitty.boss import Boss
+        errors = []
+        boss.window_for_dispatch, boss.show_error = w1, lambda *a: errors.append(a)
+        Boss.set_minimum_contrast(boss, '45%')
+        self.ae(w1.minimum_contrast_override, 45)
+        Boss.set_minimum_contrast(boss, '+10')
+        self.ae(w1.minimum_contrast_override, 55)
+        Boss.set_minimum_contrast(boss, '-70')
+        self.ae(w1.minimum_contrast_override, 0)
+        Boss.set_minimum_contrast(boss, 'default')
+        self.ae(w1.minimum_contrast_override, None)
+        self.ae(errors, [])
+        Boss.set_minimum_contrast(boss, 'loud')
+        self.ae(len(errors), 1)
+
     def test_reference_lightness_algorithm(self):
         def L(c):
             return lightness(luminance(c))
