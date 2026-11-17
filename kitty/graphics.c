@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include <zlib.h>
 #include <structmember.h>
@@ -470,30 +471,51 @@ zlib_strerror(int ret) {
 #undef Z
 }
 
+// For the tests: fail the allocation of the next decompression buffer
+static bool fail_next_inflate_allocation = false;
+
+// Decompresses the image data into a buffer of exactly the expected size, data_sz. zlib counts the bytes of one call
+// in a uInt, so the input and output are given to it in parts that each fit in one, for data of any size. Fails the
+// command, never aborts, when out of memory.
 static bool
 inflate_zlib(LoadData *load_data, uint8_t *buf, size_t bufsz) {
-    bool ok = false;
-    z_stream z;
-    uint8_t *decompressed = malloc(load_data->data_sz);
-    if (decompressed == NULL) fatal("Out of memory allocating decompression buffer");
-    z.zalloc = Z_NULL;
-    z.zfree = Z_NULL;
-    z.opaque = Z_NULL;
-    z.avail_in = bufsz;
-    z.next_in = (Bytef *)buf;
-    z.avail_out = load_data->data_sz;
-    z.next_out = decompressed;
+    bool ok = false, initialized = false;
+    z_stream z = {.zalloc = Z_NULL, .zfree = Z_NULL, .opaque = Z_NULL};
+    const size_t expected = load_data->data_sz;
+    // malloc(0) may return NULL, which is not a failure
+    uint8_t *decompressed = fail_next_inflate_allocation ? NULL : malloc(MAX(expected, (size_t)1));
+    fail_next_inflate_allocation = false;
+    if (decompressed == NULL) ABRT(ENOMEM, "Out of memory allocating %zu bytes for the decompressed image data", expected);
     int ret;
     if ((ret = inflateInit(&z)) != Z_OK) ABRT(ENOMEM, "Failed to initialize inflate with error: %s", zlib_strerror(ret));
-    if ((ret = inflate(&z, Z_FINISH)) != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
-    if (z.avail_out) ABRT(EINVAL, "Image data size post inflation does not match expected size");
+    initialized = true;
+    size_t consumed = 0, produced = 0;
+    do {
+        if (!z.avail_in && consumed < bufsz) {
+            const size_t part = MIN(bufsz - consumed, (size_t)UINT_MAX);
+            z.next_in = (Bytef *)buf + consumed;
+            z.avail_in = (uInt)part;
+            consumed += part;
+        }
+        const uInt room = (uInt)MIN(expected - produced, (size_t)UINT_MAX);
+        z.next_out = decompressed + produced;
+        z.avail_out = room;
+        ret = inflate(&z, Z_NO_FLUSH);
+        produced += room - z.avail_out;
+        // Z_BUF_ERROR: no progress is possible, either the output is full before the end of the stream or the input
+        // ended before it
+        if (ret == Z_BUF_ERROR && produced == expected) ABRT(EINVAL, "Image data size post inflation does not match expected size");
+        if (ret == Z_MEM_ERROR) ABRT(ENOMEM, "Out of memory inflating image data");
+    } while (ret == Z_OK);
+    if (ret != Z_STREAM_END) ABRT(EINVAL, "Failed to inflate image data with error: %s", zlib_strerror(ret));
+    if (produced != expected) ABRT(EINVAL, "Image data size post inflation does not match expected size");
     free_load_data(load_data);
-    load_data->buf_capacity = load_data->data_sz;
+    load_data->buf_capacity = expected;
     load_data->buf = decompressed;
-    load_data->buf_used = load_data->data_sz;
+    load_data->buf_used = expected;
     ok = true;
 err:
-    inflateEnd(&z);
+    if (initialized) inflateEnd(&z);
     if (!ok) free(decompressed);
     return ok;
 }
@@ -2976,8 +2998,16 @@ pycreate_canvas(PyObject *self UNUSED, PyObject *args) {
     return ans;
 }
 
+// For the tests: make the allocation of the next decompression buffer fail, as when out of memory
+static PyObject *
+pyfail_next_inflate_allocation(PyObject *self UNUSED, PyObject *args UNUSED) {
+    fail_next_inflate_allocation = true;
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_methods[] = {
-    M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS), {NULL, NULL, 0, NULL} /* Sentinel */
+    M(shm_write, METH_VARARGS), M(shm_unlink, METH_VARARGS), M(create_canvas, METH_VARARGS), M(fail_next_inflate_allocation, METH_NOARGS),
+    {NULL, NULL, 0, NULL} /* Sentinel */
 };
 
 

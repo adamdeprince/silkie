@@ -510,6 +510,26 @@ class TestGraphics(BaseTest):
         s.reset()
         self.assertEqual(g.disk_cache.total_size, 0)
 
+    def test_inflate_failures(self):
+        from kitty.fast_data_types import fail_next_inflate_allocation
+        s, g, pl, sl = load_helpers(self)
+        data = byte_block(4 * 16 * 8)
+        z = zlib.compress(data)
+        # Out of memory fails the command and nothing else
+        fail_next_inflate_allocation()
+        self.assertTrue(pl(z, s=16, v=8, o='z').startswith('ENOMEM:'))
+        sl(z, s=16, v=8, o='z', expecting_data=data)
+        # more or less data than the size of the image, and data that is not zlib
+        for wrong in data + b'abcd', data[:-4]:
+            self.ae(pl(zlib.compress(wrong), s=16, v=8, o='z'), 'EINVAL:Image data size post inflation does not match expected size')
+        for bad in z[:len(z) // 2], b'not zlib data':
+            r = pl(bad, s=16, v=8, o='z')
+            self.assertTrue(r.startswith('EINVAL:Failed to inflate image data'), r)
+        # a stream that ends exactly at the end of the image, compressed in many small blocks
+        c = zlib.compressobj()
+        many = b''.join(c.compress(data[i:i + 7]) + c.flush(zlib.Z_FULL_FLUSH) for i in range(0, len(data), 7)) + c.flush()
+        sl(many, s=16, v=8, o='z', expecting_data=data)
+
     def test_load_images_from_file_edge_cases(self):
         s, g, pl, sl = load_helpers(self)
         random_data = byte_block(32 * 1024)
