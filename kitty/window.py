@@ -247,6 +247,21 @@ def process_title_from_child(title: memoryview, is_base64: bool, default_title: 
     return sanitize_title(stitle or default_title)
 
 
+def is_conemu_osc9_command(raw_data: str) -> bool:
+    # ConEmu uses OSC 9 with numeric sub-commands 1-12, for example: 9;9;path
+    # these must not be treated as iTerm2 style notifications. ConEmu documents
+    # nothing above 12, so 13;x and the like are ordinary notifications. See
+    # https://conemu.github.io/en/AnsiEscapeCodes.html
+    return re.match(r'(?:1[0-2]|[1-9])(?:;|$)', raw_data) is not None
+
+
+def conemu_text_argument(text: str) -> str:
+    # ConEmu writes text arguments in double quotes, which are optional
+    if len(text) > 1 and text[0] == '"' and text[-1] == '"':
+        return text[1:-1]
+    return text
+
+
 @lru_cache(maxsize=64)
 def compile_match_query(exp: str, is_simple: bool = True) -> MatchPatternType:
     if is_simple:
@@ -1495,6 +1510,21 @@ class Window:
             if (tab := self.tabref()) is not None:
                 tab.update_progress()
             self.clear_progress_if_needed()
+            return
+        if osc_code == 9 and is_conemu_osc9_command(raw_data):
+            # 9;4 progress is handled above, 9;9 cwd and 9;12 prompt marks in the parser
+            num, _, arg = raw_data.partition(';')
+            if num == '2':  # ConEmu shows a message box, we show a notification with the text as its title
+                get_boss().notification_manager.handle_notification_cmd(self.id, osc_code, conemu_text_argument(arg))
+            elif num == '3':  # set the tab title, empty text restores the default title
+                if (tab := self.tabref()) is not None:
+                    tab.set_title(conemu_text_argument(arg))
+            else:
+                # Not implemented: 1 (sleep) would let a program stall the terminal, 6 (GuiMacro) and
+                # 7 (run a process) execute commands, 8 (print an environment variable) leaks information,
+                # 5 (wait for a key) and 10 (xterm emulation) only mean something inside ConEmu, 11 is a comment.
+                if get_boss().args.dump_commands:
+                    log_error(f'Ignoring ConEmu OSC 9 command: {raw_data!r}')
             return
         get_boss().notification_manager.handle_notification_cmd(self.id, osc_code, raw_data)
 
