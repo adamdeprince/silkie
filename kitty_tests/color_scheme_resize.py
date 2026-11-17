@@ -3,6 +3,7 @@
 
 import os
 import signal
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -116,6 +117,7 @@ class TestColorSchemeResize(BaseTest):
         tm.resize = Mock()
         tm.apply_options = lambda: apply_to_window(self.window, tm.profile)
         self.boss.active_tab_manager = tm
+        self.boss.set_profile_of = partial(Boss.set_profile_of, self.boss)
         with patch('kitty.boss.load_profiles', return_value={'work': profile}), patch('kitty.boss.apply_to_os_window'):
             Boss.set_window_profile(self.boss, 'work')
             self.killpg.assert_called_once_with(12345, signal.SIGWINCH)

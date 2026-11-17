@@ -20,6 +20,7 @@ from .cli_stub import CLIOptions, SaveAsSessionOptions
 from .constants import app_class, app_display_name, is_wayland
 from .dock_status import schedule_dock_status_update
 from .native_ui import native_tabs_active, update_native_tab_status
+from .tab_settings import update_native_tab_settings_button
 from .profiles import Profile, apply_to_os_window, command_of, directory_of, environment_of, parsed_options, profile_for_new_os_window
 from .fast_data_types import (
     native_tabs_members,
@@ -78,6 +79,7 @@ from .window import CwdRequest, Watchers, Window, WindowCreationSpec, WindowDict
 from .window_list import WindowGroup, WindowList
 
 if TYPE_CHECKING:
+    from .tab_settings import ScrollbackSettings
     from .fast_data_types import OSWindowGeometry
 
 P = ParamSpec('P')
@@ -661,6 +663,22 @@ class Tab:  # {{{
     def profile(self) -> Profile:
         tm = self.tab_manager_ref()
         return tm.profile if tm is not None else profile_for_new_os_window()
+
+    # The scrollback settings chosen for this tab in its settings popover, None to follow the options
+    scrollback_settings: 'ScrollbackSettings | None' = None
+
+    def set_scrollback_settings(self, lines: int, compression: str) -> None:
+        """
+        Set how many lines of history the windows of this tab keep, negative for unlimited, and how that history
+        is compressed: none or zstd:<level>.
+        """
+        from .tab_settings import ScrollbackSettings
+        self.scrollback_settings = ScrollbackSettings(lines, compression)
+        # TODO: per window scrollback settings come with the zstd-scrollback branch, apply them here once it is merged.
+        # Until then Window has no set_scrollback_settings() and the settings popover shows these fields as unavailable.
+        for w in self:
+            if (apply := getattr(w, 'set_scrollback_settings', None)) is not None:
+                apply(lines, compression)
 
     def set_title(self, title: str) -> None:
         self.name = title or ''
@@ -1621,6 +1639,8 @@ class TabManager:  # {{{
     tab_drag_history_before_hover: tuple[int, ...] = ()
     # The program status badge last sent to the native tab of this tab manager, see update_native_tab_status()
     native_tab_status_shown: dict[str, Any] | None = None
+    # Whether the gear that opens the settings popover of the native tab is shown, see update_native_tab_settings_button()
+    native_tab_settings_button_shown: bool = False
 
     def __init__(
         self,
@@ -1866,6 +1886,7 @@ class TabManager:  # {{{
         if self.native_tabs:
             # The native tab bar is not drawn by the terminal, its program status badge is updated here instead
             update_native_tab_status(self)
+            update_native_tab_settings_button(self)
         w = self.active_window or self.any_window
         if w is not None:
             data = {'tab_manager': self}
@@ -2789,6 +2810,7 @@ class TabManager:  # {{{
         self.tab_bar.apply_options()
         if self.native_tabs:
             update_native_tab_status(self)
+            update_native_tab_settings_button(self)
         schedule_dock_status_update()
         self.update_tab_bar_data()
         self.layout_tab_bar()

@@ -282,6 +282,31 @@ native_tab_status(PyObject *self UNUSED, PyObject *args) {
 }
 
 static PyObject *
+native_tab_settings_button(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    int show;
+    if (!PyArg_ParseTuple(args, "Kp", &id, &show)) return NULL;
+    const NativeUIBackend *b = native_ui_backend();
+    OSWindow *w = os_window_for_id(id);
+    if (!w || !b || !b->tab_settings_button) Py_RETURN_FALSE;
+    b->tab_settings_button(w, show);
+    Py_RETURN_TRUE;
+}
+
+static PyObject *
+native_tab_settings_show(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    PyObject *model, *callback;
+    if (!PyArg_ParseTuple(args, "KO!O", &id, &PyDict_Type, &model, &callback)) return NULL;
+    B(show_tab_settings);
+    OSWindow *w = window_arg(id);
+    if (!w) return NULL;
+    b->show_tab_settings(w, model, callback);
+    if (PyErr_Occurred()) return NULL;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 native_tab_snapshot(PyObject *self UNUSED, PyObject *args) {
     unsigned long long id;
     const char *path;
@@ -347,6 +372,8 @@ static PyMethodDef methods[] = {
     {"native_tabs_members", native_tabs_members, METH_O, ""},
     {"native_tab_status", native_tab_status, METH_VARARGS, ""},
     {"native_tab_snapshot", native_tab_snapshot, METH_VARARGS, ""},
+    {"native_tab_settings_button", native_tab_settings_button, METH_VARARGS, ""},
+    {"native_tab_settings_show", native_tab_settings_show, METH_VARARGS, ""},
     {"native_settings_show", native_settings_show, METH_VARARGS, ""},
     {"native_settings_update", native_settings_update, METH_O, ""},
     {"native_menu_update", native_menu_update, METH_O, ""},

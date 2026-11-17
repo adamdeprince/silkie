@@ -262,29 +262,334 @@ new_badge(NSString *state, NSString *kind, NSInteger progress) {
     return v;
 }
 
+// The accessory view of a native tab holds its program status badge and the gear that opens its settings. It lives
+// in the tab bar, which is in whichever window of the group is selected, so it knows the OS window of its tab by id.
+@interface TabAccessoryView : NSStackView
+@property(nonatomic) id_type osWindowId;
+@property(nonatomic, retain) TabStatusView *badge;
+@property(nonatomic, retain) NSButton *gear;
+@end
+
+@implementation TabAccessoryView
+- (void)dealloc {
+    [_badge release];
+    [_gear release];
+    [super dealloc];
+}
+@end
+
+static TabAccessoryView *
+tab_accessory(OSWindow *w, bool create) {
+    NSWindow *nw = ns_window(w);
+    if (!nw) return nil;
+    NSView *v = nw.tab.accessoryView;
+    if ([v isKindOfClass:[TabAccessoryView class]]) return (TabAccessoryView *)v;
+    if (!create) return nil;
+    TabAccessoryView *a = [[[TabAccessoryView alloc] init] autorelease];
+    a.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    a.spacing = 4;
+    a.alignment = NSLayoutAttributeCenterY;
+    a.osWindowId = w->id;
+    [a setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    nw.tab.accessoryView = a;
+    return a;
+}
+
+static void
+drop_tab_accessory_if_empty(OSWindow *w) {
+    TabAccessoryView *a = tab_accessory(w, false);
+    if (a && !a.badge && !a.gear) ns_window(w).tab.accessoryView = nil;
+}
+
 static void
 tab_status(OSWindow *w, PyObject *status) {
     @autoreleasepool {
-        NSWindow *nw = ns_window(w);
-        if (!nw) return;
-        NSWindowTab *tab = nw.tab;
         if (status == Py_None) {
-            tab.accessoryView = nil;
+            TabAccessoryView *a = tab_accessory(w, false);
+            if (a.badge) {
+                [a removeArrangedSubview:a.badge];
+                [a.badge removeFromSuperview];
+                a.badge = nil;
+            }
+            drop_tab_accessory_if_empty(w);
             return;
         }
+        TabAccessoryView *a = tab_accessory(w, true);
+        if (!a) return;
         NSDictionary *d = ns_from_python(status);
         NSString *state = str_of(d, @"state"), *kind = str_of(d, @"kind"), *text = str_of(d, @"text");
         const NSInteger progress = int_of(d, @"progress", -1);
-        TabStatusView *v = [tab.accessoryView isKindOfClass:[TabStatusView class]] ? (TabStatusView *)tab.accessoryView : nil;
+        TabStatusView *v = a.badge;
         // Progress reports come often, they update the badge in place to keep the spinner turning smoothly
         if (!v || ![v.state isEqualToString:state] || ![v.kind isEqualToString:kind] || (v.spinner && v.determinate != (progress >= 0))) {
+            if (v) {
+                [a removeArrangedSubview:v];
+                [v removeFromSuperview];
+            }
             v = new_badge(state, kind, progress);
-            tab.accessoryView = v;
+            a.badge = v;
+            [a insertArrangedSubview:v atIndex:0];  // the gear, if any, stays last
         } else if (v.spinner && progress >= 0) v.spinner.doubleValue = progress;
         v.label.stringValue = text;
         v.label.hidden = text.length == 0;
         v.toolTip = str_of(d, @"tooltip");
         [v setAccessibilityLabel:str_of(d, @"accessibility")];
+    }
+}
+// }}}
+
+// Tab settings popover {{{
+@interface TabGearTarget : NSObject
++ (TabGearTarget *)shared;
+@end
+
+@implementation TabGearTarget
++ (TabGearTarget *)shared {
+    static TabGearTarget *ans = nil;
+    if (!ans) ans = [[TabGearTarget alloc] init];
+    return ans;
+}
+
+- (void)openTabSettings:(NSButton *)sender {
+    for (NSView *v = sender.superview; v; v = v.superview) {
+        if ([v isKindOfClass:[TabAccessoryView class]]) {
+            char action[64];  // the name of the action and a 64 bit number fit in 64 bytes
+            snprintf(action, sizeof(action), "open_tab_settings %llu", ((TabAccessoryView *)v).osWindowId);
+            set_cocoa_pending_action(USER_MENU_ACTION, action);
+            return;
+        }
+    }
+}
+@end
+
+static void
+tab_settings_button(OSWindow *w, bool show) {
+    @autoreleasepool {
+        TabAccessoryView *a = tab_accessory(w, show);
+        if (!a) return;
+        if (show && !a.gear) {
+            NSImage *img = [NSImage imageWithSystemSymbolName:@"gearshape" accessibilityDescription:@"Tab Settings"];
+            NSButton *b = [NSButton buttonWithImage:img target:[TabGearTarget shared] action:@selector(openTabSettings:)];
+            b.bordered = NO;
+            b.imagePosition = NSImageOnly;
+            b.symbolConfiguration = [NSImageSymbolConfiguration configurationWithPointSize:BADGE_ICON_SIZE - 3 weight:NSFontWeightRegular];
+            b.contentTintColor = [NSColor secondaryLabelColor];
+            b.toolTip = @"Tab Settings";
+            [b setAccessibilityLabel:@"Tab Settings"];
+            b.translatesAutoresizingMaskIntoConstraints = NO;
+            [b.widthAnchor constraintEqualToConstant:BADGE_ICON_SIZE].active = YES;
+            [b.heightAnchor constraintEqualToConstant:BADGE_ICON_SIZE].active = YES;
+            a.gear = b;
+            [a addArrangedSubview:b];
+        } else if (!show && a.gear) {
+            [a removeArrangedSubview:a.gear];
+            [a.gear removeFromSuperview];
+            a.gear = nil;
+            drop_tab_accessory_if_empty(w);
+        }
+    }
+}
+
+@interface TabSettingsController : NSViewController <NSPopoverDelegate, NSTextFieldDelegate, NSComboBoxDelegate>
+@property(nonatomic) PyObject *callback;
+@property(nonatomic, retain) NSPopover *popover;
+@property(nonatomic, retain) NSTextField *errorLabel;
+@property(nonatomic, retain) NSMutableArray<NSControl *> *textControls;
+@property(nonatomic, retain) NSView *firstControl;
+@end
+
+static TabSettingsController *tab_settings_controller = nil;
+static const void *FIELD_NAME_KEY = &FIELD_NAME_KEY;
+
+@implementation TabSettingsController
+
+- (void)dealloc {
+    Py_CLEAR(_callback);
+    [_popover release];
+    [_errorLabel release];
+    [_textControls release];
+    [_firstControl release];
+    [super dealloc];
+}
+
+- (void)emit:(NSString *)verb name:(NSString *)name value:(NSString *)value {
+    if (!_callback) return;
+    PyObject *ret = PyObject_CallFunction(_callback, "sss", verb.UTF8String, name.UTF8String, value.UTF8String);
+    NSString *err = @"";
+    if (!ret) PyErr_Print();
+    else {
+        if (PyUnicode_Check(ret)) {
+            const char *e = PyUnicode_AsUTF8(ret);
+            if (e) err = @(e);
+            else PyErr_Clear();
+        }
+        Py_DECREF(ret);
+    }
+    _errorLabel.stringValue = err;
+    _errorLabel.hidden = err.length == 0;
+}
+
+static NSString *
+field_name(id control) {
+    NSString *n = objc_getAssociatedObject(control, FIELD_NAME_KEY);
+    return n ? n : @"";
+}
+
+- (void)choiceChanged:(NSPopUpButton *)sender {
+    NSString *value = sender.selectedItem.representedObject;
+    [self emit:@"set" name:field_name(sender) value:value ? value : @""];
+}
+
+- (void)buttonPressed:(NSButton *)sender { [self emit:@"activate" name:field_name(sender) value:@""]; }
+
+- (void)textCommitted:(NSTextField *)sender { [self emit:@"set" name:field_name(sender) value:sender.stringValue]; }
+
+- (void)controlTextDidEndEditing:(NSNotification *)n {
+    NSTextField *f = n.object;
+    [self emit:@"set" name:field_name(f) value:f.stringValue];
+}
+
+- (void)comboBoxSelectionDidChange:(NSNotification *)n {
+    NSComboBox *c = n.object;
+    const NSInteger i = c.indexOfSelectedItem;
+    if (i >= 0) [self emit:@"set" name:field_name(c) value:[c itemObjectValueAtIndex:i]];
+}
+
+- (void)popoverDidShow:(NSNotification *)n {
+    NSWindow *pw = _popover.contentViewController.view.window;
+    pw.autorecalculatesKeyViewLoop = YES;
+    // The keyboard goes to the popover, not to the terminal under it, while it is open
+    [pw makeKeyWindow];
+    if (_firstControl) [pw makeFirstResponder:_firstControl];
+}
+
+- (void)popoverWillClose:(NSNotification *)n {
+    // Commit what is being typed, a popover closes without the field it is in ending its editing
+    [_popover.contentViewController.view.window makeFirstResponder:nil];
+}
+
+- (void)popoverDidClose:(NSNotification *)n {
+    Py_CLEAR(_callback);
+    if (tab_settings_controller == self) {
+        tab_settings_controller = nil;
+        [self autorelease];
+    }
+}
+
+static NSTextField *
+label_for(NSString *title, BOOL heading) {
+    NSTextField *l = [NSTextField labelWithString:title];
+    if (heading) l.font = [NSFont boldSystemFontOfSize:[NSFont systemFontSize]];
+    else l.alignment = NSTextAlignmentRight;
+    return l;
+}
+
+- (NSView *)controlFor:(NSDictionary *)f {
+    NSString *kind = str_of(f, @"kind"), *title = str_of(f, @"title"), *value = str_of(f, @"value");
+    NSControl *c = nil;
+    if ([kind isEqualToString:@"choice"]) {
+        NSPopUpButton *p = [[[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO] autorelease];
+        for (NSArray *choice in array_of(f, @"choices")) {
+            if (![choice isKindOfClass:[NSArray class]] || choice.count < 2) continue;
+            // Not addItemWithTitle:, which replaces an item of the same title
+            NSMenuItem *mi = [[[NSMenuItem alloc] initWithTitle:[choice[1] description] action:NULL keyEquivalent:@""] autorelease];
+            [p.menu addItem:mi];
+            mi.representedObject = [choice[0] description];
+            if ([mi.representedObject isEqualToString:value]) [p selectItem:mi];
+        }
+        p.target = self; p.action = @selector(choiceChanged:);
+        c = p;
+    } else if ([kind isEqualToString:@"combo"]) {
+        NSComboBox *cb = [[[NSComboBox alloc] init] autorelease];
+        for (NSArray *choice in array_of(f, @"choices")) {
+            if ([choice isKindOfClass:[NSArray class]] && choice.count) [cb addItemWithObjectValue:[choice[0] description]];
+        }
+        cb.stringValue = value;
+        cb.completes = YES;
+        cb.delegate = self;
+        cb.target = self; cb.action = @selector(textCommitted:);
+        [_textControls addObject:cb];
+        c = cb;
+    } else if ([kind isEqualToString:@"text"]) {
+        NSTextField *t = [NSTextField textFieldWithString:value];
+        t.placeholderString = str_of(f, @"placeholder");
+        t.delegate = self;
+        t.target = self; t.action = @selector(textCommitted:);
+        [_textControls addObject:t];
+        c = t;
+    } else if ([kind isEqualToString:@"button"]) {
+        c = [NSButton buttonWithTitle:title target:self action:@selector(buttonPressed:)];
+    } else return nil;
+    objc_setAssociatedObject(c, FIELD_NAME_KEY, str_of(f, @"name"), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    c.toolTip = str_of(f, @"help");
+    [c setAccessibilityLabel:title];
+    if (f[@"enabled"] && !bool_of(f, @"enabled")) c.enabled = NO;
+    else if (!_firstControl) self.firstControl = c;
+    if (![kind isEqualToString:@"button"]) [c.widthAnchor constraintGreaterThanOrEqualToConstant:200].active = YES;
+    return c;
+}
+
+- (void)buildFrom:(NSDictionary *)model {
+    self.textControls = [NSMutableArray array];
+    NSGridView *grid = [NSGridView gridViewWithNumberOfColumns:2 rows:0];
+    grid.rowSpacing = 6;
+    grid.columnSpacing = 8;
+    for (NSDictionary *f in array_of(model, @"fields")) {
+        if (![f isKindOfClass:[NSDictionary class]]) continue;
+        NSString *kind = str_of(f, @"kind");
+        if ([kind isEqualToString:@"section"]) {
+            NSGridRow *row = [grid addRowWithViews:@[label_for(str_of(f, @"title"), YES)]];
+            if (grid.numberOfRows > 1) row.topPadding = 8;
+            [row mergeCellsInRange:NSMakeRange(0, 2)];
+            continue;
+        }
+        NSView *c = [self controlFor:f];
+        if (!c) continue;
+        NSView *label = [kind isEqualToString:@"button"] ? [NSGridCell emptyContentView] : label_for(str_of(f, @"title"), NO);
+        [grid addRowWithViews:@[label, c]];
+    }
+    [grid columnAtIndex:0].xPlacement = NSGridCellPlacementTrailing;
+    [grid columnAtIndex:1].xPlacement = NSGridCellPlacementFill;
+    self.errorLabel = [NSTextField wrappingLabelWithString:@""];
+    _errorLabel.textColor = [NSColor systemRedColor];
+    _errorLabel.hidden = YES;
+    _errorLabel.preferredMaxLayoutWidth = 300;
+    NSStackView *stack = [NSStackView stackViewWithViews:@[grid, _errorLabel]];
+    stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    stack.alignment = NSLayoutAttributeLeading;
+    stack.edgeInsets = NSEdgeInsetsMake(14, 14, 14, 14);
+    [stack setAccessibilityLabel:str_of(model, @"title")];
+    self.view = stack;
+    self.preferredContentSize = stack.fittingSize;
+}
+@end
+
+static void
+show_tab_settings(OSWindow *w, PyObject *model, PyObject *callback) {
+    @autoreleasepool {
+        NSWindow *nw = ns_window(w);
+        if (!nw) return;
+        if (tab_settings_controller) [tab_settings_controller.popover close];
+        TabSettingsController *c = [[TabSettingsController alloc] initWithNibName:nil bundle:nil];  // released when its popover closes
+        c.callback = Py_NewRef(callback);
+        [c buildFrom:ns_from_python(model)];
+        NSPopover *p = [[[NSPopover alloc] init] autorelease];
+        p.contentViewController = c;
+        p.behavior = NSPopoverBehaviorTransient;
+        p.delegate = c;
+        c.popover = p;
+        tab_settings_controller = c;
+        // At the gear of the tab when it is visible, otherwise at the top of the terminal, as in a window whose tab bar is hidden
+        NSButton *gear = tab_accessory(w, false).gear;
+        if (gear && gear.window && !gear.hiddenOrHasHiddenAncestor && nw.tabGroup.isTabBarVisible) {
+            [p showRelativeToRect:gear.bounds ofView:gear preferredEdge:gear.isFlipped ? NSRectEdgeMaxY : NSRectEdgeMinY];
+        } else {
+            NSWindow *shown = nw.tabGroup.selectedWindow ? nw.tabGroup.selectedWindow : nw;
+            NSView *v = shown.contentView;
+            const NSRect b = v.bounds;
+            const NSRect top = NSMakeRect(NSMidX(b) - 1, v.isFlipped ? NSMinY(b) : NSMaxY(b) - 1, 2, 1);
+            [p showRelativeToRect:top ofView:v preferredEdge:v.isFlipped ? NSRectEdgeMaxY : NSRectEdgeMinY];
+        }
     }
 }
 
@@ -627,6 +932,9 @@ static SettingsController *settings_controller = nil;
         sidebarIndex = 0;
     }
     if (!_pageId.length) self.pageId = str_of(self.pages.firstObject, @"id");
+    // A profile asked for, such as the profile of a tab that its settings popover edits, wins over the one shown
+    NSString *wanted = str_of(model, @"select_profile");
+    if (page.length && wanted.length) selectedProfile = wanted;
     if (self.isProfilesPage && selectedProfile.length) {
         NSArray *items = self.sidebarItems;
         for (NSUInteger i = 0; i < items.count; i++) {
@@ -1234,6 +1542,8 @@ native_ui_cocoa_backend(void) {
         .detach_tab = detach_tab,
         .tab_members = tab_members,
         .tab_status = tab_status,
+        .tab_settings_button = tab_settings_button,
+        .show_tab_settings = show_tab_settings,
         .snapshot_tab = snapshot_tab,
         .show_settings = show_settings,
         .update_settings = update_settings,

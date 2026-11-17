@@ -632,18 +632,32 @@ class Boss:
         tm = self.active_tab_manager
         profile = load_profiles().get(profile_id)
         if tm is not None and profile is not None:
-            windows = tuple(w for tab in tm for w in tab)
-            colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in windows}
-            bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in windows}
-            tm.profile = profile
-            apply_to_os_window(tm)
-            tm.apply_options()
-            tm.resize()
-            for w in windows:
-                if w.screen.color_profile.default_bg != bg_colors_before[w.id]:
-                    self.default_bg_changed_for(w.id)
-                if color_profile_signature(w.screen.color_profile) != colors_before[w.id]:
-                    w.notify_child_of_color_change()
+            self.set_profile_of(tm, profile)
+
+    @ac('tab', """
+        Open the settings of a native tab, such as its profile and name, in a popover on the tab. By default
+        the active tab, or the tab whose OS window id is specified, for example: open_tab_settings 3
+        """)
+    def open_tab_settings(self, os_window_id: str = '') -> None:
+        from .tab_settings import tab_settings_controller
+        tm = self.os_window_map.get(int(os_window_id)) if os_window_id.isdigit() else self.active_tab_manager
+        if tm is not None and tm.native_tabs:
+            tab_settings_controller.show(tm)
+
+    def set_profile_of(self, tm: TabManager, profile: Profile) -> None:
+        ' Change the profile of a tab manager, that is of a native tab or of an OS window with the tab bar of the terminal '
+        windows = tuple(w for tab in tm for w in tab)
+        colors_before = {w.id: color_profile_signature(w.screen.color_profile) for w in windows}
+        bg_colors_before = {w.id: w.screen.color_profile.default_bg for w in windows}
+        tm.profile = profile
+        apply_to_os_window(tm)
+        tm.apply_options()
+        tm.resize()
+        for w in windows:
+            if w.screen.color_profile.default_bg != bg_colors_before[w.id]:
+                self.default_bg_changed_for(w.id)
+            if color_profile_signature(w.screen.color_profile) != colors_before[w.id]:
+                w.notify_child_of_color_change()
 
     def list_os_windows(
         self, self_window: Window | None = None, tab_filter: Callable[[Tab], bool] | None = None, window_filter: Callable[[Window], bool] | None = None
