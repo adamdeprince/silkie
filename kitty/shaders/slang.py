@@ -47,7 +47,6 @@ from kitty.fast_data_types import (
     MARK,
     MARK_MASK,
     MAX_CUSTOM_SHADER_GROUPS,
-    MAX_SHADER_ANIM_USER_EVENT_NAME_LEN,
     MAX_SHADER_ANIM_USER_EVENTS,
     PADDING_PROGRAM,
     POINTER_MAP_SIZE,
@@ -1509,8 +1508,8 @@ def parse_animation_events(raw: str) -> tuple[str, ...]:
         if not is_valid_animation_event(e):
             if e.startswith(USER_ANIMATION_EVENT_PREFIX):
                 raise ValueError(
-                    f'{e!r} is not a valid user event name, the part after {USER_ANIMATION_EVENT_PREFIX} must be at most'
-                    f' {MAX_SHADER_ANIM_USER_EVENT_NAME_LEN} letters, digits, underscores, hyphens or periods'
+                    f'{e!r} is not a valid user event name, the part after {USER_ANIMATION_EVENT_PREFIX} must be one or more'
+                    ' letters, digits, underscores, hyphens or periods'
                 )
             raise ValueError(
                 f'{e!r} is not a valid animation event name; valid names: {", ".join(sorted(SHADER_ANIMATION_EVENTS))}'

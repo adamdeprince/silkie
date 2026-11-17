@@ -615,7 +615,7 @@ be combined with ``|`` — any one of them will trigger the action.
    * - ``user:<name>``
      - Sent by the :ac:`shader_event` action, typically from a mapping, see
        :ref:`custom_shader_mappings`. ``<name>`` can be any combination of
-       letters, digits, underscores, hyphens and periods, up to 63 characters.
+       letters, digits, underscores, hyphens and periods.
        A pipeline can use up to 48 different user events.
 
 Note that if both a start event and a focus-out event fire in the same frame

@@ -280,7 +280,7 @@ user_animation_event_name_pat = re.compile(r'[a-zA-Z0-9_.-]+')
 
 def is_valid_user_animation_event_name(name: str) -> bool:
     "Whether name, without the user: prefix, is valid as the name of a custom shader user event"
-    return len(name) <= defines.MAX_SHADER_ANIM_USER_EVENT_NAME_LEN and user_animation_event_name_pat.fullmatch(name) is not None
+    return user_animation_event_name_pat.fullmatch(name) is not None
 
 
 @func_with_args('shader_event')

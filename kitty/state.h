@@ -549,7 +549,6 @@ typedef enum {
 // shader_event action occupy the bits above the builtin events
 #define SHADER_ANIM_FIRST_USER_EVENT 16
 #define MAX_SHADER_ANIM_USER_EVENTS (64 - SHADER_ANIM_FIRST_USER_EVENT)
-#define MAX_SHADER_ANIM_USER_EVENT_NAME_LEN 63
 // Bitmask of ShaderAnimationEvent values and user events
 typedef uint64_t ShaderAnimEventMask;
 

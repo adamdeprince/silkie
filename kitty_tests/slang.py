@@ -118,8 +118,11 @@ class TestSlang(BaseTest):
             g = pipeline(f'animation_toggle user:toggle-notch {comment}\nanimation_duration 600 {comment}')['groups'][0]
             self.ae(g['animation_toggle'], ('user:toggle-notch',))
             self.ae(g['animation_duration'], 600_000_000)
-        for bad in ('user:', 'user:a/b', 'user:' + 'x' * 100, 'usr:a'):
+        for bad in ('user:', 'user:a/b', 'usr:a'):
             self.assertRaises(ValueError, pipeline, f'animation_start {bad}')
+        # User event names are not limited in length
+        long_name = 'user:' + 'x' * 1000
+        self.ae(pipeline(f'animation_start {long_name}')['groups'][0]['animation_start'], (long_name,))
         # A toggled group stays on until toggled off unless told otherwise
         self.ae(pipeline('animation_toggle user:t')['groups'][0]['animation_end_duration'], 0)
         self.ae(pipeline('animation_toggle user:t\nanimation_stop 100')['groups'][0]['animation_end_duration'], 100_000_000)
@@ -159,6 +162,10 @@ class TestSlang(BaseTest):
             (True, False, False, False, True),  # and over a simultaneous start
         ]
         self.ae(simulate_custom_shader_animation(p, ticks), expected)
+        # Long user event names work in the state machine too
+        p = pipeline(f'animation_toggle {long_name}', '')
+        self.ae(simulate_custom_shader_animation(p, [(), (long_name,), (long_name + 'y',), (long_name,)]), [
+            (False, True), (True, True), (True, True), (False, True)])
 
     def test_custom_shader_focus_changes_between_frames(self):
         # https://github.com/kovidgoyal/kitty/issues/10871 focus changes that

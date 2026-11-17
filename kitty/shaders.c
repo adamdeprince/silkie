@@ -425,8 +425,8 @@ typedef struct CustomShaderPipeline {
     bool has_pointer_map;                           // true when a shader defines pointer_map() to move pointer events
     uint32_t pointer_map_groups;                    // bitmask of the groups with shaders whose pointer_map() is used
     // Names (without the user: prefix) of the user events the pipeline uses,
-    // user event i is bit SHADER_ANIM_FIRST_USER_EVENT + i
-    char user_events[MAX_SHADER_ANIM_USER_EVENTS][MAX_SHADER_ANIM_USER_EVENT_NAME_LEN + 1];
+    // user event i is bit SHADER_ANIM_FIRST_USER_EVENT + i, owned by the pipeline
+    char *user_events[MAX_SHADER_ANIM_USER_EVENTS];
     size_t num_user_events;
 } CustomShaderPipeline;
 
@@ -757,11 +757,10 @@ init_shader_animation_state(OSWindow *osw) {
     osw->shader_anim.next_end_at = MONOTONIC_T_MAX;
 }
 
+// The names of the events in mask separated by |, for debug output. The
+// returned string is valid until the next call.
 static const char *
 shader_anim_event_mask_str(ShaderAnimEventMask mask) {
-    static char buf[256];
-    char *p = buf;
-    char *const end = buf + sizeof(buf) - 1;
     static const struct {
         ShaderAnimEventMask bit;
         const char *name;
@@ -778,29 +777,42 @@ shader_anim_event_mask_str(ShaderAnimEventMask mask) {
         {1u << SHADER_ANIM_EVENT_CURSOR_TRAIL_MOVE, "cursor-trail-move"},
         {1u << SHADER_ANIM_EVENT_CURSOR_TRAIL_STOP, "cursor-trail-stop"},
     };
-    bool first = true;
-    for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); i++) {
-        if (!(mask & events[i].bit)) continue;
-        if (!first && p < end) *p++ = '|';
-        size_t len = strlen(events[i].name);
-        if (p + len >= end) break;
-        memcpy(p, events[i].name, len);
-        p += len;
-        first = false;
+    static const char user_prefix[] = "user:";
+    static char *buf = NULL;
+    static size_t capacity = 0;
+    // Room for every name with a separator or the terminating null after each
+    size_t needed = 0;
+    for (size_t i = 0; i < arraysz(events); i++) {
+        if (mask & events[i].bit) needed += strlen(events[i].name) + 1;
     }
     for (size_t i = 0; i < custom_shaders.end.num_user_events; i++) {
-        if (!(mask & (1ull << (SHADER_ANIM_FIRST_USER_EVENT + i)))) continue;
-        if (!first && p < end) *p++ = '|';
-        int n = snprintf(p, end - p + 1, "user:%s", custom_shaders.end.user_events[i]);
-        if (n < 0 || p + n >= end) break;
-        p += n;
-        first = false;
+        if (mask & (1ull << (SHADER_ANIM_FIRST_USER_EVENT + i))) needed += sizeof(user_prefix) - 1 + strlen(custom_shaders.end.user_events[i]) + 1;
     }
-    if (first) {
-        memcpy(buf, "(none)", 7);
-    } else {
-        *p = '\0';
+    if (!needed) return "(none)";
+    if (needed > capacity) {
+        char *nb = realloc(buf, needed);
+        if (!nb) return "(out of memory)";
+        buf = nb;
+        capacity = needed;
     }
+    char *p = buf;
+#define add_name(prefix, prefix_len, name)       \
+    {                                            \
+        if (p != buf) *p++ = '|';                \
+        memcpy(p, prefix, prefix_len);           \
+        p += prefix_len;                         \
+        const size_t name_len = strlen(name);    \
+        memcpy(p, name, name_len);               \
+        p += name_len;                           \
+    }
+    for (size_t i = 0; i < arraysz(events); i++) {
+        if (mask & events[i].bit) add_name("", 0, events[i].name);
+    }
+    for (size_t i = 0; i < custom_shaders.end.num_user_events; i++) {
+        if (mask & (1ull << (SHADER_ANIM_FIRST_USER_EVENT + i))) add_name(user_prefix, sizeof(user_prefix) - 1, custom_shaders.end.user_events[i]);
+    }
+#undef add_name
+    *p = '\0';
     return buf;
 }
 
@@ -3395,6 +3407,11 @@ free_custom_shader_pipeline(CustomShaderPipeline *p) {
         if (p->groups[i].animation_curve_is_shared) p->groups[i].animation_curve = NULL;
         else p->groups[i].animation_curve = free_animation(p->groups[i].animation_curve);
     }
+    for (size_t i = 0; i < p->num_user_events; i++) {
+        free(p->user_events[i]);
+        p->user_events[i] = NULL;
+    }
+    p->num_user_events = 0;
 }
 
 static NamedTexture
@@ -3405,6 +3422,9 @@ named_texture_from_str(const char *s) {
     return CUSTOM_SHADER_TEXTURE_DEFAULT;
 }
 
+// The bit for the event named s, zero when it is not a valid event name. A
+// user event not yet used by the pipeline is added to it. Sets a Python
+// exception and returns zero when that fails for lack of memory.
 static ShaderAnimEventMask
 shader_anim_event_bit(const char *s, CustomShaderPipeline *p) {
     if (strcmp(s, "pointer-left-button-press") == 0) return 1u << SHADER_ANIM_EVENT_POINTER_LEFT_BUTTON_PRESS;
@@ -3421,12 +3441,16 @@ shader_anim_event_bit(const char *s, CustomShaderPipeline *p) {
     static const char user_prefix[] = "user:";
     if (strncmp(s, user_prefix, sizeof(user_prefix) - 1) == 0) {
         const char *name = s + sizeof(user_prefix) - 1;
-        if (!name[0] || strlen(name) > MAX_SHADER_ANIM_USER_EVENT_NAME_LEN) return 0;
+        if (!name[0]) return 0;
         size_t i = 0;
         while (i < p->num_user_events && strcmp(p->user_events[i], name) != 0) i++;
         if (i == p->num_user_events) {
             if (i >= MAX_SHADER_ANIM_USER_EVENTS) return 0;
-            memcpy(p->user_events[p->num_user_events++], name, strlen(name) + 1);
+            if (!(p->user_events[i] = strdup(name))) {
+                PyErr_NoMemory();
+                return 0;
+            }
+            p->num_user_events++;
         }
         return 1ull << (SHADER_ANIM_FIRST_USER_EVENT + i);
     }
@@ -3438,7 +3462,10 @@ parse_anim_event_sequence(PyObject *seq, CustomShaderPipeline *p) {
     ShaderAnimEventMask mask = 0;
     for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(seq); i++) {
         PyObject *item = PySequence_Fast_GET_ITEM(seq, i);
-        if (PyUnicode_Check(item)) mask |= shader_anim_event_bit(PyUnicode_AsUTF8(item), p);
+        if (!PyUnicode_Check(item)) continue;
+        const char *name = PyUnicode_AsUTF8(item);
+        if (name) mask |= shader_anim_event_bit(name, p);
+        if (PyErr_Occurred()) return 0;
     }
     return mask;
 }
@@ -3525,6 +3552,8 @@ transfer_pipeline_to_struct(PyObject *pg, CustomShaderPipeline *p) {
 
         PyObject *attached = PyDict_GetItemString(g, "attached");
         cg->attached = attached && PyObject_IsTrue(attached);
+        // Such as from running out of memory storing user event names
+        if (PyErr_Occurred()) return false;
     }
     p->all_animation_start_events = 0;
     for (size_t i = 0; i < p->num_groups; i++) p->all_animation_start_events |= p->groups[i].animation_start_events | p->groups[i].animation_toggle_events;
@@ -3910,7 +3939,6 @@ init_shaders(PyObject *module) {
     C(CUSTOM_END_PROGRAM);
     C(MAX_CUSTOM_SHADER_GROUPS);
     C(MAX_SHADER_ANIM_USER_EVENTS);
-    C(MAX_SHADER_ANIM_USER_EVENT_NAME_LEN);
     C(POINTER_MAP_SIZE);
     C(GLSL_VERSION);
     C(GL_VERSION);
