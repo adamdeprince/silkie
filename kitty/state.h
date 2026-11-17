@@ -45,6 +45,12 @@ typedef enum ShowHyperlinkTargets {
     SHOW_HYPERLINK_TARGETS_SUPER = 8,
     SHOW_HYPERLINK_TARGETS_ALT = 16
 } ShowHyperlinkTargets;
+typedef enum HyperlinkTargetPosition {
+    HYPERLINK_TARGET_TOP = 0,
+    HYPERLINK_TARGET_BOTTOM = 1,
+    HYPERLINK_TARGET_BELOW = 2,
+    HYPERLINK_TARGET_TOOLTIP = 3
+} HyperlinkTargetPosition;
 
 struct MenuItem {
     const char **location;
@@ -174,6 +180,7 @@ typedef struct Options {
         AdjustmentUnit unit;
     } underline_position, underline_thickness, strikethrough_position, strikethrough_thickness, cell_width, cell_height, baseline;
     ShowHyperlinkTargets show_hyperlink_targets;
+    HyperlinkTargetPosition hyperlink_target_position;
     UnderlineHyperlinks underline_hyperlinks;
     int background_blur;
     long macos_titlebar_color;
@@ -262,7 +269,8 @@ typedef struct PendingClick {
 
 
 typedef struct WindowBarData {
-    unsigned width, height;
+    unsigned width, height, requested_width;
+    bool fit_to_text;
     uint8_t *buf;
     PyObject *last_drawn_title_object_id;
     hyperlink_id_type hyperlink_id_for_title_object;

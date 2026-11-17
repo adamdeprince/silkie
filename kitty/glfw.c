@@ -1667,8 +1667,11 @@ draw_window_title(
     size_t width,
     size_t height,
     size_t *actual_width) {
-    static char buf[2048];
-    strip_csi_(text, buf, arraysz(buf));
+    // Stripping escape codes never lengthens the text, so a buffer the size of text holds it all
+    const size_t bufsz = strlen(text) + 1;
+    RAII_ALLOC(char, buf, malloc(bufsz));
+    if (!buf) return false;
+    strip_csi_(text, buf, bufsz);
     if (actual_width) {
         size_t text_w = cocoa_text_width_for_single_line(buf, height);
         if (text_w > 0 && text_w < width) width = text_w;
@@ -1736,8 +1739,11 @@ draw_window_title(
     double font_sz_pts, double ydpi, const char *text, color_type fg, color_type bg, uint8_t *output_buf, size_t width, size_t height, size_t *actual_width) {
     FreeTypeRenderCtx ctx;
     if (!(ctx = freetype_render_ctx(false))) return false;
-    static char buf[2048];
-    strip_csi_(text, buf, arraysz(buf));
+    // Stripping escape codes never lengthens the text, so a buffer the size of text holds it all
+    const size_t bufsz = strlen(text) + 1;
+    RAII_ALLOC(char, buf, malloc(bufsz));
+    if (!buf) return false;
+    strip_csi_(text, buf, bufsz);
     unsigned px_sz = (unsigned)(font_sz_pts * ydpi / 72.);
     px_sz = MIN(px_sz, 3 * height / 4);
     if (actual_width) {
