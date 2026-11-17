@@ -1701,3 +1701,35 @@ class TestWindowHelpers(BaseTest):
             self.assertIsNot(ans, w1)
             self.assertIsInstance(ans, Watchers)
             self.ae(calls[-1], ())
+
+    def test_on_quit_watchers_aborting_quit(self):
+        # An on_quit watcher that aborts the quit must clear the application quit
+        # request, otherwise process_pending_closes() calls quit() on every tick
+        from unittest.mock import Mock
+
+        from kitty.boss import Boss
+        from kitty.fast_data_types import CLOSE_BEING_CONFIRMED, IMPERATIVE_CLOSE_REQUESTED, NO_CLOSE_REQUESTED
+
+        def quit(confirm_threshold: int, watchers_allow: bool) -> tuple[list[int], Mock]:
+            boss = Mock(os_window_map={1: [[Mock()]]}, active_window=None)
+            boss.close_windows_with_confirmation_msg.return_value = ('', 1)
+            boss._call_on_quit_watchers.return_value = watchers_allow
+            opts = SimpleNamespace(confirm_os_window_close=(confirm_threshold, False))
+            with (
+                patch('kitty.boss.get_options', return_value=opts),
+                patch('kitty.boss.current_application_quit_request', return_value=NO_CLOSE_REQUESTED),
+                patch('kitty.boss.set_application_quit_request') as set_request,
+            ):
+                Boss.quit(boss)
+            return [c.args[0] for c in set_request.call_args_list], boss
+
+        for threshold, confirmed in ((0, True), (1, False)):
+            with self.subTest(needs_confirmation=not confirmed):
+                requests, boss = quit(threshold, False)
+                self.ae(requests, [NO_CLOSE_REQUESTED])
+                boss._call_on_quit_watchers.assert_called_once_with({'confirmed': confirmed})
+                boss.confirm.assert_not_called()
+        self.ae(quit(0, True)[0], [IMPERATIVE_CLOSE_REQUESTED])
+        requests, boss = quit(1, True)
+        self.ae(requests, [CLOSE_BEING_CONFIRMED])
+        boss.confirm.assert_called_once()
