@@ -15,9 +15,15 @@
 #include "simd-string.h"
 #include <stdalign.h>
 
+// The size of the buffer child output is read into. It is a streaming window, not a limit on the
+// length of an escape code, see hold_st_terminated_esc_code()
 #define BUF_SZ (1024u * 1024u)
 // The extra bytes are so loads of large integers such as for AVX 512 dont read past the end of the buffer
 #define BUF_EXTRA (512u / 8u)
+// Not a limit: the part of an unfinished OSC, DCS, APC, PM or SOS kept in the read buffer, where it
+// costs nothing, before it is moved out to a growable buffer. Moving it out at a quarter of the buffer
+// leaves room for more input, see hold_st_terminated_esc_code()
+#define HOLD_THRESHOLD (BUF_SZ / 4u)
 // Dump lines only. A CSI may have any number of parameters; the report is truncated to this buffer.
 #define CSI_DUMP_BYTES (64u * 1024u)
 // Pending input smaller than this, typically the echo of typed characters, is
@@ -215,7 +221,7 @@ vte_state_name(VTEState s) {
     return buf;
 }
 
-typedef enum { CSI_START, CSI_BODY, CSI_POST_SECONDARY } CSIState;
+typedef enum { CSI_START, CSI_BODY, CSI_POST_SECONDARY, CSI_IGNORE } CSIState;
 
 typedef struct ParsedCSI {
     char primary, secondary, trailer;
@@ -237,13 +243,16 @@ typedef struct PS {
 
     VTEState vte_state;
     ParsedCSI csi;
-    // Payload of the OSC/APC/DCS/PM/SOS currently being read. The main buffer
-    // only has to hold a window of it; the bytes move here so a sequence longer
-    // than BUF_SZ can finish. escape_limit 0 keeps every byte.
-    uint8_t *esc_data;
-    size_t esc_len, esc_cap;
-    int esc_prev;
-    bool esc_active, esc_over;
+    // The start of a long OSC, DCS, APC, PM or SOS that has not ended yet. Its bytes move here so that
+    // the read buffer can be reused, so the escape code can be of any length. The bytes read after
+    // them are in the read buffer from read.consumed. When dropping is set, memory to hold the code
+    // could not be had and it is skipped up to its terminator. ends_with_esc records whether the last
+    // byte held is the ESC of ESC \.
+    struct {
+        uint8_t *data;
+        size_t len, cap;
+        bool dropping, ends_with_esc;
+    } held;
 
     // these are temporary variables set only for duration of a parse call
     PyObject *dump_callback;
@@ -440,90 +449,198 @@ consume_esc(PS *self) {
 #undef CALL_ED1
 } // }}}
 
+// ST terminator {{{
+// Finds the BEL or ESC \ that ends the escape code being read, skipping a \ that does not follow an
+// ESC. Returns false when the data runs out first. On success *end_pos is where the payload ends in
+// buf and *esc_was_held is true when the ESC of ESC \ was the last byte held in self->held, in which
+// case the payload ends there instead.
+static bool
+find_st_terminator(PS *self, size_t *end_pos, bool *esc_was_held) {
+    *esc_was_held = false;
+    while (self->read.pos < self->read.sz) {
+        const size_t sz = self->read.sz - self->read.pos;
+        const uint8_t *q = find_either_of_two_bytes(self->buf + self->read.pos, sz, BEL, ESC_ST);
+        if (q == NULL) {
+            self->read.pos += sz;
+            return false;
+        }
+        const size_t qpos = q - self->buf;
+        self->read.pos = qpos + 1;
+        if (*q == BEL) {
+            *end_pos = qpos;
+            return true;
+        }
+        if (qpos > self->read.consumed) {
+            if (self->buf[qpos - 1] == ESC) {
+                *end_pos = qpos - 1;
+                return true;
+            }
+        } else if (self->held.ends_with_esc) {
+            *end_pos = qpos;
+            *esc_was_held = true;
+            return true;
+        }
+    }
+    return false;
+}
+// }}}
+
+// Held escape codes {{{
+
+// Set by tests to exercise what happens when memory to hold an escape code cannot be had. This file
+// is compiled twice, with and without DUMP_COMMANDS, both use the one flag.
+#ifdef DUMP_COMMANDS
+extern bool vt_parser_fail_held_allocations;
+#else
+bool vt_parser_fail_held_allocations = false;
+#endif
+
+static void
+release_held(PS *self) {
+    free(self->held.data);
+    zero_at_ptr(&self->held);
+}
+
+// Make room for n more bytes, a NUL and BUF_EXTRA bytes of slack. The dispatchers may write a NUL
+// at the end of the payload and the graphics parser decodes base64 in place into at least BUF_EXTRA
+// bytes, which the read buffer also allows. Returns false on overflow or allocation failure.
+static bool
+reserve_held(PS *self, size_t n) {
+    const size_t slack = 1u + BUF_EXTRA;
+    if (n > SIZE_MAX - slack || self->held.len > SIZE_MAX - slack - n) return false;
+    const size_t need = self->held.len + n + slack;
+    if (need <= self->held.cap) return true;
+    size_t cap = self->held.cap > SIZE_MAX / 2u ? need : MAX(need, self->held.cap * 2u);
+    uint8_t *data = UNLIKELY(vt_parser_fail_held_allocations) ? NULL : realloc(self->held.data, cap);
+    if (!data) return false;
+    self->held.data = data;
+    self->held.cap = cap;
+    return true;
+}
+
+static void
+drop_held(PS *self, size_t sz) {
+    REPORT_ERROR("Out of memory holding a %s escape code of %zu bytes or more, ignoring it", vte_state_name(self->vte_state), sz);
+    free(self->held.data);
+    self->held.data = NULL;
+    self->held.len = self->held.cap = 0;
+    self->held.dropping = true;
+}
+
+static bool
+append_to_held(PS *self, const uint8_t *src, size_t n) {
+    if (self->held.dropping) return false;
+    if (!reserve_held(self, n)) {
+        drop_held(self, n > SIZE_MAX - self->held.len ? SIZE_MAX : self->held.len + n);
+        return false;
+    }
+    memcpy(self->held.data + self->held.len, src, n);
+    self->held.len += n;
+    return true;
+}
+
+// Calls dispatch on the held payload. The buffer is detached first, as a dispatcher can reset the
+// parser, which frees the held buffer. Returns the buffer, which the caller must free or re-attach.
+static uint8_t *
+dispatch_held(PS *self, void(dispatch)(PS *, uint8_t *, size_t, bool), size_t sz, bool is_partial) {
+    uint8_t *data = self->held.data;
+    self->held.data = NULL;
+    self->held.len = self->held.cap = 0;
+    data[sz] = 0;
+    dispatch(self, data, sz, is_partial);
+    return data;
+}
+
+// }}}
+
 // OSC {{{
 
 #include "parse-multicell-command.h"
 #include "parse-dnd-command.h"
 
+// A long OSC 52 clipboard write is passed on in pieces of at least HOLD_THRESHOLD bytes, marked as
+// partial, so that it never has to be held whole. Each piece repeats the 52;where; prefix, so that it
+// reaches the same clipboard as the first.
 static void
-esc_reset(PS *self) {
-    free(self->esc_data);
-    self->esc_data = NULL;
-    self->esc_len = self->esc_cap = 0;
-    self->esc_prev = -1;
-    self->esc_active = false;
-    self->esc_over = false;
+stream_osc_52(PS *self, void(dispatch)(PS *, uint8_t *, size_t, bool)) {
+    const size_t len = self->held.len;
+    if (len < 3 || memcmp(self->held.data, "52;", 3) != 0) return;
+    const uint8_t *sep = memchr(self->held.data + 3, ';', len - 3);
+    if (sep == NULL) return;
+    const size_t prefix = sep + 1 - self->held.data;
+    if (len == prefix) return;
+    // An ESC at the end may start the terminator, keep it
+    const size_t keep = self->held.data[len - 1] == ESC ? 1 : 0, sz = len - keep;
+    const uint8_t last = self->held.data[sz];
+    const size_t cap = self->held.cap;
+    uint8_t *data = dispatch_held(self, dispatch, sz, true);
+    if (self->held.data || self->vte_state != VTE_OSC) {
+        free(data); // the parser was reset by the dispatcher
+        return;
+    }
+    data[sz] = last;
+    memmove(data + prefix, data + sz, keep);
+    self->held.data = data;
+    self->held.cap = cap;
+    self->held.len = prefix + keep;
 }
 
+// The escape_limit option, 0 by default, discards an escape code longer than it
 static bool
-esc_push(PS *self, uint8_t ch) {
-    if (self->esc_len + 2 > self->esc_cap) {
-        size_t cap = self->esc_cap ? self->esc_cap : 64u;
-        while (cap < self->esc_len + 2) {
-            if (cap > SIZE_MAX / 2u) return false;
-            cap *= 2u;
-        }
-        uint8_t *p = realloc(self->esc_data, cap);
-        if (!p) return false;
-        self->esc_data = p;
-        self->esc_cap = cap;
-    }
-    self->esc_data[self->esc_len++] = ch;
+over_escape_limit(PS *self, size_t sz) {
+    const unsigned long limit = OPT(escape_limit);
+    if (!limit || sz <= limit) return false;
+    REPORT_ERROR("%s escape code longer than escape_limit (%lu bytes), ignoring it", vte_state_name(self->vte_state), limit);
     return true;
 }
 
-// Copies the sequence out of the parse window as it arrives, so the window can
-// slide and a payload larger than BUF_SZ still completes. escape_limit, when
-// not zero, discards a sequence that grows past it. The payload is NUL terminated
-// for the dispatchers, which read it as text.
+// Called when the data runs out before the escape code ends. What was read of it stays in the read
+// buffer until it reaches HOLD_THRESHOLD bytes, then it moves to self->held, so that the read buffer
+// always has room for more input. The escape code can so be of any length, and one that is split
+// over a few reads, which is common, is not copied.
+static void
+hold_st_terminated_esc_code(PS *self, void(dispatch)(PS *, uint8_t *, size_t, bool)) {
+    const size_t n = self->read.pos - self->read.consumed;
+    if (!n || (n < HOLD_THRESHOLD && !self->held.dropping)) return;
+    self->held.ends_with_esc = self->buf[self->read.pos - 1] == ESC;
+    if (!self->held.dropping && over_escape_limit(self, self->held.len > SIZE_MAX - n ? SIZE_MAX : self->held.len + n)) {
+        free(self->held.data);
+        self->held.data = NULL;
+        self->held.len = self->held.cap = 0;
+        self->held.dropping = true;
+    }
+    const bool held = append_to_held(self, self->buf + self->read.consumed, n);
+    self->read.consumed = self->read.pos;
+    // With escape_limit set the whole code is held, so that the limit applies to all of it
+    if (held && self->vte_state == VTE_OSC && !OPT(escape_limit)) stream_osc_52(self, dispatch);
+}
+
 static bool
 accumulate_st_terminated_esc_code(PS *self, void(dispatch)(PS *, uint8_t *, size_t, bool)) {
-    if (!self->esc_active) {
-        esc_reset(self);
-        self->esc_active = true;
+    size_t pos;
+    bool esc_was_held;
+    if (!find_st_terminator(self, &pos, &esc_was_held)) {
+        hold_st_terminated_esc_code(self, dispatch);
+        return false;
     }
-    const unsigned long limit = OPT(escape_limit);
-    size_t i = self->read.pos;
-    const size_t sz = self->read.sz;
-    while (i < sz) {
-        const uint8_t ch = self->buf[i++];
-        const bool term = ch == BEL || (self->esc_prev == ESC && ch == '\\');
-        if (term) {
-            if (ch != BEL && self->esc_len) self->esc_len--;
-            self->read.pos = i;
-            self->read.consumed = i;
-            if (!self->esc_over) {
-                if (!self->esc_data) {
-                    static uint8_t empty = 0;
-                    dispatch(self, &empty, 0, false);
-                } else {
-                    self->esc_data[self->esc_len] = 0;
-                    dispatch(self, self->esc_data, self->esc_len, false);
-                }
-            }
-            esc_reset(self);
-            return true;
-        }
-        if (!self->esc_over) {
-            if (limit && self->esc_len >= limit) {
-                self->esc_over = true;
-                free(self->esc_data);
-                self->esc_data = NULL;
-                self->esc_len = self->esc_cap = 0;
-                REPORT_ERROR("%s escape code too long, ignoring it", vte_state_name(self->vte_state));
-            } else if (!esc_push(self, ch)) {
-                self->esc_over = true;
-                free(self->esc_data);
-                self->esc_data = NULL;
-                self->esc_len = self->esc_cap = 0;
-                REPORT_ERROR("Out of memory reading %s escape code, ignoring it", vte_state_name(self->vte_state));
-            }
-        }
-        self->esc_prev = ch;
+    if (LIKELY(!self->held.len && !self->held.dropping)) {
+        // The whole escape code is in the read buffer, which is the case unless it is long
+        uint8_t *buf = self->buf + self->read.consumed;
+        size_t sz = pos - self->read.consumed;
+        if (over_escape_limit(self, sz)) return true;
+        buf[sz] = 0; // ensure null termination, this is anyway an ST termination char
+        dispatch(self, buf, sz, false);
+        return true;
     }
-    self->read.pos = i;
-    self->read.consumed = i;
-    return false;
+    // A dropped escape code was reported when it was dropped, its bytes up to here are skipped
+    if (!self->held.dropping) {
+        if (esc_was_held) self->held.len--;
+        else if (!over_escape_limit(self, self->held.len + (pos - self->read.consumed))) append_to_held(self, self->buf + self->read.consumed, pos - self->read.consumed);
+        else self->held.dropping = true;
+    }
+    if (!self->held.dropping) free(dispatch_held(self, dispatch, self->held.len, false));
+    release_held(self);
+    return true;
 }
 
 static bool
@@ -994,6 +1111,22 @@ consume_csi_digit_run(ParsedCSI *csi, const uint8_t *buf, size_t *pos, const siz
     *pos = p;
 }
 
+// An invalid CSI is skipped up to its final byte, as a VT500 parser does, so that the rest of it is
+// not drawn as text. An ESC ends it and starts a new escape code, CAN and SUB cancel it. Returns true
+// when the CSI has ended.
+static bool
+abandon_csi(ParsedCSI *csi, uint8_t ch, size_t *pos) {
+    csi->is_valid = false;
+    switch (ch) {
+        case ESC: *pos -= 1; return true;
+        case CAN:
+        case SUB: return true;
+    }
+    if (0x40 <= ch && ch <= 0x7e) return true;
+    csi->state = CSI_IGNORE;
+    return false;
+}
+
 static bool
 csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const size_t sz) {
     while (*pos < sz) {
@@ -1033,7 +1166,10 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                     case CSI_TRAILER:
                         csi_finish(csi, ch);
                         return true;
-                    default: REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch); return true;
+                    default:
+                        REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch);
+                        if (abandon_csi(csi, ch, pos)) return true;
+                        break;
                 }
                 break;
             case CSI_POST_SECONDARY:
@@ -1041,10 +1177,21 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                     case CSI_NORMAL_MODE_EMBEDDINGS: dispatch_single_byte_control(self, ch); break;
                     case CSI_TRAILER:
                         csi_finish(csi, ch);
+                        return true;
+                    default:
+                        REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch);
+                        if (abandon_csi(csi, ch, pos)) return true;
                         break;
-                    default: REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch); break;
                 }
-                return true;
+                break;
+            case CSI_IGNORE:
+                switch (ch) {
+                    case CSI_NORMAL_MODE_EMBEDDINGS: dispatch_single_byte_control(self, ch); break;
+                    default:
+                        if (abandon_csi(csi, ch, pos)) return true;
+                        break;
+                }
+                break;
             case CSI_BODY:
                 switch (ch) {
                     case CSI_NORMAL_MODE_EMBEDDINGS: dispatch_single_byte_control(self, ch); break;
@@ -1053,7 +1200,10 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                             csi->mult = -1;
                             csi->num_digits = 1;
                         } else {
-                            if (!commit_csi_param(self, csi)) return true;
+                            if (!commit_csi_param(self, csi)) {
+                                if (abandon_csi(csi, ch, pos)) return true;
+                                break;
+                            }
                             csi->secondary = ch;
                             csi->state = CSI_POST_SECONDARY;
                         }
@@ -1067,19 +1217,28 @@ csi_parse_loop(PS *self, ParsedCSI *csi, const uint8_t *buf, size_t *pos, const 
                         csi_finish(csi, ch);
                         return true;
                     case ':':
-                        if (!commit_csi_param(self, csi)) return true;
+                        if (!commit_csi_param(self, csi)) {
+                            if (abandon_csi(csi, ch, pos)) return true;
+                            break;
+                        }
                         csi_mark_next(csi, true);
                         break;
                     case ';':
                         if (!csi->num_digits) csi->num_digits++; // Empty means zero
-                        if (!commit_csi_param(self, csi)) return true;
+                        if (!commit_csi_param(self, csi)) {
+                            if (abandon_csi(csi, ch, pos)) return true;
+                            break;
+                        }
                         csi_mark_next(csi, false);
                         break;
                     case DIGIT:
                         csi_add_digit(csi, ch);
                         consume_csi_digit_run(csi, buf, pos, sz);
                         break;
-                    default: REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch); return true;
+                    default:
+                        REPORT_ERROR("Invalid character in CSI: %s (0x%x), ignoring the sequence", csi_letter(ch), ch);
+                        if (abandon_csi(csi, ch, pos)) return true;
+                        break;
                 }
                 break;
         }
@@ -1900,7 +2059,7 @@ free_vt_parser(Parser *self) {
         PS *s = (PS *)self->state;
         free(s->csi.params);
         free(s->csi.is_sub_param);
-        free(s->esc_data);
+        release_held(s);
         utf8_decoder_free(&s->utf8_decoder);
         pthread_mutex_destroy(&s->lock);
         free(self->state);
@@ -1913,7 +2072,7 @@ static void
 reset(PS *self) {
     SET_STATE(NORMAL);
     reset_csi(&self->csi);
-    esc_reset(self);
+    release_held(self);
     utf8_decoder_reset(&self->utf8_decoder);
 }
 
@@ -1937,6 +2096,17 @@ static PyGetSetDef getsetters[] = {
 
 static PyMethodDef methods[] = {
     {NULL},
+};
+
+static PyObject *
+test_fail_escape_code_allocations(PyObject *self UNUSED, PyObject *val) {
+    vt_parser_fail_held_allocations = PyObject_IsTrue(val);
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef module_methods[] = {
+    {"test_fail_escape_code_allocations", (PyCFunction)test_fail_escape_code_allocations, METH_O, ""},
+    {NULL, NULL, 0, NULL},
 };
 
 PyTypeObject Parser_Type = {
@@ -1981,8 +2151,8 @@ alloc_vt_parser(id_type window_id) {
 
 #undef EXTRA_INIT
 #define EXTRA_INIT                                                                                                \
-    if (0 != PyModule_AddIntConstant(module, "VT_PARSER_BUFFER_SIZE", BUF_SZ)) return 0;                          \
-    if (0 != PyModule_AddIntConstant(module, "VT_PARSER_MAX_ESCAPE_CODE_SIZE", 0)) return 0; \
+    if (0 != PyModule_AddIntConstant(module, "VT_PARSER_BUFFER_SIZE", BUF_SZ)) return 0; \
+    if (0 != PyModule_AddFunctions(module, module_methods)) return 0;                  \
     if (!init_simd(module)) return 0;
 
 INIT_TYPE(Parser)

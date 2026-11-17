@@ -3136,11 +3136,9 @@ class TestGraphics(BaseTest):
         g = s.grman
 
         def command(records, action='t', image=1):
-            # in chunks, as clients send large payloads
-            from kitty.fast_data_types import VT_PARSER_MAX_ESCAPE_CODE_SIZE
+            # an escape code may be of any length, so this is a single chunk
             records = records.encode()
-            # 0 is no limit on the size of an escape code
-            step = (VT_PARSER_MAX_ESCAPE_CODE_SIZE - 64) // 4 * 3 if VT_PARSER_MAX_ESCAPE_CODE_SIZE else len(records)
+            step = len(records)
             chunks = [records[i:i + step] for i in range(0, len(records), step)]
             signal.signal(signal.SIGALRM, signal.SIG_DFL)
             signal.alarm(120)
