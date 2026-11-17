@@ -172,14 +172,17 @@ This option can be specified multiple times. The syntax is::
 
 opt(
     'disable_ligatures',
-    'never',
+    'always',
     option_type='disable_ligatures',
     ctype='int',
     long_text="""
-Choose how you want to handle multi-character ligatures. The default is to
-always render them. You can tell kitty to not render them when the cursor is
-over them by using :code:`cursor` to make editing easier, or have kitty never
-render them at all by using :code:`always`, if you don't like them. The ligature
+Choose how you want to handle multi-character ligatures, where a font draws
+several characters, such as :code:`->` or :code:`!=`, as one combined glyph.
+Silkie does not render them by default (:code:`always`): every character is
+drawn as itself. Set this to :code:`never` to always render them, or to
+:code:`cursor` to render them except under the cursor, which makes editing
+easier. Unlike kitty, whose default is :code:`never`, ligatures are something
+you turn on in Silkie. The ligature
 strategy can be set per-window either using the kitty remote control facility
 or by defining shortcuts for it in :file:`silkie.conf`, for example::
 
