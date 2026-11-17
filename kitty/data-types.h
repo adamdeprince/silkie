@@ -159,7 +159,6 @@ typedef struct ImageAnchorPosition {
     float canvas_x, canvas_y, image_x, image_y;
 } ImageAnchorPosition;
 
-#define MAX_CHILDREN 512
 #define BLANK_CHAR 0
 #define COL_MASK 0xFFFFFFFF
 #define DECORATION_FG_CODE 58

@@ -878,6 +878,7 @@ void os_window_display_info(OSWindow *w, DisplayInfo *d);
 unsigned os_window_refresh_period_us(OSWindow *w);
 OSWindow *os_window_for_id(id_type);
 void spatial_map_pointer(OSWindow *, double *, double *);
+bool reserve_os_window_slot(void);
 OSWindow *add_os_window(void);
 OSWindow *current_os_window(void);
 double dpi_for_os_window(const OSWindow *os_window);
