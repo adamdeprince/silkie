@@ -77,6 +77,8 @@ outputHandleMode(void *data, struct wl_output *output UNUSED, uint32_t flags, in
 static void
 outputHandleDone(void *data, struct wl_output *output UNUSED) {
     struct _GLFWmonitor *monitor = data;
+    // The color manager can be bound after the output, before the output is in the list of monitors
+    _glfwWaylandColorManagementCreateOutput(monitor);
     for (int i = 0; i < _glfw.monitorCount; i++) {
         if (_glfw.monitors[i] == monitor) return;
     }
