@@ -11,8 +11,8 @@
 // reads the pixels on the CPU: the peak of an HDR image, vector images that
 // draw a raster image and pointer images.
 
-#include "image-transfer.h"
 #include "data-types.h"
+#include "image-transfer.h"
 #include <math.h>
 #include <stdlib.h>
 
