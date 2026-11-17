@@ -550,7 +550,9 @@ err:
     return ok;
 }
 
-// Inflates data of unknown size, for text formats
+// Inflates data of unknown size, for text formats. The buffer grows as the
+// data comes out, rather than being sized from the compressed data, and
+// running out of memory fails the command, not the terminal.
 static bool
 inflate_zlib_unbounded(LoadData *load_data, uint8_t *buf, size_t bufsz) {
     bool ok = false;
@@ -984,7 +986,11 @@ load_image_data(
                     (!g->compressed && data_fmt != PNG && data_fmt != VECTOR)) ABRT("EFBIG", "Too much data");
                 const size_t capacity = MAX(load_data->buf_capacity > limit/2 ? limit : 2*load_data->buf_capacity, load_data->buf_used+g->payload_sz);
                 void *next = realloc(load_data->buf, capacity);
-                if (!next) ABRT("ENOMEM", "Out of memory");
+                if (!next) {
+                    // what was loaded so far is of no use without the rest, and is a lot of memory to hold on to
+                    free_load_data(load_data);
+                    ABRT("ENOMEM", "Out of memory");
+                }
                 load_data->buf = next;
                 load_data->buf_capacity = capacity;
             }
@@ -1678,7 +1684,11 @@ update_dest_rect(ImageRef *ref, uint32_t num_cols, uint32_t num_rows, CellPixelS
     ref->effective_num_cols = num_cols;
 }
 
-static void update_vector_texture(GraphicsManager *self, Image *img, double width, double height);
+// A part of an image, as fractions of its width and height: in doubles, as a part of a large image is a tiny fraction of it
+typedef struct {
+    double left, top, right, bottom;
+} ImageFraction;
+static void update_vector_texture(GraphicsManager *self, Image *img, double width, double height, ImageFraction shown, double view_width, double view_height);
 
 static ImageRef *
 create_ref(Image *img, ImageRef *clone_from) {
@@ -2101,6 +2111,7 @@ grman_update_layers(
         bool was_drawn = img->is_drawn, ref_removed = false;
         img->is_drawn = false;
         double vector_width = 0, vector_height = 0;  // the largest size the image is shown at
+        ImageFraction vector_shown = {.left = 1, .top = 1, .right = 0, .bottom = 0};  // the parts of it on screen
         const size_t first_render_item = self->render_data.count;
 
         for (ref_map_itr refitr = vt_first(&img->refs_by_internal_id); !vt_is_end(refitr);) {
@@ -2145,10 +2156,25 @@ grman_update_layers(
                 continue;
             } // not visible
             if (img->vector) {
-                double w = ((double)r.right - r.left) / screen_width * screen_width_px * img->width / ref->src_width;
-                double h = ((double)r.top - r.bottom) / screen_height * screen_height_px * img->height / ref->src_height;
+                const double rw = (double)r.right - r.left, rh = (double)r.top - r.bottom;
+                double w = rw / screen_width * screen_width_px * img->width / ref->src_width;
+                double h = rh / screen_height * screen_height_px * img->height / ref->src_height;
                 vector_width = MAX(vector_width, w);
                 vector_height = MAX(vector_height, h);
+                if (rw > 0 && rh > 0) {
+                    // the part of the placement on screen, and so of the image, in doubles since a part of a
+                    // large image is a tiny fraction of it
+                    const double fx0 = (MAX((double)r.left, (double)screen_left) - r.left) / rw;
+                    const double fx1 = (MIN((double)r.right, (double)screen_left + screen_width) - r.left) / rw;
+                    const double fy0 = ((double)r.top - MIN((double)r.top, (double)screen_top)) / rh;
+                    const double fy1 = ((double)r.top - MAX((double)r.bottom, (double)screen_bottom)) / rh;
+                    if (fx0 < fx1 && fy0 < fy1) {
+                        vector_shown.left = MIN(vector_shown.left, (ref->src_x + fx0 * ref->src_width) / img->width);
+                        vector_shown.right = MAX(vector_shown.right, (ref->src_x + fx1 * ref->src_width) / img->width);
+                        vector_shown.top = MIN(vector_shown.top, (ref->src_y + fy0 * ref->src_height) / img->height);
+                        vector_shown.bottom = MAX(vector_shown.bottom, (ref->src_y + fy1 * ref->src_height) / img->height);
+                    }
+                }
             }
 
             if (ref->z_index < ((int32_t)INT32_MIN / 2)) self->num_of_below_refs++;
@@ -2179,8 +2205,22 @@ grman_update_layers(
             continue;
         }
         if (img->vector && img->is_drawn) {
-            update_vector_texture(self, img, vector_width, vector_height);
-            for (size_t k = first_render_item; k < self->render_data.count; k++) self->render_data.item[k].texture_id = texture_id_for_img(img);
+            update_vector_texture(self, img, vector_width, vector_height, vector_shown, screen_width_px, screen_height_px);
+            const VectorView v = img->vector_view;
+            for (size_t k = first_render_item; k < self->render_data.count; k++) {
+                ImageRenderData *rd = self->render_data.item + k;
+                rd->texture_id = texture_id_for_img(img);
+                if (!v.cols || !v.rows) continue;
+                // The texture holds a part of the image, the coordinates of what to show are of all of it
+                ref_map_itr ri = vt_get(&img->refs_by_internal_id, rd->ref_id);
+                if (vt_is_end(ri)) continue;
+                const ImageRef *ref = ri.data->val;
+                const double sx = v.width / img->width, sy = v.height / img->height;
+                rd->src_rect.left = (float)((ref->src_x * sx - v.x) / v.cols);
+                rd->src_rect.right = (float)(((ref->src_x + ref->src_width) * sx - v.x) / v.cols);
+                rd->src_rect.top = (float)((ref->src_y * sy - v.y) / v.rows);
+                rd->src_rect.bottom = (float)(((ref->src_y + ref->src_height) * sy - v.y) / v.rows);
+            }
         }
         if (img->is_drawn && !was_drawn && img->animation_state != ANIMATION_STOPPED && img->extra_framecnt && img->animation_duration) {
             self->has_images_needing_animation = true;
@@ -2479,27 +2519,78 @@ unsigned long kitty_vector_depth_limit(void) { return OPT(vector_depth_limit); }
 unsigned long kitty_vector_dash_limit(void) { return OPT(vector_dash_limit); }
 unsigned long kitty_vector_curve_limit(void) { return OPT(vector_curve_limit); }
 
-// Brings the texture of a vector image up to date, at the size the image is
-// shown at. A change of that size draws all of it, a change to the document
-// only the rectangle that change reaches. vector_raster_limit 0 keeps that size.
-static bool
-update_vector_eye(GraphicsManager *self, Image *img, double width, double height, VectorStereo stereo, bool all) {
-    if (!self->window_id || width < 1 || height < 1) return false;
-    const unsigned long cap = OPT(vector_raster_limit);
-    if (cap && width * height > (double)cap) {
-        double scale = sqrt((double)cap / (width * height));
-        if (scale < 1) width *= scale, height *= scale;
+// The part of a vector image to rasterize, for the image shown at width x height
+// pixels with the fractions of it in shown on screen, in a window view_width x
+// view_height pixels. current is the part held now, kept while it will do.
+//
+// A raster bigger than the window is never needed in full: only what is on
+// screen can be seen, in physical pixels, at the size it is shown. Rasterizing
+// the whole image instead would take memory in proportion to the size it is
+// shown at, which a placement much larger than the window, or one showing a
+// small part of the image magnified, makes as large as anyone likes. So the
+// part on screen is rasterized, with a quarter of the window more all round,
+// so that scrolling a little does not draw it again, or the whole image when
+// that is no bigger. The size the image is drawn at stays that of the largest
+// placement, unless several placements show different parts of it at
+// different magnifications that would together take more than four windows'
+// worth of pixels at the largest: then it is reduced until they fit. Doubles
+// count pixels exactly up to 2^53, and an image shown larger than that is
+// reduced to it.
+static VectorView
+choose_vector_view(double width, double height, ImageFraction shown, double view_width, double view_height, const VectorView *current) {
+    const double exact = 9007199254740992.0;
+    view_width = MAX(1., view_width), view_height = MAX(1., view_height);
+    if (width > exact || height > exact) {
+        const double s = exact / MAX(width, height);
+        width *= s, height *= s;
     }
-    uint32_t w = (uint32_t)lround(width), h = (uint32_t)lround(height);
-    const bool has_pixels = !all && img->texture && img->texture->id && w == img->vector_tex_width && h == img->vector_tex_height;
-    VectorRect rect;
-    rect = (VectorRect){0, 0, w, h};
-    if (has_pixels && !vector_doc_damage(img->vector, w, h, &rect)) return true;
-    float *linear = vector_doc_render_stereo(img->vector, w, h, rect, vector_lookup, self, stereo);
-    if (!linear) return false;
+    double W = MAX(1., round(width)), H = MAX(1., round(height)), nx0, ny0, nx1, ny1;
+    for (int pass = 0; pass < 2; pass++) {
+        // what is on screen in pixels of the raster, with two more for the filtering at its edges
+        nx0 = MAX(0., floor(shown.left * W) - 2), nx1 = MIN(W, ceil(shown.right * W) + 2);
+        ny0 = MAX(0., floor(shown.top * H) - 2), ny1 = MIN(H, ceil(shown.bottom * H) + 2);
+        if (!(nx0 < nx1)) nx0 = 0, nx1 = MIN(W, 1.);
+        if (!(ny0 < ny1)) ny0 = 0, ny1 = MIN(H, 1.);
+        const double budget = 4 * view_width * view_height, area = (nx1 - nx0) * (ny1 - ny0);
+        if (area <= budget || pass) break;
+        const double s = sqrt(budget / area);
+        W = MAX(1., round(W * s)), H = MAX(1., round(H * s));
+    }
+    const double mx = ceil(view_width / 4), my = ceil(view_height / 4);
+    if (W * H <= (nx1 - nx0 + 2 * mx) * (ny1 - ny0 + 2 * my) && W <= INT32_MAX && H <= INT32_MAX) return (VectorView){W, H, 0, 0, (unsigned)W, (unsigned)H};
+    if (current && current->width == W && current->height == H && current->x <= nx0 && current->y <= ny0 && current->x + current->cols >= nx1 &&
+        current->y + current->rows >= ny1)
+        return *current;
+    const double x0 = MAX(0., nx0 - mx), y0 = MAX(0., ny0 - my), x1 = MIN(W, nx1 + mx), y1 = MIN(H, ny1 + my);
+    return (VectorView){W, H, x0, y0, (unsigned)(x1 - x0), (unsigned)(y1 - y0)};
+}
+
+static inline bool
+same_vector_view(const VectorView *a, const VectorView *b) {
+    return a->width == b->width && a->height == b->height && a->x == b->x && a->y == b->y && a->cols == b->cols && a->rows == b->rows;
+}
+
+// Draws view of a vector image, for one eye, into img->texture: all of it, or
+// when the texture already holds that view and all is false only what changed.
+static bool
+update_vector_eye(GraphicsManager *self, Image *img, VectorView view, VectorStereo stereo, bool all) {
+    const bool has_pixels = !all && img->texture && img->texture->id && same_vector_view(&img->vector_view, &view);
+    VectorRect rect = {0, 0, view.cols, view.rows};
+    if (has_pixels && !vector_doc_damage_view(img->vector, view, &rect)) return true;
+    float *linear = vector_doc_render_view_stereo(img->vector, view, rect, vector_lookup, self, stereo);
+    if (!linear) {
+        // out of memory, most likely: the image stays as it was until something about it changes
+        log_error("Failed to rasterize %ux%u pixels of a vector image", rect.width, rect.height);
+        return false;
+    }
+    // the render above allocated four floats a pixel, so these sizes cannot overflow
     const size_t count = (size_t)rect.width * rect.height * 4;
     uint16_t *data = malloc(count * sizeof(uint16_t));
-    if (!data) { free(linear); return false; }
+    if (!data) {
+        free(linear);
+        log_error("Out of memory converting %ux%u pixels of a vector image", rect.width, rect.height);
+        return false;
+    }
     float peak = 0;
     for (size_t i = 0; i < count; i += 4) {
         if (linear[i + 3] == 0.f) {
@@ -2524,7 +2615,7 @@ update_vector_eye(GraphicsManager *self, Image *img, double width, double height
     free(linear);
     img->peak = has_pixels ? MAX(img->peak, peak) : peak;
     if (img->texture) {
-        if (rect.width == w && rect.height == h) send_image_to_gpu(&img->texture->id, data, w, h, false, true, true, true, REPEAT_CLAMP);
+        if (!has_pixels) send_image_to_gpu(&img->texture->id, data, view.cols, view.rows, false, true, true, true, REPEAT_CLAMP);
         else update_image_on_gpu(img->texture->id, data, rect.x, rect.y, rect.width, rect.height, true);
     }
     for (size_t i = 0; i < self->render_data.count; i++) if (self->render_data.item[i].image_id == img->internal_id) {
@@ -2532,13 +2623,22 @@ update_vector_eye(GraphicsManager *self, Image *img, double width, double height
         self->render_data.item[i].texture_id = texture_id_for_img(img);
     }
     free(data);
-    img->vector_tex_width = w;
-    img->vector_tex_height = h;
     return true;
 }
 
+// Brings the textures of a vector image up to date, see choose_vector_view()
+// for what they hold. vector_raster_limit, when set, caps the size the image is
+// drawn at before that.
 static void
-update_vector_texture(GraphicsManager *self, Image *img, double width, double height) {
+update_vector_texture(GraphicsManager *self, Image *img, double width, double height, ImageFraction shown, double view_width, double view_height) {
+    if (!self->window_id || !(width >= 1) || !(height >= 1)) return;
+    const unsigned long cap = OPT(vector_raster_limit);
+    if (cap && width * height > (double)cap) {
+        double scale = sqrt((double)cap / (width * height));
+        if (scale < 1) width *= scale, height *= scale;
+    }
+    const VectorView view = choose_vector_view(width, height, shown, view_width, view_height, &img->vector_view);
+    const bool same_view = same_vector_view(&img->vector_view, &view);
     OSWindow *w = os_window_for_kitty_window(self->window_id);
     VectorStereo stereo = {.multiplier = 1.};
     const bool enabled = w && w->spatial.mode && vector_doc_has_depth(img->vector);
@@ -2548,18 +2648,17 @@ update_vector_texture(GraphicsManager *self, Image *img, double width, double he
         .phase_pixels = -0.5, .phase_limit = w->spatial.phase_limit, .multiplier = w->spatial.multiplier};
     const bool changed = memcmp(&stereo, &img->vector_stereo, sizeof(stereo)) != 0;
     VectorRect damage;
-    const bool dirty = vector_doc_damage(img->vector, img->vector_tex_width, img->vector_tex_height, &damage);
+    const bool dirty = vector_doc_damage_view(img->vector, img->vector_view, &damage);
     if (enabled) {
-        const bool resized = lround(width) != img->vector_tex_width || lround(height) != img->vector_tex_height;
-        if (changed || dirty || resized || !img->vector_right_texture) {
+        if (changed || dirty || !same_view || !img->vector_right_texture) {
             if (!img->vector_right_texture) img->vector_right_texture = new_texture_ref();
-            if (!update_vector_eye(self, img, width, height, stereo, true)) return;
+            if (!update_vector_eye(self, img, view, stereo, true)) return;
             const float left_peak = img->peak;
             TextureRef *left = img->texture;
             img->texture = img->vector_right_texture;
             stereo.eye_pixels = -stereo.eye_pixels;
             stereo.phase_pixels = -stereo.phase_pixels;
-            const bool success = update_vector_eye(self, img, width, height, stereo, true);
+            const bool success = update_vector_eye(self, img, view, stereo, true);
             stereo.eye_pixels = -stereo.eye_pixels;
             stereo.phase_pixels = -stereo.phase_pixels;
             img->vector_right_texture = img->texture;
@@ -2567,7 +2666,8 @@ update_vector_texture(GraphicsManager *self, Image *img, double width, double he
             if (!success) return;
             img->peak = MAX(img->peak, left_peak);
         }
-    } else if (!update_vector_eye(self, img, width, height, stereo, changed)) return;
+    } else if (!update_vector_eye(self, img, view, stereo, changed)) return;
+    img->vector_view = view;
     img->vector_stereo = stereo;
     vector_doc_clear_damage(img->vector);
     for (size_t i = 0; i < self->render_data.count; i++) if (self->render_data.item[i].image_id == img->internal_id) {
@@ -4022,6 +4122,34 @@ W(update_vector_pixels) {
     return Py_BuildValue("IIII", rect.x, rect.y, rect.width, rect.height);
 }
 
+// For tests: a part of a vector image drawn at a size, see VectorView
+W(render_vector_view) {
+    unsigned long id;
+    VectorView v;
+    PA("kddddII", &id, &v.width, &v.height, &v.x, &v.y, &v.cols, &v.rows);
+    Image *img = vector_image_for_tests(self, id);
+    if (!img) return NULL;
+    uint8_t *data = vector_doc_render_view(img->vector, v, (VectorRect){0, 0, v.cols, v.rows}, vector_lookup, self);
+    if (!data) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to rasterize the vector image");
+        return NULL;
+    }
+    PyObject *ans = PyBytes_FromStringAndSize((const char *)data, (Py_ssize_t)v.cols * v.rows * 4);
+    free(data);
+    return ans;
+}
+
+// For tests: the part of a vector image update_vector_texture() rasterizes
+W(choose_vector_view) {
+    double width, height, view_width, view_height;
+    ImageFraction shown;
+    VectorView current = {0};
+    PA("dd(dddd)dd|(ddddII)", &width, &height, &shown.left, &shown.top, &shown.right, &shown.bottom, &view_width, &view_height, &current.width,
+        &current.height, &current.x, &current.y, &current.cols, &current.rows);
+    const VectorView v = choose_vector_view(width, height, shown, view_width, view_height, &current);
+    return Py_BuildValue("ddddII", v.width, v.height, v.x, v.y, v.cols, v.rows);
+}
+
 #define M(x, va) {#x, (PyCFunction)py##x, va, ""}
 
 static PyMethodDef methods[] = {
@@ -4031,6 +4159,8 @@ static PyMethodDef methods[] = {
     M(render_vector_image, METH_VARARGS),
     M(render_vector_linear, METH_VARARGS),
     M(update_vector_pixels, METH_VARARGS),
+    M(render_vector_view, METH_VARARGS),
+    M(choose_vector_view, METH_VARARGS),
     {NULL} /* Sentinel */
 };
 

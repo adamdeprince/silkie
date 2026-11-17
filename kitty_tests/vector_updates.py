@@ -76,10 +76,11 @@ class TestVectorUpdates(BaseTest):
     def test_partial_redraw_preserves_dashed_budget(self):
         screen = self.create_screen(options={'vector_dash_limit': 8})
         graphics = screen.grman
-        # The invisible first subpath spends six of the eight dash boundaries.
-        # The visible second subpath then falls back to solid. Culling the first
-        # before dashing would incorrectly give the second a fresh budget.
-        retained = 'p id=1 d=M-1000,30L-998,30M18,30L20,30 stroke=#ff8800 w=2 dash=1,1'
+        # The first subpath, away from the marker, spends six of the eight dash
+        # ends, and the second, beside it, then falls back to solid. Leaving out
+        # the first because it is outside the part drawn again would give the
+        # second a fresh budget. Dashes off the image are not cut, so not counted.
+        retained = 'p id=1 d=M2,10L7,10M18,30L22,30 stroke=#ff8800 w=2 dash=1,1'
         marker = 'p id=2 d=M18,29h2v2h-2Z fill='
 
         def command(image, text, action='t'):

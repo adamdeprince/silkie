@@ -143,7 +143,7 @@ typedef struct {
     float peak; // of HDR images, see docs/hdr-protocol.rst
     bool tone_map;
     VectorDoc *vector;  // f=200 images are rasterized on demand at the size they are shown at, the document tracks what changed
-    uint32_t vector_tex_width, vector_tex_height;
+    VectorView vector_view;  // the part of the image, at the size it is shown at, that its texture holds
     uint8_t gamut;  // the gamut the pixels of every frame are in, see docs/wide-gamut-protocol.rst
 } Image;
 

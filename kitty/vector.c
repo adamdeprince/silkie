@@ -24,7 +24,7 @@
 #endif
 
 #define TOLERANCE 0.25 // flattening error in device pixels
-#define SUBSAMPLES 16         // scanlines per pixel row
+#define SUBSAMPLES 16  // scanlines per pixel row
 
 // Geometry {{{
 
@@ -45,6 +45,22 @@ mat_invert(Mat m, Mat *out) {
     if (fabs(det) < 1e-12) return false;
     *out = (Mat){m.d / det, -m.b / det, -m.c / det, m.a / det, (m.c * m.f - m.d * m.e) / det, (m.b * m.e - m.a * m.f) / det};
     return true;
+}
+
+// The inverse of any transform whose determinant is not zero, as long as doubles can hold it
+static bool
+mat_invert_any(Mat m, Mat *out) {
+    const double det = m.a * m.d - m.b * m.c;
+    if (!(det != 0) || !isfinite(det)) return false;
+    const Mat inv = {m.d / det, -m.b / det, -m.c / det, m.a / det, (m.c * m.f - m.d * m.e) / det, (m.b * m.e - m.a * m.f) / det};
+    if (!isfinite(inv.a) || !isfinite(inv.b) || !isfinite(inv.c) || !isfinite(inv.d) || !isfinite(inv.e) || !isfinite(inv.f)) return false;
+    *out = inv;
+    return true;
+}
+
+static bool
+mat_is_finite(Mat m) {
+    return isfinite(m.a) && isfinite(m.b) && isfinite(m.c) && isfinite(m.d) && isfinite(m.e) && isfinite(m.f);
 }
 
 static double
@@ -103,6 +119,11 @@ box_transform(Box b, Mat m) {
     return ans;
 }
 
+static inline bool
+box_misses(Box b, Box region) {
+    return b.x1 < region.x0 || b.x0 > region.x1 || b.y1 < region.y0 || b.y0 > region.y1;
+}
+
 enum { PC_MOVE, PC_LINE, PC_QUAD, PC_CUBIC, PC_CLOSE };
 typedef struct {
     uint8_t op;
@@ -117,6 +138,8 @@ typedef struct {
     double *pts;  // x, y pairs
     size_t count, capacity;
     bool closed;
+    // A piece of a dash cut where it can no longer be seen ends there without a cap, see dash_polyline()
+    bool cut_start, cut_end;
 } Poly;
 typedef struct {
     Poly *item;
@@ -195,10 +218,147 @@ start_subpath(PolyList *out, double x, double y) {
     return p;
 }
 
-// Flattens a path into polylines, with the transform applied to the control
-// points first, so that tol is in the output space.
+// }}}
+
+// Flattening only what can be seen {{{
+//
+// The work of flattening a curve grows with its size. Wang's formula asks for
+// a number of segments that grows with the square root of how far the curve
+// bends, in device pixels, and a circle needs segments in proportion to the
+// square root of its radius. Coordinates, radii, widths and transforms all come
+// from the program drawing, so left alone a curve a hundred million million
+// pixels across would take billions of segments, although only a sliver of it
+// can be seen. What can be seen is bounded: the pixels of the image being
+// drawn. So only the part of a curve that can reach those pixels is flattened
+// to the tolerance, and the rest is replaced by coarse pieces that keep out of
+// them.
+//
+// Replacing a piece of a curve by the straight line between its ends leaves the
+// winding number of every point outside the convex hull of the piece as it was:
+// the piece and the line together make a closed loop inside the hull, which
+// winds around nothing outside it. The hull of a Bézier curve is that of its
+// control points, which lies inside their bounding box, so a piece whose control
+// points have a bounding box clear of the visible region can become a line
+// without changing the coverage of a single visible pixel: of a fill under
+// either rule, of a clip, and of a stroke when the region is grown by how far
+// the stroke reaches from its path. The off-screen parts of a fill still count
+// for the winding of the pixels that can be seen, which is why they become
+// lines and are not dropped. A piece that does reach the region is split in
+// two, until each piece either misses it or could fit inside it. A curve whose
+// control points fit in a box the size of the region needs at most
+// Cull.direct segments, see make_cull(), and a curve that does not fit has only
+// a few pieces at each halving of its size that reach the region, so the
+// segments of any curve come to a small multiple of Cull.direct, whatever its
+// coordinates. A curve that fits in the region is flattened directly, exactly
+// as it always was.
+//
+// Circles, for round joins, caps and pen points, are treated the same way along
+// arcs of the points they are flattened to, so the points kept are exactly
+// those of flattening the whole circle, see circle_points(). Dashes are skipped
+// through rather than cut where they cannot be seen, see dash_polyline().
+//
+// The region is that of the whole raster being drawn into, not that of the part
+// of it being drawn, so that drawing a part flattens every curve exactly as
+// drawing all of it does, and the part comes out the same.
+
+typedef struct {
+    Mat to_device;  // from the coordinates points are made in to device pixels
+    Box region;     // device pixels from which something can reach a visible pixel
+    double tol;     // flattening error in device pixels
+    double direct;  // the most segments a curve that fits in the region needs
+} Cull;
+
+// view is the raster being drawn into, reach how far what is made of the
+// flattened path can reach from it, in device pixels
+static Cull
+make_cull(Mat to_device, Box view, double reach, double tol) {
+    // 2 more for the pixel of slack polygon_misses() and the rasterizer allow
+    const Box region = box_grow(view, reach + 2);
+    const double size = fmax(region.x1 - region.x0, region.y1 - region.y0);
+    // Control points in a box of side s have second differences of at most 2s
+    // along each axis, so Wang's formula in wang_segments() gives at most
+    // sqrt(0.75 * 2 sqrt(2) s / tol) segments for such a curve
+    const double direct = ceil(sqrt(0.75 * 2.8284271247461903 * size / tol));
+    return (Cull){to_device, region, tol, fmax(1, direct)};
+}
+
+// Wang's formula for the number of segments a cubic needs for the error to stay below tol
+static inline double
+wang_segments(const double *d, double tol) {
+    double ddx = fmax(fabs(d[0] - 2 * d[2] + d[4]), fabs(d[2] - 2 * d[4] + d[6])), ddy = fmax(fabs(d[1] - 2 * d[3] + d[5]), fabs(d[3] - 2 * d[5] + d[7]));
+    double dd = sqrt(ddx * ddx + ddy * ddy);
+    return sqrt(0.75 * dd / tol);
+}
+
+// A curve is halved at most this many times. A piece that is 2^-64 of a curve
+// and still needs more than Cull.direct segments can only come from coordinates
+// so large that doubles cannot place points of it to within a pixel.
+#define MAX_SPLITS 64
+// In exact arithmetic only a few pieces at each halving reach the region, so a
+// curve is looked at far fewer times than this. Rounding in curves with absurd
+// coordinates is all this stops from multiplying pieces; past it a piece becomes
+// its chord.
+#define PIECE_BUDGET (1u << 16)
+
+// Adds the points after the first of the cubic p (four x, y pairs) to cur
 static bool
-flatten_path(const Path *path, Mat m, double tol, PolyList *out) {
+flatten_curve(Poly *cur, const double *p, const Cull *c) {
+    typedef struct {
+        double p[8];
+        unsigned depth;
+    } Piece;
+    // each halving leaves one half waiting, so this holds every piece not yet looked at
+    Piece stack[MAX_SPLITS + 1];
+    size_t top = 1, budget = PIECE_BUDGET;
+    memcpy(stack[0].p, p, sizeof(stack[0].p));
+    stack[0].depth = 0;
+    while (top) {
+        const Piece pc = stack[--top];
+        const double *q = pc.p;
+        double d[8];
+        bool finite = true;
+        Box b = empty_box;
+        for (int k = 0; k < 4; k++) {
+            apply(c->to_device, q[2 * k], q[2 * k + 1], d + 2 * k, d + 2 * k + 1);
+            finite = finite && isfinite(q[2 * k]) && isfinite(q[2 * k + 1]) && isfinite(d[2 * k]) && isfinite(d[2 * k + 1]);
+            box_add(&b, d[2 * k], d[2 * k + 1]);
+        }
+        // A piece that overflowed cannot be flattened, and one that misses the region need not be: see above
+        if (!finite || box_misses(b, c->region) || !budget) {
+            if (!poly_add(cur, q[6], q[7])) return false;
+            continue;
+        }
+        budget--;
+        const double nd = wang_segments(d, c->tol);
+        if (nd > c->direct && pc.depth < MAX_SPLITS) {
+            // de Casteljau at t = 1/2, the second half first so that the first is taken first
+            Piece l = {.depth = pc.depth + 1}, r = {.depth = pc.depth + 1};
+            for (int k = 0; k < 2; k++) {
+                const double p01 = (q[k] + q[2 + k]) / 2, p12 = (q[2 + k] + q[4 + k]) / 2, p23 = (q[4 + k] + q[6 + k]) / 2;
+                const double p012 = (p01 + p12) / 2, p123 = (p12 + p23) / 2, mid = (p012 + p123) / 2;
+                l.p[k] = q[k], l.p[2 + k] = p01, l.p[4 + k] = p012, l.p[6 + k] = mid;
+                r.p[k] = mid, r.p[2 + k] = p123, r.p[4 + k] = p23, r.p[6 + k] = q[6 + k];
+            }
+            stack[top++] = r;
+            stack[top++] = l;
+            continue;
+        }
+        size_t n = nd > 1 ? (size_t)ceil(fmin(nd, c->direct)) : 1;
+        // vector_curve_limit 0 keeps every segment the error bound asks for.
+        if (kitty_vector_curve_limit() && n > kitty_vector_curve_limit()) n = (size_t)kitty_vector_curve_limit();
+        for (size_t k = 1; k <= n; k++) {
+            double t = (double)k / n, mt = 1 - t;
+            double w0 = mt * mt * mt, w1 = 3 * mt * mt * t, w2 = 3 * mt * t * t, w3 = t * t * t;
+            if (!poly_add(cur, w0 * q[0] + w1 * q[2] + w2 * q[4] + w3 * q[6], w0 * q[1] + w1 * q[3] + w2 * q[5] + w3 * q[7])) return false;
+        }
+    }
+    return true;
+}
+
+// Flattens a path into polylines, with the transform m applied to the control
+// points first. cull says what can be seen, from where the points end up.
+static bool
+flatten_path(const Path *path, Mat m, const Cull *cull, PolyList *out) {
     Poly *cur = NULL;
     double cx = 0, cy = 0, sx = 0, sy = 0;  // current and subpath start points, in output space
     for (size_t i = 0; i < path->count; i++) {
@@ -229,18 +389,8 @@ flatten_path(const Path *path, Mat m, double tol, PolyList *out) {
                     x2 = x1 + (x3 - x1) / 3, y2 = y1 + (y3 - y1) / 3;
                     x1 = cx + 2 * (x1 - cx) / 3, y1 = cy + 2 * (y1 - cy) / 3;
                 } else apply(m, c->p[4], c->p[5], &x3, &y3);
-                // Wang's formula for the number of segments needed for the error to stay below tol
-                double ddx = fmax(fabs(cx - 2 * x1 + x2), fabs(x1 - 2 * x2 + x3)), ddy = fmax(fabs(cy - 2 * y1 + y2), fabs(y1 - 2 * y2 + y3));
-                double dd = sqrt(ddx * ddx + ddy * ddy);
-                unsigned n = (unsigned)ceil(sqrt(0.75 * dd / tol));
-                if (n < 1) n = 1;
-                // vector_curve_limit 0 keeps every segment the error bound asks for.
-                if (kitty_vector_curve_limit() && n > kitty_vector_curve_limit()) n = (unsigned)kitty_vector_curve_limit();
-                for (unsigned k = 1; k <= n; k++) {
-                    double t = (double)k / n, mt = 1 - t;
-                    double w0 = mt * mt * mt, w1 = 3 * mt * mt * t, w2 = 3 * mt * t * t, w3 = t * t * t;
-                    if (!poly_add(cur, w0 * cx + w1 * x1 + w2 * x2 + w3 * x3, w0 * cy + w1 * y1 + w2 * y2 + w3 * y3)) return false;
-                }
+                const double q[8] = {cx, cy, x1, y1, x2, y2, x3, y3};
+                if (!flatten_curve(cur, q, cull)) return false;
                 cx = x3;
                 cy = y3;
             } break;
@@ -496,7 +646,8 @@ rasterize(EdgeList *el, bool evenodd, Rect clip, span_fn fn, void *ctx) {
 typedef struct {
     EdgeList *edges;
     Mat m;
-    Rect clip;  // the pixels being drawn, pieces that stay clear of them are left out
+    Rect clip;   // the pixels being drawn, pieces that stay clear of them are left out
+    Box region;  // the device pixels a filled shape can be seen from, see make_cull()
 } StrokeOut;
 
 static bool
@@ -505,23 +656,91 @@ emit(StrokeOut *o, const double *pts, size_t n) {
     return add_polygon(o->edges, pts, n, o->m, true);
 }
 
+// How many segments a circle of radius r is flattened to for an error of tol
+static double
+circle_segments(double r, double tol) {
+    if (!(r > tol)) return 6;
+    const double x = tol / r;
+    // acos(1 - x) is all rounding for a tiny x, 2 asin(sqrt(x / 2)) is the same angle without the cancellation
+    double n = ceil(M_PI / (x > 1e-8 ? acos(1 - x) : 2 * asin(sqrt(x / 2))));
+    // Doubles hold whole numbers exactly up to 2^53, and so the angles of the points.
+    // A circle that needs more is so large that its points cannot be placed to a pixel anyway.
+    if (!(n <= 9007199254740992.0)) n = 9007199254740992.0;
+    return fmax(n, 6);
+}
+
+static inline bool
+circle_point(Poly *p, double cx, double cy, double r, double i, double n) {
+    double a = 2 * M_PI * i / n;
+    return poly_add(p, cx + r * cos(a), cy + r * sin(a));
+}
+
+#define CIRCLE_RUN 16  // arcs of no more segments than this are kept whole
+
+// The points a circle is flattened to, which are n points spaced evenly
+// around it, leaving out runs of them along arcs that cannot be seen. An arc
+// of a quarter of the circle or less lies inside the triangle of its ends and
+// the point where the tangents at its ends meet, so when that triangle misses
+// the region the chord can stand for the arc, see "Flattening only what can be
+// seen". Only arcs that reach the region are split, so this takes a few points
+// for each halving of the arcs and the points that can be seen, however many
+// n is.
+static bool
+circle_points(const StrokeOut *o, Poly *p, double cx, double cy, double r, double n) {
+    if (!circle_point(p, cx, cy, r, 0, n)) return false;
+    if (n <= 4 * CIRCLE_RUN) {
+        for (double i = 1; i < n; i++)
+            if (!circle_point(p, cx, cy, r, i, n)) return false;
+        return true;
+    }
+    typedef struct {
+        double i, j;  // the arc from point i to point j
+    } Arc;
+    // four quarters, then one more waiting for each halving of an arc of at most 2^53 points
+    Arc stack[64];
+    size_t top = 0;
+    const double q[5] = {0, floor(n / 4), floor(n / 2), floor(3 * n / 4), n};
+    for (int k = 3; k >= 0; k--) stack[top++] = (Arc){q[k], q[k + 1]};
+    while (top) {
+        const Arc arc = stack[--top];
+        if (arc.j - arc.i > CIRCLE_RUN) {
+            const double half = M_PI * (arc.j - arc.i) / n, mid = M_PI * (arc.i + arc.j) / n, reach = r / cos(half);
+            const double a0 = 2 * M_PI * arc.i / n, a1 = 2 * M_PI * arc.j / n;
+            Box b = empty_box;
+            box_add(&b, cx + r * cos(a0), cy + r * sin(a0));
+            box_add(&b, cx + r * cos(a1), cy + r * sin(a1));
+            box_add(&b, cx + reach * cos(mid), cy + reach * sin(mid));
+            // box_transform() gives everything for corners that overflow, which cannot be drawn either
+            const Box db = box_transform(b, o->m);
+            if (box_misses(db, o->region) || !isfinite(db.x0) || !isfinite(db.x1) || !isfinite(db.y0) || !isfinite(db.y1)) {
+                if (arc.j < n && !circle_point(p, cx, cy, r, arc.j, n)) return false;
+                continue;
+            }
+            const double m = floor((arc.i + arc.j) / 2);
+            stack[top++] = (Arc){m, arc.j};
+            stack[top++] = (Arc){arc.i, m};
+            continue;
+        }
+        for (double k = arc.i + 1; k <= arc.j && k < n; k++)
+            if (!circle_point(p, cx, cy, r, k, n)) return false;
+    }
+    return true;
+}
+
 static bool
 emit_circle(StrokeOut *o, double cx, double cy, double r, double tol) {
-    if (r <= 0) return true;
+    double dx, dy;
+    apply(o->m, cx, cy, &dx, &dy);
+    // nothing a double can draw
+    if (!(r > 0) || !isfinite(r) || !isfinite(cx) || !isfinite(cy) || !isfinite(fabs(dx) + fabs(dy) + 2 * r * mat_scale(o->m))) return true;
     const double box[8] = {cx - r, cy - r, cx + r, cy - r, cx + r, cy + r, cx - r, cy + r};
     if (polygon_misses(box, 4, o->m, o->clip)) return true;
-    unsigned n = r > tol ? (unsigned)ceil(M_PI / acos(1 - tol / r)) : 6;
-    if (n < 6) n = 6;
-    if (kitty_vector_curve_limit() && n > kitty_vector_curve_limit()) n = (unsigned)kitty_vector_curve_limit();
-    double *pts = malloc(2 * n * sizeof(double));
-    if (!pts) return false;
-    for (unsigned i = 0; i < n; i++) {
-        double a = 2 * M_PI * i / n;
-        pts[2 * i] = cx + r * cos(a);
-        pts[2 * i + 1] = cy + r * sin(a);
-    }
-    bool ok = emit(o, pts, n);
-    free(pts);
+    double segments = circle_segments(r, tol);
+    // vector_curve_limit 0 keeps every segment the error bound asks for.
+    if (kitty_vector_curve_limit() && segments > kitty_vector_curve_limit()) segments = (double)kitty_vector_curve_limit();
+    Poly poly = {0};
+    bool ok = circle_points(o, &poly, cx, cy, r, segments) && emit(o, poly.pts, poly.count / 2);
+    free(poly.pts);
     return ok;
 }
 
@@ -576,11 +795,16 @@ dedupe(double *pts, size_t n) {
     return out;
 }
 
+// Strokes a polyline with cap0 at its start and cap1 at its end
 static bool
-stroke_polyline(StrokeOut *o, double *pts, size_t n, bool closed, double hw, int cap, int join, double miter_limit, double tol) {
+stroke_polyline(StrokeOut *o, double *pts, size_t n, bool closed, double hw, int cap0, int cap1, int join, double miter_limit, double tol) {
     n = dedupe(pts, n);
     if (closed && n > 2 && fabs(pts[0] - pts[2 * n - 2]) < 1e-9 && fabs(pts[1] - pts[2 * n - 1]) < 1e-9) n--;
-    if (n == 1) return cap == CAP_BUTT ? true : (cap == CAP_ROUND ? emit_circle(o, pts[0], pts[1], hw, tol) : emit_cap(o, pts[0], pts[1], 1, 0, hw, CAP_SQUARE, tol));
+    if (n == 1) {
+        // a dot, which a piece cut out of a longer dash never is
+        if (cap0 != cap1 || cap0 == CAP_BUTT) return true;
+        return cap0 == CAP_ROUND ? emit_circle(o, pts[0], pts[1], hw, tol) : emit_cap(o, pts[0], pts[1], 1, 0, hw, CAP_SQUARE, tol);
+    }
     if (n < 2) return true;
     if (n == 2) closed = false;
     size_t nseg = closed ? n : n - 1;
@@ -601,86 +825,330 @@ stroke_polyline(StrokeOut *o, double *pts, size_t n, bool closed, double hw, int
         if (!emit_join(o, pts[0], pts[1], pdx, pdy, dx / len, dy / len, hw, join, miter_limit, tol)) return false;
     } else {
         double dx = pts[0] - pts[2], dy = pts[1] - pts[3], len = sqrt(dx * dx + dy * dy);
-        if (!emit_cap(o, pts[0], pts[1], dx / len, dy / len, hw, cap, tol)) return false;
-        if (!emit_cap(o, pts[2 * n - 2], pts[2 * n - 1], pdx, pdy, hw, cap, tol)) return false;
+        if (!emit_cap(o, pts[0], pts[1], dx / len, dy / len, hw, cap0, tol)) return false;
+        if (!emit_cap(o, pts[2 * n - 2], pts[2 * n - 1], pdx, pdy, hw, cap1, tol)) return false;
     }
     return true;
 }
 
-// Splits a polyline into the "on" pieces of the dash pattern. budget is how
-// many more dashes the path may be cut into: a polyline that would need more
-// is not dashed at all, so that a pattern far finer than the path is long
-// cannot take the terminal with it
+// Dashes {{{
+
+// A dash pattern, repeated: the entries of the cycle are the dash lengths, or
+// those twice over for an odd number of them, and the even ones are dashes
+typedef struct {
+    const double *dash;
+    size_t ndash, entries;
+    double *prefix;   // where each entry of the cycle starts, and where the last ends: entries + 1 of them
+    double cycle;     // the length of the cycle
+    double shortest;  // the shortest entry that is not 0
+    double coverage;  // the part of a path the dashes and their caps cover, for patterns too fine to draw
+} DashPattern;
+
+static void
+dash_pattern_free(DashPattern *p) {
+    free(p->prefix);
+    p->prefix = NULL;
+}
+
+// False only when out of memory. A pattern with nothing to it leaves cycle at 0.
 static bool
-dash_polyline(const Poly *p, const double *dash, unsigned ndash, double phase, PolyList *out, size_t *budget) {
-    double total = 0;
-    for (unsigned i = 0; i < ndash; i++) total += dash[i];
-    size_t n = p->count / 2;
-    double plen = 0;
-    if (total > 0 && n >= 2) {
-        for (size_t i = 0; i + 1 < n; i++) plen += hypot(p->pts[2 * i + 2] - p->pts[2 * i], p->pts[2 * i + 3] - p->pts[2 * i + 1]);
-        if (p->closed) plen += hypot(p->pts[0] - p->pts[2 * n - 2], p->pts[1] - p->pts[2 * n - 1]);
+dash_pattern_init(DashPattern *p, const double *dash, size_t ndash, uint8_t cap, double hw) {
+    memset(p, 0, sizeof(*p));
+    if (!ndash) return true;
+    if (ndash > (SIZE_MAX / sizeof(double) - 1) / 2) return false;
+    p->dash = dash, p->ndash = ndash, p->entries = ndash & 1 ? 2 * ndash : ndash;
+    if (!(p->prefix = malloc((p->entries + 1) * sizeof(double)))) return false;
+    // How far beyond its end a cap covers, on average across the width: a
+    // square cap all of hw, a round one a quarter circle's area over hw
+    const double ext = cap == CAP_SQUARE ? hw : (cap == CAP_ROUND ? M_PI / 4 * hw : 0);
+    double uncovered = 0;
+    p->prefix[0] = 0;
+    p->shortest = INFINITY;
+    for (size_t k = 0; k < p->entries; k++) {
+        const double len = dash[k % ndash];
+        p->prefix[k + 1] = p->prefix[k] + len;
+        if (k & 1) uncovered += fmax(0, len - 2 * ext);
+        if (len > 0) p->shortest = fmin(p->shortest, len);
     }
-    // each period of the pattern ends ndash dashes and gaps, and the phase and the ends of the path add a period at most
-    const double needed = total > 0 ? (plen / total + 2) * ndash : 0;
-    // A null budget means every dash is drawn. A set budget draws the path solid past it.
-    const bool solid = total <= 0 || n < 2 || (budget && !(needed <= (double)*budget));
-    if (solid) {
-        Poly *q = polylist_new(out);
+    p->cycle = p->prefix[p->entries];
+    // A pattern too long for a double to add up cannot repeat along any path a double can measure, and is drawn solid
+    if (!(p->cycle > 0) || !isfinite(p->cycle)) p->cycle = 0;
+    else p->coverage = fmin(1, fmax(0, 1 - uncovered / p->cycle));
+    return true;
+}
+
+// Where along a pattern a point of a path is
+typedef struct {
+    size_t k;     // the entry of the cycle
+    double left;  // how much of it is still to come
+} DashState;
+
+static inline double
+dash_len(const DashPattern *p, size_t k) {
+    return p->dash[k % p->ndash];
+}
+
+// The state at pos along the cycle, 0 <= pos < cycle. A point where an entry
+// starts is in that entry, as the start of the pattern is in its first.
+static void
+dash_locate(const DashPattern *p, DashState *st, double pos) {
+    // the first prefix at or past pos, the last being the cycle, which is past it
+    size_t lo = 0, hi = p->entries;
+    while (lo < hi) {
+        const size_t mid = lo + (hi - lo) / 2;
+        if (p->prefix[mid] < pos) lo = mid + 1;
+        else hi = mid;
+    }
+    if (p->prefix[lo] == pos) *st = lo < p->entries ? (DashState){lo, dash_len(p, lo)} : (DashState){0, dash_len(p, 0)};
+    else *st = (DashState){lo - 1, p->prefix[lo] - pos};
+}
+
+// Moves st on by dist along the path, in time that does not depend on how many dashes that passes
+static void
+dash_advance(const DashPattern *p, DashState *st, double dist) {
+    if (!(dist > 0)) return;
+    if (dist < st->left) {
+        st->left -= dist;
+        return;
+    }
+    double pos = p->prefix[st->k + 1] - st->left + dist;
+    if (pos >= p->cycle) pos = fmod(pos, p->cycle);
+    dash_locate(p, st, pos);
+}
+
+typedef struct {
+    const DashPattern *pat;
+    double hw, ext;   // the half width, and how far a cap reaches past the end of a dash
+    Mat m;            // to device pixels
+    bool cull;        // when the transform can be undone, the corners of the region pieces can be seen from, in path coordinates
+    double wx[4], wy[4];
+    Box join_region;  // device pixels a join can be seen from
+    PolyList *out;    // the dashes
+    PolyList *fine;   // pieces of the path along which the pattern is finer than the rasterizer samples
+} Dasher;
+
+// A point of the segment from x0, y0 to x1, y1 of length len, s along it
+static inline void
+seg_point(double x0, double y0, double x1, double y1, double len, double s, double *x, double *y) {
+    const double t = s / len;
+    *x = x0 + (x1 - x0) * t;
+    *y = y0 + (y1 - y0) * t;
+}
+
+static Poly *
+piece_new(PolyList *list, double x, double y, bool cut) {
+    Poly *p = polylist_new(list);
+    if (!p || !poly_add(p, x, y)) return NULL;
+    p->cut_start = cut;
+    return p;
+}
+
+static bool
+piece_end(Poly *p, double x, double y, bool cut) {
+    if (!poly_add(p, x, y)) return false;
+    p->cut_end = cut;
+    return true;
+}
+
+// Splits a polyline into the "on" pieces of the dash pattern.
+//
+// A dash is cut only where it can be seen. For each segment the corners of the
+// visible region are projected onto it: along the segment they give the stretch
+// [a, b] the region lies beside, and across it whether the region comes within
+// the half width at all. Only the dashes over [a, b] are cut one by one, and the
+// pattern is moved through the rest of the segment by dash_advance(), so a
+// segment costs the dashes beside the region whatever its length. Outside
+// [a, b] what can be seen is a cap reaching back into it, which can only be
+// that of the last dash to end before a or of the first to start after b, as
+// the caps of the others reach less far into it; and a join at a corner in the
+// middle of a dash, which reaches no further than stroke_reach() from the
+// corner. Pieces cut at a or b, or out of a dash around a corner, end there
+// without a cap, so they draw no more than the dash they are a part of.
+//
+// A pattern that repeats more than SUBSAMPLES times a pixel along the segment
+// cannot be sampled by the rasterizer: the dashes of a vertical line would be
+// point sampled, aliasing to whatever happens to fall on the scanlines. That
+// stretch is drawn whole into fine instead, which the caller fills at
+// pat->coverage, the part of it the dashes cover. That is what the dashes
+// average to over any pixel, to within the one period of the pattern that a
+// pixel can see partly, less than 1/SUBSAMPLES of it. It also keeps the number of
+// dashes cut at SUBSAMPLES a pixel, with the region bounded. The same goes for a
+// segment so long that positions along it are further apart than the shortest
+// dash, where stepping from dash to dash would not get anywhere.
+static bool
+dash_polyline(const Dasher *ds, const Poly *p, double phase) {
+    const DashPattern *pat = ds->pat;
+    const size_t n = p->count / 2;
+    if (n < 2) {
+        Poly *q = polylist_new(ds->out);
         if (!q) return false;
         q->closed = p->closed;
         for (size_t i = 0; i < n; i++)
             if (!poly_add(q, p->pts[2 * i], p->pts[2 * i + 1])) return false;
         return true;
     }
-    if (budget) *budget -= (size_t)needed;
-    // Rounding cannot make the loops below run much past the count above, this only guarantees they end
-    size_t steps = 2 * (size_t)needed + 16;
-    unsigned idx = 0;
-    double left = dash[0];
-    bool on = true;
-    phase = fmod(phase, total * (ndash & 1 ? 2 : 1));
-    if (phase < 0) phase += total * (ndash & 1 ? 2 : 1);
-    while (phase > 0) {
-        if (!steps--) return false;
-        if (phase >= left) {
-            phase -= left;
-            idx = (idx + 1) % ndash;
-            left = dash[idx];
-            on = !on;
-        } else {
-            left -= phase;
-            phase = 0;
-        }
-    }
-    Poly *cur = NULL;
-    size_t nseg = p->closed ? n : n - 1;
+    DashState st = {0, dash_len(pat, 0)};
+    double start = fmod(phase, pat->cycle);
+    if (start < 0) start += pat->cycle;
+    if (start > 0 && start < pat->cycle) dash_locate(pat, &st, start);
+    Poly *cur = NULL;   // the piece that runs on into the next segment
+    bool cur_fine = false;
+    const size_t nseg = p->closed ? n : n - 1;
+    double pdx = 0, pdy = 0, plen = 0;  // the direction and length of the segment before
     for (size_t i = 0; i < nseg; i++) {
-        size_t j = (i + 1) % n;
-        double x0 = p->pts[2 * i], y0 = p->pts[2 * i + 1], x1 = p->pts[2 * j], y1 = p->pts[2 * j + 1];
-        double len = hypot(x1 - x0, y1 - y0), pos = 0;
-        if (on && !cur) {
-            if (!(cur = polylist_new(out)) || !poly_add(cur, x0, y0)) return false;
+        const size_t j = (i + 1) % n;
+        const double x0 = p->pts[2 * i], y0 = p->pts[2 * i + 1], x1 = p->pts[2 * j], y1 = p->pts[2 * j + 1];
+        const double len = hypot(x1 - x0, y1 - y0);
+        if (!isfinite(len)) {  // a segment whose length overflows cannot be measured along
+            if (cur && !piece_end(cur, x0, y0, true)) return false;
+            cur = NULL;
+            plen = 0;
+            continue;
         }
-        while (len - pos > left) {
-            if (!steps--) return false;
-            pos += left;
-            double t = pos / len, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-            if (on) {
-                if (!poly_add(cur, x, y)) return false;
-                cur = NULL;
-            } else {
-                if (!(cur = polylist_new(out)) || !poly_add(cur, x, y)) return false;
+        if (len == 0) {
+            if (cur && !poly_add(cur, x1, y1)) return false;
+            continue;
+        }
+        const double ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+        double a = 0, b = len;
+        bool near = true;  // whether the region comes within the half width of the segment's line
+        if (ds->cull) {
+            double cmin = INFINITY, cmax = -INFINITY;
+            a = INFINITY, b = -INFINITY;
+            for (int k = 0; k < 4; k++) {
+                const double wx = ds->wx[k] - x0, wy = ds->wy[k] - y0, along = wx * ux + wy * uy, across = wy * ux - wx * uy;
+                a = fmin(a, along), b = fmax(b, along), cmin = fmin(cmin, across), cmax = fmax(cmax, across);
             }
-            on = !on;
-            idx = (idx + 1) % ndash;
-            left = dash[idx];
+            near = !(cmax < -ds->hw || cmin > ds->hw);
         }
-        left -= len - pos;
-        if (on && !poly_add(cur, x1, y1)) return false;
+        const bool last = i + 1 == nseg, first = i == 0;
+        // the device length of a unit of the path along this segment
+        const double dev = hypot(ds->m.a * ux + ds->m.c * uy, ds->m.b * ux + ds->m.d * uy);
+        // Along a segment so long that adding the shortest entry to a position along it changes nothing, the
+        // pattern cannot be followed in doubles at all, and is drawn as one finer than the samples is
+        const bool fine = near && (pat->cycle * dev < 1.0 / SUBSAMPLES || !(len + pat->shortest > len));
+        const double r0 = fmin(len, fmax(0, a)), r1 = fmin(len, fmax(0, b));
+        const bool over = near && a < len && b > 0;  // whether some of the segment is beside the region
+        const bool on_at_start = !(st.k & 1), spans_start = on_at_start && st.left > 0 && dash_len(pat, st.k) - st.left > 0;
+        // Carry the piece of the last segment on if this one goes on with it
+        const bool carry = cur && over && r0 == 0 && fine == cur_fine;
+        if (cur && !carry) {
+            if (!piece_end(cur, x0, y0, cur_fine || st.left > 0)) return false;
+            cur = NULL;
+        }
+        // A join around this corner in the middle of a dash that no piece goes on through
+        if (!carry && !first && plen > 0 && spans_start && !fine) {
+            double vx, vy;
+            apply(ds->m, x0, y0, &vx, &vy);
+            if (!(vx < ds->join_region.x0 || vx > ds->join_region.x1 || vy < ds->join_region.y0 || vy > ds->join_region.y1)) {
+                const double back = fmin(dash_len(pat, st.k) - st.left, plen) / 2, ahead = fmin(st.left, len) / 2;
+                Poly *q = piece_new(ds->out, x0 - pdx * back, y0 - pdy * back, true);
+                if (!q || !poly_add(q, x0, y0) || !piece_end(q, x0 + ux * ahead, y0 + uy * ahead, true)) return false;
+            }
+        }
+        pdx = ux, pdy = uy, plen = len;
+        if (fine) {
+            if (over) {
+                double x, y;
+                if (!carry) {
+                    seg_point(x0, y0, x1, y1, len, r0, &x, &y);
+                    if (!(cur = piece_new(ds->fine, x, y, true))) return false;
+                    cur_fine = true;
+                }
+                seg_point(x0, y0, x1, y1, len, r1, &x, &y);
+                if (!poly_add(cur, x, y)) return false;
+                if (r1 < len) {
+                    cur->cut_end = true;
+                    cur = NULL;
+                }
+            }
+            dash_advance(pat, &st, len);
+            continue;
+        }
+        if (!near) {  // nothing but a join at the end of the segment can be seen
+            dash_advance(pat, &st, len);
+            continue;
+        }
+        double pos = 0, x, y;
+        // The cap of the last dash to end before the region
+        if (ds->ext > 0 && a > 0 && r0 > 0) {
+            dash_advance(pat, &st, r0 - pos);
+            pos = r0;
+            const bool off = st.k & 1;
+            if (off || st.left == 0) {
+                const double s_end = off ? r0 - (dash_len(pat, st.k) - st.left) : r0;
+                const double dlen = dash_len(pat, off ? (st.k + pat->entries - 1) % pat->entries : st.k);
+                if (s_end >= 0 && s_end >= a - ds->ext) {
+                    const double s_start = s_end - dlen;
+                    seg_point(x0, y0, x1, y1, len, fmax(0, s_start), &x, &y);
+                    Poly *q = piece_new(ds->out, x, y, s_start < 0 && !first);
+                    seg_point(x0, y0, x1, y1, len, s_end, &x, &y);
+                    if (!q || !piece_end(q, x, y, false)) return false;
+                }
+            }
+        }
+        // The dashes beside the region
+        if (over) {
+            dash_advance(pat, &st, r0 - pos);
+            pos = r0;
+            bool on = !(st.k & 1);
+            if (on && !carry) {
+                seg_point(x0, y0, x1, y1, len, r0, &x, &y);
+                // the start of the path is the start of a dash, any other point but the start of a dash is a cut
+                if (!(cur = piece_new(ds->out, x, y, !(first && r0 == 0) && dash_len(pat, st.k) - st.left > 0))) return false;
+                cur_fine = false;
+            }
+            while (r1 - pos > st.left) {
+                pos += st.left;
+                seg_point(x0, y0, x1, y1, len, pos, &x, &y);
+                if (on) {
+                    if (!piece_end(cur, x, y, false)) return false;
+                    cur = NULL;
+                } else {
+                    if (!(cur = piece_new(ds->out, x, y, false))) return false;
+                    cur_fine = false;
+                }
+                on = !on;
+                st.k = (st.k + 1) % pat->entries;
+                st.left = dash_len(pat, st.k);
+            }
+            st.left -= r1 - pos;
+            pos = r1;
+            if (on) {
+                seg_point(x0, y0, x1, y1, len, r1, &x, &y);
+                if (r1 == len && !last) {
+                    if (!poly_add(cur, x, y)) return false;  // runs on into the next segment
+                } else {
+                    // where the path ends the dash ends, anywhere else it is cut if it goes on
+                    if (!piece_end(cur, x, y, st.left > 0 && !(last && r1 == len))) return false;
+                    cur = NULL;
+                }
+            }
+        }
+        // The cap of the first dash to start after the region
+        if (ds->ext > 0 && b < len && r1 < len) {
+            dash_advance(pat, &st, r1 - pos);
+            pos = r1;
+            const bool on = !(st.k & 1);
+            if (!on || st.left == dash_len(pat, st.k)) {
+                const double s_start = on ? r1 : r1 + st.left;
+                const double dlen = dash_len(pat, on ? st.k : (st.k + 1) % pat->entries);
+                if (s_start <= len && s_start <= b + ds->ext) {
+                    const double s_end = s_start + dlen;
+                    seg_point(x0, y0, x1, y1, len, s_start, &x, &y);
+                    Poly *q = piece_new(ds->out, x, y, false);
+                    seg_point(x0, y0, x1, y1, len, fmin(len, s_end), &x, &y);
+                    if (!q || !piece_end(q, x, y, s_end > len && !last)) return false;
+                }
+            }
+        }
+        dash_advance(pat, &st, len - pos);
     }
+    if (cur) cur->cut_end = cur_fine;  // the end of the path ends the last dash
     return true;
 }
+
+// }}}
 
 // }}}
 
@@ -720,12 +1188,13 @@ typedef struct Elem {
     Paint fill, stroke;
     double width, miter_limit, dash_phase;
     double *dash;
-    unsigned ndash;
+    size_t ndash;
     uint8_t rule, cap, join, opacity, blend;
     double g[5];  // l: x1 y1 x2 y2, r: cx cy r fx fy
     Stop *stops;
-    unsigned nstops;
+    size_t nstops;
     size_t slot, sorted_slot, bytes;
+    size_t child_slot;  // where it is in the list of the children of its parent
     // The box of the geometry in the element's own coordinate system, worked
     // out when first asked for and kept up as geometry is appended
     Box box;
@@ -743,6 +1212,21 @@ typedef struct Elem {
 #define VAL_TY Elem *
 #include "kitty-verstable.h"
 
+typedef struct {
+    Elem **item;
+    size_t count, capacity;
+} ChildList;
+
+#define NAME child_map
+#define KEY_TY uint32_t
+#define VAL_TY ChildList
+#include "kitty-verstable.h"
+
+#define NAME count_map
+#define KEY_TY uint32_t
+#define VAL_TY size_t
+#include "kitty-verstable.h"
+
 struct VectorDoc {
     unsigned width, height;
     elem_map by_id;
@@ -754,6 +1238,14 @@ struct VectorDoc {
     size_t nsorted;
     bool is_sorted;
     unsigned clip_groups;  // the groups other than the root that have a clip path
+    count_map clip_refs;   // how many of them clip to each id
+    count_map image_refs;  // how many i records draw each image id, for vector_doc_image_changed()
+    // The elements with each parent id, whether or not that is an element, so
+    // that deleting a group takes time in proportion to what it holds
+    child_map children;
+    // How many more parent links working out damage may follow in this
+    // vector_doc_apply(), see damage_under()
+    size_t damage_steps;
     // What changed since the damage was last cleared: everything, or the
     // part of the image inside the box, which is in the image's user units
     bool damage_all;
@@ -803,6 +1295,9 @@ vector_doc_new(unsigned width, unsigned height) {
     d->width = width;
     d->height = height;
     vt_init(&d->by_id);
+    vt_init(&d->clip_refs);
+    vt_init(&d->image_refs);
+    vt_init(&d->children);
     d->root.t = identity;
     d->root.visible = true;
     d->root.opacity = 100;
@@ -820,6 +1315,10 @@ vector_doc_free(VectorDoc *d) {
     free(d->sorted);
     vt_cleanup(&d->by_id);
     Py_XDECREF(d->font_session);
+    vt_create_for_loop(child_map_itr, it, &d->children) free(it.data->val.item);
+    vt_cleanup(&d->children);
+    vt_cleanup(&d->clip_refs);
+    vt_cleanup(&d->image_refs);
     free(d);
 }
 
@@ -849,14 +1348,65 @@ is_clip_group(const Elem *e) {
     return e->type == 'g' && e->ref;
 }
 
+static bool
+count_inc(count_map *m, uint32_t key) {
+    count_map_itr it = vt_get(m, key);
+    if (vt_is_end(it)) return !vt_is_end(vt_insert(m, key, 1));
+    it.data->val++;
+    return true;
+}
+
+static void
+count_dec(count_map *m, uint32_t key) {
+    count_map_itr it = vt_get(m, key);
+    if (!vt_is_end(it) && !--it.data->val) vt_erase_itr(m, it);
+}
+
+static bool
+children_add(VectorDoc *d, Elem *e) {
+    child_map_itr it = vt_get(&d->children, e->parent);
+    if (vt_is_end(it) && vt_is_end(it = vt_insert(&d->children, e->parent, (ChildList){0}))) return false;
+    ChildList *cl = &it.data->val;
+    if (cl->count == cl->capacity) {
+        void *np = cl->count == SIZE_MAX ? NULL : reserve_array(cl->item, &cl->capacity, cl->count + 1, sizeof(Elem *), 4);
+        if (!np) {
+            if (!cl->count) vt_erase_itr(&d->children, it);
+            return false;
+        }
+        cl->item = np;
+    }
+    e->child_slot = cl->count;
+    cl->item[cl->count++] = e;
+    return true;
+}
+
+static void
+children_remove(VectorDoc *d, Elem *e) {
+    child_map_itr it = vt_get(&d->children, e->parent);
+    if (vt_is_end(it)) return;
+    ChildList *cl = &it.data->val;
+    Elem *last = cl->item[--cl->count];
+    cl->item[e->child_slot] = last;
+    last->child_slot = e->child_slot;
+    if (!cl->count) {
+        free(cl->item);
+        vt_erase_itr(&d->children, it);
+    }
+}
+
 static void
 remove_elem(VectorDoc *d, Elem *e) {
     vt_erase(&d->by_id, e->id);
+    children_remove(d, e);
     d->order[e->slot] = NULL;
     d->used_bytes -= e->bytes;
     d->live--;
     d->is_sorted = false;
-    if (is_clip_group(e)) d->clip_groups--;
+    if (is_clip_group(e)) {
+        d->clip_groups--;
+        count_dec(&d->clip_refs, e->ref);
+    }
+    if (e->type == 'i') count_dec(&d->image_refs, e->ref);
     elem_free(e);
 }
 
@@ -877,14 +1427,22 @@ has_render_order(const Elem *e) {
     return e->type != 's' && e->type != 'l' && e->type != 'r';
 }
 
-// Puts e into the document, replacing any element with the same id in place
+// Puts e into the document, replacing any element with the same id in place.
+// What can fail is done first, so that a failure leaves the document as it was.
 static bool
 insert_elem(VectorDoc *d, Elem *e) {
     elem_map_itr existing = vt_get(&d->by_id, e->id);
     Elem *old = vt_is_end(existing) ? NULL : existing.data->val;
-    const bool keep_sorted = d->is_sorted && old && old->parent == e->parent && has_render_order(old) == has_render_order(e);
-    if (!keep_sorted) d->is_sorted = false;
+    const bool same_parent = old && old->parent == e->parent;
+    const bool keep_sorted = d->is_sorted && same_parent && has_render_order(old) == has_render_order(e);
+    if (is_clip_group(e) && !count_inc(&d->clip_refs, e->ref)) return false;
+    if (e->type == 'i' && !count_inc(&d->image_refs, e->ref)) goto undo_clip;
+    if (!same_parent && !children_add(d, e)) goto undo_image;
     if (old) {
+        if (same_parent) {
+            e->child_slot = old->child_slot;
+            vt_get(&d->children, e->parent).data->val.item[e->child_slot] = e;
+        } else children_remove(d, old);
         e->slot = old->slot;
         if (keep_sorted && has_render_order(e)) {
             e->sorted_slot = old->sorted_slot;
@@ -893,50 +1451,88 @@ insert_elem(VectorDoc *d, Elem *e) {
         d->order[e->slot] = e;
         existing.data->val = e;
         d->used_bytes -= old->bytes;
-        if (is_clip_group(old)) d->clip_groups--;
+        if (is_clip_group(old)) {
+            d->clip_groups--;
+            count_dec(&d->clip_refs, old->ref);
+        }
+        if (old->type == 'i') count_dec(&d->image_refs, old->ref);
         elem_free(old);
         d->live--;
     } else {
-        if (d->count == SIZE_MAX) return false;
+        if (d->count == SIZE_MAX) goto undo_children;
         if (d->count + 1 > d->capacity) {
             void *np = reserve_array(d->order, &d->capacity, d->count + 1, sizeof(Elem *), 64);
-            if (!np) return false;
+            if (!np) goto undo_children;
             d->order = np;
         }
-        if (vt_is_end(vt_insert(&d->by_id, e->id, e))) return false;
+        if (vt_is_end(vt_insert(&d->by_id, e->id, e))) goto undo_children;
         e->slot = d->count;
         d->order[d->count++] = e;
     }
+    if (!keep_sorted) d->is_sorted = false;
     d->used_bytes += e->bytes;
     d->live++;
     if (is_clip_group(e)) d->clip_groups++;
     return true;
-}
-
-static bool
-is_descendant(const VectorDoc *d, const Elem *e, uint32_t gid) {
-    size_t remaining = d->live;
-    for (uint32_t p = e->parent; remaining; remaining--) {
-        if (p == gid) return true;
-        if (!p) return false;
-        Elem *g = lookup(d, p);
-        if (!g || g->type != 'g') return false;
-        p = g->parent;
-    }
+undo_children:
+    children_remove(d, e);
+undo_image:
+    if (e->type == 'i') count_dec(&d->image_refs, e->ref);
+undo_clip:
+    if (is_clip_group(e)) count_dec(&d->clip_refs, e->ref);
     return false;
 }
 
-static void
+// Deletes gid and everything under it: what has it as parent, and what is
+// under any group among those. Walking down from gid through the lists of
+// children takes time in proportion to what is deleted, where looking up from
+// every element of the document would take that for each delete.
+static bool
 delete_group(VectorDoc *d, uint32_t gid) {
-    // mark first, the parent chains are looked up through groups that are about to go
-    for (size_t i = 0; i < d->count; i++) {
-        Elem *e = d->order[i];
-        if (e) e->in_progress = e->id == gid || is_descendant(d, e, gid);
+    Elem **found = NULL;
+    uint32_t *todo = NULL;
+    size_t nfound = 0, found_cap = 0, ntodo = 0, todo_cap = 0;
+    bool ok = true;
+#define PUSH(arr, n, cap, val)                                                     \
+    if (n == cap) {                                                                \
+        void *np = reserve_array(arr, &cap, n + 1, sizeof(*arr), 16);             \
+        if (!np) {                                                                 \
+            ok = false;                                                            \
+            break;                                                                 \
+        }                                                                          \
+        arr = np;                                                                  \
+    }                                                                              \
+    arr[n++] = val;
+    do {
+        Elem *g = lookup(d, gid);
+        if (g) {
+            PUSH(found, nfound, found_cap, g);
+            g->in_progress = true;
+        }
+        PUSH(todo, ntodo, todo_cap, gid);
+    } while (0);
+    while (ok && ntodo) {
+        child_map_itr it = vt_get(&d->children, todo[--ntodo]);
+        if (vt_is_end(it)) continue;
+        const ChildList *cl = &it.data->val;
+        for (size_t i = 0; i < cl->count; i++) {
+            Elem *c = cl->item[i];
+            if (c->in_progress) continue;  // a cycle of groups back to gid
+            PUSH(found, nfound, found_cap, c);
+            c->in_progress = true;
+            if (c->type == 'g') {
+                PUSH(todo, ntodo, todo_cap, c->id);
+            }
+        }
     }
-    for (size_t i = 0; i < d->count; i++) {
-        Elem *e = d->order[i];
-        if (e && e->in_progress) remove_elem(d, e);
+#undef PUSH
+    for (size_t i = 0; i < nfound; i++) {
+        if (ok) remove_elem(d, found[i]);
+        else found[i]->in_progress = false;
     }
+    free(found);
+    free(todo);
+    return ok;
 }
 
 // }}}
@@ -1015,9 +1611,10 @@ stroke_reach(const Elem *style) {
 
 // The transform from the coordinate system of e to that of the image. Returns
 // 0 when e hangs off something that is not a group, so that it is not drawn,
-// and -1 when the parent chain contains a cycle.
+// and -1 when the parent chain contains a cycle or is longer than *steps, when
+// steps is given, which is then reduced by the length of the chain.
 static int
-elem_matrix(const VectorDoc *d, const Elem *e, Mat *out) {
+elem_matrix_within(const VectorDoc *d, const Elem *e, Mat *out, size_t *steps) {
     Mat m = e->has_t ? e->t : identity;
     uint32_t p = e->parent;
     size_t remaining = d->live, depth = 0;
@@ -1025,6 +1622,10 @@ elem_matrix(const VectorDoc *d, const Elem *e, Mat *out) {
     while (p) {
         if (!remaining--) return -1; // a cycle in the parent chain
         if (depth_limit && ++depth > depth_limit) return -1;
+        if (steps) {
+            if (!*steps) return -1;
+            --*steps;
+        }
         const Elem *g = lookup(d, p);
         if (!g || g->type != 'g') return 0;
         if (g->has_t) m = mat_mul(g->t, m);
@@ -1034,23 +1635,29 @@ elem_matrix(const VectorDoc *d, const Elem *e, Mat *out) {
     return 1;
 }
 
+// unused here, but branches built on this one call it
+__attribute__((unused)) static int
+elem_matrix(const VectorDoc *d, const Elem *e, Mat *out) {
+    return elem_matrix_within(d, e, out, NULL);
+}
+
 static bool
 is_clip_path(const VectorDoc *d, uint32_t id) {
     if (d->root.ref == id) return true;
-    if (!d->clip_groups) return false;
-    for (size_t i = 0; i < d->count; i++) {
-        const Elem *e = d->order[i];
-        if (e && is_clip_group(e) && e->ref == id) return true;
-    }
-    return false;
+    return d->clip_groups && !vt_is_end(vt_get((count_map *)&d->clip_refs, id));
 }
 
-// Damages the part of the image under box, which is in the coordinate system of e
+// Damages the part of the image under box, which is in the coordinate system of
+// e. Finding where that is follows the parents of e, which in a deep tree of
+// groups takes as long for each record as drawing all of the image does. So
+// the links followed for a vector_doc_apply() are limited to a few for each
+// element and record, past which the whole image is damaged instead: drawing
+// all of it again costs no more than following them would have.
 static void
 damage_under(VectorDoc *d, const Elem *e, Box box) {
     if (d->damage_all || box_is_empty(box)) return;
     Mat m;
-    switch (elem_matrix(d, e, &m)) {
+    switch (elem_matrix_within(d, e, &m, &d->damage_steps)) {
         case 0: return;
         case 1: break;
         default:
@@ -1347,8 +1954,7 @@ parse_list(const char *s, const char *end, double **out, size_t *count) {
             FAIL("Bad number list");
         }
         if (n == cap) {
-            cap = cap ? cap * 2 : 16;
-            void *np = realloc(arr, cap * sizeof(double));
+            void *np = n == SIZE_MAX ? NULL : reserve_array(arr, &cap, n + 1, sizeof(double), 16);
             if (!np) {
                 free(arr);
                 FAIL("Out of memory");
@@ -1370,7 +1976,7 @@ cmp_stop(const void *a, const void *b) {
 
 static bool
 parse_stops(const char *s, const char *end, Elem *e) {
-    unsigned cap = 0;
+    size_t cap = 0;
     while (s < end) {
         double off;
         if (!parse_num(&s, end, &off)) FAIL("Bad gradient stop");
@@ -1382,8 +1988,7 @@ parse_stops(const char *s, const char *end, Elem *e) {
         if (!parse_color(s, c, &p) || p.type != PAINT_SOLID) FAIL("Bad gradient stop color");
         s = c;
         if (e->nstops == cap) {
-            cap = cap ? cap * 2 : 4;
-            void *np = realloc(e->stops, cap * sizeof(Stop));
+            void *np = e->nstops == SIZE_MAX ? NULL : reserve_array(e->stops, &cap, e->nstops + 1, sizeof(Stop), 4);
             if (!np) FAIL("Out of memory");
             e->stops = np;
         }
@@ -1507,8 +2112,8 @@ parse_field(Record *r, const char *key, size_t klen, const char *v, const char *
         free(e->dash);
         e->dash = NULL;
         if (!parse_list(v, end, &e->dash, &n)) return false;
-        e->ndash = (unsigned)n;
-        for (unsigned i = 0; i < e->ndash; i++)
+        e->ndash = n;
+        for (size_t i = 0; i < e->ndash; i++)
             if (e->dash[i] < 0) FAIL("Negative dash length");
     } else if (IS("dp")) {
         NUM(e->dash_phase);
@@ -1611,8 +2216,9 @@ done:
     return ok;
 }
 
+// With compile false the text of a t record is not laid out, see vector_doc_apply()
 static bool
-parse_record(VectorDoc *doc, const char *line, const char *end, Record *r) {
+parse_record(VectorDoc *doc, const char *line, const char *end, Record *r, bool compile) {
     memset(r, 0, sizeof(*r));
     while (line < end && *line == ' ') line++;
     if (line >= end) return true;  // blank
@@ -1647,7 +2253,7 @@ parse_record(VectorDoc *doc, const char *line, const char *end, Record *r) {
     r->id = e->id;
     switch (r->op) {
         case 't':
-            if (!compile_text(doc, e)) return false;
+            if (compile && !compile_text(doc, e)) return false;
             break;
         case 'p':
         case 's':
@@ -1708,113 +2314,150 @@ append_geometry(VectorDoc *d, Elem *target, Elem *src) {
     return true;
 }
 
-const char *
-vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
-    Record *recs = NULL;
-    size_t nrecs = 0, cap = 0;
-    const char *s = (const char *)text, *end = s + sz;
-    static char errbuf[128];
-    const char *err = NULL;
-    unsigned lineno = 0;
-    while (s < end) {
-        const char *nl = memchr(s, '\n', end - s);
-        const char *le = nl ? nl : end;
-        if (le > s && le[-1] == '\r') le--;
-        lineno++;
-        if (nrecs == cap) {
-            cap = cap ? cap * 2 : 64;
-            void *np = realloc(recs, cap * sizeof(Record));
-            if (!np) {
-                err = "Out of memory";
+// Applies one record that has been parsed, returning an error message or NULL
+static const char *
+apply_record(VectorDoc *d, Record *r) {
+    // a few more parent links for damage_under() to follow for each record
+    d->damage_steps = d->damage_steps > SIZE_MAX - 4 ? SIZE_MAX : d->damage_steps + 4;
+    switch (r->op) {
+        case 0: break;
+        case 'x':
+            if (r->all) {
+                for (size_t k = 0; k < d->count; k++)
+                    if (d->order[k]) remove_elem(d, d->order[k]);
+                d->count = 0;
+                d->root.t = identity;
+                d->root.has_t = false;
+                d->root.ref = 0;
+                d->root.opacity = 100;
+                d->root.blend = BLEND_NORMAL;
+                d->root.visible = true;
+                d->root.has_clip_box = false;
+                d->damage_all = true;
+            } else if (r->delete_group) {
+                d->damage_all = true;
+                if (!delete_group(d, r->id)) return "Out of memory";
+            } else {
+                Elem *e = lookup(d, r->id);
+                if (e) {
+                    damage_elem(d, e);
+                    remove_elem(d, e);
+                }
+            }
+            break;
+        case 'a': {
+            Elem *e = lookup(d, r->id);
+            if (!e) break;
+            elem_box(e);  // leaves the cursor at the end of the path there is
+            const PathCursor before = e->cursor;
+            const size_t ncmds = e->path.count, npts = e->npts;
+            const bool wrong_kind = (r->elem->path.count && e->type != 'p' && e->type != 's') || (r->elem->npts && e->type != 'k');
+            if (wrong_kind) return "Append to an element of another kind";
+            if (append_geometry(d, e, r->elem)) damage_appended(d, e, ncmds, npts, before);
+            else {
+                e->has_box = false;  // some of it may have been appended
+                d->damage_all = true;
+                return "Out of memory or geometry size overflow";
+            }
+        } break;
+        case 'g':
+            d->damage_all = true;  // a group changes everything under it
+            if (!r->elem->id) {    // the root group
+                d->root.t = r->elem->t;
+                d->root.has_t = r->elem->has_t;
+                d->root.ref = r->elem->ref;
+                d->root.opacity = r->elem->opacity;
+                d->root.blend = r->elem->blend;
+                d->root.visible = r->elem->visible;
+                d->root.has_clip_box = r->elem->has_clip_box;
+                d->root.clip_box = r->elem->clip_box;
                 break;
             }
-            recs = np;
-        }
+            /* fallthrough */
+        default: {
+            Elem *old = lookup(d, r->id), *e = r->elem;
+            if (old) damage_elem(d, old);
+            if (!insert_elem(d, e)) return "Out of memory or too many elements";
+            r->elem = NULL;  // now owned by the document
+            damage_elem(d, e);
+        } break;
+    }
+    return NULL;
+}
+
+// The end of the line at s, without its line ending, setting *next to the start of the next one
+static const char *
+line_end(const char *s, const char *end, const char **next) {
+    const char *nl = memchr(s, '\n', end - s), *le = nl ? nl : end;
+    *next = nl ? nl + 1 : end;
+    if (le > s && le[-1] == '\r') le--;
+    return le;
+}
+
+// Every record is parsed before any is applied, so that a bad one changes
+// nothing. They are not kept from one pass to the next but parsed again as they
+// are applied: kept, they would take many times the memory of the text they
+// came from, a delete of a few bytes holding a whole element. Text records are
+// the exception: laying out text costs too much to do twice, and what it makes
+// is kept by the document anyway.
+const char *
+vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
+    static char errbuf[128];
+    const char *const begin = (const char *)text, *end = begin + sz;
+    const char *err = NULL;
+    Elem **texts = NULL;
+    size_t ntexts = 0, texts_cap = 0, next_text = 0, lineno = 0;
+    for (const char *s = begin, *next; s < end; s = next) {
+        const char *le = line_end(s, end, &next);
+        lineno++;
+        Record r;
         parse_error = NULL;
-        if (!parse_record(d, s, le, recs + nrecs)) {
-            snprintf(errbuf, sizeof(errbuf), "Line %u: %s", lineno, parse_error ? parse_error : "Bad record");
-            err = errbuf;
-            nrecs++;
-            break;
-        }
-        nrecs++;
-        s = nl ? nl + 1 : end;
-    }
-    if (!err) {
-        for (size_t i = 0; i < nrecs; i++) {
-            Record *r = recs + i;
-            switch (r->op) {
-                case 0: break;
-                case 'x':
-                    if (r->all) {
-                        for (size_t k = 0; k < d->count; k++)
-                            if (d->order[k]) remove_elem(d, d->order[k]);
-                        d->count = 0;
-                        d->root.t = identity;
-                        d->root.has_t = false;
-                        d->root.ref = 0;
-                        d->root.opacity = 100;
-                        d->root.blend = BLEND_NORMAL;
-                        d->root.visible = true;
-                        d->root.has_clip_box = false;
-                        d->damage_all = true;
-                    } else if (r->delete_group) {
-                        delete_group(d, r->id);
-                        d->damage_all = true;
-                    } else {
-                        Elem *e = lookup(d, r->id);
-                        if (e) {
-                            damage_elem(d, e);
-                            remove_elem(d, e);
-                        }
-                    }
-                    break;
-                case 'a': {
-                    Elem *e = lookup(d, r->id);
-                    if (!e) break;
-                    elem_box(e);  // leaves the cursor at the end of the path there is
-                    const PathCursor before = e->cursor;
-                    const size_t ncmds = e->path.count, npts = e->npts;
-                    const bool wrong_kind = (r->elem->path.count && e->type != 'p' && e->type != 's') || (r->elem->npts && e->type != 'k');
-                    if (wrong_kind) err = "Append to an element of another kind";
-                    else if (append_geometry(d, e, r->elem)) damage_appended(d, e, ncmds, npts, before);
-                    else {
-                        e->has_box = false;  // some of it may have been appended
-                        d->damage_all = true;
-                        err = "Out of memory or geometry size overflow";
-                    }
-                } break;
-                case 'g':
-                    d->damage_all = true;  // a group changes everything under it
-                    if (!r->elem->id) {  // the root group
-                        d->root.t = r->elem->t;
-                        d->root.has_t = r->elem->has_t;
-                        d->root.ref = r->elem->ref;
-                        d->root.opacity = r->elem->opacity;
-                        d->root.blend = r->elem->blend;
-                        d->root.visible = r->elem->visible;
-                        d->root.has_clip_box = r->elem->has_clip_box;
-                        d->root.clip_box = r->elem->clip_box;
-                        break;
-                    }
-                    /* fallthrough */
-                default: {
-                    Elem *old = lookup(d, r->id), *e = r->elem;
-                    if (old) damage_elem(d, old);
-                    if (!insert_elem(d, e)) err = "Too many elements";
-                    else {
-                        r->elem = NULL;  // now owned by the document
-                        damage_elem(d, e);
-                    }
-                } break;
+        const bool ok = parse_record(d, s, le, &r, true);
+        if (ok && r.op == 't') {
+            if (ntexts == texts_cap) {
+                void *np = ntexts == SIZE_MAX ? NULL : reserve_array(texts, &texts_cap, ntexts + 1, sizeof(Elem *), 16);
+                if (!np) {
+                    elem_free(r.elem);
+                    err = "Out of memory";
+                    goto done;
+                }
+                texts = np;
             }
-            if (err) break;
+            texts[ntexts++] = r.elem;
+            r.elem = NULL;
         }
-        if (err) d->damage_all = true;  // the records before the bad one were applied
-        compact(d);
+        elem_free(r.elem);
+        if (!ok) {
+            snprintf(errbuf, sizeof(errbuf), "Line %zu: %s", lineno, parse_error ? parse_error : "Bad record");
+            err = errbuf;
+            goto done;
+        }
     }
-    for (size_t i = 0; i < nrecs; i++) elem_free(recs[i].elem);
-    free(recs);
+    lineno = 0;
+    d->damage_steps = d->live > (SIZE_MAX - 64) / 2 ? SIZE_MAX : 2 * d->live + 64;
+    for (const char *s = begin, *next; s < end && !err; s = next) {
+        const char *le = line_end(s, end, &next);
+        lineno++;
+        Record r;
+        parse_error = NULL;
+        if (parse_record(d, s, le, &r, false)) {
+            if (r.op == 't') {  // the one laid out in the first pass
+                elem_free(r.elem);
+                r.elem = texts[next_text];
+                texts[next_text++] = NULL;
+            }
+            err = apply_record(d, &r);
+        } else {  // only memory can run out the second time
+            snprintf(errbuf, sizeof(errbuf), "Line %zu: %s", lineno, parse_error ? parse_error : "Bad record");
+            err = errbuf;
+        }
+        elem_free(r.elem);
+    }
+    if (err) d->damage_all = true;  // the records before the bad one were applied
+    compact(d);
+done:
+    for (size_t i = 0; i < ntexts; i++) elem_free(texts[i]);
+    free(texts);
     return err;
 }
 
@@ -1848,6 +2491,7 @@ typedef struct {
     Elem **sorted;  // live elements sorted by parent then slot
     size_t nsorted;
     Rect area;  // the pixels being drawn
+    Box view;   // the pixels of the raster they are a part of, see make_cull()
     vector_image_lookup lookup;
     void *lookup_ctx;
     bool failed;
@@ -1863,17 +2507,17 @@ clampf(float x) {
 static void
 eval_stops(const Elem *g, double t, float *r, float *gg, float *b, float *a) {
     const Stop *st = g->stops;
-    unsigned n = g->nstops;
+    const size_t n = g->nstops;
     double c[4];
     if (t <= st[0].offset || n == 1) {
         c[0] = st[0].r, c[1] = st[0].g, c[2] = st[0].b, c[3] = st[0].a;
     } else if (t >= st[n - 1].offset) {
         c[0] = st[n - 1].r, c[1] = st[n - 1].g, c[2] = st[n - 1].b, c[3] = st[n - 1].a;
     } else {
-        unsigned i = 1, hi = n - 1;
-        // Find the first stop at or after t, preserving the behavior at repeated offsets.
+        // the first stop at or after t, by bisection: this is done for every pixel, and a gradient can have any number of stops
+        size_t i = 1, hi = n - 1;
         while (i < hi) {
-            unsigned mid = i + (hi - i) / 2;
+            const size_t mid = i + (hi - i) / 2;
             if (st[mid].offset < t) i = mid + 1;
             else hi = mid;
         }
@@ -2055,65 +2699,125 @@ add_polys(const Render *r, const PolyList *polys, EdgeList *el) {
     return true;
 }
 
+// Strokes the flattened subpaths of a path drawn with the style of style, into
+// el, and into fine the stretches whose dashes are too fine to draw one by one,
+// which are to be filled at *fine_coverage, see dash_polyline()
 static bool
-stroke_polys(PolyList *polys, const Elem *style, double hw, Mat m, Rect clip, double tol, EdgeList *el) {
-    StrokeOut out = {el, m, clip};
-    size_t budget_store = kitty_vector_dash_limit();
-    size_t *budget = budget_store ? &budget_store : NULL;
-    for (size_t i = 0; i < polys->count; i++) {
-        const Poly *p = polys->item + i;
-        if (!style->ndash) {
-            // A retained network can have thousands of subpaths while only a
-            // small gate or ink rectangle is damaged. Cull before stroking,
-            // which would otherwise build caps and joins for every subpath.
+stroke_polys(const Render *r, PolyList *polys, const Elem *style, Mat m, double tol, EdgeList *el, EdgeList *fine, float *fine_coverage) {
+    const double hw = style->width / 2;
+    StrokeOut out = {el, m, r->area, box_grow(r->view, 2)};
+    StrokeOut fine_out = {fine, m, r->area, out.region};
+    DashPattern pat;
+    if (!dash_pattern_init(&pat, style->dash, style->ndash, style->cap, hw)) return false;
+    bool ok = true;
+    if (!(pat.cycle > 0)) {
+        for (size_t i = 0; ok && i < polys->count; i++) {
+            Poly *p = polys->item + i;
+            // A drawing can have thousands of subpaths while a small part of it
+            // is drawn. Leave out those that cannot reach it before building
+            // their caps and joins.
             Box box = empty_box;
             for (size_t k = 0; k < p->count; k += 2) box_add(&box, p->pts[k], p->pts[k + 1]);
             box = box_transform(box_grow(box, stroke_reach(style)), m);
-            if (box.x1 < clip.x0 - 1 || box.x0 > clip.x1 + 1 || box.y1 < clip.y0 - 1 || box.y0 > clip.y1 + 1) continue;
-            if (!stroke_polyline(&out, p->pts, p->count / 2, p->closed, hw, style->cap, style->join, style->miter_limit, tol)) return false;
-            continue;
+            if (box.x1 < r->area.x0 - 1 || box.x0 > r->area.x1 + 1 || box.y1 < r->area.y0 - 1 || box.y0 > r->area.y1 + 1) continue;
+            ok = stroke_polyline(&out, p->pts, p->count / 2, p->closed, hw, style->cap, style->cap, style->join, style->miter_limit, tol);
         }
-        PolyList pieces = {0};
-        bool ok = dash_polyline(p, style->dash, style->ndash, style->dash_phase, &pieces, budget);
-        for (size_t k = 0; ok && k < pieces.count; k++)
-            ok = stroke_polyline(&out, pieces.item[k].pts, pieces.item[k].count / 2, pieces.item[k].closed, hw, style->cap, style->join, style->miter_limit, tol);
-        polylist_free(&pieces);
-        if (!ok) return false;
+        return ok;
     }
-    return true;
+    Dasher ds = {.pat = &pat, .hw = hw, .ext = style->cap == CAP_BUTT ? 0 : hw, .m = m};
+    Mat inv;
+    // A transform that cannot be undone flattens the stroke to nothing
+    if (!mat_invert_any(m, &inv)) goto done;
+    {
+        const Box region = out.region;
+        const double xs[4] = {region.x0, region.x1, region.x1, region.x0}, ys[4] = {region.y0, region.y0, region.y1, region.y1};
+        for (int k = 0; k < 4; k++) apply(inv, xs[k], ys[k], ds.wx + k, ds.wy + k);
+        ds.cull = true;
+        for (int k = 0; k < 4; k++) ds.cull = ds.cull && isfinite(ds.wx[k]) && isfinite(ds.wy[k]);
+        if (!ds.cull) goto done;  // nothing of a stroke that large can be placed to a pixel
+        ds.join_region = box_grow(r->view, stroke_reach(style) * mat_scale(m) + 2);
+    }
+    *fine_coverage = (float)pat.coverage;
+    // vector_dash_limit, when set, is how many dash ends the path may have, past which a subpath is stroked solid
+    size_t budget = kitty_vector_dash_limit();
+    const bool limited = budget > 0;
+    for (size_t i = 0; ok && i < polys->count; i++) {
+        PolyList pieces = {0}, fine_pieces = {0};
+        ds.out = &pieces, ds.fine = &fine_pieces;
+        ok = dash_polyline(&ds, polys->item + i, style->dash_phase);
+        if (ok && limited) {
+            const size_t ends = pieces.count > SIZE_MAX / 2 ? SIZE_MAX : 2 * pieces.count;
+            if (ends > budget) {
+                Poly *p = polys->item + i;
+                ok = stroke_polyline(&out, p->pts, p->count / 2, p->closed, hw, style->cap, style->cap, style->join, style->miter_limit, tol);
+                polylist_free(&pieces);
+                polylist_free(&fine_pieces);
+                continue;
+            }
+            budget -= ends;
+        }
+        for (size_t k = 0; ok && k < pieces.count; k++) {
+            Poly *q = pieces.item + k;
+            ok = stroke_polyline(&out, q->pts, q->count / 2, q->closed, hw, q->cut_start ? CAP_BUTT : style->cap, q->cut_end ? CAP_BUTT : style->cap,
+                style->join, style->miter_limit, tol);
+        }
+        for (size_t k = 0; ok && k < fine_pieces.count; k++) {
+            Poly *q = fine_pieces.item + k;
+            ok = stroke_polyline(&fine_out, q->pts, q->count / 2, false, hw, CAP_BUTT, CAP_BUTT, style->join, style->miter_limit, tol);
+        }
+        polylist_free(&pieces);
+        polylist_free(&fine_pieces);
+    }
+done:
+    dash_pattern_free(&pat);
+    return ok;
 }
 
 // Draws path with the style of e (which is e's own path or the symbol it uses)
 static void
 draw_path(Render *r, const Elem *e, const Path *path, Mat m, const Target *t) {
+    if (!mat_is_finite(m)) return;  // a transform that overflowed puts nothing anywhere
     if (e->fill.type != PAINT_NONE) {
         PolyList polys = {0};
         EdgeList el = {0};
         Fill f;
-        bool ok = flatten_path(path, m, TOLERANCE, &polys) && add_polys(r, &polys, &el);
+        const Cull cull = make_cull(identity, r->view, 0, TOLERANCE);
+        bool ok = flatten_path(path, m, &cull, &polys) && add_polys(r, &polys, &el);
         if (ok && setup_fill(r, &f, t, &e->fill, m, 1)) fill_edges(r, &el, e->rule == 1, &f);
         if (!ok) r->failed = true;
         polylist_free(&polys);
         free(el.item);
     }
     if (e->stroke.type != PAINT_NONE && e->width > 0) {
+        const double scale = mat_scale(m), reach = stroke_reach(e) * scale;
+        if (!isfinite(reach)) return;  // nor does a stroke wider than a double can hold
         PolyList polys = {0};
-        EdgeList el = {0};
+        EdgeList el = {0}, fine = {0};
+        float coverage = 0;
         Fill f;
-        double tol = TOLERANCE / mat_scale(m);
-        bool ok = flatten_path(path, identity, tol, &polys) && stroke_polys(&polys, e, e->width / 2, m, r->area, tol, &el);
+        // The path is flattened in its own coordinates, for the stroke to be
+        // built there, with the error and what can be seen measured in device
+        // pixels. Everything within the reach of the stroke can be seen, so for
+        // a stroke millions of pixels wide that is a great deal, and the
+        // tolerance becomes a fixed fraction of the reach rather than of a pixel.
+        // It still keeps the outline to within a millionth of the reach, and
+        // keeps the segments of each curve bounded, see make_cull().
+        const Cull cull = make_cull(m, r->view, reach, fmax(TOLERANCE, reach * 0x1p-24));
+        bool ok = flatten_path(path, identity, &cull, &polys) && stroke_polys(r, &polys, e, m, TOLERANCE / scale, &el, &fine, &coverage);
         if (ok && setup_fill(r, &f, t, &e->stroke, m, 1)) fill_edges(r, &el, false, &f);
+        if (ok && fine.count && coverage > 0 && setup_fill(r, &f, t, &e->stroke, m, coverage)) fill_edges(r, &fine, false, &f);
         if (!ok) r->failed = true;
         polylist_free(&polys);
         free(el.item);
+        free(fine.item);
     }
 }
 
 static void
 draw_pen(Render *r, const Elem *e, Mat m, const Target *t) {
-    if (e->fill.type == PAINT_NONE || !e->npts) return;
+    if (e->fill.type == PAINT_NONE || !e->npts || !mat_is_finite(m)) return;
     EdgeList el = {0};
-    StrokeOut out = {&el, m, r->area};
+    StrokeOut out = {&el, m, r->area, box_grow(r->view, 2)};
     double tol = TOLERANCE / mat_scale(m);
     bool ok = true;
     const double *p = e->pts;
@@ -2170,7 +2874,8 @@ make_clip(Render *r, const Elem *path, Mat m, const uint8_t *outer) {
     }
     PolyList polys = {0};
     EdgeList el = {0};
-    bool ok = flatten_path(&path->path, mat_mul(m, path->t), TOLERANCE, &polys) && add_polys(r, &polys, &el);
+    const Cull cull = make_cull(identity, r->view, 0, TOLERANCE);
+    bool ok = flatten_path(&path->path, mat_mul(m, path->t), &cull, &polys) && add_polys(r, &polys, &el);
     MaskCtx mc = {mask, outer, r->area};
     if (ok) ok = rasterize(&el, path->rule == 1, r->area, mask_span, &mc);
     if (!ok) r->failed = true;
@@ -2377,21 +3082,28 @@ sort_elements(VectorDoc *d) {
     return true;
 }
 
+static bool
+view_is_valid(const VectorDoc *d, VectorView v) {
+    return d->width && d->height && v.width > 0 && v.height > 0 && isfinite(v.width) && isfinite(v.height) && v.x >= 0 && v.y >= 0 &&
+           isfinite(v.x) && isfinite(v.y) && v.x == floor(v.x) && v.y == floor(v.y) && v.cols && v.rows && v.cols <= INT32_MAX && v.rows <= INT32_MAX;
+}
+
 float *
-vector_doc_render_stereo(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx, VectorStereo stereo) {
-    if (!width || !height || !d->width || !d->height || !rect.width || !rect.height) return NULL;
-    if (width > INT32_MAX || height > INT32_MAX) return NULL;
-    if (rect.x >= width || rect.y >= height || rect.width > width - rect.x || rect.height > height - rect.y) return NULL;
+vector_doc_render_view_stereo(VectorDoc *d, VectorView view, VectorRect rect, vector_image_lookup lookup, void *ctx, VectorStereo stereo) {
+    if (!view_is_valid(d, view) || !rect.width || !rect.height) return NULL;
+    if (rect.x >= view.cols || rect.y >= view.rows || rect.width > view.cols - rect.x || rect.height > view.rows - rect.y) return NULL;
     if (!sort_elements(d)) return NULL;
     const Rect area = {(int)rect.x, (int)rect.y, (int)(rect.x + rect.width), (int)(rect.y + rect.height)};
-    Render r = {.doc = d, .sorted = d->sorted, .nsorted = d->nsorted, .area = area, .lookup = lookup, .lookup_ctx = ctx, .stereo = stereo};
+    Render r = {.doc = d, .sorted = d->sorted, .nsorted = d->nsorted, .area = area, .view = {0, 0, view.cols, view.rows}, .lookup = lookup,
+        .lookup_ctx = ctx, .stereo = stereo};
     if (rect_size(area) > SIZE_MAX / (4 * sizeof(float))) return NULL;
     Canvas canvas = {.px = calloc(rect_size(area), 4 * sizeof(float)), .r = area};
     if (!canvas.px) return NULL;
     // The scale is that of the whole image whatever part of it is drawn, and
     // every step from here on works out a pixel from the geometry over that
-    // pixel alone, so the part comes out as it does when all of it is drawn
-    Mat m = {(double)width / d->width, 0, 0, (double)height / d->height, 0, 0};
+    // pixel alone, so the part comes out as it does when all of it is drawn.
+    // The whole image need not fit in memory, only the part of it held.
+    Mat m = {view.width / d->width, 0, 0, view.height / d->height, -view.x, -view.y};
     render_group(&r, &d->root, m, (Target){&canvas, NULL, BLEND_NORMAL});
     if (r.failed) {
         free(canvas.px);
@@ -2405,14 +3117,24 @@ vector_doc_render_stereo(VectorDoc *d, unsigned width, unsigned height, VectorRe
     return canvas.px;
 }
 
+static VectorView
+whole_view(unsigned width, unsigned height) {
+    return (VectorView){width, height, 0, 0, width, height};
+}
+
+float *
+vector_doc_render_stereo(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx, VectorStereo stereo) {
+    return vector_doc_render_view_stereo(d, whole_view(width, height), rect, lookup, ctx, stereo);
+}
+
 float *
 vector_doc_render_linear(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
     return vector_doc_render_stereo(d, width, height, rect, lookup, ctx, (VectorStereo){0});
 }
 
 uint8_t *
-vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
-    float *linear = vector_doc_render_linear(d, width, height, rect, lookup, ctx);
+vector_doc_render_view(VectorDoc *d, VectorView view, VectorRect rect, vector_image_lookup lookup, void *ctx) {
+    float *linear = vector_doc_render_view_stereo(d, view, rect, lookup, ctx, (VectorStereo){0});
     if (!linear) return NULL;
     const size_t n = (size_t)rect.width * rect.height;
     uint8_t *out = malloc(n * 4);
@@ -2425,23 +3147,37 @@ vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect
 }
 
 uint8_t *
+vector_doc_render_rect(VectorDoc *d, unsigned width, unsigned height, VectorRect rect, vector_image_lookup lookup, void *ctx) {
+    return vector_doc_render_view(d, whole_view(width, height), rect, lookup, ctx);
+}
+
+uint8_t *
 vector_doc_render(VectorDoc *d, unsigned width, unsigned height, vector_image_lookup lookup, void *ctx) {
     return vector_doc_render_rect(d, width, height, (VectorRect){0, 0, width, height}, lookup, ctx);
 }
 
 bool
-vector_doc_damage(const VectorDoc *d, unsigned width, unsigned height, VectorRect *rect) {
-    *rect = (VectorRect){0, 0, width, height};
+vector_doc_damage_view(const VectorDoc *d, VectorView view, VectorRect *rect) {
+    *rect = (VectorRect){0, 0, view.cols, view.rows};
     if (d->damage_all) return true;
-    if (box_is_empty(d->damage) || !d->width || !d->height) return false;
-    const double sx = (double)width / d->width, sy = (double)height / d->height;
+    if (box_is_empty(d->damage) || !view_is_valid(d, view)) return false;
+    const double sx = view.width / d->width, sy = view.height / d->height;
     // The pixels the box touches and one more all round, since the box and
     // the edges inside it reach pixels by different arithmetic
-    const double x0 = fmax(0, floor(d->damage.x0 * sx) - 1), y0 = fmax(0, floor(d->damage.y0 * sy) - 1);
-    const double x1 = fmin(width, ceil(d->damage.x1 * sx) + 1), y1 = fmin(height, ceil(d->damage.y1 * sy) + 1);
-    if (!(x0 < x1 && y0 < y1)) return false;  // all of it is off the image
+    const double x0 = fmax(0, floor(d->damage.x0 * sx - view.x) - 1), y0 = fmax(0, floor(d->damage.y0 * sy - view.y) - 1);
+    const double x1 = fmin(view.cols, ceil(d->damage.x1 * sx - view.x) + 1), y1 = fmin(view.rows, ceil(d->damage.y1 * sy - view.y) + 1);
+    if (!(x0 < x1 && y0 < y1)) return false;  // all of it is off the part held
     *rect = (VectorRect){(unsigned)x0, (unsigned)y0, (unsigned)(x1 - x0), (unsigned)(y1 - y0)};
     return true;
+}
+
+bool
+vector_doc_damage(const VectorDoc *d, unsigned width, unsigned height, VectorRect *rect) {
+    if (!width || !height) {
+        *rect = (VectorRect){0, 0, width, height};
+        return d->damage_all;
+    }
+    return vector_doc_damage_view(d, whole_view(width, height), rect);
 }
 
 void
@@ -2450,16 +3186,13 @@ vector_doc_clear_damage(VectorDoc *d) {
     d->damage = empty_box;
 }
 
+// This is asked of every vector image whenever any image goes, so it looks
+// the id up rather than going through the elements
 bool
 vector_doc_image_changed(VectorDoc *d, uint32_t id) {
-    for (size_t i = 0; i < d->count; i++) {
-        const Elem *e = d->order[i];
-        if (e && e->type == 'i' && e->ref == id) {
-            d->damage_all = true;
-            return true;
-        }
-    }
-    return false;
+    if (vt_is_end(vt_get(&d->image_refs, id))) return false;
+    d->damage_all = true;
+    return true;
 }
 
 // }}}
