@@ -322,6 +322,28 @@ increment_bg_image_idx(size_t idx, int delta) {
     return global_state.background_images.count ? global_state.background_images.count - 1 : 0;
 }
 
+// Makes room for one more OS window, before its native window is made, so that a window that cannot have it is
+// refused instead of aborting. The OS windows move when the array grows, which is why nothing keeps a pointer to one:
+// the window the callbacks are for is found again here, and the caller gives the native windows their new pointers,
+// see update_os_window_references().
+bool
+reserve_os_window_slot(void) {
+    if (global_state.num_os_windows < global_state.capacity) return true;
+    if (global_state.num_os_windows >= SIZE_MAX / 2 / sizeof(OSWindow)) return false;
+    const size_t new_capacity = MAX((size_t)4, 2 * global_state.num_os_windows);
+    bool ok = false;
+    WITH_OS_WINDOW_REFS
+    OSWindow *grown = realloc(global_state.os_windows, new_capacity * sizeof(OSWindow));
+    if (grown) {
+        memset(grown + global_state.capacity, 0, (new_capacity - global_state.capacity) * sizeof(OSWindow));
+        global_state.os_windows = grown;
+        global_state.capacity = new_capacity;
+        ok = true;
+    }
+    END_WITH_OS_WINDOW_REFS
+    return ok;
+}
+
 OSWindow *
 add_os_window(void) {
     WITH_OS_WINDOW_REFS
@@ -2237,8 +2259,40 @@ request_callback_with_thumbnail(PyObject *self UNUSED, PyObject *args) {
 #define M(name, arg_type) {#name, (PyCFunction)name, arg_type, NULL}
 #define MW(name, arg_type) {#name, (PyCFunction)py##name, arg_type, NULL}
 
+// test only: makes room for count more OS windows one at a time, as create_os_window() does, filling each with an
+// empty window, and checks that the window callbacks are for is still found after the array moved. The windows are
+// taken away again. Must not be called while there are real OS windows.
+static PyObject *
+pytest_reserve_os_windows(PyObject *self UNUSED, PyObject *args) {
+    unsigned long count;
+    if (!PyArg_ParseTuple(args, "k", &count)) return NULL;
+    if (global_state.num_os_windows) {
+        PyErr_SetString(PyExc_RuntimeError, "Cannot test reserving OS windows while there are OS windows");
+        return NULL;
+    }
+    bool ok = true;
+    id_type first_id = 0;
+    for (unsigned long n = 0; n < count && ok; n++) {
+        if (!reserve_os_window_slot()) return PyErr_NoMemory();
+        OSWindow *w = global_state.os_windows + global_state.num_os_windows++;
+        zero_at_ptr(w);
+        w->id = ++global_state.os_window_id_counter;
+        if (!n) {
+            first_id = w->id;
+            global_state.callback_os_window = w;
+        }
+        ok = global_state.callback_os_window && global_state.callback_os_window->id == first_id;
+    }
+    const size_t capacity = global_state.capacity;
+    for (size_t i = 0; i < global_state.num_os_windows; i++) ok = ok && global_state.os_windows[i].id == first_id + i;
+    global_state.callback_os_window = NULL;
+    global_state.num_os_windows = 0;
+    return Py_BuildValue("Ok", ok ? Py_True : Py_False, (unsigned long)capacity);
+}
+
 static PyMethodDef module_methods[] = {
     M(os_window_focus_counters, METH_NOARGS),
+    {"test_reserve_os_windows", (PyCFunction)pytest_reserve_os_windows, METH_VARARGS, NULL},
     M(get_mouse_data_for_window, METH_VARARGS),
     M(request_callback_with_thumbnail, METH_VARARGS),
     M(set_tab_being_dragged, METH_VARARGS),

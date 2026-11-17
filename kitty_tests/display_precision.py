@@ -57,3 +57,11 @@ class TestDisplayPrecision(BaseTest):
         report = self.report(screen, 'query:id=2147483647')
         self.ae(report['precision'], 'configured')
         self.assertGreater(len(screen.callbacks.wtcbuf), 256)
+
+    def test_output_fields_without_a_window(self):
+        # Silkie's own surface is known only once a window has been drawn; until then nothing is guessed
+        screen = self.create_screen(options={'display_info': 'color=rgb bits=10'})
+        report = self.report(screen)
+        self.ae((report['output_bits'], report['output_type'], report['output_dither']), ('0', 'unknown', '0'))
+        report = self.report(screen, 'mode:mode=1')
+        self.ae((report['output_bits'], report['output_type'], report['output_dither']), ('0', 'unknown', '0'))

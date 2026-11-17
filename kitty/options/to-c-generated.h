@@ -1410,6 +1410,32 @@ convert_from_opts_hdr(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_deep_color(PyObject *val, Options *opts) {
+    opts->deep_color = deep_color(val);
+}
+
+static void
+convert_from_opts_deep_color(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "deep_color");
+    if (ret == NULL) return;
+    convert_from_python_deep_color(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_output_dither(PyObject *val, Options *opts) {
+    opts->output_dither = PyObject_IsTrue(val);
+}
+
+static void
+convert_from_opts_output_dither(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "output_dither");
+    if (ret == NULL) return;
+    convert_from_python_output_dither(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_hdr_max_headroom(PyObject *val, Options *opts) {
     opts->hdr_max_headroom = PyFloat_AsFloat(val);
 }
@@ -2003,6 +2029,10 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_dim_opacity(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_hdr(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_deep_color(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_output_dither(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_hdr_max_headroom(py_opts, opts);
     if (PyErr_Occurred()) return false;

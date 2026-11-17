@@ -456,6 +456,12 @@ hdr(PyObject *val) {
     return HDR_OFF;
 }
 
+static inline DeepColorMode
+deep_color(PyObject *val) {
+    if (PyUnicode_CompareWithASCIIString(val, "never") == 0) return DEEP_COLOR_NEVER;
+    return DEEP_COLOR_ALWAYS;
+}
+
 static inline int
 macos_colorspace(PyObject *csname) {
     if (PyUnicode_CompareWithASCIIString(csname, "srgb") == 0) return 1;

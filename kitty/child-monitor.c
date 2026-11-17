@@ -53,7 +53,7 @@ typedef struct {
 
         PyObject *dump_callback,
         *update_screen, *death_notify;
-    unsigned int count;
+    size_t count;
     bool shutting_down;
     pthread_t io_thread, talk_thread;
 
@@ -84,9 +84,14 @@ static const Child EMPTY_CHILD = {0};
 #define talk_mutex(op) pthread_mutex_##op(&talk_lock);
 
 
-static Child children[MAX_CHILDREN] = {{0}};
-static Child scratch[MAX_CHILDREN] = {{0}};
-static Child add_queue[MAX_CHILDREN] = {{0}}, remove_queue[MAX_CHILDREN] = {{0}}, remove_notify[MAX_CHILDREN] = {{0}};
+// A child goes from add_queue to children, in the I/O thread, and from there to remove_queue, from which the main thread
+// takes it to remove_notify; scratch is the main thread's copy of children. All of them grow as children are added,
+// see reserve_child_slot(), so that a child can always move on once it has been added, without the memory for it
+// having to be found in the I/O thread. Only children_fds, which poll() uses without the lock, is grown by the I/O
+// thread, which polls it, see add_children(). Children are referred to by id, never by pointer or index, as these
+// arrays move and the entries in children shift when one is removed.
+static Child *children = NULL, *scratch = NULL, *add_queue = NULL, *remove_queue = NULL, *remove_notify = NULL;
+static size_t children_capacity = 0, scratch_capacity = 0, add_queue_capacity = 0, remove_queue_capacity = 0, remove_notify_capacity = 0;
 // Pending input of each child, as the I/O thread last saw it. Parallel to children and
 // only used by the I/O thread, so it needs no lock.
 typedef struct {
@@ -97,9 +102,12 @@ typedef struct {
     // Bytes were committed since pending was queried
     bool stale;
 } ChildInputWake;
-static ChildInputWake child_input_wake[MAX_CHILDREN] = {{{0}}};
+// Grown with children_fds, in add_children(), the only place children are added to
+static ChildInputWake *child_input_wake = NULL;
+static size_t child_input_wake_capacity = 0;
 static size_t add_queue_count = 0, remove_queue_count = 0;
-static struct pollfd children_fds[MAX_CHILDREN + EXTRA_FDS] = {{0}};
+static struct pollfd *children_fds = NULL;
+static size_t children_fds_capacity = 0;
 static pthread_mutex_t children_lock, talk_lock;
 static bool kill_signal_received = false, reload_config_signal_received = false;
 static ChildMonitor *the_monitor = NULL;
@@ -109,10 +117,45 @@ typedef struct {
     int status;
 } ReapedPID;
 
-static pid_t monitored_pids[256] = {0};
-static size_t monitored_pids_count = 0;
-static ReapedPID reaped_pids[arraysz(monitored_pids)] = {{0}};
-static size_t reaped_pids_count = 0;
+// A pid goes from monitored_pids to reaped_pids when it dies, so reserving room in both when one is monitored means
+// one that dies can always be recorded, see monitor_pid()
+static pid_t *monitored_pids = NULL;
+static size_t monitored_pids_count = 0, monitored_pids_capacity = 0;
+static ReapedPID *reaped_pids = NULL;
+static size_t reaped_pids_count = 0, reaped_pids_capacity = 0;
+
+// Makes *items, an array of entries of size bytes, room for at least needed entries, the new ones zeroed. Returns
+// false, changing nothing, when that much memory cannot be had.
+static bool
+grow_array(void **items, size_t *capacity, size_t needed, size_t size) {
+    if (needed <= *capacity) return true;
+    size_t new_capacity = *capacity < 16 ? 16 : *capacity;
+    while (new_capacity < needed) {
+        if (new_capacity > SIZE_MAX / 2) {
+            new_capacity = needed;
+            break;
+        }
+        new_capacity *= 2;
+    }
+    if (new_capacity > SIZE_MAX / size) return false;
+    void *grown = realloc(*items, new_capacity * size);
+    if (!grown) return false;
+    memset((char *)grown + *capacity * size, 0, (new_capacity - *capacity) * size);
+    *items = grown;
+    *capacity = new_capacity;
+    return true;
+}
+#define GROW(name, needed) grow_array((void **)&name, &name##_capacity, needed, sizeof(name[0]))
+
+// Room for one more child in every array it can be in, with the children lock held. The number of children in all
+// of them together grows only here.
+static bool
+reserve_child_slot(size_t count) {
+    if (count > SIZE_MAX - add_queue_count - remove_queue_count - 1) return false;
+    const size_t total = count + add_queue_count + remove_queue_count + 1;
+    return GROW(add_queue, add_queue_count + 1) && GROW(children, total) && GROW(remove_queue, total) && GROW(scratch, total) &&
+           GROW(remove_notify, total);
+}
 
 
 // Main thread functions {{{
@@ -180,6 +223,8 @@ new_childmonitor_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwd
         return NULL;
     }
     if (!PyArg_ParseTuple(args, "OO|ii", &death_notify, &dump_callback, &talk_fd, &listen_fd)) return NULL;
+    // the fds polled before any child is added, the wakeup and signal fds
+    if (!GROW(children_fds, EXTRA_FDS + 1)) return PyErr_NoMemory();
     if ((ret = pthread_mutex_init(&children_lock, NULL)) != 0) {
         PyErr_Format(PyExc_RuntimeError, "Failed to create children_lock mutex: %s", strerror(ret));
         return NULL;
@@ -338,9 +383,9 @@ static PyObject *
 add_child(ChildMonitor *self, PyObject *args) {
 #define add_child_doc "add_child(id, pid, fd, screen) -> Add a child."
     children_mutex(lock);
-    if (self->count + add_queue_count >= MAX_CHILDREN) {
-        PyErr_SetString(PyExc_ValueError, "Too many children");
+    if (!reserve_child_slot(self->count)) {
         children_mutex(unlock);
+        PyErr_SetString(PyExc_MemoryError, "Out of memory adding a child");
         return NULL;
     }
     add_queue[add_queue_count] = EMPTY_CHILD;
@@ -781,7 +826,7 @@ resize_pty(ChildMonitor *self, PyObject *args) {
     if (fd == -1) FIND(add_queue, add_queue_count);
     if (fd != -1) {
         if (!pty_resize(fd, &dim)) PyErr_SetFromErrno(PyExc_OSError);
-    } else log_error("Failed to send resize signal to child with id: %lu (children count: %u) (add queue: %zu)", window_id, self->count, add_queue_count);
+    } else log_error("Failed to send resize signal to child with id: %lu (children count: %zu) (add queue: %zu)", window_id, self->count, add_queue_count);
     children_mutex(unlock);
     if (PyErr_Occurred()) return NULL;
     Py_RETURN_NONE;
@@ -809,7 +854,7 @@ pyset_iutf8(ChildMonitor *self, PyObject *args) {
     for (size_t i = 0; i < self->count; i++) {
         if (children[i].id == window_id) {
             found = Py_True;
-            if (!set_iutf8(children_fds[EXTRA_FDS + i].fd, on & 1)) PyErr_SetFromErrno(PyExc_OSError);
+            if (!set_iutf8(children[i].fd, on & 1)) PyErr_SetFromErrno(PyExc_OSError);
             break;
         }
     }
@@ -911,6 +956,16 @@ sync_ime_position_with_cursor(OSWindow *os_window, Window *w) {
     update_ime_state_in_os_window(os_window, w, 0);
 }
 
+// A screen whose VAO could not be made for want of memory gets another try each time it is about to be drawn, and
+// all of its data is sent to the GPU once it has one. Returns whether it has one.
+static bool
+retry_cell_vao(ssize_t *vao_idx, Screen *screen) {
+    if (*vao_idx >= 0) return true;
+    if (!ensure_cell_vao(vao_idx)) return false;
+    screen->reload_all_gpu_data = true;
+    return true;
+}
+
 static bool
 prepare_to_render_os_window(
     OSWindow *os_window,
@@ -928,7 +983,8 @@ prepare_to_render_os_window(
     // A window in a wide gamut is converted to it as a whole, after everything is drawn
     os_window->needs_layers =
         (!global_state.supports_framebuffer_srgb || effective_os_window_alpha(os_window) < 1.f || os_window->live_resize.in_progress ||
-         (background_image_for_os_window(os_window) != NULL) || os_window->shader_anim.has_active_shaders || os_window->wide_gamut || os_window->spatial.mode);
+         (background_image_for_os_window(os_window) != NULL) || os_window->shader_anim.has_active_shaders || os_window->wide_gamut || os_window->spatial.mode ||
+         os_window->output.encode_in_shader || output_dither_levels(os_window, NULL));
     if (TD.screen && os_window->num_tabs && !os_window->has_too_few_tabs) {
         if (!os_window->tab_bar_data_updated) {
             call_boss(update_tab_bar_data, "K", os_window->id);
@@ -939,7 +995,7 @@ prepare_to_render_os_window(
         zero_at_ptr(cri);
         cri->x = TD.screen->cursor->x;
         cri->y = TD.screen->cursor->y;
-        if (send_cell_data_to_gpu(TD.vao_idx, TD.screen, os_window)) needs_render = true;
+        if (retry_cell_vao(&TD.vao_idx, TD.screen) && send_cell_data_to_gpu(TD.vao_idx, TD.screen, os_window)) needs_render = true;
         os_window->needs_layers = os_window->needs_layers || screen_needs_rendering_in_layers(os_window, NULL, TD.screen);
     }
     if (OPT(mouse_hide.hide_wait) > 0 && !is_mouse_hidden(os_window)) {
@@ -1045,7 +1101,7 @@ prepare_to_render_os_window(
                     set_maximum_wait(min_gap);
                 }
             }
-            if (send_cell_data_to_gpu(WD.vao_idx, WD.screen, os_window)) needs_render = true;
+            if (retry_cell_vao(&WD.vao_idx, WD.screen) && send_cell_data_to_gpu(WD.vao_idx, WD.screen, os_window)) needs_render = true;
             // Must be after send_cell_data_to_gpu() as that updates the graphics layers, which
             // determine whether there are images that need rendering in layers. Otherwise, a newly
             // placed image is not drawn until something else causes a re-render, see #10875
@@ -1058,7 +1114,7 @@ prepare_to_render_os_window(
             WindowRenderData *trd = &w->window_title_render_data;
             if (trd->screen && trd->geometry.bottom > trd->geometry.top && trd->geometry.right > trd->geometry.left) {
                 trd->screen->cursor_render_info.is_visible = false;
-                if (send_cell_data_to_gpu(trd->vao_idx, trd->screen, os_window)) needs_render = true;
+                if (retry_cell_vao(&trd->vao_idx, trd->screen) && send_cell_data_to_gpu(trd->vao_idx, trd->screen, os_window)) needs_render = true;
             }
         }
     }
@@ -1159,6 +1215,8 @@ render_prepared_os_window(
     set_gpu_viewport(os_window->viewport_width, os_window->viewport_height);
     setup_os_window_for_rendering(os_window, tab, NULL, true, now);
     BorderRects *br = &tab->border_rects;
+    // A tab whose VAO could not be made for want of memory gets another try, its borders are drawn once it has one
+    if (br->vao_idx < 0 && ensure_border_vao(&br->vao_idx)) br->is_dirty = true;
     draw_borders(br->vao_idx, br->num_border_rects, br->rect_buf, br->is_dirty, active_window_bg, num_visible_windows, all_windows_have_same_bg, os_window);
     br->is_dirty = false;
     if (TD.screen && os_window->num_tabs && !os_window->has_too_few_tabs) draw_cells(&TD, os_window, true, true, false, NULL, NULL, now);
@@ -1240,7 +1298,7 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
     }
     w->render_calls++;
     make_os_window_context_current(w);
-    if (!w->linear_output_checked) { w->linear_output = backbuffer_is_float(); w->linear_output_checked = true; }
+    if (!w->linear_output_checked) check_os_window_output(w);
     const float previous_headroom = effective_hdr_headroom(w);
     w->hdr_enabled_by_default = glfwGetWindowHDRDefault(w->handle);
     w->hdr_headroom = glfwGetWindowHDRHeadroom(w->handle);
@@ -1252,6 +1310,26 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
         w->viewport_size_dirty = false;
         needs_render = true;
     }
+    // The depth of the display is taken in like its size: when it changes, the window gets what suits the new display
+    monotonic_t depth_wait;
+    if (update_output_depth(w, glfwIsWindowOutputDeep(w->handle), now, &depth_wait)) needs_render = true;
+    set_maximum_wait(depth_wait);
+#ifdef __APPLE__
+    // A floating point surface costs twice what an 8 bit one does, so a window has one only while it is of use
+    const bool want_float = os_window_wants_float_surface(w);
+    if (want_float != w->output.is_float && w->output.refused_switch != (want_float ? 2 : 1)) {
+        if (glfwCocoaSetWindowFloatSurface && glfwCocoaSetWindowFloatSurface(w->handle, want_float)) {
+            check_os_window_output(w);
+            os_window_surface_switched(w);
+            bind_shader_globals_to_current_context();
+            set_gpu_viewport(w->viewport_width, w->viewport_height);
+            w->viewport_size_dirty = false;
+            w->output.refused_switch = 0;
+            debug_rendering("The window %llu now has %s surface\n", w->id, want_float ? "a floating point" : "an 8 bit");
+        } else w->output.refused_switch = want_float ? 2 : 1;
+        needs_render = true;
+    }
+#endif
     unsigned int active_window_id = 0, num_visible_windows = 0;
     bool all_windows_have_same_bg;
     color_type active_window_bg = 0;
@@ -1295,11 +1373,26 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
         set_maximum_wait(interval - (now - os_window->display_info_at));
         return;
     }
+    // The depth of the display can change without anything being drawn
+    if (os_window->handle) {
+        monotonic_t depth_wait;
+        const bool depth_changed = update_output_depth(os_window, glfwIsWindowOutputDeep(os_window->handle), now, &depth_wait);
+        set_maximum_wait(depth_wait);
+        if (depth_changed && os_window->display_info_at) {
+            // The window takes in the change when it is next drawn, perhaps with another surface, and that is what
+            // the next report is of, so that programs get one event with the outcome
+            os_window->needs_render = true;
+            os_window->display_info_at = now;
+            set_maximum_wait(interval);
+            return;
+        }
+    }
     DisplayInfo d, *o = &os_window->display_info;
     os_window_display_info(os_window, &d);
     const bool color_changed = os_window->display_info_at && (d.kind != o->kind || d.color != o->color || d.gamut != o->gamut || d.bits != o->bits ||
         d.red_bits != o->red_bits || d.green_bits != o->green_bits || d.blue_bits != o->blue_bits || d.gray_bits != o->gray_bits ||
-        strcmp(d.precision, o->precision) || d.headroom != o->headroom);
+        strcmp(d.precision, o->precision) || d.headroom != o->headroom || d.output_bits != o->output_bits || strcmp(d.output_type, o->output_type) ||
+        d.output_dither != o->output_dither);
     const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi));
     *o = d;
     os_window->display_info_at = now;
@@ -1407,17 +1500,39 @@ sig_queue(PyObject *self UNUSED, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+// With the children lock held
+static bool
+add_monitored_pid(pid_t pid) {
+    const size_t total = monitored_pids_count + reaped_pids_count;
+    if (total == SIZE_MAX || !GROW(monitored_pids, monitored_pids_count + 1) || !GROW(reaped_pids, total + 1)) return false;
+    monitored_pids[monitored_pids_count++] = pid;
+    return true;
+}
+
+// With the children lock held
+static void
+record_reaped_pid(pid_t pid, int status) {
+    for (ssize_t i = monitored_pids_count - 1; i >= 0; i--) {
+        if (pid == monitored_pids[i]) {
+            // room for it was reserved when it was monitored
+            if (reaped_pids_count < reaped_pids_capacity) {
+                reaped_pids[reaped_pids_count].status = status;
+                reaped_pids[reaped_pids_count++].pid = pid;
+            }
+            remove_i_from_array(monitored_pids, (size_t)i, monitored_pids_count);
+        }
+    }
+}
+
 static PyObject *
 monitor_pid(PyObject *self UNUSED, PyObject *args) {
     int pid;
     bool ok = true;
     if (!PyArg_ParseTuple(args, "i", &pid)) return NULL;
     children_mutex(lock);
-    if (monitored_pids_count >= arraysz(monitored_pids)) {
-        PyErr_SetString(PyExc_RuntimeError, "Too many monitored pids");
+    if (!add_monitored_pid(pid)) {
+        PyErr_SetString(PyExc_MemoryError, "Out of memory monitoring a pid");
         ok = false;
-    } else {
-        monitored_pids[monitored_pids_count++] = pid;
     }
     children_mutex(unlock);
     if (!ok) return NULL;
@@ -1426,15 +1541,22 @@ monitor_pid(PyObject *self UNUSED, PyObject *args) {
 
 static void
 report_reaped_pids(void) {
-    static ReapedPID pids[64];
-    size_t i = 0;
+    // All of them are reported, the boss is called without the lock held. Without memory to copy them they are left
+    // for the next time.
+    ReapedPID *pids = NULL;
+    size_t count = 0;
     children_mutex(lock);
     if (reaped_pids_count) {
-        for (; i < reaped_pids_count && i < arraysz(pids); i++) { pids[i] = reaped_pids[i]; }
-        reaped_pids_count = 0;
+        pids = malloc(reaped_pids_count * sizeof(ReapedPID));
+        if (pids) {
+            memcpy(pids, reaped_pids, reaped_pids_count * sizeof(ReapedPID));
+            count = reaped_pids_count;
+            reaped_pids_count = 0;
+        }
     }
     children_mutex(unlock);
-    for (size_t n = 0; n < i; n++) { call_boss(on_monitored_pid_death, "li", (long)pids[n].pid, pids[n].status); }
+    for (size_t n = 0; n < count; n++) { call_boss(on_monitored_pid_death, "li", (long)pids[n].pid, pids[n].status); }
+    free(pids);
 }
 
 static void *
@@ -1810,9 +1932,18 @@ main_loop(ChildMonitor *self, PyObject *a UNUSED) {
 
 // I/O thread functions {{{
 
+// Moves the children added since the last time to those polled, with the children lock held. Room for them in children
+// was reserved when they were added; the room in children_fds, which poll() uses without the lock, is made here, in
+// the thread that polls. Without memory for it a child stays queued, and is tried again the next time round
 static void
 add_children(ChildMonitor *self) {
-    for (; add_queue_count > 0 && self->count < MAX_CHILDREN;) {
+    if (add_queue_count && (!GROW(children_fds, EXTRA_FDS + self->count + add_queue_count) || !GROW(child_input_wake, self->count + add_queue_count))) {
+        static bool reported = false;
+        if (!reported) log_error("Out of memory starting to read from new children, will try again");
+        reported = true;
+        return;
+    }
+    for (; add_queue_count > 0;) {
         add_queue_count--;
         children[self->count] = add_queue[add_queue_count];
         child_input_wake[self->count] = (ChildInputWake){0};
@@ -1847,7 +1978,7 @@ cleanup_child(ssize_t i) {
 
 
 static size_t
-remove_children(ChildMonitor *self) {
+remove_marked_children(ChildMonitor *self, bool cleanup) {
     // Returns the number of removed children whose close the main thread did not request
     size_t unrequested = 0;
     if (self->count > 0) {
@@ -1856,7 +1987,7 @@ remove_children(ChildMonitor *self) {
             if (children[i].needs_removal) {
                 count++;
                 if (!children[i].close_requested) unrequested++;
-                cleanup_child(i);
+                if (cleanup) cleanup_child(i);
                 remove_queue[remove_queue_count] = children[i];
                 remove_queue_count++;
                 children[i] = EMPTY_CHILD;
@@ -1872,6 +2003,13 @@ remove_children(ChildMonitor *self) {
         self->count -= count;
     }
     return unrequested;
+}
+
+// remove_queue has room for every child, reserved when it was added. Returns the number of removed children whose
+// close the main thread did not request
+static size_t
+remove_children(ChildMonitor *self) {
+    return remove_marked_children(self, true);
 }
 
 
@@ -1962,15 +2100,7 @@ mark_child_for_removal(ChildMonitor *self, pid_t pid, int exit_status) {
 static void
 mark_monitored_pids(pid_t pid, int status) {
     children_mutex(lock);
-    for (ssize_t i = monitored_pids_count - 1; i >= 0; i--) {
-        if (pid == monitored_pids[i]) {
-            if (reaped_pids_count < arraysz(reaped_pids)) {
-                reaped_pids[reaped_pids_count].status = status;
-                reaped_pids[reaped_pids_count++].pid = pid;
-            }
-            remove_i_from_array(monitored_pids, (size_t)i, monitored_pids_count);
-        }
-    }
+    record_reaped_pid(pid, status);
     children_mutex(unlock);
 }
 
@@ -2723,7 +2853,74 @@ send_data_to_peer(PyObject *self UNUSED, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+// test only: adds count children, as add_child() does, moves them to those polled, as the I/O thread does, removes
+// every remove_every-th one and takes the removed ones as the main thread does, without any child process, file
+// descriptor or thread, so it must not be called while a ChildMonitor exists. Returns the ids of the children left,
+// those removed, in the order taken, and the capacity of children.
+static PyObject *
+test_child_arrays(PyObject *self UNUSED, PyObject *args) {
+    unsigned long count, remove_every;
+    if (!PyArg_ParseTuple(args, "kk", &count, &remove_every)) return NULL;
+    if (the_monitor) {
+        PyErr_SetString(PyExc_RuntimeError, "Cannot test the child arrays while a ChildMonitor exists");
+        return NULL;
+    }
+    ChildMonitor fake = {0};
+    for (unsigned long n = 0; n < count; n++) {
+        if (!reserve_child_slot(fake.count)) return PyErr_NoMemory();
+        add_queue[add_queue_count++] = (Child){.id = n + 1, .fd = -1};
+        // the I/O thread takes them in batches of whatever was added since it last looked
+        if (n % 97 == 96) add_children(&fake);
+    }
+    add_children(&fake);
+    if (add_queue_count) return PyErr_NoMemory();
+    for (size_t i = 0; remove_every && i < fake.count; i++) {
+        if (children[i].id % remove_every == 0) children[i].needs_removal = true;
+    }
+    remove_marked_children(&fake, false);
+    RAII_PyObject(left, PyList_New(fake.count));
+    RAII_PyObject(removed, PyList_New(remove_queue_count));
+    if (!left || !removed) return NULL;
+    for (size_t i = 0; i < fake.count; i++) {
+        if (children_fds[EXTRA_FDS + i].fd != children[i].fd) {
+            PyErr_SetString(PyExc_AssertionError, "children_fds does not match children");
+            return NULL;
+        }
+        PyList_SET_ITEM(left, i, PyLong_FromUnsignedLong(children[i].id));
+    }
+    for (size_t i = 0; i < remove_queue_count; i++) PyList_SET_ITEM(removed, i, PyLong_FromUnsignedLong(remove_queue[i].id));
+    const size_t capacity = children_capacity;
+    for (size_t i = 0; i < fake.count; i++) children[i] = EMPTY_CHILD;
+    for (size_t i = 0; i < remove_queue_count; i++) remove_queue[i] = EMPTY_CHILD;
+    remove_queue_count = 0;
+    return Py_BuildValue("OOk", left, removed, (unsigned long)capacity);
+}
+
+// test only: monitors count pids, as monitor_pid() does, reaps every one of them, as the I/O thread does, and returns
+// how many were recorded as reaped, which must be all of them, and how many are still monitored
+static PyObject *
+test_monitored_pids(PyObject *self UNUSED, PyObject *args) {
+    unsigned long count;
+    if (!PyArg_ParseTuple(args, "k", &count)) return NULL;
+    if (the_monitor) {
+        PyErr_SetString(PyExc_RuntimeError, "Cannot test the monitored pids while a ChildMonitor exists");
+        return NULL;
+    }
+    for (unsigned long n = 0; n < count; n++) {
+        if (!add_monitored_pid((pid_t)(1000000 + n))) return PyErr_NoMemory();
+        // some die before others are monitored
+        if (n % 3 == 2) record_reaped_pid((pid_t)(1000000 + n - 1), 0);
+    }
+    for (unsigned long n = 0; n < count; n++) record_reaped_pid((pid_t)(1000000 + n), (int)(n & 0xff));
+    const size_t reaped = reaped_pids_count, monitored = monitored_pids_count;
+    reaped_pids_count = 0;
+    monitored_pids_count = 0;
+    return Py_BuildValue("kk", (unsigned long)reaped, (unsigned long)monitored);
+}
+
 static PyMethodDef module_methods[] = {
+    METHODB(test_child_arrays, METH_VARARGS),
+    METHODB(test_monitored_pids, METH_VARARGS),
     METHODB(safe_pipe, METH_VARARGS),
     {"add_timer", (PyCFunction)add_python_timer, METH_VARARGS, ""},
     {"remove_timer", (PyCFunction)remove_python_timer, METH_VARARGS, ""},

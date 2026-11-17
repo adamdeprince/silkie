@@ -2080,9 +2080,10 @@ send_display_report(Screen *self, const char *op, int id, const DisplayInfo *d) 
     const char *key = id >= 0 ? "id" : "t", *mode = id >= 0 ? (self->display_events ? ":mode=1" : ":mode=0") : "";
     const unsigned long long serial = id >= 0 ? (unsigned)id : (unsigned long long)(MAX(0, monotonic()) / MONOTONIC_T_1e6);
     const char *format = "777;display;v=1:op=%s:%s=%llu%s:kind=%s:color=%s:bits=%d:gamut=%s:headroom=%g:scale=%g:period=%u:ppi=%g"
-        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s";
+        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d";
 #define DISPLAY_REPORT_ARGS op, key, serial, mode, d->kind, d->color, d->bits, d->gamut, d->headroom, d->scale, d->period_us, d->ppi, \
-    d->red_bits, d->green_bits, d->blue_bits, d->gray_bits, d->precision
+    d->red_bits, d->green_bits, d->blue_bits, d->gray_bits, d->precision, d->output_bits, d->output_type ? d->output_type : "unknown", \
+    d->output_dither
     const int n = snprintf(NULL, 0, format, DISPLAY_REPORT_ARGS);
     if (n < 0) return;
     const size_t size = (size_t)n + 1;
