@@ -45,6 +45,7 @@
 #include "vt-parser.h"
 #include "resize.h"
 #include "extension-fields.h"
+#include "deep-colors.h"
 
 static const ScreenModes empty_modes = {0, .mDECAWM = true, .mDECTCEM = true, .mDECARM = true};
 
@@ -914,6 +915,7 @@ dealloc(Screen *self) {
     free_vt_parser(self->vt_parser);
     self->vt_parser = NULL;
     self->text_cache = tc_decref(self->text_cache);
+    if (self->deep_colors_gpu.texture_id) free_texture(&self->deep_colors_gpu.texture_id);
     Py_CLEAR(self->main_grman);
     Py_CLEAR(self->alt_grman);
     Py_CLEAR(self->last_reported_cwd);
@@ -1226,6 +1228,44 @@ screen_garbage_collect_text_cache(Screen *self) {
     tc_gc_end(self->text_cache, gc);
     // the GC remaps all cache indices so the memoized tab indices are stale
     memset(&self->tab_cache, 0, sizeof(self->tab_cache));
+}
+
+static void
+deep_colors_mark_cells(DeepColors *dc, const GPUCell *cells, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        deep_colors_gc_mark(dc, cells[i].fg);
+        deep_colors_gc_mark(dc, cells[i].bg);
+        deep_colors_gc_mark(dc, cells[i].decoration_fg);
+    }
+}
+
+static void
+deep_colors_mark_cursor(DeepColors *dc, const Cursor *c) {
+    deep_colors_gc_mark(dc, c->sgr.fg);
+    deep_colors_gc_mark(dc, c->sgr.bg);
+    deep_colors_gc_mark(dc, c->sgr.decoration_fg);
+}
+
+void
+screen_garbage_collect_deep_colors(Screen *self) {
+    // Frees the deep colors no cell or cursor of the screen refers to any
+    // more, typically those of lines that scrolled out of the history buffer.
+    // The colors that remain keep their indices, see deep-colors.h.
+    DeepColors *dc = (DeepColors *)tc_deep_colors_if_present(self->text_cache);
+    if (!dc || !deep_colors_gc_begin(dc)) return; // allocation failure, table left unchanged
+    for (index_type y = 0; y < self->historybuf->count; y++)
+        deep_colors_mark_cells(dc, historybuf_gpu_cells(self->historybuf, y), self->historybuf->xnum);
+    LineBuf *linebufs[] = {self->main_linebuf, self->alt_linebuf, self->paused_rendering.linebuf};
+    for (size_t i = 0; i < arraysz(linebufs); i++)
+        if (linebufs[i]) deep_colors_mark_cells(dc, linebufs[i]->gpu_cell_buf, (size_t)linebufs[i]->ynum * linebufs[i]->xnum);
+    if (self->overlay_line.gpu_cells) deep_colors_mark_cells(dc, self->overlay_line.gpu_cells, self->overlay_line.xnum);
+    if (self->overlay_line.original_line.gpu_cells) deep_colors_mark_cells(dc, self->overlay_line.original_line.gpu_cells, self->overlay_line.xnum);
+    deep_colors_mark_cursor(dc, &self->overlay_line.original_line.cursor);
+    if (self->cursor) deep_colors_mark_cursor(dc, self->cursor);
+    deep_colors_mark_cursor(dc, &self->main_savepoint.cursor);
+    deep_colors_mark_cursor(dc, &self->alt_savepoint.cursor);
+    deep_colors_mark_cursor(dc, &self->paused_rendering.cursor);
+    deep_colors_gc_end(dc);
 }
 
 static bool
@@ -1857,6 +1897,8 @@ screen_alignment_display(Screen *self) {
 
 void
 select_graphic_rendition(Screen *self, int *params, unsigned int count, bool is_group, Region *region_) {
+    // Collect before parsing, which may intern a color that nothing refers to yet
+    if (deep_colors_should_gc(tc_deep_colors_if_present(self->text_cache))) screen_garbage_collect_deep_colors(self);
     if (region_) {
         Region region = *region_;
         if (!region.top) region.top = 1;
@@ -1877,7 +1919,7 @@ select_graphic_rendition(Screen *self, int *params, unsigned int count, bool is_
             num = MIN(num, self->columns - x);
             for (index_type y = region.top; y < MIN(region.bottom + 1, self->lines); y++) {
                 linebuf_init_line(self->linebuf, y);
-                apply_sgr_to_cells(self->linebuf->line->gpu_cells + x, num, params, count, is_group);
+                apply_sgr_to_cells(self->linebuf->line->gpu_cells + x, num, params, count, is_group, self->text_cache);
             }
         } else {
             index_type x, num;
@@ -1887,7 +1929,7 @@ select_graphic_rendition(Screen *self, int *params, unsigned int count, bool is_
                     x = MIN(region.left, self->columns - 1);
                     num = region.right >= x ? region.right - x + 1 : 0;
                     num = MIN(self->columns - x, num);
-                    apply_sgr_to_cells(self->linebuf->line->gpu_cells + x, num, params, count, is_group);
+                    apply_sgr_to_cells(self->linebuf->line->gpu_cells + x, num, params, count, is_group, self->text_cache);
                 }
             } else {
                 for (index_type y = region.top; y < MIN(region.bottom + 1, self->lines); y++) {
@@ -1902,12 +1944,12 @@ select_graphic_rendition(Screen *self, int *params, unsigned int count, bool is_
                         num = self->columns;
                     }
                     linebuf_init_line(self->linebuf, y);
-                    apply_sgr_to_cells(self->linebuf->line->gpu_cells + x, num, params, count, is_group);
+                    apply_sgr_to_cells(self->linebuf->line->gpu_cells + x, num, params, count, is_group, self->text_cache);
                 }
             }
         }
     } else {
-        cursor_from_sgr(self->cursor, params, count, is_group);
+        cursor_from_sgr(self->cursor, params, count, is_group, self->text_cache);
         self->sgr_blink_was_used |= self->cursor->sgr.blink;
     }
     if (is_group && params[0] == BG_ALPHA_CODE && count > 1 && params[1] < 100) self->has_translucent_cells = true;
@@ -4196,7 +4238,8 @@ screen_handle_kitty_dcs(Screen *self, const char *callback_name, PyObject *cmd) 
 
 void
 screen_request_capabilities(Screen *self, char c, const char *query) {
-    static char buf[128];
+    // large enough for the longest SGR report, "1$r0;" + cell_as_sgr() + "m"
+    static char buf[CELL_AS_SGR_MAX + 8];
     int shape = 0;
     switch (c) {
         case '+': {
@@ -4217,7 +4260,7 @@ screen_request_capabilities(Screen *self, char c, const char *query) {
                 shape = snprintf(buf, sizeof(buf), "1$r%d q", shape);
             } else if (strcmp("m", query) == 0) {
                 // SGR
-                const char *s = cursor_as_sgr(self->cursor);
+                const char *s = cursor_as_sgr(self->cursor, self->text_cache);
                 if (s && s[0]) shape = snprintf(buf, sizeof(buf), "1$r0;%sm", s);
                 else shape = snprintf(buf, sizeof(buf), "1$rm");
             } else if (strcmp("r", query) == 0) { // DECSTBM
@@ -5748,10 +5791,29 @@ update_overlay_line_data(Screen *self, uint8_t *data) {
 
 WRAP0(garbage_collect_hyperlink_pool)
 WRAP0(garbage_collect_text_cache)
+WRAP0(garbage_collect_deep_colors)
 
 static PyObject *
 text_cache_count(Screen *self, PyObject *a UNUSED) {
     return PyLong_FromUnsignedLong((unsigned long)tc_num_entries(self->text_cache));
+}
+
+static PyObject *
+deep_colors_stats(Screen *self, PyObject *a UNUSED) {
+    // (colors in use, slots in use or free), for tests
+    const DeepColors *dc = tc_deep_colors_if_present(self->text_cache);
+    return Py_BuildValue("nn", (Py_ssize_t)deep_colors_live(dc), (Py_ssize_t)deep_colors_slots(dc));
+}
+
+static PyObject *
+deep_color(Screen *self, PyObject *val) {
+    // The (r, g, b, gamut) a color word of a cell or cursor refers to, None
+    // if it is not a deep color of this screen
+    unsigned long c = PyLong_AsUnsignedLong(val);
+    if (PyErr_Occurred()) return NULL;
+    DeepColor d;
+    if (c > UINT32_MAX || !deep_colors_get(tc_deep_colors_if_present(self->text_cache), (color_type)c & ~BG_ALPHA_BITS, &d)) Py_RETURN_NONE;
+    return Py_BuildValue("HHHH", d.r, d.g, d.b, d.gamut);
 }
 
 static PyObject *
@@ -7847,7 +7909,8 @@ static PyMethodDef methods[] = {
             MND(reset_dirty, METH_NOARGS) MND(is_using_alternate_linebuf, METH_NOARGS) MND(is_main_linebuf, METH_NOARGS) MND(cursor_move, METH_VARARGS)
                 MND(erase_in_line, METH_VARARGS) MND(erase_in_display, METH_VARARGS) MND(clear_scrollback, METH_NOARGS)
                     MND(scroll_until_cursor_prompt, METH_VARARGS) MND(hyperlinks_as_set, METH_NOARGS) MND(garbage_collect_hyperlink_pool, METH_NOARGS)
-                        MND(garbage_collect_text_cache, METH_NOARGS) MND(text_cache_count, METH_NOARGS) MND(hyperlink_for_id, METH_O)
+                        MND(garbage_collect_text_cache, METH_NOARGS) MND(text_cache_count, METH_NOARGS) MND(garbage_collect_deep_colors, METH_NOARGS)
+                            MND(deep_colors_stats, METH_NOARGS) MND(deep_color, METH_O) MND(hyperlink_for_id, METH_O)
                             MND(reverse_scroll, METH_VARARGS) MND(scroll_prompt_to_bottom, METH_NOARGS) METHOD(current_char_width, METH_NOARGS)
                                 MND(insert_lines, METH_VARARGS)
                                     MND(delete_lines, METH_VARARGS){"insert_characters", (PyCFunction)py_insert_characters, METH_O, ""},

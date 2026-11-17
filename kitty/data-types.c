@@ -12,6 +12,8 @@
 #undef _DARWIN_C_SOURCE
 #endif
 
+#include "deep-colors.h"
+
 #include "char-props.h"
 #include "launcher/utils.h"
 #include "line.h"
@@ -829,7 +831,19 @@ set_uint_at_address(PyObject *self UNUSED, PyObject *const *args, Py_ssize_t nar
     Py_RETURN_NONE;
 }
 
+static PyObject *
+py_deep_colors_max_entries(PyObject *self UNUSED, PyObject *args) {
+    // Test only: read, and optionally set, the limit on the size of every
+    // deep color table, see deep-colors.h
+    Py_ssize_t n = -1;
+    if (!PyArg_ParseTuple(args, "|n", &n)) return NULL;
+    const size_t prev = deep_colors_max_entries();
+    if (n >= 0) deep_colors_set_max_entries((size_t)n);
+    return PyLong_FromSize_t(prev);
+}
+
 static PyMethodDef module_methods[] = {
+    {"deep_colors_max_entries", py_deep_colors_max_entries, METH_VARARGS, ""},
     METHODB(replace_c0_codes_except_nl_space_tab, METH_O),
     METHODB(read_file, METH_O),
     {"parse_cli_from_spec", parse_cli_from_python_spec, METH_VARARGS, ""},
@@ -1011,6 +1025,7 @@ PyInit_fast_data_types(void) {
     PyModule_AddIntConstant(m, "HDR_MASK", HDR_MASK);
     PyModule_AddIntConstant(m, "GAMUT_MASK", GAMUT_MASK);
     PyModule_AddIntConstant(m, "COLOR_TYPE_MASK", COLOR_TYPE_MASK);
+    PyModule_AddIntConstant(m, "DEEP_COLOR_TYPE", DEEP_COLOR_TYPE);
     PyModule_AddIntConstant(m, "BG_ALPHA_SHIFT", BG_ALPHA_SHIFT);
     PyModule_AddIntConstant(m, "BG_ALPHA_MASK", BG_ALPHA_MASK);
     PyModule_AddStringMacro(m, ERROR_PREFIX);

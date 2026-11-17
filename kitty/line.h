@@ -142,8 +142,15 @@ cleanup_ansibuf(ANSIBuf *b) {
 #define RAII_ANSIBuf(name) __attribute__((cleanup(cleanup_ansibuf))) ANSIBuf name = {0}
 
 Line *alloc_line(TextCache *text_cache);
-void apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, unsigned int count, bool is_group);
-const char *cell_as_sgr(const GPUCell *, const GPUCell *);
+void cursor_from_sgr(Cursor *self, int *params, unsigned int count, bool is_group, TextCache *tc);
+const char *cursor_as_sgr(const Cursor *, const TextCache *);
+void apply_sgr_to_cells(GPUCell *first_cell, unsigned int cell_count, int *params, unsigned int count, bool is_group, TextCache *tc);
+// The longest output of cell_as_sgr() is bounded, it has one of each item at its longest:
+// "22;1;2;3;7;9;5;" 15, "56:1675;57:1675;" 16, "38:2:2:255:255:255;" and the
+// same for 48 19 each, "70:100;" 7, "58:2:2:255:255:255;" 19, "4:5;" 4, and
+// three deep forms "m\x1b[38:0:2:65535:65535:65535" 28 each: 183 bytes and a nul.
+#define CELL_AS_SGR_MAX 256
+const char *cell_as_sgr(const GPUCell *, const GPUCell *, const TextCache *, bool deep_in_own_sequence);
 static inline bool
 cell_has_text(const CPUCell *c) {
     return c->ch_and_idx != 0;

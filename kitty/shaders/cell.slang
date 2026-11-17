@@ -188,6 +188,10 @@ vertex_main(
         float in_url = float((is_selected >> 1) & BIT_MASK);
         // an unset decoration color is the foreground, in its gamut
         float3 decoration_fg = if_one_then(float(one_if_equal_zero_otherwise(colors[2] & BYTE_MASK, 0u)), foreground, to_color(colors[2], fg_as_uint));
+        if (is_deep_color(colors[2])) {
+            DeepColorValue d = load_deep_color(colors[2]);
+            decoration_fg = convert_gamut(d.rgb, d.gamut);
+        }
         vo.decoration_fg = if_one_then(in_url, crd.url_color_lin.rgb, decoration_fg);
         // Selection
         float3 selection_color = if_one_then(crd.use_cell_bg_for_selection_fg, bo.bg, crd.highlight_fg_lin.rgb);

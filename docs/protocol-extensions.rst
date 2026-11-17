@@ -27,6 +27,7 @@ please do so by opening issues in the `GitHub bug tracker
    underlines
    graphics-protocol
    wide-gamut-protocol
+   deep-color-protocol
    vector-protocol
    keyboard-protocol
    text-sizing-protocol

@@ -36,6 +36,9 @@ shows a Display P3 background. Decorations, underline and strikethrough, use
 the foreground and its gamut unless a decoration color is set with ``58``,
 which is always sRGB.
 
+Colors with more than eight bits per channel, in any of these gamuts, are
+given with the :doc:`deep-color-protocol`.
+
 Terminals that do not know the id skip it, so a program can emit the id
 unconditionally and get the same color interpreted as sRGB elsewhere, which
 is a little less saturated and never wrong. The id is only recognized in the

@@ -50,6 +50,7 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
    gpu-surface-protocol
    hdr-protocol
    wide-gamut-protocol
+   deep-color-protocol
    cell-alpha-protocol
 
 .. toctree::

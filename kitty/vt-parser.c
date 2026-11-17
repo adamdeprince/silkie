@@ -1220,6 +1220,15 @@ _parse_sgr(PS *self, ParsedCSI *csi) {
                         state = csi->is_sub_param[pos] ? SUB_PARAMS : COLOR1;
                         num_params++;
                         break;
+                    case DEEP_COLOR_SGR_TYPE:
+                        // only the colon form has the deep colors of docs/deep-color-protocol.rst
+                        if (csi->is_sub_param[pos]) {
+                            state = SUB_PARAMS;
+                            num_params++;
+                            break;
+                        }
+                        REPORT_ERROR("SGR escape code has a deep color in the semicolon form ignoring the full code");
+                        return false;
                     default: REPORT_ERROR("SGR escape code has unknown color type: %d ignoring the full code", csi->params[pos]); return false;
                 }
                 break;

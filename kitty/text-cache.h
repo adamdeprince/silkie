@@ -63,6 +63,13 @@ void tc_chars_at_index(const TextCache *self, char_type idx, ListOfChars *ans);
 unsigned tc_chars_at_index_ansi(const TextCache *self, char_type idx, ANSIBuf *output);
 char_type tc_get_or_insert_chars(TextCache *self, const ListOfChars *chars);
 char_type tc_num_entries(const TextCache *self);
+// The deep color table of the screen, see deep-colors.h. The text cache is
+// the per screen store that every Line, LineBuf and HistoryBuf of a screen
+// shares, so it carries the table to everything that reads cell colors.
+// tc_deep_colors() creates it on first use and returns NULL when out of memory.
+struct DeepColors;
+struct DeepColors *tc_deep_colors(TextCache *self);
+const struct DeepColors *tc_deep_colors_if_present(const TextCache *self);
 
 // Garbage collection: TextCache interns unique cell texts forever, so a
 // stream of unique multi-codepoint cells grows it without bound. The GC

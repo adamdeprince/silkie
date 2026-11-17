@@ -259,6 +259,12 @@ typedef struct {
         CursorRenderInfo cursor;
     } last_rendered;
     bool is_dirty, scroll_changed, reload_all_gpu_data, sgr_blink_was_used, has_translucent_cells;
+    // The texture the deep color table of the text cache is drawn from, see
+    // deep-colors.h, owned by the renderer
+    struct {
+        uint32_t texture_id;
+        unsigned width, height;
+    } deep_colors_gpu;
     // set once a multiline (scale > 1) char has been drawn, used to skip scanning for such chars in hot paths
     bool multiline_chars_used;
     // set when multiline chars may be cut off at the bottom of the main ([0]) or
@@ -418,6 +424,7 @@ typedef struct {
 
 void screen_align(Screen *);
 void screen_garbage_collect_text_cache(Screen *screen);
+void screen_garbage_collect_deep_colors(Screen *screen);
 void screen_restore_cursor(Screen *);
 void screen_save_cursor(Screen *);
 void screen_restore_modes(Screen *);
