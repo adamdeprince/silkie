@@ -500,7 +500,6 @@ typedef struct BackgroundImageRenderSettings {
     float opacity;
 } BackgroundImageRenderSettings;
 
-#define MAX_CUSTOM_SHADER_GROUPS 16
 // Passed to the custom shader pipeline as a preprocessor define by slang.py
 #define POINTER_MAP_SIZE 64
 
@@ -545,12 +544,26 @@ typedef enum {
     SHADER_ANIM_EVENT_CURSOR_TRAIL_STOP,
     NUM_SHADER_ANIM_EVENTS
 } ShaderAnimationEvent;
-// Events named by the pipeline itself, with the user: prefix, and fired by the
-// shader_event action occupy the bits above the builtin events
-#define SHADER_ANIM_FIRST_USER_EVENT 16
-#define MAX_SHADER_ANIM_USER_EVENTS (64 - SHADER_ANIM_FIRST_USER_EVENT)
-// Bitmask of ShaderAnimationEvent values and user events
+// Bitmask of ShaderAnimationEvent values, the builtin events. Its width is set
+// by the number of builtin events, which only changes with the code. Events
+// named by the pipeline itself, with the user: prefix, and fired by the
+// shader_event action are kept in growable sets instead, as there can be any
+// number of them.
 typedef uint64_t ShaderAnimEventMask;
+_Static_assert(NUM_SHADER_ANIM_EVENTS <= sizeof(ShaderAnimEventMask) * 8, "Too many builtin shader animation events for ShaderAnimEventMask");
+
+// A growable set of bits, bit i is bit i % 32 of words[i / 32]. The words are
+// 32 bit as sets of groups are passed to the custom shader pipeline as arrays
+// of uint.
+typedef struct ShaderBitset {
+    uint32_t *words;
+    size_t num_words; // allocated words, bits beyond them are unset
+} ShaderBitset;
+
+static inline bool
+shader_bitset_has(const ShaderBitset *s, size_t i) {
+    return i / 32 < s->num_words && (s->words[i / 32] >> (i % 32)) & 1u;
+}
 
 typedef struct OSWindow {
     void *handle;
@@ -623,17 +636,28 @@ typedef struct OSWindow {
         int last_v120_dir_x, last_v120_dir_y;
     } scroll;
     ShaderAnimEventMask shader_anim_event_registry;
+    // The user events of the current pipeline fired since the OS window was
+    // last rendered, by their index in the pipeline
+    struct {
+        ShaderBitset fired;
+        bool pending; // any bit is set in fired
+    } shader_user_events;
     id_type last_bell_window_id; // ID of the most recent window that received a bell event
-    ShaderGroupAnimState shader_group_anim[MAX_CUSTOM_SHADER_GROUPS];
+    // The animation state of each group of the current pipeline, with room for
+    // shader_group_anim_capacity groups. When that is less than the number of
+    // groups, as allocating more failed, the custom shaders are not drawn.
+    ShaderGroupAnimState *shader_group_anim;
+    size_t shader_group_anim_capacity;
     ShaderAnimState shader_anim;
     struct {
         // POINTER_MAP_SIZE x POINTER_MAP_SIZE (x, y) pairs, rows from the bottom up, in viewport UV
         float *data;
         int viewport_width, viewport_height;
         unsigned pipeline_generation;
-        // Bitmask of the groups whose pointer_map() functions data was computed
-        // from, zero when there are none and so pointer events are not moved
-        uint32_t groups;
+        // The groups whose pointer_map() functions data was computed from,
+        // when has_groups is set. Without any pointer events are not moved.
+        ShaderBitset groups;
+        bool has_groups;
     } pointer_map;
 } OSWindow;
 
@@ -842,7 +866,7 @@ record_os_window_focus_change_for_shaders(OSWindow *osw, bool focused) {
     const ShaderAnimEventMask out = (1u << SHADER_ANIM_EVENT_OS_WINDOW_FOCUS_OUT) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_OUT);
     osw->shader_anim_event_registry = (osw->shader_anim_event_registry & ~(focused ? out : in)) | (focused ? in : out);
 }
-bool custom_shader_needs_render(const ShaderAnimState *before, const ShaderAnimState *after, ShaderAnimEventMask event_mask, monotonic_t now);
+bool custom_shader_needs_render(const ShaderAnimState *before, const ShaderAnimState *after, bool had_events, monotonic_t now);
 void map_pointer_position(const OSWindow *os_window, double *x, double *y);
 void set_os_window_mouse_position(OSWindow *window, double x, double y);
 void swap_window_buffers(OSWindow *w);

@@ -97,7 +97,7 @@ class TestSlang(BaseTest):
         self.ae(simulate_custom_shader_render_ticks(8, 0xFF, True), [False] * 8)
 
     def test_custom_shader_user_events(self):
-        from kitty.fast_data_types import MAX_SHADER_ANIM_USER_EVENTS, fire_custom_shader_event, simulate_custom_shader_animation
+        from kitty.fast_data_types import fire_custom_shader_event, simulate_custom_shader_animation
         from kitty.options.utils import KeyAction, parse_key_action
 
         def pipeline(*groups: str):
@@ -127,9 +127,12 @@ class TestSlang(BaseTest):
         self.ae(pipeline('animation_toggle user:t')['groups'][0]['animation_end_duration'], 0)
         self.ae(pipeline('animation_toggle user:t\nanimation_stop 100')['groups'][0]['animation_end_duration'], 100_000_000)
         self.ae(pipeline('animation_start user:s\nanimation_toggle user:t')['groups'][0]['animation_end_duration'], -1)
-        many = '|'.join(f'user:e{i}' for i in range(MAX_SHADER_ANIM_USER_EVENTS + 1))
-        self.assertRaises(ValueError, pipeline, f'animation_start {many}')
-        pipeline(f'animation_start {many.rpartition("|")[0]}')
+        # Any number of user events and groups, well beyond a word of bits for each
+        many = pipeline(*(f'animation_toggle user:e{i}|user:x{i}' for i in range(100)), *('' for i in range(70)))
+        ticks: list[tuple[str, ...]] = [(), ('user:e3', 'user:x99'), ('user:e99',), ('user:x3',)]
+        states = simulate_custom_shader_animation(many, ticks)
+        on = lambda *groups: tuple(g in groups or g >= 100 for g in range(170))
+        self.ae(states, [on(), on(3, 99), on(3), on()])
 
         # The action
         self.ae(parse_key_action('shader_event find-cursor'), KeyAction('shader_event', ('find-cursor', 'active')))
@@ -811,6 +814,21 @@ float f() { static const float SCAN = 2; return SCAN; }
         self.assertTrue(pm_metadata['has_pointer_map'])
         self.ae(pm_metadata['pointer_map_groups'], [0, 2])
         self.assertIn('active_groups', pm_frag_src)
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            clear_caches()
+            # More groups than bits in a word: active_groups is an array with a bit per group
+            lines = []
+            for g in range(40):
+                lines.extend(('startgroup', 'animation_toggle user:t' if g == 35 else '', 'shaders crt' if g == 35 else 'shaders sample', 'endgroup'))
+            p = parse_pipeline_definition(lines, 'test')
+            try:
+                _, big_frag_src, big_metadata = build_custom_shader_pipeline_glsl(p, cache_dir=cache_dir)
+            finally:
+                clear_caches()
+        self.ae(big_metadata['pointer_map_groups'], [35])
+        self.assertRegex(big_frag_src, r'uniform\s+uint\s+active_groups_\d+\[2\];')
+        self.ae(big_metadata['loose_uniforms']['active_groups'].partition('[')[2], '0]')
 
         if not shutil.which('glslangValidator'):
             return

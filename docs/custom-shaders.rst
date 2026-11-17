@@ -294,7 +294,7 @@ _________________
 
 A group is the unit of rendering. Each group runs a chain of shaders in
 sequence, with the output color of one shader feeding as the input ``color``
-to the next. A pipeline may contain up to 16 groups.
+to the next. A pipeline may contain any number of groups.
 
 .. code-block:: none
 
@@ -615,8 +615,8 @@ be combined with ``|`` — any one of them will trigger the action.
    * - ``user:<name>``
      - Sent by the :ac:`shader_event` action, typically from a mapping, see
        :ref:`custom_shader_mappings`. ``<name>`` can be any combination of
-       letters, digits, underscores, hyphens and periods.
-       A pipeline can use up to 48 different user events.
+       letters, digits, underscores, hyphens and periods. A pipeline can use
+       any number of different user events.
 
 Note that if both a start event and a focus-out event fire in the same frame
 (for example, a mouse click that simultaneously moves focus away), the

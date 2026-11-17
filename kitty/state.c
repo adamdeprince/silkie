@@ -591,7 +591,13 @@ destroy_os_window_item(OSWindow *w) {
     if (w->persist_texture_id) free_texture(&w->persist_texture_id);
     if (w->persist_fbo_id) free_framebuffer(&w->persist_fbo_id);
     free(w->pointer_map.data);
+    free(w->pointer_map.groups.words);
     zero_at_ptr(&w->pointer_map);
+    free(w->shader_group_anim);
+    w->shader_group_anim = NULL;
+    w->shader_group_anim_capacity = 0;
+    free(w->shader_user_events.fired.words);
+    zero_at_ptr(&w->shader_user_events);
 }
 
 bool

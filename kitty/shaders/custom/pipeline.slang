@@ -67,9 +67,11 @@ static const float pointer_map_size = POINTER_MAP_SIZE;
 // Where the content visible at pos actually is, as decided by the pointer_map()
 // functions of the shaders that move content around. Shaders in groups that
 // are turned on and off by events apply only when the bit for their group is
-// set in active_groups.
+// set in active_groups, bit g being bit g % 32 of active_groups[g / 32].
+// ACTIVE_GROUP_WORDS, enough words for every group, is defined by kitty when
+// compiling.
 float2
-pipeline_pointer_map(float2 pos, uint active_groups) {
+pipeline_pointer_map(float2 pos, uint active_groups[ACTIVE_GROUP_WORDS]) {
     // POINTER_MAP
     return pos;
 }
@@ -78,7 +80,7 @@ pipeline_pointer_map(float2 pos, uint active_groups) {
 // is split over two 8 bit channels so that it is precise even on GPU drivers
 // that cannot render to 16 bit textures.
 float4
-encode_pointer_map(float2 texel_pos, uint active_groups) {
+encode_pointer_map(float2 texel_pos, uint active_groups[ACTIVE_GROUP_WORDS]) {
     // Spread the texels so that the first and last ones land exactly on the edges
     float2 pos = (texel_pos * pointer_map_size - 0.5f) / (pointer_map_size - 1.f);
     float2 q = round(saturate(pipeline_pointer_map(pos, active_groups)) * 65535.f);
@@ -87,7 +89,7 @@ encode_pointer_map(float2 texel_pos, uint active_groups) {
 }
 
 public float4
-pipeline_fragment_main(float2 backbuffer_pos, int group, float4 viewport, float animation_progress, bool convert_to_srgb, uint active_groups) {
+pipeline_fragment_main(float2 backbuffer_pos, int group, float4 viewport, float animation_progress, bool convert_to_srgb, uint active_groups[ACTIVE_GROUP_WORDS]) {
     float4 color = backbuffer.Sample(backbuffer_pos); // pre multiplied linear RGB
     color = float4(color.rgb / color.a, color.a);     // un pre multiplied color passed through pipeline
     // src_rect encodes (0, sy, sx, 0) — the fraction of the shared texture occupied by the current

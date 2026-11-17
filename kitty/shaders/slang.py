@@ -46,8 +46,6 @@ from kitty.fast_data_types import (
     GRAPHICS_PROGRAM,
     MARK,
     MARK_MASK,
-    MAX_CUSTOM_SHADER_GROUPS,
-    MAX_SHADER_ANIM_USER_EVENTS,
     PADDING_PROGRAM,
     POINTER_MAP_SIZE,
     REVERSE,
@@ -1769,15 +1767,12 @@ def parse_pipeline_definition(lines: Iterable[str], pipeline_name: str, pipeline
     if current_group is not None:
         raise ValueError('Unclosed group present')
     groups = groups or [init_group(pipeline_name)]
-    if len(groups) > MAX_CUSTOM_SHADER_GROUPS:
-        raise ValueError(f'Pipeline {pipeline_name!r} has {len(groups)} groups but the maximum is {MAX_CUSTOM_SHADER_GROUPS}')
     if groups[0]['attached']:
         raise ValueError('The first group in a pipeline cannot use attach (no previous group to attach to)')
     if groups[-1]['output_texture'] is not NamedTexture.default:
         raise ValueError('The final group cannot output to a named texture')
     if groups[-1]['viewport_pos'] != (0, 0) or groups[-1]['viewport_size'] != (1, 1):
         raise ValueError('The final group must not specify a viewport')
-    check_user_animation_events(groups, f'Pipeline {pipeline_name!r}')
 
     return {'slot': slot, 'textures': textures, 'groups': tuple(groups), 'vars': pipeline_vars, 'pipeline_dir': pipeline_dir}
 
@@ -1786,21 +1781,6 @@ def parse_pipeline_definition(lines: Iterable[str], pipeline_name: str, pipeline
 def parse_pipeline(name: str) -> Pipeline:
     lines, pipeline_dir = pipeline_definition(name)
     return parse_pipeline_definition(lines, name, pipeline_dir)
-
-
-def user_animation_events(groups: Iterable[Group]) -> tuple[str, ...]:
-    "The names, without the user: prefix, of all user events used by groups, in order of first use"
-    ans: dict[str, None] = {}
-    for g in groups:
-        for e in chain(g['animation_start'], g['animation_toggle'], g['animation_end_events']):
-            if e.startswith(USER_ANIMATION_EVENT_PREFIX):
-                ans[e[len(USER_ANIMATION_EVENT_PREFIX) :]] = None
-    return tuple(ans)
-
-
-def check_user_animation_events(groups: Iterable[Group], what: str) -> None:
-    if (n := len(user_animation_events(groups))) > MAX_SHADER_ANIM_USER_EVENTS:
-        raise ValueError(f'{what} uses {n} user events but the maximum is {MAX_SHADER_ANIM_USER_EVENTS}')
 
 
 def merge_pipelines(pipelines: list[Pipeline]) -> Pipeline:
@@ -1820,13 +1800,10 @@ def merge_pipelines(pipelines: list[Pipeline]) -> Pipeline:
     all_groups: list[Group] = []
     for p in pipelines:
         all_groups.extend(p['groups'])
-    if len(all_groups) > MAX_CUSTOM_SHADER_GROUPS:
-        raise ValueError(f'Chained pipelines have {len(all_groups)} groups combined but the maximum is {MAX_CUSTOM_SHADER_GROUPS}')
     if all_groups[-1]['output_texture'] is not NamedTexture.default:
         raise ValueError('The final group of the last pipeline cannot output to a named texture')
     if all_groups[-1]['viewport_pos'] != (0, 0) or all_groups[-1]['viewport_size'] != (1, 1):
         raise ValueError('The final group of the last pipeline must not specify a viewport')
-    check_user_animation_events(all_groups, 'Chained pipelines')
     merged_vars: dict[str, tuple[str, str]] = {}
     for p in pipelines:
         merged_vars.update(p['vars'])
@@ -1990,7 +1967,7 @@ def build_custom_shader_pipeline_ir(pipeline: Pipeline, cache_dir: str, invocati
         call = f'pos = {entry_point(g, s, "pointer_map")}(pos, csd);'
         if group_has_own_animation(pipeline['groups'][g]):
             # Applies only while the group is active
-            call = f'if ((active_groups & {1 << g}u) != 0u) {call}'
+            call = f'if ((active_groups[{g // 32}] & {1 << (g % 32)}u) != 0u) {call}'
         return call
 
     pointer_map_code = '\n    '.join(pointer_map_call(g, s) for g, s in pm)
@@ -2000,7 +1977,9 @@ def build_custom_shader_pipeline_ir(pipeline: Pipeline, cache_dir: str, invocati
     with tempfile.TemporaryDirectory() as tdir:
         for x in import_dirs:
             inc.extend(('-I', x))
-        cmd = bc + inc + [f'-DPOINTER_MAP_SIZE={POINTER_MAP_SIZE}', '-module-name', slot_module_name, '-o', ans, '--', '-']
+        cmd = bc + inc + [
+            f'-DPOINTER_MAP_SIZE={POINTER_MAP_SIZE}', f'-DACTIVE_GROUP_WORDS={active_group_words(pipeline)}',
+            '-module-name', slot_module_name, '-o', ans, '--', '-']
         invocation_tracker.add(tuple(cmd))
         cp = subprocess.run(cmd, cwd=tdir, capture_output=True, input=mod_src.encode())
         if cp.returncode != 0:
@@ -2013,7 +1992,12 @@ def build_custom_shader_pipeline_ir(pipeline: Pipeline, cache_dir: str, invocati
     return PipelineIR(tuple(import_dirs), ans, pm)
 
 
-def module_wrapper_for_slot(slot: str) -> bytes:
+def active_group_words(pipeline: Pipeline) -> int:
+    "The size of the active_groups uniform array, one bit per group, the same as group_words in shaders.c"
+    return max(1, (len(pipeline['groups']) + 31) // 32)
+
+
+def module_wrapper_for_slot(slot: str, group_words: int) -> bytes:
     return """
 #language slang 2026
 import MODULE;
@@ -2036,11 +2020,11 @@ float4 fmain_wrap(
     uniform float4 viewport,
     uniform float animation_progress,
     uniform bool convert_to_srgb,
-    uniform uint active_groups
+    uniform uint active_groups[GROUP_WORDS]
 ) : SV_Target {
     return pipeline_fragment_main(texcoord, group, viewport, animation_progress, convert_to_srgb, active_groups);
 }
-        """.replace('MODULE', slot.replace('-', '_')).encode()
+        """.replace('MODULE', slot.replace('-', '_')).replace('GROUP_WORDS', str(group_words)).encode()
 
 
 def build_custom_shader_pipeline_glsl(
@@ -2087,7 +2071,7 @@ def build_custom_shader_pipeline_glsl(
             )
             vcmd = cmd + ['-stage', 'vertex', '-entry', 'vmain_wrap', '-o', vertex, '--', '-']
             fcmd = cmd + ['-stage', 'fragment', '-entry', 'fmain_wrap', '-o', fragment, '--', '-']
-            src = module_wrapper_for_slot(slot)
+            src = module_wrapper_for_slot(slot, active_group_words(pipeline))
             invocation_tracker.add(tuple(vcmd))
             invocation_tracker.add(tuple(fcmd))
             v = subprocess.Popen(vcmd, stderr=subprocess.PIPE, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)

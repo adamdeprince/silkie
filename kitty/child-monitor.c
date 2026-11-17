@@ -964,10 +964,12 @@ prepare_to_render_os_window(
         if (*active_window_id && *active_window_id != os_window->last_active_window_id)
             events |= (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_IN) | (1u << SHADER_ANIM_EVENT_WINDOW_FOCUS_OUT);
         const ShaderAnimState before = os_window->shader_anim;
+        // update_custom_shader_animations() consumes the user events
+        const bool had_events = events || os_window->shader_user_events.pending;
         monotonic_t min_step = update_custom_shader_animations(events, now, os_window);
         os_window->shader_anim_event_registry = 0;
         if (os_window->shader_anim.has_active_shaders) os_window->needs_layers = true;
-        if (custom_shader_needs_render(&before, &os_window->shader_anim, events, now)) needs_render = true;
+        if (custom_shader_needs_render(&before, &os_window->shader_anim, had_events, now)) needs_render = true;
         // Wake up for the next animation frame and for the moment a duration
         // bounded animation expires. Static groups (animation_step 0) have
         // min_step == MONOTONIC_T_MAX and so schedule no periodic wakeup.
