@@ -90,9 +90,10 @@ wait_for "$run/control" 10 || exit 1
 
 # The terminal, drawing in software since the compositor does. The client inside it logs what it is sent
 mesa=/usr/share/glvnd/egl_vendor.d/50_mesa.json
-# kitty's caches and Mesa's stay out of the home directory
+# Silkie's caches and Mesa's stay out of the home directory. KITTY_CACHE_DIRECTORY is for trees under test that
+# predate SILKIE_CACHE_DIRECTORY.
 env -u DISPLAY XDG_RUNTIME_DIR="$run" WAYLAND_DISPLAY=wayland-rig LIBGL_ALWAYS_SOFTWARE=1 \
-    KITTY_CACHE_DIRECTORY="$run/cache" SILKIE_CONFIG_DIRECTORY="$run/config" MESA_SHADER_CACHE_DISABLE=true \
+    SILKIE_CACHE_DIRECTORY="$run/cache" KITTY_CACHE_DIRECTORY="$run/cache" SILKIE_CONFIG_DIRECTORY="$run/config" MESA_SHADER_CACHE_DISABLE=true \
     ${RIG_WAYLAND_DEBUG:+WAYLAND_DEBUG=1} $([ -e $mesa ] && echo __EGL_VENDOR_LIBRARY_FILENAMES=$mesa) \
     ${udev:+LD_LIBRARY_PATH="$run/udev${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"} \
     "$tree/kitty/launcher/kitty" --config NONE -o linux_display_server=wayland -o placement_strategy=top-left \

@@ -28,7 +28,7 @@ def main() -> None:
     if args.frames < 1 or any(count < 1 for count in counts):
         parser.error('--frames and --count must be positive')
     results = {}
-    with tempfile.TemporaryDirectory(prefix='silkie-placement-bench-') as cache, patch.dict(os.environ, {'KITTY_CACHE_DIRECTORY': cache}):
+    with tempfile.TemporaryDirectory(prefix='silkie-placement-bench-') as cache, patch.dict(os.environ, {'SILKIE_CACHE_DIRECTORY': cache}):
         for count in counts:
             test = BaseTest()
             screen = test.create_screen(cols=160, lines=50, cell_width=8, cell_height=16)

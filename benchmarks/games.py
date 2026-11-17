@@ -107,7 +107,7 @@ def main() -> None:
         parser.error('--repeat must be positive')
     fixtures = json.loads(gzip.decompress((Path(__file__).parent / 'data/games.json.gz').read_bytes()))
     results = []
-    with tempfile.TemporaryDirectory(prefix='silkie-games-bench-') as cache, patch.dict(os.environ, {'KITTY_CACHE_DIRECTORY': cache}):
+    with tempfile.TemporaryDirectory(prefix='silkie-games-bench-') as cache, patch.dict(os.environ, {'SILKIE_CACHE_DIRECTORY': cache}):
         for case in fixtures:
             if not args.case or case['name'] in args.case:
                 result = run(case, args.repeat)

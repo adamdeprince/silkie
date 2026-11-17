@@ -172,9 +172,10 @@ if [ -n "${RIG_XINPUT_TEST:-}" ]; then # what the X server itself reports, to te
     pids+=($!)
 fi
 
-# kitty's caches and Mesa's stay out of the home directory
+# Silkie's caches and Mesa's stay out of the home directory. KITTY_CACHE_DIRECTORY is for trees under test that
+# predate SILKIE_CACHE_DIRECTORY.
 env -u WAYLAND_DISPLAY DISPLAY=:$display LIBGL_ALWAYS_SOFTWARE=1 __GLX_VENDOR_LIBRARY_NAME=mesa \
-    KITTY_CACHE_DIRECTORY="$run/cache" SILKIE_CONFIG_DIRECTORY="$run/config" MESA_SHADER_CACHE_DISABLE=true \
+    SILKIE_CACHE_DIRECTORY="$run/cache" KITTY_CACHE_DIRECTORY="$run/cache" SILKIE_CONFIG_DIRECTORY="$run/config" MESA_SHADER_CACHE_DISABLE=true \
     $([ -e /usr/share/glvnd/egl_vendor.d/50_mesa.json ] && echo __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json) \
     ${udev:+LD_LIBRARY_PATH="$run/udev${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"} \
     "$tree/kitty/launcher/kitty" --config NONE -o linux_display_server=x11 -o placement_strategy=top-left \
