@@ -282,8 +282,19 @@ action two
                 system_scheme[0] = scheme
                 return tc.on_system_color_scheme_change(scheme)  # type: ignore
 
-            # No theme files: switching the system scheme applies and removes the built-in theme
+            # Off by default: nothing happens without theme files
             self.set_options()
+            self.assertFalse(get_options().automatic_light_theme)
+            tc = ThemeColors()
+            tc.on_config_reload()
+            apply.assert_not_called()
+            self.assertFalse(switch('light'))
+            self.assertFalse(switch('dark'))
+            apply.assert_not_called()
+
+            # Enabled, no theme files: switching the system scheme applies and removes the built-in theme
+            system_scheme[0] = 'light'
+            self.set_options({'automatic_light_theme': True})
             tc = ThemeColors()
             tc.on_config_reload()
             applied(builtin_bg)
@@ -330,7 +341,11 @@ action two
             applied(builtin_bg)
 
             # The option turned off restores the old behavior: nothing happens without theme files
-            for opts in ({'automatic_light_theme': False}, {'background': Color(1, 2, 3)}, {'color1': Color(1, 2, 3)}):
+            for opts in (
+                {'automatic_light_theme': False},
+                {'automatic_light_theme': True, 'background': Color(1, 2, 3)},
+                {'automatic_light_theme': True, 'color1': Color(1, 2, 3)},
+            ):
                 self.set_options(opts)
                 tc = ThemeColors()
                 system_scheme[0] = 'light'
@@ -342,8 +357,8 @@ action two
                 self.ae(tc.applied_theme, '')
 
             # Startup
-            for scheme, enabled, expected_bg in (('light', True, builtin_bg), ('dark', True, default_bg), ('light', False, default_bg)):
-                opts = self.set_options({'automatic_light_theme': enabled})
+            for scheme, enabled, expected_bg in (('light', True, builtin_bg), ('dark', True, default_bg), ('light', False, default_bg), ('light', None, default_bg)):
+                opts = self.set_options(None if enabled is None else {'automatic_light_theme': enabled})
                 tc = ThemeColors()
                 system_scheme[0] = scheme
                 query.reset_mock()
@@ -363,7 +378,7 @@ action two
         from kitty.fast_data_types import COLOR_LAYER_OVERRIDE, patch_color_profiles
 
         s = self.create_screen()
-        s.color_profile.reload_from_opts(self.set_options())
+        s.color_profile.reload_from_opts(self.set_options({'automatic_light_theme': True}))
         window = SimpleNamespace(id=1, screen=s, refresh=lambda *a, **k: None, notify_child_of_color_change=lambda: None, session_color_schemes=None)
         boss = SimpleNamespace(
             args=SimpleNamespace(debug_rendering=False), all_windows=[window], all_tab_managers=[], default_bg_changed_for=lambda *a: None
@@ -426,7 +441,7 @@ action two
             patch('kitty.colors.glfw_get_system_color_theme', side_effect=lambda *a: system_scheme[0]),
         ):
             # color_scheme dark wins over the built-in light theme of a light system
-            opts = self.set_options({'color_scheme': 'dark'})
+            opts = self.set_options({'color_scheme': 'dark', 'automatic_light_theme': True})
             tc = ThemeColors()
             tc.patch_opts(opts)
             self.ae((int(opts.foreground), int(opts.background)), (0xFFFFFF, 0))
