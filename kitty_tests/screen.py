@@ -1659,10 +1659,18 @@ class TestScreen(BaseTest):
         w('#Q')
         w('#R')
         ac(0, 0)
-        for i in range(20):
+        # the stack has no maximum depth
+        for i in range(5000):
             w('#P')
         w('#R')
-        ac(9, 10)
+        ac(4999, 5000)
+        w('7000#P')
+        w('#R')
+        ac(4999, 5000)
+        for i in range(5000):
+            w('#Q')
+        w('#R')
+        ac(0, 0)
 
     def test_detect_url(self):
         detect_url(self)

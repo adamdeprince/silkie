@@ -931,31 +931,40 @@ copy_from_color_stack_at(ColorProfile *self, unsigned int i) {
     colorprofile_resolve(self, NULL, false);
 }
 
+// Makes the color stack hold at least needed entries. The stack has no
+// maximum depth: it grows geometrically for as long as memory allows.
+static bool
+ensure_color_stack_size(ColorProfile *self, size_t needed) {
+    if (needed <= self->color_stack_sz) return true;
+    const size_t entry_sz = sizeof(self->color_stack[0]);
+    // color_stack_sz is an unsigned int and entries are addressed by size_t
+    const size_t max_entries = MIN((size_t)UINT_MAX, SIZE_MAX / entry_sz);
+    if (needed > max_entries) return false;
+    size_t new_sz = self->color_stack_sz > max_entries / 2 ? max_entries : MAX((size_t)self->color_stack_sz * 2, (size_t)4);
+    if (new_sz < needed) new_sz = needed;
+    void *mem = realloc(self->color_stack, new_sz * entry_sz);
+    if (!mem) {
+        log_error("Out of memory growing the color stack to %zu entries", new_sz);
+        return false;
+    }
+    self->color_stack = mem;
+    memset(self->color_stack + self->color_stack_sz, 0, (new_sz - self->color_stack_sz) * entry_sz);
+    self->color_stack_sz = (unsigned int)new_sz;
+    return true;
+}
+
 bool
 colorprofile_push_colors(ColorProfile *self, unsigned int idx) {
-    if (idx > 10) return false;
-    size_t sz = idx ? idx : self->color_stack_idx + 1;
-    sz = MIN(10u, sz);
-    if (self->color_stack_sz < sz) {
-        self->color_stack = realloc(self->color_stack, sz * sizeof(self->color_stack[0]));
-        if (self->color_stack == NULL) fatal("Out of memory while ensuring space for %zu elements in color stack", sz);
-        memset(self->color_stack + self->color_stack_sz, 0, (sz - self->color_stack_sz) * sizeof(self->color_stack[0]));
-        self->color_stack_sz = sz;
-    }
     if (idx == 0) {
-        if (self->color_stack_idx >= self->color_stack_sz) {
-            memmove(self->color_stack, self->color_stack + 1, (self->color_stack_sz - 1) * sizeof(self->color_stack[0]));
-            idx = self->color_stack_sz - 1;
-        } else idx = self->color_stack_idx++;
-        push_onto_color_stack_at(self, idx);
+        // push onto the top of the stack
+        if (self->color_stack_idx == UINT_MAX || !ensure_color_stack_size(self, (size_t)self->color_stack_idx + 1)) return false;
+        push_onto_color_stack_at(self, self->color_stack_idx++);
         return true;
     }
-    idx -= 1;
-    if (idx < self->color_stack_sz) {
-        push_onto_color_stack_at(self, idx);
-        return true;
-    }
-    return false;
+    // store in the numbered slot, 1 is the bottom of the stack
+    if (!ensure_color_stack_size(self, idx)) return false;
+    push_onto_color_stack_at(self, idx - 1);
+    return true;
 }
 
 void
