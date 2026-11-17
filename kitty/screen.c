@@ -1316,6 +1316,11 @@ deep_colors_mark_cells(DeepColors *dc, const GPUCell *cells, size_t count) {
 }
 
 static void
+deep_colors_mark_history_cells(void *dc, const GPUCell *cells, index_type xnum) {
+    deep_colors_mark_cells(dc, cells, xnum);
+}
+
+static void
 deep_colors_mark_cursor(DeepColors *dc, const Cursor *c) {
     deep_colors_gc_mark(dc, c->sgr.fg);
     deep_colors_gc_mark(dc, c->sgr.bg);
@@ -1329,8 +1334,8 @@ screen_garbage_collect_deep_colors(Screen *self) {
     // The colors that remain keep their indices, see deep-colors.h.
     DeepColors *dc = (DeepColors *)tc_deep_colors_if_present(self->text_cache);
     if (!dc || !deep_colors_gc_begin(dc)) return; // allocation failure, table left unchanged
-    for (index_type y = 0; y < self->historybuf->count; y++)
-        deep_colors_mark_cells(dc, historybuf_gpu_cells(self->historybuf, y), self->historybuf->xnum);
+    // compressed scrollback without deep colors is not decompressed for this
+    historybuf_visit_gpu_cells(self->historybuf, HISTORY_HAS_DEEP_COLORS, deep_colors_mark_history_cells, dc);
     LineBuf *linebufs[] = {self->main_linebuf, self->alt_linebuf, self->paused_rendering.linebuf};
     for (size_t i = 0; i < arraysz(linebufs); i++)
         if (linebufs[i]) deep_colors_mark_cells(dc, linebufs[i]->gpu_cell_buf, (size_t)linebufs[i]->ynum * linebufs[i]->xnum);

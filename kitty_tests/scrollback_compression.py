@@ -157,6 +157,47 @@ class TestScrollbackCompression(BaseTest):
         self.ae(a.deep_colors_stats()[0], 30 * 10)
         self.assert_same(a, b, 'after garbage collection')
 
+    def test_deep_color_gc_skips_frames_without_deep_colors(self):
+        # Compressed frames with no 16 bit colors are not decompressed by the
+        # garbage collection of those colors, the ones with them are, and the
+        # colors they use are kept
+        a, b = self.screen_pair(cols=10, lines=5, scrollback=400)
+        for s in (a, b):
+            for i in range(150):
+                s.draw(f'plain{i}\r\n')
+            for i in range(10):
+                parse_bytes(s, f'\x1b[38:0:0:{i}:1:2m'.encode())
+                s.draw(f'deep{i}')
+                parse_bytes(s, b'\x1b[m')
+                s.draw('\r\n')
+            for i in range(150):
+                s.draw(f'plain{i}\r\n')
+        hb = a.historybuf
+        hb.wait_for_compression()
+        stats = hb.compression_stats()
+        deep_frames = stats['deep_color_frames']
+        self.assertGreater(deep_frames, 0)
+        self.assertLess(deep_frames, stats['frames'] // 4)
+        before = stats['frames_decompressed']
+        for s in (a, b):
+            s.garbage_collect_deep_colors()
+        self.ae(hb.compression_stats()['frames_decompressed'] - before, deep_frames, 'only the frames with deep colors were decompressed')
+        self.ae(a.deep_colors_stats()[0], 10)
+        self.ae(a.deep_colors_stats()[0], b.deep_colors_stats()[0])
+        self.assert_same(a, b, 'after garbage collection')
+        # scrollback with no deep colors at all is not decompressed
+        c = self.create_screen(cols=10, lines=5, scrollback=100, options={'scrollback_compression': 3})
+        # a deep color table, with a color used only by a line that leaves the scrollback
+        parse_bytes(c, b'\x1b[38:0:0:1:1:2mx\x1b[m\r\n')
+        for i in range(300):
+            c.draw(f'plain{i}\r\n')
+        c.historybuf.wait_for_compression()
+        stats = c.historybuf.compression_stats()
+        self.ae(stats['deep_color_frames'], 0)
+        c.garbage_collect_deep_colors()
+        self.ae(c.historybuf.compression_stats()['frames_decompressed'], stats['frames_decompressed'])
+        self.ae(c.deep_colors_stats()[0], 0)
+
     def test_historybuf_round_trip(self):
         hb = HistoryBuf(100, 10, **TINY)
         ref = HistoryBuf(100, 10, compress=False)

@@ -135,7 +135,6 @@ bool cells_have_multiline_chars(const CPUCell *cells, index_type count);
 bool historybuf_pop_line(HistoryBuf *, Line *);
 void historybuf_init_line(HistoryBuf *self, index_type num, Line *l);
 bool history_buf_endswith_wrap(HistoryBuf *self);
-GPUCell *historybuf_gpu_cells(HistoryBuf *self, index_type num);  // valid until the next access to the buffer
 void historybuf_mark_line_clean(HistoryBuf *self, index_type y);
 void historybuf_mark_line_dirty(HistoryBuf *self, index_type y);
 void historybuf_set_line_has_image_placeholders(HistoryBuf *self, index_type y, bool val);
