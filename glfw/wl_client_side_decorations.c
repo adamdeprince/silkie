@@ -180,15 +180,17 @@ init_buffer_pair(_GLFWWaylandBufferPair *pair, size_t width, size_t height, doub
     const double w = round(width * scale), h = round(height * scale);
     if (!(w <= INT32_MAX / 4) || !(h <= INT32_MAX)) return false;
     // wl_shm buffers must have non-zero size
-    pair->width = MAX(1, (int)w);
-    pair->height = MAX(1, (int)h);
+    const size_t bw = MAX(1, (int)w), bh = MAX(1, (int)h), stride = 4 * bw;
+    if (bh > INT32_MAX / stride) return false;
+    const size_t size_in_bytes = stride * bh;
+    if (size_in_bytes > (INT32_MAX - *total) / 2) return false;
+    pair->width = bw;
+    pair->height = bh;
     pair->viewport_width = width;
     pair->viewport_height = height;
-    pair->stride = 4 * pair->width;
-    if (pair->height > INT32_MAX / pair->stride) return false;
-    pair->size_in_bytes = pair->stride * pair->height;
-    if (pair->size_in_bytes > (INT32_MAX - *total) / 2) return false;
-    *total += 2 * pair->size_in_bytes;
+    pair->stride = stride;
+    pair->size_in_bytes = size_in_bytes;
+    *total += 2 * size_in_bytes;
     return true;
 }
 
@@ -500,7 +502,7 @@ static void
 render_title_bar(_GLFWwindow *window, bool to_front_buffer) {
     uint32_t *pixels = (uint32_t *)(to_front_buffer ? decs.titlebar.buffer.data.front : decs.titlebar.buffer.data.back);
     const int width = decs.titlebar.buffer.width, height = decs.titlebar.buffer.height;
-    if (width <= 0 || height <= 0) return;
+    if (!pixels || width <= 0 || height <= 0) return;
     const double scale = decs.for_window_state.fscale;
     const bool focused = window->id == _glfw.focusedWindowId;
     const bool docked = window->wl.current.toplevel_states & TOPLEVEL_STATE_DOCKED;
@@ -641,6 +643,15 @@ render_shadows(_GLFWwindow *window) {
 }
 #undef st
 
+static void
+forget_buffer_sizes(_GLFWwindow *window) {
+    // Without buffers nothing must be rendered, which the sizes of zero ensure
+#define Q(which) memset(&decs.which.buffer, 0, sizeof(_GLFWWaylandBufferPair))
+    all_surfaces(Q);
+#undef Q
+    decs.mapping.size = 0;
+}
+
 static bool
 create_shm_buffers(_GLFWwindow *window) {
     decs.mapping.size = 0;
@@ -650,7 +661,7 @@ create_shm_buffers(_GLFWwindow *window) {
     do {                                                                                                              \
         if (!init_buffer_pair(&decs.which.buffer, width, height, decs.for_window_state.fscale, &decs.mapping.size)) { \
             _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: The window decorations are too large for wl_shm buffers");  \
-            decs.mapping.size = 0;                                                                                    \
+            forget_buffer_sizes(window);                                                                              \
             return false;                                                                                             \
         }                                                                                                             \
     } while (0)
@@ -668,11 +679,14 @@ create_shm_buffers(_GLFWwindow *window) {
     int fd = createAnonymousFile(decs.mapping.size);
     if (fd < 0) {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: Creating a buffer file for %zu B failed: %s", decs.mapping.size, strerror(errno));
+        forget_buffer_sizes(window);
         return false;
     }
     decs.mapping.data = mmap(NULL, decs.mapping.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (decs.mapping.data == MAP_FAILED) {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Wayland: mmap failed: %s", strerror(errno));
+        decs.mapping.data = NULL;
+        forget_buffer_sizes(window);
         close(fd);
         return false;
     }
@@ -748,17 +762,22 @@ create_csd_surfaces(_GLFWwindow *window, _GLFWWaylandCSDSurface *s) {
     }
 }
 
-#define damage_csd(which, xbuffer)                                                                                                                            \
-    if (decs.which.surface) {                                                                                                                                 \
-        wl_surface_attach(decs.which.surface, (xbuffer), 0, 0);                                                                                               \
-        if (decs.which.wp_viewport) wp_viewport_set_destination(decs.which.wp_viewport, decs.which.buffer.viewport_width, decs.which.buffer.viewport_height); \
-        wl_surface_damage(decs.which.surface, 0, 0, decs.which.buffer.width, decs.which.buffer.height);                                                       \
-        wl_surface_commit(decs.which.surface);                                                                                                                \
-        if (decs.which.buffer.a == (xbuffer)) {                                                                                                               \
-            decs.which.buffer.a_busy = true;                                                                                                                  \
-        } else {                                                                                                                                              \
-            decs.which.buffer.b_busy = true;                                                                                                                  \
-        }                                                                                                                                                     \
+// Without a buffer, after creating the buffers failed, the surface is unmapped. A viewport destination
+// of zero is a protocol error, so it is unset instead.
+#define damage_csd(which, xbuffer)                                                                                \
+    if (decs.which.surface) {                                                                                     \
+        struct wl_buffer *b_ = (xbuffer);                                                                         \
+        wl_surface_attach(decs.which.surface, b_, 0, 0);                                                          \
+        if (decs.which.wp_viewport) {                                                                             \
+            if (b_)                                                                                               \
+                wp_viewport_set_destination(                                                                      \
+                    decs.which.wp_viewport, decs.which.buffer.viewport_width, decs.which.buffer.viewport_height); \
+            else wp_viewport_set_destination(decs.which.wp_viewport, -1, -1);                                     \
+        }                                                                                                         \
+        wl_surface_damage(decs.which.surface, 0, 0, decs.which.buffer.width, decs.which.buffer.height);           \
+        wl_surface_commit(decs.which.surface);                                                                    \
+        if (b_ && decs.which.buffer.a == b_) decs.which.buffer.a_busy = true;                                     \
+        else if (b_) decs.which.buffer.b_busy = true;                                                             \
     }
 
 static bool
