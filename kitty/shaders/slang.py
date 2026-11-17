@@ -362,8 +362,11 @@ class LoadShaderPrograms:
                         for name in group['shaders']:
                             with suppress(Exception):  # failures to read the shader are reported when building it
                                 sources.append(custom_shader(name, group['pipeline_dir'])[2])
+            declared: set[str] = set()
+            for src in sources:
+                declared |= static_const_names(src)
             for var_name in self.custom_shader_vars:
-                if not any(declares_static_const(src, var_name) for src in sources):
+                if var_name not in declared:
                     err(
                         f'The custom_shader_var {var_name} does not match a static const in any of the custom shaders:'
                         f' {" ".join(self.custom_shaders)}'
@@ -1677,36 +1680,39 @@ def parse_var_directive(parts: list[str]) -> tuple[str, str, str]:
     return var_type, var_name, value.rstrip(';')
 
 
-def apply_pipeline_specializations(src: bytes, merged_vars: dict[str, tuple[str, str]]) -> bytes:
-    if not merged_vars:
+def static_consts(text: str) -> Iterator[SlangVariable]:
+    "The top level static const variables that can be specialized"
+    for v in parse_slang_declarations(text).variables:
+        if {'static', 'const'} <= v.modifiers and 'extern' not in v.modifiers:
+            yield v
+
+
+def specialize_static_consts(src: bytes, values: dict[str, tuple[str, str]]) -> bytes:
+    # Replace: static const <any_type> <name> = <default>; → static const <type> <name> = <value>;
+    # An empty type keeps the type of the declaration.
+    if not values:
         return src
     text = src.decode()
-    # Replace: static const <any_type> <name> = <default>; → static const <type> <name> = <value>;
     replacements = sorted(
-        (v.type_start, v.end, f'{merged_vars[v.name][0]} {v.name} = {merged_vars[v.name][1]}')
-        for v in parse_slang_declarations(text).variables
-        if v.name in merged_vars and {'static', 'const'} <= v.modifiers and 'extern' not in v.modifiers
+        (v.type_start, v.end, f'{values[v.name][0] or v.type} {v.name} = {values[v.name][1]}') for v in static_consts(text) if v.name in values
     )
     for start, end, replacement in reversed(replacements):
         text = text[:start] + replacement + text[end:]
     return text.encode()
 
 
-def static_const_pattern(name: str) -> re.Pattern[bytes]:
-    return re.compile(rf'(?m)^(\s*)static\s+const\s+([A-Za-z_][A-Za-z0-9_]*)\s+{re.escape(name)}\s*=.+'.encode())
+def apply_pipeline_specializations(src: bytes, merged_vars: dict[str, tuple[str, str]]) -> bytes:
+    return specialize_static_consts(src, merged_vars)
 
 
 def apply_config_specializations(src: bytes, config_vars: dict[str, str]) -> bytes:
     # Values from the custom_shader_var option, which have no type, so keep
     # the type of the declaration. Applied last, they override pipeline vars.
-    for var_name, value in config_vars.items():
-        repl = f' {var_name} = {value};'.encode()
-        src = static_const_pattern(var_name).sub(lambda m: m.group(1) + b'static const ' + m.group(2) + repl, src)
-    return src
+    return specialize_static_consts(src, {name: ('', value) for name, value in config_vars.items()})
 
 
-def declares_static_const(src: bytes, name: str) -> bool:
-    return static_const_pattern(name).search(src) is not None
+def static_const_names(src: bytes) -> frozenset[str]:
+    return frozenset(v.name for v in static_consts(src.decode()))
 
 
 def with_config_vars(pipeline: 'Pipeline', config_vars: dict[str, str]) -> 'Pipeline':

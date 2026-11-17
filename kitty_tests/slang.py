@@ -19,6 +19,7 @@ from kitty.shaders.slang import (
     SlangShaderQuery,
     Stage,
     apply_config_specializations,
+    static_const_names,
     apply_pipeline_specializations,
     build_custom_shader_pipeline_glsl,
     build_import_graph,
@@ -634,6 +635,20 @@ static const float OTHER = 1.0;
         self.assertIn(b'\n    static const int SHAKE_MODE = 1;\n', out)
         self.assertIn(b'\nstatic const float OTHER = 1.0;\n', out)
         self.assertNotIn(b'MISSING', out)
+        # Declarations are found by parsing, not by matching lines
+        src = b"""
+/*
+static const float COMMENTED = 1.0;
+*/
+static const float
+    SPLIT = 2.0;
+static float NOT_CONST = 3.0;
+"""
+        self.ae(static_const_names(src), {'SPLIT'})
+        out = apply_config_specializations(src, {'SPLIT': '4.5', 'COMMENTED': '5', 'NOT_CONST': '6'})
+        self.assertIn(b'static const float SPLIT = 4.5;', out)
+        self.assertIn(b'static const float COMMENTED = 1.0;', out)
+        self.assertIn(b'static float NOT_CONST = 3.0;', out)
         # With the real shader and pipeline
         src = custom_shader('screen-shake')[2]
         p = parse_pipeline_definition(get_custom_pipeline_src('screen-shake-random').decode().splitlines(), 'screen-shake-random')
