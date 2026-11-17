@@ -61,6 +61,17 @@ class PublishTests(unittest.TestCase):
         self.assertFalse(staging.exists())
         self.assertEqual((self.demo / 'guest.json').read_bytes(), original)
 
+    def test_content_named_guest_is_staged_unchanged(self):
+        name = f'guest-{self.digest}.ext2'
+        (self.demo / 'guest.ext2').rename(self.demo / name)
+        self.manifest['image'] = name
+        self.write_manifest()
+        with publisher.staged_site(self.site) as (staging, relative):
+            self.assertEqual(relative.as_posix(), '_static/demo/' + name)
+            self.assertEqual((staging / relative).read_bytes(), self.image)
+            self.assertEqual(json.loads((staging / publisher.GUEST_MANIFEST).read_text()), self.manifest)
+        self.assertEqual((self.demo / name).read_bytes(), self.image)
+
     def test_invalid_guest_fails_before_credentials_or_network(self):
         cases = [dict(self.manifest, sha256='invalid'), dict(self.manifest, sha256='0' * 64),
                  dict(self.manifest, bytes=1), dict(self.manifest, image='../private.ext2')]

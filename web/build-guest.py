@@ -351,7 +351,8 @@ def populate(root: Path, binaries: dict[str, Path], sources: Path, console_sessi
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=PROJECT / 'docs/silkie/_static/demo/guest.ext2')
+    parser.add_argument('--output-dir', type=Path, default=PROJECT / 'docs/silkie/_static/demo',
+                        help='Directory for guest.json and the image, which is named guest-<sha256>.ext2')
     parser.add_argument('--games-dir', type=Path, default=PROJECT.parent)
     parser.add_argument('--game-binaries', type=Path, help='Reuse previously compiled static i386 game binaries from this directory')
     parser.add_argument('--cache', type=Path, default=Path(tempfile.gettempdir()) / 'silkie-guest-build')
@@ -371,19 +372,23 @@ def main() -> None:
     console_session = build_game('silkie-console-session', HERE / 'guest/console-session', args.cache)
     sprite_caches = {name: build_sprite_cache(name, args.games_dir / name, args.cache)
                      for name in ('silkie-sprint', 'silkie-scramble')}
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='rootfs-', dir=args.cache) as staging, \
-            tempfile.TemporaryDirectory(prefix='.guest-build-', dir=args.output.parent) as artifact_dir:
+            tempfile.TemporaryDirectory(prefix='.guest-build-', dir=args.output_dir) as artifact_dir:
         root = Path(staging)
         for archive in archives:
             unpack(archive, root)
         populate(root, binaries, args.games_dir, console_session, sprite_caches)
         for path in [root, *root.rglob('*')]:
             os.utime(path, (epoch, epoch), follow_symlinks=False)
-        image = Path(artifact_dir) / args.output.name
+        image = Path(artifact_dir) / 'guest.ext2'
         make_image(root, image, args.free_space_ratio, epoch)
+        image_digest = digest(image)
+        # Named by content, as the website serves it: pages already open keep
+        # reading their image, and guest.json is the same here as on the site.
+        output = args.output_dir / f'guest-{image_digest}.ext2'
         metadata = {
-            'image': args.output.name, 'sha256': digest(image),
+            'image': output.name, 'sha256': image_digest,
             'bytes': image.stat().st_size, 'architecture': 'i386',
             'distribution': f"Alpine Linux {lock['version']}",
             'entry': '/usr/local/bin/silkie-demo-shell',
@@ -393,10 +398,25 @@ def main() -> None:
         }
         manifest = Path(artifact_dir) / 'guest.json'
         manifest.write_text(json.dumps(metadata, indent=2) + '\n')
+        manifest_path = args.output_dir / 'guest.json'
+        previous = previous_image(manifest_path)
         # A failed download/compile/format must leave the previous demo usable.
-        os.replace(image, args.output)
-        os.replace(manifest, args.output.with_name('guest.json'))
-    print(f'Built {args.output} ({metadata["bytes"]:,} bytes)')
+        os.replace(image, output)
+        os.replace(manifest, manifest_path)
+    if previous is not None and previous != output:
+        previous.unlink(missing_ok=True)
+    print(f'Built {output} ({metadata["bytes"]:,} bytes)')
+
+
+def previous_image(manifest: Path) -> Path | None:
+    """The image the current guest.json names, to remove once replaced."""
+    try:
+        name = json.loads(manifest.read_text()).get('image')
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(name, str) or not name or Path(name).name != name or name in ('.', '..'):
+        return None
+    return manifest.parent / name
 
 
 if __name__ == '__main__':

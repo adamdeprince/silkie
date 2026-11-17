@@ -36,5 +36,5 @@ _codeql_detected_source_root
 /web/wasm/target/
 /web/guest/console-session/target/
 /web/guest/math/target/
-/docs/silkie/_static/demo/guest.ext2
-/html/_static/demo/guest.ext2
+/docs/silkie/_static/demo/guest*.ext2
+/html/_static/demo/guest*.ext2
