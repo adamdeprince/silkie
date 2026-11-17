@@ -2,9 +2,11 @@
 # License: GPLv3 Copyright: 2020, Kovid Goyal <kovid at kovidgoyal.net>
 
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
+from copy import copy, deepcopy
 from enum import Enum
 from functools import partial
 from itertools import repeat
+from math import ceil, isfinite
 from typing import Any, ClassVar, NamedTuple, cast
 
 from kitty.borders import BorderColor
@@ -71,6 +73,10 @@ class LayoutGlobalData:
 
 
 lgd = LayoutGlobalData()
+
+
+def fractional_resize_steps(remaining: int, fraction: float) -> int:
+    return max(1, ceil(remaining * fraction - 1e-9)) if remaining > 0 else 0
 
 
 def idx_for_id(win_id: int, windows: Iterable[WindowType]) -> int | None:
@@ -414,6 +420,38 @@ class Layout:
             return False
         return self.apply_bias(idx, increment, all_windows, is_horizontal)
 
+    def apply_fractional_bias(self, window_idx: int, increment: float, all_windows: WindowList, is_horizontal: bool) -> bool:
+        return self.apply_bias(window_idx, increment, all_windows, is_horizontal)
+
+    def modify_size_of_window_by_fraction(self, all_windows: WindowList, window_id: int, increment: float, is_horizontal: bool, fraction: float) -> bool:
+        if window_id not in all_windows.id_map:
+            return False
+        idx = all_windows.group_idx_for_window(window_id)
+        if idx is None or all_windows.num_groups < 2 or not increment or not isfinite(increment) or not 0 < fraction <= 1:
+            return False
+        # Probe private layout state, without changing windows or rendering every
+        # intermediate step. This follows each layout's ordinary resize rules.
+        probe = copy(self)
+        state = deepcopy(self.layout_state())
+        state['opts'] = self.layout_opts.serialized()
+        if not probe.set_layout_state(state, lambda group_id: group_id):
+            return False
+        # The state after each step, so that the chosen number of steps can be
+        # adopted without repeating them.
+        states: list[dict[str, Any]] = []
+        # Biases span at most one unit; allow two for clamping/normalization.
+        # The bound also prevents future layout implementations from looping.
+        for _ in range(max(1, ceil(2 / abs(increment)))):
+            if not probe.apply_fractional_bias(idx, increment, all_windows, is_horizontal):
+                break
+            states.append(deepcopy(probe.layout_state()))
+        steps = fractional_resize_steps(len(states), fraction)
+        if not steps:
+            return False
+        state = states[steps - 1]
+        state['opts'] = self.layout_opts.serialized()
+        return self.set_layout_state(state, lambda group_id: group_id)
+
     def drag_resize_window(self, all_windows: WindowList, window_id: int, increment: float, is_horizontal: bool = True) -> float:
         """Resize by a number of cells, returning the number of cells actually applied.
 
@@ -745,14 +783,16 @@ class Layout:
             return DockMetrics(r.height, content.height, area.height, lgd.cell_height, dock.decoration('top') + dock.decoration('bottom'))
         return DockMetrics(r.width, content.width, area.width, lgd.cell_width, dock.decoration('left') + dock.decoration('right'))
 
-    def resize_dock(self, all_windows: WindowList, dock: WindowGroup, increment: int, max_room: int | None = None) -> int:
+    def resize_dock(self, all_windows: WindowList, dock: WindowGroup, increment: int, fraction: float = 0, max_room: int | None = None) -> int:
         """
         Resize a docked group along its axis by a number of cells, positive
         values make it bigger, whatever its edge. Returns the number of cells
         actually applied. A dock keeps at least one cell and grows only into the
         content it is docked to, which keeps space for at least one cell, so
         that the docks inside it are not shrunk. max_room further limits the
-        number of pixels the dock can grow by.
+        number of pixels the dock can grow by. With a non-zero fraction, that
+        fraction of the possible steps of size increment is taken, the last
+        step being partial if needed.
         """
         if (spec := dock.dock) is None or not increment:
             return 0
@@ -768,7 +808,11 @@ class Layout:
             limit = max(0, (room - m.decoration) // m.cell - 1)
         else:
             limit = cells - 1
-        steps = min(abs(increment), limit)
+        step = abs(increment)
+        if fraction:
+            steps = min(limit, fractional_resize_steps(ceil(limit / step), fraction) * step)
+        else:
+            steps = min(step, limit)
         if not steps:
             return 0
         applied = steps if increment > 0 else -steps

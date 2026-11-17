@@ -2178,14 +2178,14 @@ class Boss:
         if overlay_window is not None:
             overlay_window.allow_remote_control = True
 
-    def resize_layout_window(self, window: Window, increment: float, is_horizontal: bool, reset: bool = False) -> bool | None | str:
+    def resize_layout_window(self, window: Window, increment: float, is_horizontal: bool, reset: bool = False, fraction: float = 0) -> bool | None | str:
         tab = window.tabref()
         if tab is None or not increment:
             return False
         if reset:
             tab.reset_window_sizes()
             return None
-        return tab.resize_window_by(window.id, increment, is_horizontal)
+        return tab.resize_window_by(window.id, increment, is_horizontal, fraction)
 
     def resize_os_window(self, os_window_id: int, width: int, height: int, unit: str, incremental: bool = False, metrics: 'None | OSWindowSize' = None) -> None:
         if not incremental and (width < 0 or height < 0):
@@ -2877,7 +2877,7 @@ class Boss:
         default_data: dict[str, Any] | None = None,
         cwd: str = '',
     ) -> Any:
-        from kittens.runner import CLIOnlyKitten, KittenMetadata, create_kitten_handler
+        from kittens.runner import CLIOnlyKitten, KittenMetadata, create_kitten_handler, resolved_kitten
 
         is_wrapped = kitten in wrapped_kitten_names()
         if window is None:
@@ -2886,6 +2886,21 @@ class Boss:
         else:
             w = window
             tab = w.tabref() if w else None
+        resize_session = None
+        if w is not None and tab is not None and resolved_kitten(kitten) == 'resize_window':
+            group = tab.windows.group_for_window(w)
+            if group is not None:
+                for i, overlay in enumerate(group.windows):
+                    if i and overlay.is_resize_overlay:
+                        # Replace the existing resize UI so that the options for
+                        # this invocation take effect, but keep its snapshot of
+                        # the sizes from when resize mode was first opened.
+                        from .rc.resize_window_edge import resize_window_edge
+
+                        resize_session = resize_window_edge.sessions.pop(overlay, None)
+                        w = group.windows[i - 1]
+                        self.mark_window_for_close(overlay)
+                        break
         args = list(args)
         if w is not None and '@selection' in args and (sel := self.data_for_at(which='@selection', window=w)):
             args = [sel if xa == '@selection' else xa for xa in args]
@@ -2971,6 +2986,14 @@ class Boss:
             wid = w.id
             overlay_window.actions_on_close.append(partial(self.on_kitten_finish, wid, custom_callback or end_kitten.handle_result, default_data=default_data))
             overlay_window.open_url_handler = end_kitten.open_url_handler
+            if resolved_kitten(kitten) == 'resize_window':
+                # The resize kitten sends commands over the overlay's terminal.
+                # Also allow it when launched directly with configurable options.
+                overlay_window.allow_remote_control = True
+                overlay_window.is_resize_overlay = True
+                from .rc.resize_window_edge import resize_window_edge
+
+                resize_window_edge.start_session(overlay_window, tab.current_layout, resize_session)
             if action_on_removal is not None:
 
                 def callback_wrapper(*a: Any) -> None:

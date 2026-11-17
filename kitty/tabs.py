@@ -861,19 +861,23 @@ class Tab:  # {{{
             self.goto_layout(layout)
         self.new_window(location='vsplit')
 
-    def resize_window_by(self, window_id: int, increment: float, is_horizontal: bool) -> str | None:
+    def resize_window_by(self, window_id: int, increment: float, is_horizontal: bool, fraction: float = 0) -> str | None:
         if (dock := self.windows.dock_for_window_id(window_id)) is not None and dock.dock is not None:
             if is_horizontal == dock.dock.is_horizontal:
                 which = 'taller or shorter' if dock.dock.is_horizontal else 'wider or narrower'
                 return f'A dock at the {dock.dock.edge} edge can only be made {which}'
-            return None if self.resize_dock(dock, increment) else 'Could not resize'
+            return None if self.resize_dock(dock, increment, fraction) else 'Could not resize'
         increment_as_percent = self.current_layout.bias_increment_for_cell(self.windows, is_horizontal) * increment
-        if self.current_layout.modify_size_of_window(self.windows, window_id, increment_as_percent, is_horizontal):
+        if fraction:
+            changed = self.current_layout.modify_size_of_window_by_fraction(self.windows, window_id, increment_as_percent, is_horizontal, fraction)
+        else:
+            changed = self.current_layout.modify_size_of_window(self.windows, window_id, increment_as_percent, is_horizontal)
+        if changed:
             self.relayout()
             return None
         return 'Could not resize'
 
-    def resize_dock(self, dock: WindowGroup, increment: float, relayout_other_tabs: bool = True) -> int:
+    def resize_dock(self, dock: WindowGroup, increment: float, fraction: float = 0, relayout_other_tabs: bool = True) -> int:
         "Resize a docked group by a number of cells, see Layout.resize_dock()"
         # Round away from zero, so that fractional increments still resize
         cells = int(math.copysign(math.ceil(abs(increment)), increment))
@@ -883,7 +887,7 @@ class Tab:  # {{{
             # Growing an OS window dock must not shrink the tab docks of the other tabs either
             is_horizontal = dock.dock.is_horizontal
             max_room = min((t.current_layout.room_for_os_window_docks(t.windows, is_horizontal) for t in tm if t is not self), default=None)
-        applied = self.current_layout.resize_dock(self.windows, dock, cells, max_room)
+        applied = self.current_layout.resize_dock(self.windows, dock, cells, fraction, max_room)
         if applied:
             self.relayout()
             if is_os_window_dock and relayout_other_tabs:

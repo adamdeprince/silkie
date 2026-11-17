@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # License: GPL v3 Copyright: 2026, Kovid Goyal <kovid at kovidgoyal.net>
 
+import math
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -733,6 +734,16 @@ class TestDocks(BaseTest):
         self.assertIsNone(t1.resize_window_by(side.id, 3, True))
         self.ae(spec(side).size, 4)
         self.assertIsNone(t1.resize_window_by(side.id, 10 * possible_steps, True))
+        self.ae(spec(side).size, 1 + possible_steps)
+        # Taking a fraction of the remaining steps
+        self.assertIsNone(t1.resize_window_by(side.id, -100, True))
+        self.assertIsNone(t1.resize_window_by(side.id, 1, True, fraction=0.5))
+        self.ae(spec(side).size, 1 + (possible_steps + 1) // 2)
+        # The increment is the size of the steps, the last one can be partial
+        self.assertIsNone(t1.resize_window_by(side.id, -100, True))
+        self.assertIsNone(t1.resize_window_by(side.id, 4, True, fraction=0.5))
+        self.ae(spec(side).size, 1 + 4 * math.ceil(math.ceil(possible_steps / 4) / 2))
+        self.assertIsNone(t1.resize_window_by(side.id, 40, True, fraction=1))
         self.ae(spec(side).size, 1 + possible_steps)
         # Fractional increments resize by at least a cell
         self.assertIsNone(t1.resize_window_by(side.id, -0.5, True))
