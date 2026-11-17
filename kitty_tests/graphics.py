@@ -910,6 +910,31 @@ class TestGraphics(BaseTest):
         self.ae(pl('', a='p', i=3), 'OK')
         self.ae(g.image_for_client_id(3)['refs.count'], 1)
 
+    def test_out_of_memory_for_placement_ids(self):
+        # The placement id of a new placement, and the copies of the
+        # placements shown while rendering is paused
+        from kitty.fast_data_types import fail_next_graphics_allocation
+        cw, ch = 10, 20
+        s, dx, dy, put_image, put_ref, layers, rect_eq = put_helpers(self, cw, ch, cols=100, lines=10)
+        g = s.grman
+        self.ae(put_image(s, cw, ch, cursor_movement=1)[1], 'OK')
+        fail_next_graphics_allocation('placement_id')
+        self.assertTrue(put_ref(s, id=1, placement_id=7, cursor_movement=1)[1][0].startswith('ENOMEM'))
+        self.ae(g.image_for_client_id(1)['refs.count'], 1)
+        self.ae(put_ref(s, id=1, placement_id=7, cursor_movement=1)[1][0], 'OK')
+        self.ae(put_ref(s, id=1, placement_id=8, cursor_movement=1)[1][0], 'OK')
+        self.ae(len(layers(s)), 3)
+        # a placement that could not be copied is not shown while paused,
+        # update_graphics_layers() gives what is drawn, the paused copies then
+        fail_next_graphics_allocation('ref')
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(len(s.update_graphics_layers()), 2)
+        self.assertTrue(s.pause_rendering(False))
+        self.ae(len(s.update_graphics_layers()), 3)
+        self.assertTrue(s.pause_rendering(True, 5000))
+        self.ae(len(s.update_graphics_layers()), 3)
+        self.assertTrue(s.pause_rendering(False))
+
     def test_out_of_memory_for_render_data(self):
         from kitty.fast_data_types import fail_next_graphics_allocation
         cw, ch = 10, 20

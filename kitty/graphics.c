@@ -220,8 +220,9 @@ typedef enum {
     ALLOCATION_SORTED,
     ALLOCATION_CLIENT_IDS,
     ALLOCATION_RENDER_DATA,
+    ALLOCATION_PLACEMENT_ID,
 } Allocation;
-static const char *allocation_names[] = {"", "inflate", "image", "texture", "ref", "sorted", "client_ids", "render_data"};
+static const char *allocation_names[] = {"", "inflate", "image", "texture", "ref", "sorted", "client_ids", "render_data", "placement_id"};
 static Allocation failing_allocation = ALLOCATION_NONE;
 
 // Whether the tests made this allocation fail, which it does once
@@ -423,18 +424,33 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
         // it is freed, whether or not the image still exists.
         clone->surface = NULL;
         clone->surface_texture = 0;
+        // Out of memory, the paused frame lacks the placements, or the
+        // images, that could not be copied, and the clone stays consistent
+        bool out_of_memory = false;
         iter_refs(img) {
-            ImageRef *cr = malloc(sizeof(ImageRef));
-            if (cr) {
-                memcpy(cr, i.data->val, sizeof(*cr));
-                if (vt_is_end(vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr))) fatal("Out of memory");
-                if (cr->client_id && vt_is_end(vt_insert(&clone->refs_by_client_id, cr->client_id, cr))) fatal("Out of memory");
+            ImageRef *cr = allocation_fails(ALLOCATION_REF) ? NULL : malloc(sizeof(ImageRef));
+            if (!cr) {
+                out_of_memory = true;
+                continue;
+            }
+            memcpy(cr, i.data->val, sizeof(*cr));
+            if (vt_is_end(vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr))) {
+                free(cr);
+                out_of_memory = true;
+            } else if (cr->client_id && vt_is_end(vt_insert(&clone->refs_by_client_id, cr->client_id, cr))) {
+                vt_erase(&clone->refs_by_internal_id, cr->internal_id);
+                free(cr);
+                out_of_memory = true;
             }
         }
         clone->texture = incref_texture_ref(img->texture);
         clone->vector_right_texture = incref_texture_ref(img->vector_right_texture);
         clone->palette = incref_palette(img->palette);
-        vt_insert(&dest->images_by_internal_id, clone->internal_id, clone);
+        if (vt_is_end(vt_insert(&dest->images_by_internal_id, clone->internal_id, clone))) {
+            free_image(dest, clone);
+            out_of_memory = true;
+        }
+        if (out_of_memory) log_error("Out of memory copying the images shown while rendering is paused, some are not shown");
     }
 }
 
@@ -2336,7 +2352,13 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
     ref->num_cols = g->num_cells;
     ref->num_rows = g->num_lines;
     if (img->client_id) {
-        if (!ref->client_id && g->placement_id && vt_is_end(vt_insert(&img->refs_by_client_id, g->placement_id, ref))) fatal("Out of memory");
+        if (!ref->client_id && g->placement_id &&
+            (allocation_fails(ALLOCATION_PLACEMENT_ID) || vt_is_end(vt_insert(&img->refs_by_client_id, g->placement_id, ref)))) {
+            // a new placement, nothing else refers to it yet
+            remove_ref(img, ref);
+            set_command_failed_response("ENOMEM", "Out of memory creating a placement");
+            return g->id;
+        }
         ref->client_id = g->placement_id;
     }
     update_src_rect(ref, img);
