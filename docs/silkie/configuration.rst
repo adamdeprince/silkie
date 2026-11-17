@@ -111,11 +111,11 @@ OS appearance changes. Reloading the configuration restores the saved choices.
 With ``color_scheme auto``, Silkie follows the OS appearance: it uses
 :file:`dark-theme.auto.conf`, :file:`light-theme.auto.conf` or
 :file:`no-preference-theme.auto.conf` from the Silkie config directory when
-present. Without a light theme file, a light OS appearance selects a built-in
-light theme, as long as :file:`silkie.conf` sets no colors of its own; set
-``automatic_light_theme no`` to keep the default colors. To customize the
-built-in theme, copy :file:`builtin-light-theme.conf` from the Silkie package
-to :file:`light-theme.auto.conf`. Colors from profiles, ``launch --color``, the
+present. With ``automatic_light_theme yes`` and no light theme file, a light
+OS appearance selects a built-in light theme, as long as :file:`silkie.conf`
+sets no colors of its own; by default the colors stay as configured. To
+customize the built-in theme, copy :file:`builtin-light-theme.conf` from the
+Silkie package to :file:`light-theme.auto.conf`. Colors from profiles, ``launch --color``, the
 ssh kitten and programs stay on top of any theme. E-paper mode shows black on
 white over all of them.
 
