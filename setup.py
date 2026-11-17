@@ -414,6 +414,12 @@ def xxhash_flags() -> tuple[list[str], list[str]]:
     return pkg_config('libxxhash', '--cflags-only-I'), pkg_config('libxxhash', '--libs')
 
 
+@lru_cache(maxsize=2)
+def zstd_flags() -> tuple[list[str], list[str]]:
+    # compresses the scrollback, see kitty/history.c
+    return pkg_config('libzstd', '--cflags-only-I'), pkg_config('libzstd', '--libs')
+
+
 def at_least_version(package: str, major: int, minor: int = 0) -> None:
     q = f'{major}.{minor}'
     if subprocess.run([PKGCONFIG, package, f'--atleast-version={q}']).returncode != 0:
@@ -769,10 +775,12 @@ def kitty_env(args: Options) -> Env:
     ans.xt_version = '.'.join(map(str, version))
 
     xxhash = xxhash_flags()
+    zstd = zstd_flags()
     at_least_version('harfbuzz', 7, 1)
     cflags.extend(pkg_config('libpng', '--cflags-only-I'))
     cflags.extend(pkg_config('lcms2', '--cflags-only-I'))
     cflags.extend(xxhash[0])
+    cflags.extend(zstd[0])
     # simde doesnt come with pkg-config files but some Linux distros add
     # them and on macOS when building with homebrew it is required
     with suppress(SystemExit, subprocess.CalledProcessError):
@@ -816,7 +824,7 @@ def kitty_env(args: Options) -> Env:
     gl_libs = ['-framework', 'OpenGL'] if is_macos else pkg_config('gl', '--libs')
     libpng = pkg_config('libpng', '--libs')
     lcms2 = pkg_config('lcms2', '--libs')
-    ans.ldpaths += pylib + platform_libs + gl_libs + libpng + lcms2 + libcrypto_ldflags + xxhash[1]
+    ans.ldpaths += pylib + platform_libs + gl_libs + libpng + lcms2 + libcrypto_ldflags + xxhash[1] + zstd[1]
     if is_macos:
         ans.ldpaths.extend('-framework Cocoa'.split())
     elif not is_openbsd:

@@ -252,6 +252,19 @@ Keep the window open even after the command being executed exits, at a shell pro
 The shell will be run after the launched command exits.
 
 
+--scrollback-lines
+The number of lines of scrollback for the new window, or :code:`unlimited`.
+Windows opened later in the same tab get the same scrollback settings. Defaults
+to the profile of the tab or :opt:`scrollback_lines`.
+
+
+--scrollback-compression
+How the scrollback of the new window is kept: :code:`none` or a zstd
+compression level. Windows opened later in the same tab get the same
+scrollback settings. Defaults to the profile of the tab or
+:opt:`scrollback_compression`.
+
+
 --copy-colors
 type=bool-set
 Set the colors of the newly created window to be the same as the colors in the
@@ -1014,6 +1027,12 @@ def _launch(
                     new_window.creation_spec = new_window.creation_spec._replace(spacing=tuple(opts.spacing))
                 if opts.color:
                     new_window.creation_spec = new_window.creation_spec._replace(colors=tuple(opts.color))
+        if opts.scrollback_lines or opts.scrollback_compression:
+            # for this window and those opened in its tab later
+            cur_lines, cur_compression = new_window.scrollback_settings
+            new_window.set_scrollback_settings(opts.scrollback_lines or cur_lines, opts.scrollback_compression or cur_compression)
+            if (wtab := new_window.tabref()) is not None:
+                wtab.scrollback_settings = new_window.scrollback_override
         if spacing:
             patch_window_edges(new_window, spacing)
             tab.relayout()

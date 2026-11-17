@@ -271,3 +271,34 @@ limits apply when Silkie rasterizes a vector image.
 ``vector_curve_limit``
     The maximum number of line segments used to flatten one curve or circle.
     ``0`` means as many segments as the flattening error asks for.
+
+Compressed scrollback
+---------------------
+
+Silkie keeps unlimited scrollback by default, compressed with zstd at level
+9: :opt:`scrollback_lines` is :code:`unlimited` and :opt:`scrollback_compression`
+is :code:`9`. The two options are independent: a line limit, compression
+(:code:`none` or any zstd level, negative fast levels included) or both. The
+option documentation has the measured memory, CPU and latency for several
+levels, and what frames and a line limit cost.
+
+The newest 2048 lines stay uncompressed. Older lines go, 128 at a time, to a
+background thread that encodes them compactly and compresses them, so output
+does not wait for compression: :code:`benchmark.py` measured the same
+throughput as uncompressed scrollback. 1.5 million lines of colored log output
+take about 49 MB instead of 8.4 GB.
+
+The settings can differ per window and per tab:
+
+* a profile can set :code:`scrollback_lines` and :code:`scrollback_compression`;
+* :code:`launch --scrollback-lines N --scrollback-compression L` (also on a
+  :code:`launch` line of a session file) sets them for the new window, and
+  windows opened later in its tab get the same;
+* :code:`kitten @ set-scrollback-compression L [--lines N] [--recompress]`
+  changes them for the matched windows, or with :code:`--match-tab` for
+  tabs, including windows opened in them later. :code:`--recompress` also
+  recompresses what is already compressed, in the background.
+
+A new level applies to lines compressed from then on. With unlimited
+scrollback the scrollback pager history (:opt:`scrollback_pager_history_size`)
+receives nothing, as no line ever leaves the scrollback.

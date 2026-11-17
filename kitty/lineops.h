@@ -135,12 +135,10 @@ bool cells_have_multiline_chars(const CPUCell *cells, index_type count);
 bool historybuf_pop_line(HistoryBuf *, Line *);
 void historybuf_init_line(HistoryBuf *self, index_type num, Line *l);
 bool history_buf_endswith_wrap(HistoryBuf *self);
-CPUCell *historybuf_cpu_cells(HistoryBuf *self, index_type num);
-GPUCell *historybuf_gpu_cells(HistoryBuf *self, index_type num);
+GPUCell *historybuf_gpu_cells(HistoryBuf *self, index_type num);  // valid until the next access to the buffer
 void historybuf_mark_line_clean(HistoryBuf *self, index_type y);
 void historybuf_mark_line_dirty(HistoryBuf *self, index_type y);
 void historybuf_set_line_has_image_placeholders(HistoryBuf *self, index_type y, bool val);
-void historybuf_refresh_sprite_positions(HistoryBuf *self);
 void historybuf_clear(HistoryBuf *self);
 void mark_text_in_line(PyObject *marker, Line *line, ANSIBuf *buf);
 bool line_has_mark(Line *, uint16_t mark);

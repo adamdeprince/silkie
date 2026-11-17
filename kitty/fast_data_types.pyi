@@ -1226,11 +1226,38 @@ def get_fallback_font(text: str, bold: bool, italic: bool) -> Any:
 def create_test_font_group(sz: float, dpix: float, dpiy: float) -> tuple[int, int, int]: ...
 
 class HistoryBuf:
+    xnum: int
+    ynum: int
+    count: int
+
+    def __init__(
+        self, ynum: int, xnum: int, pagerhist_sz: int = 0, compress: bool = True, level: int = 0,
+        hot_lines: int = 0, block_lines: int = 0, frame_bytes: int = 0,
+    ) -> None: ...
+
     def pagerhist_as_text(self, upto_output_start: bool = False) -> str:
         pass
 
     def pagerhist_as_bytes(self) -> bytes:
         pass
+
+    def compression_stats(self) -> dict[str, Any]: ...
+
+    def cache_trim(self, render_start: int = 0) -> None: ...
+
+    def wait_for_compression(self) -> None: ...
+
+    def set_mode(self, lines: int, compress: bool, level: int, recompress: bool = False) -> None: ...
+
+    @staticmethod
+    def compressor_stats() -> dict[str, Any]: ...
+
+    @staticmethod
+    def zstd_levels() -> tuple[int, int, int]: ...
+
+
+def test_set_history_compression(hot_lines: int = 0, block_lines: int = 0, frame_bytes: int = 0) -> None: ...
+
 
 class LineBuf:
     def is_continued(self, idx: int) -> bool:
@@ -1393,6 +1420,8 @@ class Screen:
 
     def erase_in_line(self, mode: int = 0, private: bool = False) -> None:
         pass
+
+    def set_scrollback_mode(self, lines: int, compression: int, recompress: bool = False) -> None: ...
 
     def scroll(self, amt: int, upwards: bool) -> bool:
         pass

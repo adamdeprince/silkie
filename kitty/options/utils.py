@@ -777,10 +777,54 @@ def cursor_trail_start_threshold(x: str) -> tuple[int, int]:
 
 
 def scrollback_lines(x: str) -> int:
+    if x.strip().lower() == 'unlimited':
+        return 2**32 - 1
     ans = int(x)
     if ans < 0:
         ans = 2**32 - 1
     return ans
+
+
+SCROLLBACK_COMPRESSION_NONE = -(2**31)
+SCROLLBACK_UNLIMITED = 2**32 - 1
+
+
+def scrollback_settings_from(lines: int | str, compression: int | str) -> tuple[int, int]:
+    """ Normalize scrollback settings given as a number of lines (negative or
+    'unlimited' for unlimited) and a compression ('none', a zstd level, or
+    'zstd:<level>') to (lines, level or SCROLLBACK_COMPRESSION_NONE) """
+    if isinstance(lines, str):
+        lines = scrollback_lines(lines)
+    lines = SCROLLBACK_UNLIMITED if lines < 0 else max(1, lines)
+    if isinstance(compression, str):
+        c = compression.strip().lower()
+        if c.startswith('zstd:'):
+            c = c[5:]
+        level = scrollback_compression(c)
+    elif int(compression) == SCROLLBACK_COMPRESSION_NONE:
+        level = SCROLLBACK_COMPRESSION_NONE
+    else:
+        level = scrollback_compression(str(int(compression)))
+    return lines, level
+
+
+def scrollback_settings_for_display(lines: int, level: int) -> tuple[int, int | str]:
+    ' (lines, compression) with -1 for unlimited and "none" or a level '
+    return (-1 if lines >= 2**31 - 1 else lines), ('none' if level == SCROLLBACK_COMPRESSION_NONE else level)
+
+
+def scrollback_compression(x: str) -> int:
+    # a zstd level, or SCROLLBACK_COMPRESSION_NONE for none
+    x = x.strip().lower()
+    if x in ('none', 'no', 'off', 'false'):
+        return SCROLLBACK_COMPRESSION_NONE
+    level = int(x)
+    from kitty.fast_data_types import HistoryBuf
+    levels = getattr(HistoryBuf, 'zstd_levels', None)  # absent only while bootstrapping a build
+    lo, hi, _ = levels() if levels else (level, level, 0)
+    if not lo <= level <= hi:
+        raise ValueError(f'{level} is not a zstd compression level, the zstd library in use has levels from {lo} to {hi}')
+    return level
 
 
 def scrollback_pager_history_size(x: str) -> int:

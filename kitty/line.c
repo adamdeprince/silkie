@@ -710,6 +710,13 @@ line_as_ansi(Line *self, ANSILineState *s, index_type start_at, index_type stop_
     }
     close_multicell(s);
     if (s->output_buf->active_hyperlink_id && s->limit < self->xnum && !self->cpu_cells[s->limit].hyperlink_id) write_hyperlink_to_ansi_buf(s, 0);
+    // The next line is compared with the last cell of this one, which must not
+    // be referenced: the cells of a compressed history line are freed once it
+    // has been read, see history.c
+    if (s->prev_gpu_cell != &blank_cell) {
+        s->prev_gpu_cell_storage = *s->prev_gpu_cell;
+        s->prev_gpu_cell = &s->prev_gpu_cell_storage;
+    }
     return s->escape_code_written;
 #undef CMP_ATTRS
 #undef CMP

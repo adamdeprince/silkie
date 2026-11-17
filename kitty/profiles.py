@@ -49,7 +49,7 @@ PROFILE_PAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     ('Text', ('font_family', 'bold_font', 'italic_font', 'bold_italic_font', 'font_size', 'cursor_shape')),
     ('Window', ('background_opacity', 'initial_window_width', 'initial_window_height', 'window_padding_width', 'enabled_layouts')),
-    ('Terminal', ('scrollback_lines',)),
+    ('Terminal', ('scrollback_lines', 'scrollback_compression')),
 )
 OS_WINDOW_KEYS = frozenset(('font_family', 'bold_font', 'italic_font', 'bold_italic_font', 'font_size', 'background_opacity'))
 FONT_KEYS = ('font_family', 'bold_font', 'italic_font', 'bold_italic_font')

@@ -39,6 +39,7 @@ from .constants import (
     unserialize_launch_flag,
     wakeup_io_loop,
 )
+from .options.utils import scrollback_settings_for_display, scrollback_settings_from
 from .profiles import apply_to_window, parsed_options
 from .fast_data_types import (
     CURSOR_BEAM,
@@ -927,8 +928,11 @@ class Window:
         cell_width, cell_height = cell_size_for_window(self.os_window_id)
         opts = get_options()
         profile = getattr(tab, 'profile', None)
-        scrollback_lines = parsed_options(profile).get('scrollback_lines', opts.scrollback_lines) if profile is not None else opts.scrollback_lines
+        # Scrollback settings set for the tab (launch, rc, the tab settings) are inherited by its new windows
+        self.scrollback_override: tuple[int, int] | None = getattr(tab, 'scrollback_settings', None)
+        scrollback_lines = self.scrollback_override[0] if self.scrollback_override else self.default_scrollback_settings(profile)[0]
         self.screen: Screen = Screen(self, 24, 80, scrollback_lines, cell_width, cell_height, self.id)
+        self.apply_scrollback_settings(profile=profile)
         if profile is not None:
             apply_to_window(self, profile)
         self.update_minimum_contrast()
@@ -1045,6 +1049,35 @@ class Window:
         if (tab := self.tabref()) is not None:
             apply_to_window(self, tab.profile)
         self.update_minimum_contrast()
+        if self.scrollback_override is None:
+            # a changed compression applies to lines compressed from now on; the line limit only to new windows
+            self.screen.set_scrollback_mode(self.screen.historybuf.ynum, self.default_scrollback_settings()[1])
+
+    def default_scrollback_settings(self, profile: Any = None) -> tuple[int, int]:
+        ' (lines, compression) from the profile of the tab or the global options '
+        opts = get_options()
+        if profile is None and (tab := self.tabref()) is not None:
+            profile = getattr(tab, 'profile', None)
+        parsed = parsed_options(profile) if profile is not None else {}
+        return parsed.get('scrollback_lines', opts.scrollback_lines), parsed.get('scrollback_compression', opts.scrollback_compression)
+
+    def apply_scrollback_settings(self, recompress: bool = False, profile: Any = None) -> None:
+        lines, compression = self.scrollback_override or self.default_scrollback_settings(profile)
+        self.screen.set_scrollback_mode(min(lines, 2**32 - 1), compression, recompress)
+
+    def set_scrollback_settings(self, lines: int, compression: int | str, recompress: bool = False) -> None:
+        """ Set this window's scrollback: lines negative for unlimited or a
+        count; compression 'none', a zstd level or 'zstd:<level>'. Changes to
+        compression apply to lines compressed from now on, and with recompress
+        also to what is compressed already. A lower limit drops the oldest lines. """
+        self.scrollback_override = scrollback_settings_from(lines, compression)
+        self.apply_scrollback_settings(recompress)
+
+    @property
+    def scrollback_settings(self) -> tuple[int, int | str]:
+        ' (lines, compression): lines is -1 for unlimited, compression "none" or a zstd level '
+        lines, compression = self.scrollback_override or self.default_scrollback_settings()
+        return scrollback_settings_for_display(lines, compression)
 
     # minimum_contrast {{{
     @property
