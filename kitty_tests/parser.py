@@ -1097,6 +1097,21 @@ class TestParser(BaseTest):
         pb('\033]52;p;xyz\x07', ('clipboard_control', 52, 'p;xyz'))
         c.clear()
         pb('\033]22;?__current__\x07', ('set_dynamic_color', 22, '?__current__'))
+        c.clear()
+        pb('\033]7501;?\033\\', ('program_status_report', '?'))
+        pb('\033]7501;state=working:progress=40\x07', ('program_status_report', 'state=working:progress=40'))
+        self.ae(c.program_status_reports, ['?', 'state=working:progress=40'])
+        c.clear()
+        # reports far longer than the 4096 byte limit of the specification reach
+        # the handler intact, whether they arrive at once or in pieces
+        long_report = 'state=idle:' + 'unknown=pair:' * 8000 + 'state=working'
+        pb(f'\033]7501;{long_report}\033\\', ('program_status_report', long_report))
+        payload = f'\033]7501;{long_report}\x07'.encode()
+        third = len(payload) // 3
+        for start in range(0, len(payload), third):
+            self.write_bytes(s, self.create_write_buffer(s), payload[start:start + third])
+            s.test_parse_written_data()
+        self.ae(c.program_status_reports, [long_report, long_report])
 
     def test_dcs_codes(self):
         s = self.create_screen()
