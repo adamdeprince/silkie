@@ -1282,20 +1282,20 @@ typedef struct GLFWTabletPadEvent {
 #define GLFW_DOUBLEBUFFER 0x00021010
 /*! @brief Framebuffer deep color hint.
  *
- *  Whether to give the window a framebuffer with more than 8 bits per color
- *  channel, one of the GLFW_DEEP_COLOR_* values. With GLFW_DEEP_COLOR_AUTO the
- *  platform decides from what the system says about the display: an EDR
- *  capable or deeper than 8 bit screen on macOS and a root window of depth 30
- *  or more on X11. Nothing on Wayland says how deep the display is, so there
- *  only GLFW_DEEP_COLOR_ALWAYS asks for a 10 bit surface. A deep framebuffer
- *  is a wish: where there is none to be had the window gets an ordinary one.
- *  Query what it got with glGetFramebufferAttachmentParameteriv(). A window
- *  with a transparent framebuffer needs more than 2 bits of alpha, so it gets
- *  a deep framebuffer only where that is a floating point one (macOS).
+ *  Whether to try for a framebuffer with more than 8 bits per color channel,
+ *  GLFW_DEEP_COLOR_ALWAYS or GLFW_DEEP_COLOR_NEVER. It is a wish: where there
+ *  is none to be had the window gets an ordinary one. On macOS it is the
+ *  floating point, extended linear framebuffer of GLFW_COCOA_HDR, except for a
+ *  window in DEFAULT_COLORSPACE, whose values are not color managed. On
+ *  Wayland and X11 it has 10 bits per channel and at most 2 bits of alpha, so a
+ *  window with a transparent framebuffer gets a floating point one instead on
+ *  Wayland, where the compositor can be told it holds linear values, and an
+ *  ordinary one otherwise. On X11 it needs a visual of depth 30. Query what the
+ *  window got with glGetFramebufferAttachmentParameteriv(), and whether the
+ *  display it is on can show it with glfwIsWindowOutputDeep().
  */
 #define GLFW_DEEP_COLOR 0x00021011
 #define GLFW_DEEP_COLOR_NEVER 0
-#define GLFW_DEEP_COLOR_AUTO 1
 #define GLFW_DEEP_COLOR_ALWAYS 2
 
 /*! @brief Context client API hint and attribute.
@@ -4526,6 +4526,18 @@ GLFWAPI float glfwGetWindowHDRHeadroom(GLFWwindow *window);
  *  without an HDR framebuffer. Re-query when the window's display changes.
  */
 GLFWAPI bool glfwGetWindowHDRDefault(GLFWwindow *window);
+
+/*! @brief Whether the system says that the display the window is on now shows
+ *  more than 8 bits per color channel: on macOS a screen that reports more
+ *  than 8 bits per sample or supports extended dynamic range, on X11 a screen
+ *  of depth 30 or more, on Wayland outputs whose color management image
+ *  description is HDR (PQ, HLG or linear transfer, or a peak luminance above
+ *  the reference white), all the outputs the window is on, or before it has
+ *  entered any, the description the compositor prefers for it. False when
+ *  nothing says so. Cheap enough to ask for every frame; the answer changes
+ *  when the window moves to another display.
+ */
+GLFWAPI bool glfwIsWindowOutputDeep(GLFWwindow *window);
 
 /*! @brief Enable or disable display of HDR content in the window. Only
  *  effective when the window was created with the GLFW_COCOA_HDR hint.

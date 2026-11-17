@@ -75,6 +75,10 @@ destroyContextNSGL(_GLFWwindow *window) {
 
     [window->context.nsgl.object release];
     window->context.nsgl.object = nil;
+    free(window->context.nsgl.ctxconfig);
+    free(window->context.nsgl.fbconfig);
+    window->context.nsgl.ctxconfig = NULL;
+    window->context.nsgl.fbconfig = NULL;
 }
 
 
@@ -114,34 +118,10 @@ _glfwTerminateNSGL(void) {
 }
 
 
-// Create the OpenGL context
+// The pixel format for a context made from ctxconfig and fbconfig, with a floating point color buffer or not
 //
-bool
-_glfwCreateContextNSGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig) {
-    if (ctxconfig->client == GLFW_OPENGL_ES_API) {
-        _glfwInputError(GLFW_API_UNAVAILABLE, "NSGL: OpenGL ES is not available on macOS");
-        return false;
-    }
-
-    if (ctxconfig->major > 2) {
-        if (ctxconfig->major == 3 && ctxconfig->minor < 2) {
-            _glfwInputError(GLFW_VERSION_UNAVAILABLE, "NSGL: The targeted version of macOS does not support OpenGL 3.0 or 3.1 but may support 3.2 and above");
-            return false;
-        }
-    }
-
-    // Context robustness modes (GL_KHR_robustness) are not yet supported by
-    // macOS but are not a hard constraint, so ignore and continue
-
-    // Context release behaviors (GL_KHR_context_flush_control) are not yet
-    // supported by macOS but are not a hard constraint, so ignore and continue
-
-    // Debug contexts (GL_KHR_debug) are not yet supported by macOS but are not
-    // a hard constraint, so ignore and continue
-
-    // No-error contexts (GL_KHR_no_error) are not yet supported by macOS but
-    // are not a hard constraint, so ignore and continue
-
+static NSOpenGLPixelFormat *
+create_pixel_format(const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig, bool float_surface) {
 #define addAttrib(a)                                                  \
     {                                                                 \
         assert((size_t)index < sizeof(attribs) / sizeof(attribs[0])); \
@@ -192,7 +172,7 @@ _glfwCreateContextNSGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, con
         // macOS needs non-zero color size, so set reasonable values
         if (colorBits == 0) colorBits = 24;
         else if (colorBits < 15) colorBits = 15;
-        if (window->ns.float_surface) {
+        if (float_surface) {
             addAttrib(NSOpenGLPFAColorFloat);
             colorBits = 64;
         }
@@ -234,7 +214,38 @@ _glfwCreateContextNSGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, con
 #undef addAttrib
 #undef setAttrib
 
-    window->context.nsgl.pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
+    return [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
+}
+
+// Create the OpenGL context
+//
+bool
+_glfwCreateContextNSGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, const _GLFWfbconfig *fbconfig) {
+    if (ctxconfig->client == GLFW_OPENGL_ES_API) {
+        _glfwInputError(GLFW_API_UNAVAILABLE, "NSGL: OpenGL ES is not available on macOS");
+        return false;
+    }
+
+    if (ctxconfig->major > 2) {
+        if (ctxconfig->major == 3 && ctxconfig->minor < 2) {
+            _glfwInputError(GLFW_VERSION_UNAVAILABLE, "NSGL: The targeted version of macOS does not support OpenGL 3.0 or 3.1 but may support 3.2 and above");
+            return false;
+        }
+    }
+
+    // Context robustness modes (GL_KHR_robustness) are not yet supported by
+    // macOS but are not a hard constraint, so ignore and continue
+
+    // Context release behaviors (GL_KHR_context_flush_control) are not yet
+    // supported by macOS but are not a hard constraint, so ignore and continue
+
+    // Debug contexts (GL_KHR_debug) are not yet supported by macOS but are not
+    // a hard constraint, so ignore and continue
+
+    // No-error contexts (GL_KHR_no_error) are not yet supported by macOS but
+    // are not a hard constraint, so ignore and continue
+
+    window->context.nsgl.pixelFormat = create_pixel_format(ctxconfig, fbconfig, window->ns.float_surface);
     if (window->context.nsgl.pixelFormat == nil) {
         _glfwInputError(GLFW_FORMAT_UNAVAILABLE, "NSGL: Failed to find a suitable pixel format");
         return false;
@@ -269,6 +280,11 @@ _glfwCreateContextNSGL(_GLFWwindow *window, const _GLFWctxconfig *ctxconfig, con
     window->context.extensionSupported = extensionSupportedNSGL;
     window->context.getProcAddress = getProcAddressNSGL;
     window->context.destroy = destroyContextNSGL;
+    // Kept to make a context with another framebuffer later, without which the window keeps this one
+    window->context.nsgl.ctxconfig = malloc(sizeof(_GLFWctxconfig));
+    window->context.nsgl.fbconfig = malloc(sizeof(_GLFWfbconfig));
+    if (window->context.nsgl.ctxconfig) *window->context.nsgl.ctxconfig = *ctxconfig;
+    if (window->context.nsgl.fbconfig) *window->context.nsgl.fbconfig = *fbconfig;
 
     return true;
 }
@@ -331,6 +347,54 @@ glfwCocoaRecreateGLDrawable(GLFWwindow *w) {
         [oldContext release];
     } @catch (NSException *e) {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Failed to recreate NSGL context: %s (%s)", [[e name] UTF8String], [[e reason] UTF8String]);
+        return false;
+    }
+    return true;
+}
+
+// Gives the window a floating point framebuffer, holding linear values in an extended linear color space, or an 8 bit
+// one, and returns whether it changed. The framebuffer of an NSOpenGLContext is fixed, so this is done with a new
+// context that shares its objects with all the others, as the old one did, so nothing needs to be made again or sent
+// to the GPU again. The new context is current afterwards. On failure the window keeps the context it had
+GLFWAPI bool
+glfwCocoaSetWindowFloatSurface(GLFWwindow *w, bool float_surface) {
+    _GLFWwindow *window = (_GLFWwindow *)w;
+    if (window->context.client == GLFW_NO_API || window->context.nsgl.object == nil || !window->context.nsgl.ctxconfig || !window->context.nsgl.fbconfig)
+        return false;
+    if (window->ns.float_surface == float_surface) return false;
+    @try {
+        NSOpenGLPixelFormat *pixelFormat = create_pixel_format(window->context.nsgl.ctxconfig, window->context.nsgl.fbconfig, float_surface);
+        if (pixelFormat == nil) return false;
+        NSOpenGLContext *oldContext = window->context.nsgl.object;
+        NSOpenGLContext *share = globally_shared_context ? globally_shared_context : oldContext;
+        NSOpenGLContext *newContext = [[NSOpenGLContext alloc] initWithFormat:pixelFormat shareContext:share];
+        if (newContext == nil) {
+            [pixelFormat release];
+            return false;
+        }
+        GLint opacity = 0;
+        [oldContext getValues:&opacity forParameter:NSOpenGLContextParameterSurfaceOpacity];
+        [newContext setValues:&opacity forParameter:NSOpenGLContextParameterSurfaceOpacity];
+        GLint interval = 0;
+        [newContext setValues:&interval forParameter:NSOpenGLContextParameterSwapInterval];
+        [NSOpenGLContext clearCurrentContext];
+        [oldContext clearDrawable];
+        window->ns.float_surface = float_surface;
+        _glfwCocoaUpdateColorSpaceForSurface(window);
+        [window->ns.view setWantsBestResolutionOpenGLSurface:window->ns.retina];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [newContext setView:window->ns.view];
+#pragma clang diagnostic pop
+        [newContext makeCurrentContext];
+        [newContext update];
+        [window->context.nsgl.pixelFormat release];
+        window->context.nsgl.pixelFormat = pixelFormat;
+        window->context.nsgl.object = newContext;
+        [oldContext release];
+        _glfwPlatformSetTls(&_glfw.contextSlot, window);
+    } @catch (NSException *e) {
+        _glfwInputError(GLFW_PLATFORM_ERROR, "Failed to switch the NSGL framebuffer: %s (%s)", [[e name] UTF8String], [[e reason] UTF8String]);
         return false;
     }
     return true;

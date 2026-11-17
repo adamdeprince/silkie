@@ -48,8 +48,12 @@ fragment_main(float2 texcoord: TEXCOORD, float4 frag_coord: SV_Position, uniform
         float luminance = dot(color_premul.rgb, float3(0.2126f, 0.7152f, 0.0722f));
         color_premul.rgb = spatial_anaglyph == 1.f ? float3(luminance, 0.f, 0.f) : float3(0.f, 0.f, luminance);
     }
-    if (encode_srgb == 0.0f) return float4(linear_output_from_extended(color_premul.rgb, output_gamut), color_premul.a);
-    // A surface with 8 bits or fewer per channel is dithered to its steps, dither_levels, which are zero for any other
+    // dither_levels are the steps to dither to, zero for no dithering, see output_dither_levels()
+    if (encode_srgb == 0.0f) {
+        float4 linear = float4(linear_output_from_extended(color_premul.rgb, output_gamut), color_premul.a);
+        if (dither_levels.x > 0.f) return dither_linear_premultiplied(linear, frag_coord.xy, dither_levels);
+        return linear;
+    }
     float3 encoded = linear2srgb(output_from_extended(color_premul.rgb / color_premul.a, output_gamut));
     if (dither_levels.x > 0.f && color_premul.a > 0.f) return dither_premultiplied(encoded, color_premul.a, frag_coord.xy, dither_levels);
     return vec4_premul(encoded, color_premul.a);

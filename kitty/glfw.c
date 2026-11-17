@@ -2618,9 +2618,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     }
     if (OPT(hide_window_decorations) & 1) glfwWindowHint(GLFW_DECORATED, false);
 
-    static const int deep_color_hints[] = {
-        [DEEP_COLOR_NEVER] = GLFW_DEEP_COLOR_NEVER, [DEEP_COLOR_AUTO] = GLFW_DEEP_COLOR_AUTO, [DEEP_COLOR_ALWAYS] = GLFW_DEEP_COLOR_ALWAYS};
-    glfwWindowHint(GLFW_DEEP_COLOR, deep_color_hints[OPT(deep_color) < arraysz(deep_color_hints) ? OPT(deep_color) : DEEP_COLOR_AUTO]);
+    glfwWindowHint(GLFW_DEEP_COLOR, OPT(deep_color) == DEEP_COLOR_NEVER ? GLFW_DEEP_COLOR_NEVER : GLFW_DEEP_COLOR_ALWAYS);
     const bool set_blur = OPT(background_blur) > 0 && OPT(background_opacity) < 1.f;
     glfwWindowHint(GLFW_BLUR_RADIUS, set_blur ? OPT(background_blur) : 0);
 #ifdef __APPLE__
@@ -3596,7 +3594,7 @@ os_window_display_info(OSWindow *w, DisplayInfo *d) {
         const int r = w->output.red_bits, gr = w->output.green_bits, b = w->output.blue_bits;
         d->output_bits = r == gr && r == b ? r : 0;
         if (r > 0 && gr > 0 && b > 0) d->output_type = w->output.is_float ? "float" : "fixed";
-        d->output_dither = output_dither_levels(w, NULL);
+        d->output_dither = output_dither_bits(w);
     }
     // Overrides for what the OS cannot tell us
     if (OPT(eink_mode)) d->kind = display_kinds[GLFW_DISPLAY_KIND_EINK];

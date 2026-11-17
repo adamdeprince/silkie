@@ -871,6 +871,15 @@ glfwGetWindowHDRDefault(GLFWwindow *handle) {
     return _glfwPlatformGetWindowHDRDefault(window);
 }
 
+GLFWAPI bool
+glfwIsWindowOutputDeep(GLFWwindow *handle) {
+    _GLFWwindow *window = (_GLFWwindow *)handle;
+    assert(window != NULL);
+
+    _GLFW_REQUIRE_INIT_OR_RETURN(false);
+    return _glfwPlatformIsWindowOutputDeep(window);
+}
+
 GLFWAPI float
 glfwSetWindowHDRRange(GLFWwindow *handle, float peak) {
     _GLFWwindow *window = (_GLFWwindow *)handle;

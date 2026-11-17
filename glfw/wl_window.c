@@ -1563,15 +1563,21 @@ attach_opengl_context_to_window(_GLFWwindow *window, const _GLFWctxconfig *ctxco
                 debug("No HDR for window %llu: no floating point EGL window surfaces\n", window->id);
             } else wanted.floatColor = describe_hdr_window(window, 1.f);
         }
-        // A window that is not HDR gets 10 bits per channel only when asked to always. Nothing in the protocols
-        // says how deep the display is, and a compositor that puts a deep surface on an 8 bit display rounds it
-        // without the dithering that an 8 bit surface gets from the application
+        // A window that is not HDR gets 10 bits per channel, which cost no more than 8. They come with 2 bits of
+        // alpha at most, so a transparent window gets a floating point surface instead, described to the compositor
+        // as linear as an HDR one is, where there is one, and an ordinary surface otherwise. The surface does not
+        // depend on the output: what does is how the application dithers into it
         bool deep = false;
+        if (!wanted.floatColor && fbconfig->deepColor == GLFW_DEEP_COLOR_ALWAYS && wanted.transparent && hdr_can_be_described() &&
+            _glfwHasFloatColorEGL(ctxconfig, fbconfig)) {
+            wanted.floatColor = describe_hdr_window(window, 1.f);
+            if (wanted.floatColor) debug("Window %llu is transparent and gets a floating point surface for deep color\n", window->id);
+        }
         if (!wanted.floatColor && fbconfig->deepColor == GLFW_DEEP_COLOR_ALWAYS) {
             deep = _glfwCreateDeepColorContextEGL(window, ctxconfig, &wanted);
             debug("Window %llu %s\n", window->id,
                 deep                 ? "has a 10 bit surface for deep color"
-                : wanted.transparent ? "has no deep color: 10 bit surfaces have too little alpha for a transparent window"
+                : wanted.transparent ? "has no deep color: 10 bit surfaces have too little alpha for a transparent window and there are no floating point ones"
                                      : "has no deep color: no such EGL window surfaces");
         }
         if (!deep && !_glfwCreateContextEGL(window, ctxconfig, &wanted)) return false;
@@ -3992,6 +3998,21 @@ _glfwPlatformGetWindowHDRHeadroom(_GLFWwindow *window) {
 
 void
 _glfwPlatformSetWindowHDRActive(_GLFWwindow *window UNUSED, bool active UNUSED) {}
+
+// The output that governs a window is the one whose description the compositor prefers for it, which it chooses when
+// the window is on several. Before it has said, the outputs the window is on, all of them, and before the window is on
+// any, all outputs there are: that is what is known when a window is made, as it is on no output until it is shown.
+bool
+_glfwPlatformIsWindowOutputDeep(_GLFWwindow *window) {
+    if (window->wl.color.has_preferred) return _glfwWaylandColorDescriptionIsDeep(&window->wl.color.preferred);
+    _GLFWmonitor **monitors = window->wl.monitorsCount ? window->wl.monitors : _glfw.monitors;
+    const int count = window->wl.monitorsCount ? (int)window->wl.monitorsCount : _glfw.monitorCount;
+    if (count <= 0) return false;
+    for (int i = 0; i < count; i++) {
+        if (!monitors[i]->wl.color.deep) return false;
+    }
+    return true;
+}
 
 bool
 _glfwPlatformGetWindowHDRDefault(_GLFWwindow *window) {

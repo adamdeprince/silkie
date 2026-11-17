@@ -652,6 +652,15 @@ typedef struct _GLFWmonitorWayland {
     bool xdg_size_received;
     bool xdg_position_received;
 
+    // The image description of the output, from color management, see wl_color_management.c
+    struct {
+        struct wp_color_management_output_v1 *output;
+        struct wp_image_description_v1 *pending;
+        struct wp_image_description_info_v1 *info;
+        GLFWcolortransfer reading_transfer;
+        float reading_max, reading_reference, reading_target_max;
+        bool deep;  // the description says the output shows more than 8 bits per channel
+    } color;
 } _GLFWmonitorWayland;
 
 // Wayland-specific per-cursor data
@@ -687,6 +696,9 @@ void _glfwWaylandSetTabletToolCursor(_GLFWWaylandTabletTool *tool);
 void _glfwWaylandBindColorManager(struct wl_registry *registry, uint32_t name, uint32_t version);
 void _glfwWaylandTerminateColorManager(void);
 void _glfwWaylandColorManagementCreate(_GLFWwindow *window);
+void _glfwWaylandColorManagementCreateOutput(struct _GLFWmonitor *monitor);
+void _glfwWaylandColorManagementDestroyOutput(struct _GLFWmonitor *monitor);
+bool _glfwWaylandColorDescriptionIsDeep(const GLFWcolordescription *d);
 void _glfwWaylandColorManagementDestroy(_GLFWwindow *window);
 
 typedef struct wayland_cursor_shape {

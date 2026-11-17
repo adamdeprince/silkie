@@ -220,6 +220,7 @@ _glfwAddOutputWayland(uint32_t name, uint32_t version) {
 
     wl_output_add_listener(output, &outputListener, monitor);
     _glfwCreateXdgOutputWayland(monitor);
+    _glfwWaylandColorManagementCreateOutput(monitor);
 }
 
 
@@ -229,6 +230,7 @@ _glfwAddOutputWayland(uint32_t name, uint32_t version) {
 
 void
 _glfwPlatformFreeMonitor(_GLFWmonitor *monitor) {
+    _glfwWaylandColorManagementDestroyOutput(monitor);
     if (monitor->wl.xdg_output) zxdg_output_v1_destroy(monitor->wl.xdg_output);
     if (monitor->wl.output) wl_output_destroy(monitor->wl.output);
 }

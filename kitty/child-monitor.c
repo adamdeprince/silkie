@@ -1225,6 +1225,26 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
         w->viewport_size_dirty = false;
         needs_render = true;
     }
+    // The depth of the display is taken in like its size: when it changes, the window gets what suits the new display
+    monotonic_t depth_wait;
+    if (update_output_depth(w, glfwIsWindowOutputDeep(w->handle), now, &depth_wait)) needs_render = true;
+    set_maximum_wait(depth_wait);
+#ifdef __APPLE__
+    // A floating point surface costs twice what an 8 bit one does, so a window has one only while it is of use
+    const bool want_float = os_window_wants_float_surface(w);
+    if (want_float != w->output.is_float && w->output.refused_switch != (want_float ? 2 : 1)) {
+        if (glfwCocoaSetWindowFloatSurface && glfwCocoaSetWindowFloatSurface(w->handle, want_float)) {
+            check_os_window_output(w);
+            os_window_surface_switched(w);
+            bind_shader_globals_to_current_context();
+            set_gpu_viewport(w->viewport_width, w->viewport_height);
+            w->viewport_size_dirty = false;
+            w->output.refused_switch = 0;
+            debug_rendering("The window %llu now has %s surface\n", w->id, want_float ? "a floating point" : "an 8 bit");
+        } else w->output.refused_switch = want_float ? 2 : 1;
+        needs_render = true;
+    }
+#endif
     unsigned int active_window_id = 0, num_visible_windows = 0;
     bool all_windows_have_same_bg;
     color_type active_window_bg = 0;
@@ -1267,6 +1287,20 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
     if (now - os_window->display_info_at < interval) {
         set_maximum_wait(interval - (now - os_window->display_info_at));
         return;
+    }
+    // The depth of the display can change without anything being drawn
+    if (os_window->handle) {
+        monotonic_t depth_wait;
+        const bool depth_changed = update_output_depth(os_window, glfwIsWindowOutputDeep(os_window->handle), now, &depth_wait);
+        set_maximum_wait(depth_wait);
+        if (depth_changed && os_window->display_info_at) {
+            // The window takes in the change when it is next drawn, perhaps with another surface, and that is what
+            // the next report is of, so that programs get one event with the outcome
+            os_window->needs_render = true;
+            os_window->display_info_at = now;
+            set_maximum_wait(interval);
+            return;
+        }
     }
     DisplayInfo d, *o = &os_window->display_info;
     os_window_display_info(os_window, &d);

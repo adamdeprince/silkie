@@ -23,7 +23,7 @@ choices_for_allow_remote_control = typing.Literal['password', 'socket-only', 'so
 choices_for_background_image_layout = typing.Literal['mirror-tiled', 'scaled', 'tiled', 'clamped', 'centered', 'cscaled']
 choices_for_cjk_font_locale = typing.Literal['auto', 'jp', 'kr', 'sc', 'tc', 'hk']
 choices_for_color_scheme = typing.Literal['auto', 'light', 'dark']
-choices_for_deep_color = typing.Literal['auto', 'always', 'never']
+choices_for_deep_color = typing.Literal['always', 'never']
 choices_for_default_pointer_shape = typing.Literal['arrow', 'beam', 'text', 'pointer', 'hand', 'help', 'wait', 'progress', 'crosshair', 'cell', 'vertical-text', 'move', 'e-resize', 'ne-resize', 'nw-resize', 'n-resize', 'se-resize', 'sw-resize', 's-resize', 'w-resize', 'ew-resize', 'ns-resize', 'nesw-resize', 'nwse-resize', 'zoom-in', 'zoom-out', 'alias', 'copy', 'not-allowed', 'no-drop', 'grab', 'grabbing']
 choices_for_focus_follows_mouse = typing.Literal['no', 'n', 'false', 'y', 'yes', 'true', 'drop']
 choices_for_hdr = typing.Literal['no', 'detect', 'auto', 'always']
@@ -628,7 +628,7 @@ class Options:
     cursor_trail_start_threshold: tuple[int, int] = (2, 2)
     cursor_underline_thickness: float = 2.0
     custom_shaders: tuple[str, ...] = ()
-    deep_color: choices_for_deep_color = 'auto'
+    deep_color: choices_for_deep_color = 'always'
     default_pointer_shape: choices_for_default_pointer_shape = 'beam'
     default_profile: str = 'default'
     detect_urls: bool = True

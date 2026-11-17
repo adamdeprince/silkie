@@ -448,9 +448,8 @@ hdr(PyObject *val) {
 
 static inline DeepColorMode
 deep_color(PyObject *val) {
-    if (PyUnicode_CompareWithASCIIString(val, "always") == 0) return DEEP_COLOR_ALWAYS;
     if (PyUnicode_CompareWithASCIIString(val, "never") == 0) return DEEP_COLOR_NEVER;
-    return DEEP_COLOR_AUTO;
+    return DEEP_COLOR_ALWAYS;
 }
 
 static inline int

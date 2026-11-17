@@ -1674,7 +1674,10 @@ float4 fmain_wrap(
     uniform float3 dither_levels
 ) : SV_Target {
     float4 c = pipeline_fragment_main(texcoord, group, viewport, animation_progress, convert_to_srgb, wide_gamut);
-    if (dither_levels.x > 0.f && c.a > 0.f) return dither_premultiplied(clamp(c.rgb / c.a, 0.f, 1.f), c.a, frag_coord.xy, dither_levels);
+    if (dither_levels.x > 0.f && c.a > 0.f) {
+        if (convert_to_srgb) return dither_premultiplied(clamp(c.rgb / c.a, 0.f, 1.f), c.a, frag_coord.xy, dither_levels);
+        return dither_linear_premultiplied(c, frag_coord.xy, dither_levels);
+    }
     return c;
 }
         """.replace('MODULE', slot.replace('-', '_')).replace('DITHER', dither).encode()

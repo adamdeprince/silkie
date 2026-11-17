@@ -39,6 +39,11 @@ The rest:
 ``display-client.py``
     Runs inside the terminal and logs the replies of the display protocol.
 
+``gradient-card.py``
+    Runs inside the terminal: slow, dark ramps as 16 bit float images beside
+    8 bit ones, to judge banding, deep color and dithering by eye on a real
+    display. ``--help`` says what to compare.
+
 ``hdr-client.py``
     Runs inside the terminal: asks for the HDR headroom, prints text at
     ``SGR 56:400`` and shows an ``f=64`` image with values above 1.0.

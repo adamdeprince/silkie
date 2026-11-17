@@ -213,7 +213,10 @@ _glfwWaylandBindColorManager(struct wl_registry *registry, uint32_t name, uint32
     cm.compositor_version = version;
     cm.version = MIN(version, (uint32_t)IMPLEMENTED_VERSION);
     cm.manager = wl_registry_bind(registry, name, &wp_color_manager_v1_interface, cm.version);
-    if (cm.manager) wp_color_manager_v1_add_listener(cm.manager, &manager_listener, NULL);
+    if (cm.manager) {
+        wp_color_manager_v1_add_listener(cm.manager, &manager_listener, NULL);
+        for (int i = 0; i < _glfw.monitorCount; i++) _glfwWaylandColorManagementCreateOutput(_glfw.monitors[i]);
+    }
 }
 
 void
@@ -442,6 +445,161 @@ _glfwWaylandColorManagementDestroy(_GLFWwindow *window) {
     window->wl.color.surface = NULL;
     window->wl.color.has_preferred = false;
 }
+
+// What the outputs can show {{{
+
+// An output whose image description has a transfer function made for HDR, or a peak above its reference white, is
+// driven with more than 8 bits per channel: 8 bits are not enough for either. Nothing in the protocol gives the depth
+// of an SDR output, which is therefore never known to be deep.
+static bool
+is_deep(GLFWcolortransfer transfer, float max, float reference, float target_max) {
+    if (transfer == GLFW_COLOR_TRANSFER_PQ || transfer == GLFW_COLOR_TRANSFER_HLG || transfer == GLFW_COLOR_TRANSFER_EXT_LINEAR) return true;
+    const float peak = target_max > 0 ? target_max : max;
+    return reference >= 1 && peak > reference;
+}
+
+bool
+_glfwWaylandColorDescriptionIsDeep(const GLFWcolordescription *d) {
+    return is_deep(d->transfer, d->max_luminance, d->reference_luminance, d->target_max_luminance);
+}
+
+static void
+forget_output_description_being_read(_GLFWmonitor *monitor) {
+    if (monitor->wl.color.info) wp_image_description_info_v1_destroy(monitor->wl.color.info);
+    if (monitor->wl.color.pending) wp_image_description_v1_destroy(monitor->wl.color.pending);
+    monitor->wl.color.info = NULL;
+    monitor->wl.color.pending = NULL;
+}
+
+static void
+output_info_done(void *data, struct wp_image_description_info_v1 *info UNUSED) {
+    _GLFWmonitor *monitor = data;
+    forget_output_description_being_read(monitor);
+    const bool deep = is_deep(monitor->wl.color.reading_transfer, monitor->wl.color.reading_max, monitor->wl.color.reading_reference,
+        monitor->wl.color.reading_target_max);
+    if (deep != monitor->wl.color.deep) debug("Output %s is %s\n", monitor->name ? monitor->name : "", deep ? "deep (HDR)" : "not known to be deep");
+    monitor->wl.color.deep = deep;
+}
+
+static void
+output_info_icc_file(void *data UNUSED, struct wp_image_description_info_v1 *info UNUSED, int32_t fd, uint32_t size UNUSED) {
+    close(fd);
+}
+
+static void
+output_info_primaries(void *data UNUSED, struct wp_image_description_info_v1 *info UNUSED, int32_t r_x UNUSED, int32_t r_y UNUSED,
+    int32_t g_x UNUSED, int32_t g_y UNUSED, int32_t b_x UNUSED, int32_t b_y UNUSED, int32_t w_x UNUSED, int32_t w_y UNUSED) {}
+
+static void
+output_info_primaries_named(void *data UNUSED, struct wp_image_description_info_v1 *info UNUSED, uint32_t primaries UNUSED) {}
+
+static void
+output_info_tf_power(void *data UNUSED, struct wp_image_description_info_v1 *info UNUSED, uint32_t eexp UNUSED) {}
+
+static void
+output_info_tf_named(void *data, struct wp_image_description_info_v1 *info UNUSED, uint32_t tf) {
+    ((_GLFWmonitor *)data)->wl.color.reading_transfer = transfer_from_wayland(tf);
+}
+
+static void
+output_info_luminances(void *data, struct wp_image_description_info_v1 *info UNUSED, uint32_t min_lum UNUSED, uint32_t max_lum, uint32_t reference_lum) {
+    ((_GLFWmonitor *)data)->wl.color.reading_max = (float)max_lum;
+    ((_GLFWmonitor *)data)->wl.color.reading_reference = (float)reference_lum;
+}
+
+static void
+output_info_target_luminance(void *data, struct wp_image_description_info_v1 *info UNUSED, uint32_t min_lum UNUSED, uint32_t max_lum) {
+    ((_GLFWmonitor *)data)->wl.color.reading_target_max = (float)max_lum;
+}
+
+static void
+output_info_target_value(void *data UNUSED, struct wp_image_description_info_v1 *info UNUSED, uint32_t value UNUSED) {}
+
+static const struct wp_image_description_info_v1_listener output_info_listener = {
+    .done = output_info_done,
+    .icc_file = output_info_icc_file,
+    .primaries = output_info_primaries,
+    .primaries_named = output_info_primaries_named,
+    .tf_power = output_info_tf_power,
+    .tf_named = output_info_tf_named,
+    .luminances = output_info_luminances,
+    .target_primaries = output_info_primaries,
+    .target_luminance = output_info_target_luminance,
+    .target_max_cll = output_info_target_value,
+    .target_max_fall = output_info_target_value,
+};
+
+static void
+output_description_failed(void *data, struct wp_image_description_v1 *description UNUSED, uint32_t cause, const char *msg) {
+    _GLFWmonitor *monitor = data;
+    debug("The compositor could not give the color description of output %s: cause: %u %s\n", monitor->name ? monitor->name : "", cause, msg ? msg : "");
+    forget_output_description_being_read(monitor);
+}
+
+static void
+output_description_is_ready(_GLFWmonitor *monitor, struct wp_image_description_v1 *description) {
+    monitor->wl.color.reading_transfer = GLFW_COLOR_TRANSFER_UNKNOWN;
+    monitor->wl.color.reading_max = monitor->wl.color.reading_reference = monitor->wl.color.reading_target_max = 0;
+    monitor->wl.color.info = wp_image_description_v1_get_information(description);
+    if (monitor->wl.color.info) wp_image_description_info_v1_add_listener(monitor->wl.color.info, &output_info_listener, monitor);
+    else forget_output_description_being_read(monitor);
+}
+
+static void
+output_description_ready(void *data, struct wp_image_description_v1 *description, uint32_t identity UNUSED) {
+    output_description_is_ready(data, description);
+}
+
+#if IMPLEMENTED_VERSION >= 2
+static void
+output_description_ready2(void *data, struct wp_image_description_v1 *description, uint32_t identity_hi UNUSED, uint32_t identity_lo UNUSED) {
+    output_description_is_ready(data, description);
+}
+#endif
+
+static const struct wp_image_description_v1_listener output_description_listener = {
+    .failed = output_description_failed,
+    .ready = output_description_ready,
+#if IMPLEMENTED_VERSION >= 2
+    .ready2 = output_description_ready2,
+#endif
+};
+
+static void
+request_output_description(_GLFWmonitor *monitor) {
+    if (!monitor->wl.color.output) return;
+    forget_output_description_being_read(monitor);
+    monitor->wl.color.pending = wp_color_management_output_v1_get_image_description(monitor->wl.color.output);
+    if (monitor->wl.color.pending) wp_image_description_v1_add_listener(monitor->wl.color.pending, &output_description_listener, monitor);
+}
+
+static void
+output_description_changed(void *data, struct wp_color_management_output_v1 *output UNUSED) {
+    request_output_description(data);
+}
+
+static const struct wp_color_management_output_v1_listener output_listener = {
+    .image_description_changed = output_description_changed,
+};
+
+// Called for every output, once both it and the color manager are known, in whichever order they come
+void
+_glfwWaylandColorManagementCreateOutput(_GLFWmonitor *monitor) {
+    if (!cm.manager || !monitor->wl.output || monitor->wl.color.output) return;
+    monitor->wl.color.output = wp_color_manager_v1_get_output(cm.manager, monitor->wl.output);
+    if (!monitor->wl.color.output) return;
+    wp_color_management_output_v1_add_listener(monitor->wl.color.output, &output_listener, monitor);
+    request_output_description(monitor);
+}
+
+void
+_glfwWaylandColorManagementDestroyOutput(_GLFWmonitor *monitor) {
+    forget_output_description_being_read(monitor);
+    if (monitor->wl.color.output) wp_color_management_output_v1_destroy(monitor->wl.color.output);
+    monitor->wl.color.output = NULL;
+    monitor->wl.color.deep = false;
+}
+// }}}
 
 bool
 _glfwPlatformGetWindowPreferredColorDescription(_GLFWwindow *window, GLFWcolordescription *desc) {

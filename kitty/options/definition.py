@@ -2889,28 +2889,41 @@ see :doc:`/hdr-protocol`.
 
 opt(
     'deep_color',
-    'auto',
-    choices=('auto', 'always', 'never'),
+    'always',
+    choices=('always', 'never'),
     ctype='deep_color',
     long_text="""
 Draw into a window surface with more than 8 bits per color channel, so that
 smooth gradients, in images with 16 bits per channel for example, do not band
 on displays that show more than 256 levels. This does not make anything
-brighter: unlike :opt:`hdr` it changes only how finely colors are stored.
-With the default, :code:`auto`, a deep surface is used where the system says
-the display can show it: on macOS where any screen supports extended dynamic
-range or reports more than 8 bits per sample (MacBook Pro and other XDR and
-P3 displays) and :opt:`macos_colorspace` is not :code:`default`, and on X11
-when the screen has a depth of 30 bits or more. Nothing on Wayland says how
-deep the display is and a compositor showing a deep surface on an 8 bit
-display rounds it without dithering, so there :code:`auto` keeps an 8 bit
-surface. :code:`always` asks for a deep surface wherever the system has one:
-a floating point one on macOS, the one HDR uses, and one with 10 bits per
-channel on Wayland and X11, there only for windows that are not transparent,
-as such surfaces have at most two bits of alpha. :code:`never` keeps an 8 bit
-surface, except for a window that needs a floating point one for :opt:`hdr`.
-The precision Silkie actually got is reported by the :doc:`/display-protocol`
-as :code:`output_bits`. Takes effect for newly created OS windows.
+brighter, that is :opt:`hdr`. With the default, :code:`always`, Silkie asks
+for a deep surface wherever the system has one, and how finely it dithers
+into it follows the display the window is on, see :opt:`output_dither`.
+:code:`never` keeps an 8 bit surface, to save memory and bandwidth.
+
+What a deep surface costs differs. On Wayland and X11 it has 10 bits per
+channel and the same 32 bits per pixel as an 8 bit one, so it costs nothing
+more. Its alpha has at most 2 bits, so a transparent window gets a floating
+point surface on Wayland, where the graphics driver has one, and stays 8 bit
+otherwise. On X11 it needs a visual of depth 30. On macOS it is a floating
+point surface with 16 bits per channel, twice the memory and bandwidth of an
+8 bit one, so Silkie uses it only while the window is on a screen that can
+show it, one that supports extended dynamic range or reports more than 8 bits
+per sample, and switches to an 8 bit surface, like a resize, when the window
+is moved to another screen. With :opt:`macos_colorspace` set to
+:code:`default` the colors are passed to the display unmanaged, which a
+floating point surface cannot do, so that window stays 8 bit.
+
+HDR needs a floating point surface too: while :opt:`hdr` is in use for a
+window, which with the default :code:`detect` is whenever it is on an HDR
+capable screen, such as a MacBook Pro's, the window has one even with
+:code:`never`. Set :opt:`hdr` to :code:`no` as well to keep every window 8
+bits deep.
+
+The surface Silkie actually got, and how it dithers, is reported by the
+:doc:`/display-protocol` as :code:`output_bits`, :code:`output_type` and
+:code:`output_dither`. On Wayland and X11 the choice is made for newly created
+OS windows.
 """,
 )
 
@@ -2920,15 +2933,20 @@ opt(
     option_type='to_bool',
     ctype='bool',
     long_text="""
-When the window surface has 8 bits or fewer per color channel, add a faint
-ordered dither, below half a step of the surface, to the colors Silkie
-computes with more precision than the surface holds, such as gradients in
-images with 16 bits per channel, scaled images and the edges of text, instead
-of rounding them to the nearest step, which shows as bands. Colors that the
-surface holds exactly, solid text and backgrounds among them, are left exactly
-as they are. A deep surface, see :opt:`deep_color`, is not dithered.
-Dithering draws a window through an intermediate image, which costs one more
-pass over the window for every frame.
+Instead of rounding the colors Silkie computes with more precision than the
+display shows, such as gradients in images with 16 bits per channel, scaled
+images and the edges of text, to the nearest step, which shows as bands, add
+a faint ordered dither, below half a step. Colors that are exactly a step,
+solid text and backgrounds among them, are left exactly as they are. The step
+is that of the window surface when it is 8 bits deep. A deeper surface is
+dithered to the steps of 8 bits unless the system says the display the window
+is on shows more, since compositors and the system round a deep surface to an
+8 bit display without dithering it. Then a 10 bit surface is dithered to its
+own steps and a floating point one is not dithered at all. The system says
+so for HDR outputs on Wayland, for screens that support extended dynamic
+range or report more than 8 bits on macOS, and for screens 30 bits deep on
+X11. Dithering draws a window through an intermediate image, which costs one
+more pass over the window for every frame.
 """,
 )
 

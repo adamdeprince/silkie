@@ -204,19 +204,90 @@ check_os_window_output(OSWindow *w) {
         w->output.blue_bits, w->output.is_float ? "floating point" : "normalized", w->output.encode_in_shader ? ", encoded to sRGB in the shader" : "");
 }
 
-// Whether what is drawn into the window is dithered to the steps its surface has, and if so how many steps each channel
-// has above zero. Only a surface of normalized integers 8 bits deep or less is: a deeper one shows smooth gradients as
-// they are and a floating point one is quantized by the system, not here
+// Whether what is drawn into the window is dithered, and if so to how many steps above zero in each channel. A surface
+// of 8 bits or fewer is dithered to its own steps. A deeper one is dithered to the steps of 8 bits unless the system
+// says the display the window is on shows more, as compositors and the system round a deep surface to an 8 bit display
+// without dithering it; then a surface of normalized integers is dithered to its own steps and a floating point one
+// not at all.
 bool
 output_dither_levels(const OSWindow *w, float levels[3]) {
-    const int r = w->output.red_bits, g = w->output.green_bits, b = w->output.blue_bits;
-    if (!OPT(output_dither) || w->output.is_float || r <= 0 || g <= 0 || b <= 0 || r > 8 || g > 8 || b > 8) return false;
-    if (levels) {
-        levels[0] = (float)((1u << r) - 1u);
-        levels[1] = (float)((1u << g) - 1u);
-        levels[2] = (float)((1u << b) - 1u);
+    const int bits[3] = {w->output.red_bits, w->output.green_bits, w->output.blue_bits};
+    if (!OPT(output_dither) || bits[0] <= 0 || bits[1] <= 0 || bits[2] <= 0) return false;
+    const bool shallow = !w->output.is_float && bits[0] <= 8 && bits[1] <= 8 && bits[2] <= 8;
+    if (!shallow && w->output.display_deep && w->output.is_float) return false;
+    for (int i = 0; i < 3; i++) {
+        // normalized integer channels have at most 16 bits in OpenGL, what is above that is not a step any display has
+        const int b = shallow || w->output.display_deep ? MIN(bits[i], 16) : 8;
+        if (levels) levels[i] = (float)((1u << b) - 1u);
     }
     return true;
+}
+
+// The bits of the steps dithered to, of the narrowest channel, 0 when not dithering
+int
+output_dither_bits(const OSWindow *w) {
+    float levels[3];
+    if (!output_dither_levels(w, levels)) return 0;
+    const float narrowest = MIN(levels[0], MIN(levels[1], levels[2]));
+    return (int)lroundf(log2f(narrowest + 1.f));
+}
+
+// How long a change in the depth of the display has to last before it is acted on
+#define OUTPUT_DEPTH_DEBOUNCE ms_to_monotonic_t(300ll)
+
+// Takes in whether the system says the display of the window is deep now and returns whether what was acted on
+// changed. The first answer is acted on at once, later ones once they have lasted, as a window dragged across the
+// boundary between displays can be on either for a moment. wait is how long until a change seen will have lasted, or -1
+bool
+update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_t *wait) {
+    if (wait) *wait = -1;
+    if (!w->output.display_depth_known) {
+        w->output.display_depth_known = true;
+        w->output.display_deep = w->output.display_deep_seen = deep_now;
+        w->output.display_deep_seen_at = now;
+        return true;
+    }
+    if (deep_now != w->output.display_deep_seen) {
+        w->output.display_deep_seen = deep_now;
+        w->output.display_deep_seen_at = now;
+    }
+    if (w->output.display_deep_seen == w->output.display_deep) return false;
+    const monotonic_t lasted = now - w->output.display_deep_seen_at;
+    if (lasted < OUTPUT_DEPTH_DEBOUNCE) {
+        if (wait) *wait = OUTPUT_DEPTH_DEBOUNCE - lasted;
+        return false;
+    }
+    w->output.display_deep = deep_now;
+    w->output.refused_switch = 0;
+    return true;
+}
+
+// Whether a window whose surface can be switched, on macOS, should have a floating point one, which has twice the
+// memory and bandwidth of an 8 bit one: while it is on a display that shows more than 8 bits, for HDR while that is
+// active and for deep color. Every display with HDR is one, and the change from one display to the other is acted on
+// once it has lasted, see update_output_depth(), for both. A window whose colors are passed to the display unmanaged
+// cannot have one for deep color, see wants_deep_color() in cocoa_window.m
+bool
+os_window_wants_float_surface(const OSWindow *w) {
+    if (!w->output.display_deep) return false;
+    return hdr_should_be_active(w) || (OPT(deep_color) == DEEP_COLOR_ALWAYS && OPT(macos_colorspace) != 0);
+}
+
+// The window has a new surface, with a new OpenGL context that shares all objects with the old one, except those that
+// hold others, framebuffers among them, which are made again from the textures they held
+void
+os_window_surface_switched(OSWindow *w) {
+#define F(x) if (w->indirect_output.x) free_framebuffer(&w->indirect_output.x);
+    F(framebuffer_id) F(extra_fbo_id) F(fbo_a_id) F(fbo_b_id)
+#undef F
+    w->indirect_output.attached_texture_generation = 0;
+    w->indirect_output.extra_fbo_generation = 0;
+    w->indirect_output.fbo_a_generation = 0;
+    w->indirect_output.fbo_b_generation = 0;
+    if (w->persist_fbo_id) free_framebuffer(&w->persist_fbo_id);
+    if (w->persist_texture_id) free_texture(&w->persist_texture_id);
+    w->persist_texture_generation = 0;
+    w->viewport_size_dirty = true;
 }
 
 float
@@ -3787,21 +3858,65 @@ pysimulate_hdr_render_ticks(PyObject *self UNUSED, PyObject *states) {
     return Py_NewRef(ans);
 }
 
-// test only: what is done with, and reported about, a window surface with the given bits per channel
 static PyObject *
-pysimulate_os_window_output(PyObject *self UNUSED, PyObject *args) {
-    int r, g, b, is_float;
-    if (!PyArg_ParseTuple(args, "iiip", &r, &g, &b, &is_float)) return NULL;
-    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
-    if (!w) return PyErr_NoMemory();
-    set_os_window_output(w, r, g, b, is_float);
+os_window_output_state(OSWindow *w, bool switched) {
     float levels[3] = {0};
     const bool dither = output_dither_levels(w, levels);
     DisplayInfo d;
     os_window_display_info(w, &d);
-    return Py_BuildValue("{sOsOsOs(fff)sisssO}", "linear", w->linear_output ? Py_True : Py_False, "encode_in_shader",
-        w->output.encode_in_shader ? Py_True : Py_False, "dither", dither ? Py_True : Py_False, "levels", levels[0], levels[1], levels[2],
-        "output_bits", d.output_bits, "output_type", d.output_type, "output_dither", d.output_dither ? Py_True : Py_False);
+    return Py_BuildValue("{sOsOsOsOs(fff)sisssisOsOsO}", "linear", w->linear_output ? Py_True : Py_False, "encode_in_shader",
+        w->output.encode_in_shader ? Py_True : Py_False, "needs_layers", w->output.encode_in_shader || dither ? Py_True : Py_False, "dither",
+        dither ? Py_True : Py_False, "levels", levels[0], levels[1], levels[2], "output_bits", d.output_bits, "output_type", d.output_type,
+        "output_dither", d.output_dither, "display_deep", w->output.display_deep ? Py_True : Py_False, "switched", switched ? Py_True : Py_False,
+        "layers_float", layers_are_float(w) ? Py_True : Py_False);
+}
+
+// test only: what is done with, and reported about, a window surface with the given bits per channel on a display that
+// is deep or not
+static PyObject *
+pysimulate_os_window_output(PyObject *self UNUSED, PyObject *args) {
+    int r, g, b, is_float, display_deep = 0;
+    if (!PyArg_ParseTuple(args, "iiip|p", &r, &g, &b, &is_float, &display_deep)) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    set_os_window_output(w, r, g, b, is_float);
+    update_output_depth(w, display_deep, 0, NULL);
+    return os_window_output_state(w, false);
+}
+
+// test only: a window moved between displays, as a sequence of (milliseconds, display is deep, HDR is enabled by
+// default on it). A switchable surface, as on macOS, follows os_window_wants_float_surface() between 8 bit and floating
+// point, a fixed one, as elsewhere, keeps the bits it starts with
+static PyObject *
+pysimulate_output_depth_changes(PyObject *self UNUSED, PyObject *args) {
+    int r, g, b, is_float, switchable;
+    PyObject *ticks;
+    if (!PyArg_ParseTuple(args, "iiippO", &r, &g, &b, &is_float, &switchable, &ticks)) return NULL;
+    RAII_PyObject(seq, PySequence_Fast(ticks, "expected a sequence of display states"));
+    if (!seq) return NULL;
+    RAII_ALLOC(OSWindow, w, calloc(1, sizeof(OSWindow)));
+    if (!w) return PyErr_NoMemory();
+    set_os_window_output(w, r, g, b, is_float);
+    RAII_PyObject(ans, PyList_New(0));
+    if (!ans) return NULL;
+    for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(seq); i++) {
+        long long ms;
+        int deep, hdr_default;
+        if (!PyArg_ParseTuple(PySequence_Fast_GET_ITEM(seq, i), "Lpp", &ms, &deep, &hdr_default)) return NULL;
+        w->hdr_enabled_by_default = hdr_default;
+        update_output_depth(w, deep, ms_to_monotonic_t(ms), NULL);
+        bool switched = false;
+        const bool want = os_window_wants_float_surface(w);
+        if (switchable && want != w->output.is_float) {
+            if (want) set_os_window_output(w, 16, 16, 16, true);
+            else set_os_window_output(w, 8, 8, 8, false);
+            os_window_surface_switched(w);
+            switched = true;
+        }
+        RAII_PyObject(state, os_window_output_state(w, switched));
+        if (!state || PyList_Append(ans, state) != 0) return NULL;
+    }
+    return Py_NewRef(ans);
 }
 
 // test only wrapper for decorations_map_new_size
@@ -3950,6 +4065,7 @@ static PyMethodDef module_methods[] = {
     MW(simulate_custom_shader_render_ticks, METH_VARARGS),
     MW(simulate_hdr_render_ticks, METH_O),
     MW(simulate_os_window_output, METH_VARARGS),
+    MW(simulate_output_depth_changes, METH_VARARGS),
 
     {NULL, NULL, 0, NULL} /* Sentinel */
 };

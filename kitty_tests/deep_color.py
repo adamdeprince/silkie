@@ -5,7 +5,7 @@ import math
 import re
 
 from kitty.config import load_config
-from kitty.fast_data_types import simulate_os_window_output
+from kitty.fast_data_types import simulate_os_window_output, simulate_output_depth_changes
 from kitty.options.types import defaults
 from kitty.shaders.slang import get_shader_src
 
@@ -47,40 +47,99 @@ class TestDeepColor(BaseTest):
         self.exact = float(m.group(1))
 
     def test_options(self):
-        self.ae(defaults.deep_color, 'auto')
+        self.ae(defaults.deep_color, 'always')
         self.assertTrue(defaults.output_dither)
-        for mode in ('auto', 'always', 'never'):
+        for mode in ('always', 'never'):
             bad_lines = []
             opts = load_config(overrides=[f'deep_color {mode}', 'output_dither no'], accumulate_bad_lines=bad_lines)
             self.ae(bad_lines, [])
             self.ae(opts.deep_color, mode)
             self.assertFalse(opts.output_dither)
-        bad_lines = []
-        opts = load_config(overrides=['deep_color 10bit'], accumulate_bad_lines=bad_lines)
-        self.ae(len(bad_lines), 1)
-        self.ae(opts.deep_color, 'auto')
+        for bad in ('auto', '10bit'):
+            bad_lines = []
+            opts = load_config(overrides=[f'deep_color {bad}'], accumulate_bad_lines=bad_lines)
+            self.ae(len(bad_lines), 1)
+            self.ae(opts.deep_color, 'always')
 
     def test_what_is_done_with_a_surface(self):
         self.set_options()
         cases = {
-            # bits, is_float: linear, encode_in_shader, dither, levels, output_bits, output_type
-            (8, 8, 8, False): (False, False, True, (255, 255, 255), 8, 'fixed'),
-            (10, 10, 10, False): (False, True, False, (0, 0, 0), 10, 'fixed'),
-            (16, 16, 16, True): (True, False, False, (0, 0, 0), 16, 'float'),
-            (5, 6, 5, False): (False, False, True, (31, 63, 31), 0, 'fixed'),
-            (0, 0, 0, False): (False, False, False, (0, 0, 0), 0, 'unknown'),
+            # bits, is_float, display is deep: linear, encode_in_shader, needs_layers, levels, output_bits, output_type, output_dither
+            (8, 8, 8, False, False): (False, False, True, (255, 255, 255), 8, 'fixed', 8),
+            (8, 8, 8, False, True): (False, False, True, (255, 255, 255), 8, 'fixed', 8),
+            # a deep surface on a display not known to be deep is dithered to the steps of 8 bits
+            (10, 10, 10, False, False): (False, True, True, (255, 255, 255), 10, 'fixed', 8),
+            (10, 10, 10, False, True): (False, True, True, (1023, 1023, 1023), 10, 'fixed', 10),
+            (16, 16, 16, True, False): (True, False, True, (255, 255, 255), 16, 'float', 8),
+            (16, 16, 16, True, True): (True, False, False, (0, 0, 0), 16, 'float', 0),
+            (5, 6, 5, False, False): (False, False, True, (31, 63, 31), 0, 'fixed', 5),
+            (0, 0, 0, False, False): (False, False, False, (0, 0, 0), 0, 'unknown', 0),
         }
-        for (r, g, b, is_float), expected in cases.items():
-            with self.subTest(bits=(r, g, b), is_float=is_float):
-                ans = simulate_os_window_output(r, g, b, is_float)
-                self.ae(
-                    (ans['linear'], ans['encode_in_shader'], ans['dither'], ans['levels'], ans['output_bits'], ans['output_type']), expected)
-                self.ae(ans['output_dither'], expected[2])
+        for (r, g, b, is_float, deep), expected in cases.items():
+            with self.subTest(bits=(r, g, b), is_float=is_float, display_deep=deep):
+                ans = simulate_os_window_output(r, g, b, is_float, deep)
+                self.ae((ans['linear'], ans['encode_in_shader'], ans['needs_layers'], ans['levels'], ans['output_bits'], ans['output_type'],
+                         ans['output_dither']), expected)
         self.set_options({'output_dither': False})
-        ans = simulate_os_window_output(8, 8, 8, False)
-        self.assertFalse(ans['dither'])
-        self.assertFalse(ans['output_dither'])
-        self.ae(ans['output_bits'], 8)
+        for args in ((8, 8, 8, False, False), (10, 10, 10, False, False), (16, 16, 16, True, False)):
+            ans = simulate_os_window_output(*args)
+            self.assertFalse(ans['dither'])
+            self.ae(ans['output_dither'], 0)
+        self.ae(simulate_os_window_output(10, 10, 10, False)['needs_layers'], True)
+
+    def summary(self, states):
+        return [(s['display_deep'], s['output_type'], s['output_bits'], s['output_dither'], s['switched']) for s in states]
+
+    def test_switchable_surface_follows_the_display(self):
+        # macOS: floating point on a deep screen, 8 bits on another, once the move has lasted
+        self.set_options({'deep_color': 'always', 'hdr': 'no', 'macos_colorspace': 'srgb'})
+        ticks = [
+            (0, True, False),     # opens on a deep screen: acted on at once
+            (100, False, False),  # dragged across the boundary and back, too short to act on
+            (200, True, False),
+            (300, False, False),  # moved to an 8 bit screen
+            (500, False, False),
+            (650, False, False),  # has lasted long enough
+            (700, True, False),   # and back
+            (1100, True, False),
+        ]
+        float_deep = (True, 'float', 16, 0)
+        fixed_8 = (False, 'fixed', 8, 8)
+        expected = [
+            float_deep + (True,), float_deep + (False,), float_deep + (False,), float_deep + (False,), float_deep + (False,),
+            fixed_8 + (True,), fixed_8 + (False,), float_deep + (True,)]
+        states = simulate_output_depth_changes(8, 8, 8, False, True, ticks)
+        self.ae(self.summary(states), expected)
+        # the layers follow the surface, floating point for a linear one
+        self.ae([s['layers_float'] for s in states], [s['linear'] for s in states])
+        # a window whose colors are not color managed cannot have a floating point surface
+        self.set_options({'deep_color': 'always', 'hdr': 'no', 'macos_colorspace': 'default'})
+        states = simulate_output_depth_changes(8, 8, 8, False, True, ticks)
+        self.assertTrue(all(s['output_type'] == 'fixed' and not s['switched'] for s in states))
+
+    def test_never_keeps_8_bits_across_screens(self):
+        ticks = [(0, True, False), (400, False, False), (800, True, False), (1200, False, False), (1600, True, False)]
+        self.set_options({'deep_color': 'never', 'hdr': 'no'})
+        for start in ((8, 8, 8, False), (16, 16, 16, True)):
+            states = simulate_output_depth_changes(*start, True, ticks)
+            self.ae([(s['output_type'], s['output_bits']) for s in states], [('fixed', 8)] * len(ticks))
+            self.assertTrue(all(s['output_dither'] == 8 for s in states))
+        # HDR needs a floating point surface, which it gets while it is in use, on a screen that has HDR, even with never.
+        # HDR stops as soon as the window is on a screen without it, so the surface follows at once; a move onto such a
+        # screen is acted on once it has lasted
+        self.set_options({'deep_color': 'never', 'hdr': 'detect'})
+        ticks = [(0, True, True), (400, False, False), (800, False, False), (900, True, True), (1300, True, True)]
+        states = simulate_output_depth_changes(8, 8, 8, False, True, ticks)
+        self.ae([s['output_type'] for s in states], ['float', 'fixed', 'fixed', 'fixed', 'float'])
+
+    def test_fixed_surface_changes_only_its_dithering(self):
+        # Wayland and X11: a 10 bit surface stays, dithered to 8 bits until the display is known to show more
+        self.set_options({'deep_color': 'always'})
+        ticks = [(0, False, False), (100, True, False), (450, True, False), (500, False, False), (700, True, False), (1000, False, False),
+                 (1400, False, False)]
+        states = simulate_output_depth_changes(10, 10, 10, False, False, ticks)
+        self.ae([(s['output_bits'], s['output_dither'], s['switched']) for s in states],
+                [(10, 8, False), (10, 8, False), (10, 10, False), (10, 10, False), (10, 10, False), (10, 10, False), (10, 8, False)])
 
     def test_bayer_thresholds(self):
         thresholds = sorted(bayer_threshold(x, y) for x in range(8) for y in range(8))

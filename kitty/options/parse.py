@@ -1001,7 +1001,7 @@ class Parser:
             raise ValueError(f"The value {val} is not a valid choice for deep_color")
         ans["deep_color"] = val
 
-    choices_for_deep_color = frozenset(('auto', 'always', 'never'))
+    choices_for_deep_color = frozenset(('always', 'never'))
 
     def default_pointer_shape(self, val: str, ans: dict[str, typing.Any]) -> None:
         val = val.lower()
