@@ -115,9 +115,15 @@ def stage(source: Path, output: Path, version: str) -> None:
   app "silkie.app"
   binary "#{{appdir}}/silkie.app/Contents/MacOS/silkie", target: "silkie"
   binary "#{{appdir}}/silkie.app/Contents/MacOS/kitten", target: "silkie-kitten"
-  postflight do
-    # Ad-hoc signed and not notarized: Gatekeeper refuses the quarantined download.
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{{appdir}}/silkie.app"]
+  if respond_to?(:postflight_steps)
+    postflight_steps do
+      run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{{{appdir}}}}/silkie.app"],
+                            writable_paths: ["silkie.app"], writable_base: :appdir
+    end
+  else
+    postflight do
+      system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{{appdir}}/silkie.app"]
+    end
   end
   caveats <<~EOS
     Launch with silkie; companion tools use silkie-kitten.
