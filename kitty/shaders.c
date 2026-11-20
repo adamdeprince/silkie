@@ -2174,8 +2174,11 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
             double scale = MAX(1., magnification.scale);
             double cx = scale > 1. ? 2. * magnification.x - 1. : 0.;
             double cy = scale > 1. ? 1. - 2. * magnification.y : 0.;
-            glUniform4f(dest_rect_loc, (rd->dest_rect.left + shift - cx) * scale, (rd->dest_rect.top + phase - cy) * scale,
-                (rd->dest_rect.right + shift - cx) * scale, (rd->dest_rect.bottom + phase - cy) * scale);
+            glUniform4f(dest_rect_loc,
+                (GLfloat)((rd->dest_rect.left + shift - cx) * scale),
+                (GLfloat)((rd->dest_rect.top + phase - cy) * scale),
+                (GLfloat)((rd->dest_rect.right + shift - cx) * scale),
+                (GLfloat)((rd->dest_rect.bottom + phase - cy) * scale));
             draw_quad(true, 0);
         }
     }
@@ -2991,7 +2994,8 @@ call_cell_program(int program, const UIRenderData *ui, ssize_t vao_idx, bool for
     const PaneMagnification magnification = ui->screen->magnification;
     if (magnification.scale > 1.) {
         glUniform3f(program_uniform_location(program, "pane_magnification"),
-            magnification.scale, 2. * magnification.x - 1., 1. - 2. * magnification.y);
+            (GLfloat)magnification.scale, (GLfloat)(2. * magnification.x - 1.),
+            (GLfloat)(1. - 2. * magnification.y));
     } else glUniform3f(program_uniform_location(program, "pane_magnification"), 1.f, 0.f, 0.f);
     if (for_final_output) glEnable(GL_FRAMEBUFFER_SRGB);
     draw_quad(!for_final_output, render_lines_for_screen(ui->screen) * ui->screen->columns);
