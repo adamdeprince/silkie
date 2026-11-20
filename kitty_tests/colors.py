@@ -27,11 +27,18 @@ class TestColorSchemes(BaseTest):
                 self.ae((spec['cursor'], spec['cursor_text_color']), expected)
                 self.ae((spec['selection_foreground'], spec['selection_background']), (bg, fg))
                 self.ae((spec['active_tab_foreground'], spec['active_tab_background']), (bg, fg))
-        # The colors of a gray display are black on white, unless the scheme is explicitly dark
-        for scheme, expected in (('auto', (0, 0xFFFFFF)), ('light', (0, 0xFFFFFF)), ('dark', (0xFFFFFF, 0))):
-            with self.subTest(eink_scheme=scheme):
-                spec = eink_color_spec(Options({'color_scheme': scheme}))
-                self.ae((spec['foreground'], spec['background']), expected)
+        for mode, expected in (
+            ('light', ('light', 'light', 'light')),
+            ('dark', ('dark', 'dark', 'dark')),
+            ('follow_os', ('light', 'dark', 'light')),
+            ('invert_os', ('dark', 'light', 'light')),
+        ):
+            opts = load_config(overrides=['color_scheme dark', f'eink_color_scheme {mode}'])
+            for appearance, scheme in zip(('light', 'dark', 'no_preference'), expected):
+                with self.subTest(mode=mode, appearance=appearance):
+                    spec = eink_color_spec(opts, appearance=appearance)
+                    self.ae((spec['foreground'], spec['background']), (0, 0xFFFFFF) if scheme == 'light' else (0xFFFFFF, 0))
+            self.ae(eink_color_spec(opts, eink=False)['background'], 0)
 
     def test_eink_startup_and_reload(self):
         # E-ink mode no longer changes the configured colors: the e-ink colors are a layer of each window on a gray
@@ -104,7 +111,7 @@ class TestColorSchemes(BaseTest):
             self.ae(int(screen.color_profile.default_bg), 0xFFFFFF)
             Boss.set_color_scheme(boss, 'dark')
             self.assertTrue(opts.eink_mode)
-            self.ae(int(screen.color_profile.default_bg), 0)
+            self.ae(int(screen.color_profile.default_bg), 0xFFFFFF)
             Boss.set_color_scheme(boss, 'auto')
             Boss.set_eink_mode(boss, 'no')
             self.assertFalse(opts.eink_mode)
@@ -128,8 +135,10 @@ class TestColorSchemes(BaseTest):
                 parse_bytes(screen, b'\x1b]777;display;v=1:op=query:id=7\x1b\\')
                 expected = (
                     f'\x1b]777;display;v=1:op=cap:id=7:mode=0:kind={kind}:color=gray:bits=4:gamut=unknown:headroom=1:scale=0:period=0:ppi=226'
-                    ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured:output_bits=0:output_type=unknown:output_dither=0\x1b\\'
+                    ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured:output_bits=0:output_type=unknown:output_dither=0:appearance=no_preference\x1b\\'
                 ).encode()
+                if enabled:
+                    expected = expected[:-2] + b':eink_scheme=light' + expected[-2:]
                 self.ae(screen.callbacks.wtcbuf, expected)
 
     def test_scheme_shortcuts(self):

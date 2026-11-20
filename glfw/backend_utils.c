@@ -188,6 +188,7 @@ addTimer(
     t->interval = interval;
     t->name = name;
     t->trigger_at = enabled ? monotonic() + interval : MONOTONIC_T_MAX;
+    t->tolerance = 0;
     t->repeats = repeats;
     t->callback = cb;
     t->callback_data = cb_data;
@@ -234,6 +235,34 @@ changeTimerInterval(EventLoopData *eld, id_type timer_id, monotonic_t interval) 
     }
 }
 
+void
+updateTimer(EventLoopData *eld, id_type timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled) {
+    for (nfds_t i = 0; i < eld->timers_count; i++) {
+        Timer *t = eld->timers + i;
+        if (t->id == timer_id) {
+            t->interval = interval;
+            t->tolerance = tolerance;
+            t->trigger_at = enabled ? monotonic() + interval : MONOTONIC_T_MAX;
+            update_timers(eld);
+            break;
+        }
+    }
+}
+
+static monotonic_t
+next_timer_deadline(const EventLoopData *eld) {
+    monotonic_t deadline = MONOTONIC_T_MAX;
+    // Poll up to the earliest deadline. When any event wakes poll, due timers
+    // can run as soon as their nominal trigger time has passed.
+    for (nfds_t i = 0; i < eld->timers_count; i++) {
+        const Timer *t = eld->timers + i;
+        if (t->trigger_at >= deadline) break; // sorted by nominal trigger time
+        const monotonic_t latest = t->trigger_at > MONOTONIC_T_MAX - t->tolerance ?
+            MONOTONIC_T_MAX : t->trigger_at + t->tolerance;
+        if (latest < deadline) deadline = latest;
+    }
+    return deadline;
+}
 
 // Self test of the timer and watch tables {{{
 // Run by kitty_tests/glfw.py. It is the only test hook exported, and is
@@ -392,6 +421,24 @@ table_test_timers(size_t n) {
 }
 
 static const char *
+table_test_timer_tolerance(void) {
+    Timer timers[] = {
+        {.trigger_at = 100, .tolerance = 10},
+        {.trigger_at = 105},
+        {.trigger_at = MONOTONIC_T_MAX},
+    };
+    const EventLoopData eld = {.timers = timers, .timers_count = arraysz(timers)};
+    if (next_timer_deadline(&eld) != 105) return "a flexible timer missed a nearby strict deadline";
+    timers[1].tolerance = 2;
+    if (next_timer_deadline(&eld) != 107) return "a flexible timer exceeded the tighter tolerance of another timer";
+    timers[1].trigger_at = 115;
+    if (next_timer_deadline(&eld) != 110) return "a flexible timer exceeded its tolerance";
+    timers[0].tolerance = 0;
+    if (next_timer_deadline(&eld) != 100) return "a strict timer was delayed";
+    return NULL;
+}
+
+static const char *
 table_test_watches(size_t n) {
     const char *err = table_test_setup(n);
     if (err) return err;
@@ -431,7 +478,8 @@ table_test_watches(size_t n) {
 // what went wrong. Each watch is a pipe, so this opens 3 * num_watches file descriptors.
 GLFWAPI const char *
 _glfwTestEventLoopTables(size_t num_timers, size_t num_watches) {
-    const char *err = table_test_timers(num_timers);
+    const char *err = table_test_timer_tolerance();
+    if (!err) err = table_test_timers(num_timers);
     if (!err) err = table_test_watches(num_watches);
     table_test_cleanup();
     return err;
@@ -442,9 +490,12 @@ _glfwTestEventLoopTables(size_t num_timers, size_t num_watches) {
 monotonic_t
 prepareForPoll(EventLoopData *eld, monotonic_t timeout) {
     for (nfds_t i = 0; i < eld->watches_count; i++) eld->fds[i].revents = 0;
-    if (!eld->timers_count || eld->timers[0].trigger_at == MONOTONIC_T_MAX) return timeout;
-    monotonic_t now = monotonic(), next_repeat_at = eld->timers[0].trigger_at;
-    if (timeout < 0 || now + timeout > next_repeat_at) { timeout = next_repeat_at <= now ? 0 : next_repeat_at - now; }
+    const monotonic_t deadline = next_timer_deadline(eld);
+    if (deadline != MONOTONIC_T_MAX) {
+        const monotonic_t now = monotonic();
+        const monotonic_t wait = deadline <= now ? 0 : deadline - now;
+        if (timeout < 0 || wait < timeout) timeout = wait;
+    }
     return timeout;
 }
 

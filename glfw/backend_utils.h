@@ -61,7 +61,7 @@ typedef struct {
 
 typedef struct {
     id_type id;
-    monotonic_t interval, trigger_at;
+    monotonic_t interval, trigger_at, tolerance;
     timer_callback_func callback;
     void *callback_data;
     GLFWuserdatafreefun free;
@@ -115,6 +115,7 @@ void removeTimer(EventLoopData *eld, id_type timer_id);
 void removeAllTimers(EventLoopData *eld);
 void toggleTimer(EventLoopData *eld, id_type timer_id, int enabled);
 void changeTimerInterval(EventLoopData *eld, id_type timer_id, monotonic_t interval);
+void updateTimer(EventLoopData *eld, id_type timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled);
 monotonic_t prepareForPoll(EventLoopData *eld, monotonic_t timeout);
 int pollWithTimeout(struct pollfd *fds, nfds_t nfds, monotonic_t timeout);
 int pollForEvents(EventLoopData *eld, monotonic_t timeout, watch_callback_func);

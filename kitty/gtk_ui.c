@@ -2211,6 +2211,41 @@ wayland_display(void) {
     return NULL;
 }
 
+static void
+on_text_review_response(GtkDialog *dialog, gint response, gpointer data) {
+    (void)response; (void)data;
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static bool
+show_text_review(struct OSWindow *w, const char *title, const char *text) {
+    GtkWindow *parent = NULL;
+#ifdef GDK_WINDOWING_X11
+    Page *p = page_of(w);
+    if (p) parent = GTK_WINDOW(p->hw->window);
+#else
+    (void)w;
+#endif
+    const size_t size = strlen(text);
+    // GtkTextBuffer uses gint lengths and offsets.
+    if (size > G_MAXINT) return false;
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(title, parent,
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "Close", GTK_RESPONSE_CLOSE, NULL);
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 520, 320);
+    GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
+    GtkWidget *view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(view), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(view), GTK_WRAP_WORD_CHAR);
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(view)), text, (gint)size);
+    atk_object_set_name(gtk_widget_get_accessible(view), title);
+    gtk_container_add(GTK_CONTAINER(scroll), view);
+    gtk_box_pack_start(GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), scroll, TRUE, TRUE, 0);
+    g_signal_connect(dialog, "response", G_CALLBACK(on_text_review_response), NULL);
+    gtk_widget_show_all(dialog);
+    gtk_widget_grab_focus(view);
+    return true;
+}
+
 __attribute__((visibility("default"))) const NativeUIBackend *
 native_ui_gtk_backend(const NativeUIHost *h) {
     host = h;
@@ -2254,6 +2289,7 @@ native_ui_gtk_backend(const NativeUIHost *h) {
         .update_settings = update_settings,
         .update_menu = update_menu,
         .snapshot_settings = snapshot_settings,
+        .show_text_review = show_text_review,
     };
     return &b;
 }

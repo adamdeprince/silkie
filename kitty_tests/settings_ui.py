@@ -42,6 +42,14 @@ class TestSettingsUI(BaseTest):
                     ans[f['name']] = f
         return ans
 
+    def test_eink_color_scheme_is_a_persistent_choice(self):
+        page = next(p for p in settings_model.settings_pages() if p['id'] == 'appearance')
+        field = next(f for section in page['sections'] for f in section['fields'] if f['name'] == 'eink_color_scheme')
+        self.ae(field['choices'], ['light', 'dark', 'follow_os', 'invert_os'])
+        self.ae(field['value'], 'light')
+        self.ae(settings_model.set_global_value('eink_color_scheme', 'invert_os'), '')
+        self.ae(load_config(self.conf, self.settings).eink_color_scheme, 'invert_os')
+
     def test_every_option_has_a_control(self):
         fields = self.fields()
         missing = []

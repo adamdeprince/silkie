@@ -318,13 +318,20 @@ cell_for_pos(Window *w, unsigned int *x, unsigned int *y, bool *in_left_half_of_
     double mouse_x = global_state.callback_os_window->mouse_x;
     double mouse_y = global_state.callback_os_window->mouse_y;
     double left = g->left, top = g->top, right = g->right, bottom = g->bottom;
-    w->mouse_pos.global_x = mouse_x - left;
-    w->mouse_pos.global_y = mouse_y - top;
+    double local_x = mouse_x - left, local_y = mouse_y - top;
+    screen_unmagnify_point(screen, &local_x, &local_y, right - left, bottom - top);
+    w->mouse_pos.global_x = local_x;
+    w->mouse_pos.global_y = local_y;
     if (clamp_to_window) {
         mouse_x = MIN(MAX(mouse_x, left), right);
         mouse_y = MIN(MAX(mouse_y, top), bottom);
     }
     if (mouse_x < left || mouse_y < top || mouse_x > right || mouse_y > bottom) return false;
+    if (screen->magnification.scale > 1.) {
+        local_x = mouse_x - left, local_y = mouse_y - top;
+        screen_unmagnify_point(screen, &local_x, &local_y, right - left, bottom - top);
+        mouse_x = left + local_x, mouse_y = top + local_y;
+    }
     if (mouse_x >= g->right) {
         qx = screen->columns - 1;
         in_left_half = false;
@@ -2144,13 +2151,16 @@ scroll_event(const GLFWScrollEvent *ev) {
         }
     }
     const WindowGeometry *g = &w->render_data.geometry;
-    scroll_event_in_window(osw, w, ev, osw->mouse_x - g->left, osw->mouse_y - g->top, osw->fonts_data->fcm.cell_width, osw->fonts_data->fcm.cell_height);
+    double x = osw->mouse_x - g->left, y = osw->mouse_y - g->top;
+    screen_unmagnify_point(w->render_data.screen, &x, &y, g->right - g->left, g->bottom - g->top);
+    scroll_event_in_window(osw, w, ev, x, y, osw->fonts_data->fcm.cell_width, osw->fonts_data->fcm.cell_height);
 }
 
 // Gestures {{{
 // The trackpad gesture protocol, see docs/gesture-protocol.rst
 
 static id_type gesture_window_ids[GESTURE_HOLD + 1];  // the window that captured the gesture in progress, by GestureKind
+static id_type magnifier_pinch_window;
 
 // The mode bit that asks for a kind of gesture: 1 for the kinds a window
 // system recognizes from moving fingers, 2 for the hold
@@ -2259,8 +2269,25 @@ gesture_event(const GLFWGestureEvent *ev) {
     id_type *captured_by = gesture_window_ids + ev->kind;
     if (ev->phase == GLFW_GESTURE_BEGIN) {
         w = mouse_region(false, false).window;
+        if (ev->kind == GLFW_GESTURE_PINCH) {
+            magnifier_pinch_window = w && w->render_data.screen->magnification.scale > 1. ? w->id : 0;
+            if (magnifier_pinch_window) {
+                *captured_by = 0;
+                return true;
+            }
+        }
         if (w && !(w->render_data.screen->gesture.mode & gesture_mode_bit(ev->kind))) w = NULL;
         *captured_by = w ? w->id : 0;
+    } else if (ev->kind == GLFW_GESTURE_PINCH && magnifier_pinch_window) {
+        w = window_for_window_id(magnifier_pinch_window);
+        if (ev->phase >= GLFW_GESTURE_END) magnifier_pinch_window = 0;
+        if (w && ev->phase != GLFW_GESTURE_CANCEL) {
+            const WindowGeometry *g = &w->render_data.geometry;
+            double x = (osw->mouse_x - g->left) / MAX(1u, g->right - g->left);
+            double y = (osw->mouse_y - g->top) / MAX(1u, g->bottom - g->top);
+            screen_pinch_magnification(w->render_data.screen, 1. + ev->delta, x, y, x, y);
+        }
+        return true;
     } else if (*captured_by) w = window_for_window_id(*captured_by);
     if (!w) return false;
     const WindowGeometry *g = &w->render_data.geometry;

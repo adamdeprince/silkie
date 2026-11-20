@@ -746,6 +746,10 @@ dispatch_osc(PS *self, uint8_t *buf, size_t limit, bool is_extended_osc) {
             break;
         case 8: dispatch_hyperlink(self, (char *)buf + i); break;
         case 777:
+            if (limit - i > 5 && memcmp(buf + i, "a11y;", 5) == 0) {
+                screen_accessibility_protocol(self->screen, (const char *)buf + i + 5, limit - i - 5);
+                break;
+            }
             if (limit - i > 6 && memcmp(buf + i, "depth;", 6) == 0) {
                 screen_depth_protocol(self->screen, (const char *)buf + i + 6, limit - i - 6);
                 break;

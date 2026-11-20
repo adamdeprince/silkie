@@ -172,6 +172,8 @@ def plain_text(rst: str) -> str:
 
 
 def humanize(name: str) -> str:
+    if name == 'eink_color_scheme':
+        return 'E-ink color scheme'
     if name == 'spatial_divergence_exponent':
         return 'Divergence multiplier (2^X)'
     if name == 'find_keys_to_terminal':

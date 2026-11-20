@@ -1055,6 +1055,14 @@ class Parser:
     def editor(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['editor'] = str(val)
 
+    def eink_color_scheme(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_eink_color_scheme:
+            raise ValueError(f"The value {val} is not a valid choice for eink_color_scheme")
+        ans["eink_color_scheme"] = val
+
+    choices_for_eink_color_scheme = frozenset(('light', 'dark', 'follow_os', 'invert_os'))
+
     def eink_mode(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['eink_mode'] = to_bool(val)
 
@@ -1258,6 +1266,9 @@ class Parser:
 
     def macos_window_resizable(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['macos_window_resizable'] = to_bool(val)
+
+    def magnify_raster_resolution(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['magnify_raster_resolution'] = to_bool(val)
 
     def map_timeout(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['map_timeout'] = positive_float(val)

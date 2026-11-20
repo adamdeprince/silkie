@@ -6,6 +6,19 @@
 
 
 static void
+convert_from_python_magnify_raster_resolution(PyObject *val, Options *opts) {
+    opts->magnify_raster_resolution = PyObject_IsTrue(val);
+}
+
+static void
+convert_from_opts_magnify_raster_resolution(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "magnify_raster_resolution");
+    if (ret == NULL) return;
+    convert_from_python_magnify_raster_resolution(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_font_size(PyObject *val, Options *opts) {
     opts->font_size = PyFloat_AsDouble(val);
 }
@@ -1267,6 +1280,19 @@ convert_from_opts_tab_bar_margin_color(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_eink_color_scheme(PyObject *val, Options *opts) {
+    opts->eink_color_scheme = eink_scheme_from_python(val);
+}
+
+static void
+convert_from_opts_eink_color_scheme(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "eink_color_scheme");
+    if (ret == NULL) return;
+    convert_from_python_eink_color_scheme(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_minimum_contrast(PyObject *val, Options *opts) {
     opts->minimum_contrast = minimum_contrast(val);
 }
@@ -1905,6 +1931,8 @@ convert_from_opts_remap_modifiers(PyObject *py_opts, Options *opts) {
 
 static bool
 convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
+    convert_from_opts_magnify_raster_resolution(py_opts, opts);
+    if (PyErr_Occurred()) return false;
     convert_from_opts_font_size(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_force_ltr(py_opts, opts);
@@ -2098,6 +2126,8 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_tab_bar_background(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_tab_bar_margin_color(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_eink_color_scheme(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_minimum_contrast(py_opts, opts);
     if (PyErr_Occurred()) return false;

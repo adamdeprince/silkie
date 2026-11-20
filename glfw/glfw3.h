@@ -2676,6 +2676,8 @@ GLFWAPI void glfwRemoveFDWatch(unsigned long long watch_id);
  * the longest time to wait, given the time the loop intends to wait, in the units of monotonic_t, negative meaning forever. */
 GLFWAPI void glfwSetEventLoopHook(GLFWeventloophookfun hook);
 GLFWAPI void glfwUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool enabled);
+/*! Like glfwUpdateTimer, with extra time in which the timer may share a wakeup. */
+GLFWAPI void glfwUpdateTimerWithTolerance(unsigned long long timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled);
 GLFWAPI void glfwRemoveTimer(unsigned long long);
 GLFWAPI GLFWdrawtextfun glfwSetDrawTextFunction(GLFWdrawtextfun function);
 GLFWAPI GLFWcurrentselectionfun glfwSetCurrentSelectionCallback(GLFWcurrentselectionfun callback);

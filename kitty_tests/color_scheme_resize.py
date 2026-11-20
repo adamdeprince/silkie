@@ -28,6 +28,7 @@ class TestColorSchemeResize(BaseTest):
         w.screen, w.child = self.screen, SimpleNamespace(child_fd=42)
         w.child_is_launched, w.destroyed = True, False
         w.last_reported_pty_size = (5, 5, 50, 100)
+        w.session_color_schemes = None
         w.watchers, w.call_watchers, w.refresh = Watchers(), Mock(), Mock()
         self.boss = SimpleNamespace(
             all_windows=[w], all_tab_managers=[], window_id_map={7: w}, os_window_map={},
@@ -89,6 +90,29 @@ class TestColorSchemeResize(BaseTest):
         self.killpg.assert_not_called()
         self.ae(self.screen.callbacks.wtcbuf, b'')
 
+    def test_desktop_appearance_changes_request_resize(self):
+        parse_bytes(self.screen, b'\x1b[?2031h\x1b[?2048h')
+        size = self.window.last_reported_pty_size
+        themes = ThemeColors()
+        with patch('kitty.boss.theme_colors', themes), patch.object(themes, 'refresh', return_value=False):
+            for appearance in ('light', 'dark', 'no_preference') * 32:
+                self.screen.callbacks.clear()
+                self.killpg.reset_mock()
+                Boss.on_system_color_scheme_change(self.boss, appearance, False)
+                self.killpg.assert_called_once_with(12345, signal.SIGWINCH)
+                self.ae(self.screen.callbacks.wtcbuf, b'\x1b[48;5;5;100;50t')
+                self.ae(self.window.last_reported_pty_size, size)
+
+            # Applying an automatic theme shares the desktop change's resize notification.
+            self.screen.callbacks.clear()
+            self.killpg.reset_mock()
+            with patch.object(themes, 'theme_for', return_value=SimpleNamespace(
+                mtime=-1, spec={'background': 0xFFFFFF},
+            )):
+                Boss.on_system_color_scheme_change(self.boss, 'light', False)
+            self.killpg.assert_called_once_with(12345, signal.SIGWINCH)
+            self.ae(self.screen.callbacks.wtcbuf, b'\x1b[?997;2n\x1b[48;5;5;100;50t')
+
     def test_runtime_scheme_and_eink_actions(self):
         themes = ThemeColors()
         with patch('kitty.boss.theme_colors', themes), patch.object(themes, 'refresh', return_value=False):
@@ -104,7 +128,7 @@ class TestColorSchemeResize(BaseTest):
             self.ae(self.killpg.call_count, 2)
             for _ in range(64):
                 Boss.set_color_scheme(self.boss, 'toggle')
-            self.ae(self.killpg.call_count, 66)
+            self.ae(self.killpg.call_count, 2)
 
     def test_profile_change_and_display_callback(self):
         profile = Profile('work', 'Work', options={'foreground': ['#123456'], 'color4': ['#ABCDEF']})
@@ -208,6 +232,6 @@ signal.pause()
             self.tcgetpgrp.side_effect = self.real_tcgetpgrp
             self.killpg.side_effect = self.real_killpg
             self.assertNotEqual(self.real_tcgetpgrp(pty.master_fd), os.getpgrp())
-            self.window.notify_child_of_color_change()
+            Boss.on_system_color_scheme_change(self.boss, 'light', False)
             pty.wait_till(lambda: b'WINCH_SAME_SIZE True' in pty.received_bytes)
             pty.wait_till_child_exits(require_exit_code=0)

@@ -1795,6 +1795,33 @@ snapshot_settings(const char *path) {
 }
 // }}}
 
+static bool
+show_text_review(OSWindow *w, const char *title, const char *text) {
+    NSWindow *parent = ns_window(w);
+    if (!parent) return false;
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+    alert.messageText = @(title);
+    [alert addButtonWithTitle:@"Close"].keyEquivalent = @"\033";
+    NSScrollView *scroll = [[[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 480, 280)] autorelease];
+    scroll.hasVerticalScroller = YES;
+    scroll.borderType = NSBezelBorder;
+    NSTextView *view = [[[NSTextView alloc] initWithFrame:(NSRect){NSZeroPoint, scroll.contentSize}] autorelease];
+    view.string = @(text);
+    view.font = [NSFont systemFontOfSize:[NSFont systemFontSize]];
+    view.editable = NO;
+    view.selectable = YES;
+    view.richText = NO;
+    view.verticallyResizable = YES;
+    view.autoresizingMask = NSViewWidthSizable;
+    view.textContainer.widthTracksTextView = YES;
+    view.accessibilityLabel = @(title);
+    scroll.documentView = view;
+    alert.accessoryView = scroll;
+    alert.window.initialFirstResponder = view;
+    [alert beginSheetModalForWindow:parent completionHandler:nil];
+    return true;
+}
+
 const NativeUIBackend *
 native_ui_cocoa_backend(void) {
     static const NativeUIBackend b = {
@@ -1814,6 +1841,7 @@ native_ui_cocoa_backend(void) {
         .snapshot_settings = snapshot_settings,
         .find_bar = find_bar,
         .snapshot_find_bar = snapshot_find_bar,
+        .show_text_review = show_text_review,
     };
     return &b;
 }

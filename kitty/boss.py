@@ -4023,9 +4023,9 @@ class Boss:
         if (spec := color_scheme_spec(opts)) is not None:
             patch_colors(spec, None, True, notify_on_bg_change=False)
         theme_colors.on_config_reload(opts_already_patched=True)
-        # eink_mode, monitor_info and display_info can say something else of the display of each OS window now
+        # The display or its palette may have changed.
         refresh_display_info()
-        sync_eink_colors()
+        sync_eink_colors(notify_on_bg_change=False)
         for w in self.all_windows:
             if w.screen.color_profile.default_bg != bg_colors_before.get(w.id):
                 self.default_bg_changed_for(w.id)
@@ -4685,10 +4685,19 @@ class Boss:
         return sanitize_url_for_display_to_user(url)
 
     def on_system_color_scheme_change(self, appearance: ColorSchemes, is_initial_value: bool) -> None:
-        theme_colors.on_system_color_scheme_change(appearance, is_initial_value)
-        for w in self.all_windows:
+        from .colors import sync_eink_colors
+
+        windows = tuple(self.all_windows)
+        backgrounds = {w.id: w.screen.color_profile.default_bg for w in windows}
+        theme_colors.on_system_color_scheme_change(appearance, is_initial_value, notify_on_bg_change=False)
+        if get_options().eink_color_scheme in ('follow_os', 'invert_os'):
+            sync_eink_colors(appearance=appearance, notify_on_bg_change=False)
+        for w in windows:
             if w.session_color_schemes:
-                w.apply_session_color_scheme(appearance)
+                w.apply_session_color_scheme(appearance, notify_on_bg_change=False)
+            if w.screen.color_profile.default_bg != backgrounds[w.id]:
+                self.default_bg_changed_for(w.id)
+            w.notify_child_of_color_change()
 
     def on_os_window_eink_change(self, os_window_id: int, eink: bool, gray: bool) -> None:
         # The OS window moved to or from e-paper, or to or from a display that shows only gray, see update_eink_state()
@@ -4705,6 +4714,14 @@ class Boss:
             for tab in tm:
                 for w in tab:
                     w.notify_child_of_color_change()
+
+    def on_raster_resolution_change(self, window_id: int) -> None:
+        if (w := self.window_id_map.get(window_id)) is not None:
+            w.update_pty_pixel_size()
+
+    def desktop_zoom_factor(self) -> float:
+        from .magnification import desktop_zoom_factor
+        return desktop_zoom_factor()
 
     @ac(
         'win',

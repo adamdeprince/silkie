@@ -130,7 +130,9 @@ typedef struct Options {
 
     char *default_window_logo;
     char *display_info;
+    unsigned eink_color_scheme;
     bool eink_mode;
+    bool magnify_raster_resolution;
     // The monitor_info option: for each monitor selected by matches[i], the key=value pairs specs[i]
     struct {
         char **matches, **specs;
@@ -707,12 +709,14 @@ typedef struct OSWindow {
         // until something else is wanted
         int refused_switch;
     } output;
-    FONTS_DATA_HANDLE fonts_data;
+    FONTS_DATA_HANDLE fonts_data, magnified_fonts_data;
     bool hosted_in_native_window; // shown inside a native window, whose state is the state of this window
     unsigned int font_set; // non-zero when this window does not use the global fonts, see font_set_for_options()
-    id_type temp_font_group_id;
+    id_type temp_font_group_id, temp_magnified_font_group_id;
+    id_type magnified_base_font_group;
+    double magnified_font_request;
     enum RENDER_STATE render_state;
-    monotonic_t last_render_frame_received_at, last_rendered_at;
+    monotonic_t last_render_frame_received_at, last_rendered_at, last_frame_swap_at;
     monotonic_t last_haptic_at;  // see docs/haptic-protocol.rst
     uint64_t render_calls;
     uint32_t frame_counter;
@@ -949,6 +953,22 @@ bool update_output_depth(OSWindow *w, bool deep_now, monotonic_t now, monotonic_
 bool debounce_display_change(DisplayChange *c, unsigned now_value, monotonic_t now, monotonic_t *wait);
 bool update_eink_state(OSWindow *w, const DisplayInfo *d, bool explicit, monotonic_t now, monotonic_t *wait);
 static inline bool os_window_is_eink(const OSWindow *w) { return w && (w->eink.acted & EINK_REFRESH); }
+#define EINK_FRAME_PERIOD_US 100000u
+static inline monotonic_t
+eink_frame_wait(const OSWindow *w, monotonic_t now) {
+    if (!os_window_is_eink(w) || !w->last_frame_swap_at) return 0;
+    return MAX(0, EINK_FRAME_PERIOD_US * MONOTONIC_T_1e3 - (now - w->last_frame_swap_at));
+}
+enum { EINK_SCHEME_LIGHT, EINK_SCHEME_DARK, EINK_SCHEME_FOLLOW_OS, EINK_SCHEME_INVERT_OS };
+static inline unsigned
+parse_eink_scheme(const char *scheme) {
+    if (scheme) {
+        if (strcmp(scheme, "dark") == 0) return EINK_SCHEME_DARK;
+        if (strcmp(scheme, "follow_os") == 0) return EINK_SCHEME_FOLLOW_OS;
+        if (strcmp(scheme, "invert_os") == 0) return EINK_SCHEME_INVERT_OS;
+    }
+    return EINK_SCHEME_LIGHT;
+}
 static inline bool os_window_is_gray(const OSWindow *w) { return w && (w->eink.acted & EINK_GRAY); }
 // Animation ghosts on e-paper, so there the cursor trail is not drawn
 static inline bool os_window_has_cursor_trail(const OSWindow *w) { return OPT(cursor_trail) && !os_window_is_eink(w); }
@@ -987,6 +1007,8 @@ void blank_os_window(OSWindow *);
 void set_os_window_chrome(OSWindow *w);
 FONTS_DATA_HANDLE load_fonts_data(double, double, double, unsigned int);
 void send_prerendered_sprites_for_window(OSWindow *w);
+void update_magnified_fonts(OSWindow *w, double scale);
+id_type font_group_id(FONTS_DATA_HANDLE);
 #ifdef __APPLE__
 #include "cocoa_window.h"
 #endif
@@ -996,7 +1018,7 @@ typedef void (*timer_callback_fun)(id_type, void *);
 typedef void (*tick_callback_fun)(void *);
 id_type add_main_loop_timer(monotonic_t interval, bool repeats, timer_callback_fun callback, void *callback_data, timer_callback_fun free_callback);
 void remove_main_loop_timer(id_type timer_id);
-void update_main_loop_timer(id_type timer_id, monotonic_t interval, bool enabled);
+void update_main_loop_timer(id_type timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled);
 void run_main_loop(tick_callback_fun, void *);
 void stop_main_loop(void);
 void on_os_window_font_size_change(OSWindow *window, double new_sz);

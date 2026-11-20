@@ -1817,6 +1817,7 @@ cell_update_uniform_block(
     int color_table_buf,
     const CursorRenderInfo *cursor,
     OSWindow *os_window,
+    FONTS_DATA_HANDLE fonts_data,
     float inactive_text_alpha,
     float bg_alpha,
     bool is_own_ui) {
@@ -2000,12 +2001,12 @@ cell_update_uniform_block(
     rd->lines = screen->lines;
 
     unsigned int x, y, z;
-    sprite_tracker_current_layout(os_window->fonts_data, &x, &y, &z);
+    sprite_tracker_current_layout(fonts_data, &x, &y, &z);
     rd->sprites_xnum = x;
     rd->sprites_ynum = y;
     rd->inverted = screen_invert_colors(screen) ? 1 : 0;
-    rd->cell_width = os_window->fonts_data->fcm.cell_width;
-    rd->cell_height = os_window->fonts_data->fcm.cell_height;
+    rd->cell_width = fonts_data->fcm.cell_width;
+    rd->cell_height = fonts_data->fcm.cell_height;
     rd->inactive_text_alpha = inactive_text_alpha;
     rd->dim_opacity = OPT(dim_opacity);
     rd->hdr_headroom = effective_hdr_headroom(os_window);
@@ -2042,6 +2043,16 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
     bool changed = false;
 
     ensure_sprite_map(fonts_data);
+    const id_type group = font_group_id(fonts_data);
+    if (screen->render_font_group != group) {
+        if (screen->paused_rendering.expires_at) {
+            LineBuf *lb = screen->paused_rendering.linebuf;
+            for (unsigned i = 0; i < lb->ynum; i++) linebuf_mark_line_dirty(lb, i);
+            screen->paused_rendering.cell_data_updated = false;
+        }
+        screen_dirty_sprite_positions(screen);
+        screen->render_font_group = group;
+    }
     const Cursor *cursor = screen->paused_rendering.expires_at ? &screen->paused_rendering.cursor : screen->cursor;
 
     bool cursor_pos_changed = cursor->x != screen->last_rendered.cursor.x || cursor->y != screen->last_rendered.cursor.y;
@@ -2079,8 +2090,8 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
     if (screen->paused_rendering.expires_at) {
         if (!screen->paused_rendering.cell_data_updated) {
             update_selection_data;
-            screen_update_graphics_layers(screen);
         }
+        if (screen_update_graphics_layers(screen)) changed = true;
         screen->paused_rendering.cell_data_updated = true;
     } else {
         if (screen->reload_all_gpu_data || screen_resized || screen_is_selection_dirty(screen)) update_selection_data;
@@ -2097,7 +2108,7 @@ cell_prepare_to_render(ssize_t vao_idx, Screen *screen, FONTS_DATA_HANDLE fonts_
 }
 
 static void
-draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, float extra_alpha, float hdr_headroom) {
+draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, float extra_alpha, float hdr_headroom, PaneMagnification magnification) {
     bind_program(program);
     // The colors of indexed color images are those of the terminal, they are never HDR, so their programs have no
     // headroom or tone mapping.
@@ -2160,7 +2171,11 @@ draw_graphics(int program, ImageRenderData *data, GLuint start, GLuint count, fl
                 const float limit = spatial_window->spatial.phase_limit;
                 phase = -(float)spatial_window->spatial.eye * fmaxf(-limit, fminf(limit, (float)rd->phase)) / get_gpu_viewport().height;
             }
-            glUniform4f(dest_rect_loc, rd->dest_rect.left + shift, rd->dest_rect.top + phase, rd->dest_rect.right + shift, rd->dest_rect.bottom + phase);
+            double scale = MAX(1., magnification.scale);
+            double cx = scale > 1. ? 2. * magnification.x - 1. : 0.;
+            double cy = scale > 1. ? 1. - 2. * magnification.y : 0.;
+            glUniform4f(dest_rect_loc, (rd->dest_rect.left + shift - cx) * scale, (rd->dest_rect.top + phase - cy) * scale,
+                (rd->dest_rect.right + shift - cx) * scale, (rd->dest_rect.bottom + phase - cy) * scale);
             draw_quad(true, 0);
         }
     }
@@ -2456,7 +2471,7 @@ draw_bar(const UIRenderData *ui, const WindowBarData *bar, Viewport border_rect,
     disable_scissor();
     // then draw the rendered text
     save_viewport_using_top_left_origin(border_rect.left + border_width, border_rect.top + border_width, bar->width, bar->height, sh);
-    draw_graphics(GRAPHICS_PROGRAM, &data, 0, 1, 1.f, 1.f);
+    draw_graphics(GRAPHICS_PROGRAM, &data, 0, 1, 1.f, 1.f, (PaneMagnification){0});
     restore_viewport();
     free_texture(&data.texture_id);
     // finally draw border with transparent bg
@@ -2598,7 +2613,7 @@ draw_window_number(const UIRenderData *ui) {
     color_vec3(program_uniform_location(GRAPHICS_ALPHA_MASK_PROGRAM, "amask_fg"), digit_color);
     glUniform4f(program_uniform_location(GRAPHICS_ALPHA_MASK_PROGRAM, "amask_bg_premult"), 0.f, 0.f, 0.f, 0.f);
     save_viewport_using_top_left_origin(ui->screen_left + letter_x, ui->screen_top + letter_y, lr.width_px, lr.height_px, ui->full_framebuffer_height);
-    draw_graphics(GRAPHICS_ALPHA_MASK_PROGRAM, ird, 0, 1, 1.f, 1.f);
+    draw_graphics(GRAPHICS_ALPHA_MASK_PROGRAM, ird, 0, 1, 1.f, 1.f, (PaneMagnification){0});
     restore_viewport();
 #undef lr
 }
@@ -2934,7 +2949,7 @@ draw_window_logo(const UIRenderData *ui) {
     float left = gl_pos_x(w.left, ui->screen_width), top = gl_pos_y(w.top, ui->screen_height);
     ImageRenderData d = {.texture_id = wl->instance->texture_id};
     gpu_data_for_image(&d, left, top, left + gl_size(w.width, ui->screen_width), top - gl_size(w.height, ui->screen_height));
-    draw_graphics(GRAPHICS_PROGRAM, &d, 0, 1, ui->inactive_text_alpha * OPT(window_logo_alpha), 1.f);
+    draw_graphics(GRAPHICS_PROGRAM, &d, 0, 1, ui->inactive_text_alpha * OPT(window_logo_alpha), 1.f, (PaneMagnification){0});
 }
 
 bool
@@ -2973,6 +2988,11 @@ call_cell_program(int program, const UIRenderData *ui, ssize_t vao_idx, bool for
     glUniform1f(program_uniform_location(program, "spatial_multiplier"), w->spatial.mode ? w->spatial.multiplier : 1.f);
     glUniform2f(program_uniform_location(program, "spatial_pixel_size"),
         w->spatial.mode ? 2.f / ui->screen_width : 0.f, w->spatial.mode ? 2.f / ui->screen_height : 0.f);
+    const PaneMagnification magnification = ui->screen->magnification;
+    if (magnification.scale > 1.) {
+        glUniform3f(program_uniform_location(program, "pane_magnification"),
+            magnification.scale, 2. * magnification.x - 1., 1. - 2. * magnification.y);
+    } else glUniform3f(program_uniform_location(program, "pane_magnification"), 1.f, 0.f, 0.f);
     if (for_final_output) glEnable(GL_FRAMEBUFFER_SRGB);
     draw_quad(!for_final_output, render_lines_for_screen(ui->screen) * ui->screen->columns);
     if (for_final_output) glDisable(GL_FRAMEBUFFER_SRGB);
@@ -3233,7 +3253,7 @@ program_for_image(const ImageRenderData *rd) {
 static void
 draw_image_layer(const UIRenderData *ui, ssize_t vao_idx, float hdr_headroom, GLuint start, GLuint count) {
     if (!ui->grd.num_of_indexed_refs) {
-        draw_graphics(GRAPHICS_PROGRAM, ui->grd.images, start, count, ui->inactive_text_alpha, hdr_headroom);
+        draw_graphics(GRAPHICS_PROGRAM, ui->grd.images, start, count, ui->inactive_text_alpha, hdr_headroom, ui->screen->magnification);
         return;
     }
     CELL_BUFFERS;
@@ -3244,7 +3264,7 @@ draw_image_layer(const UIRenderData *ui, ssize_t vao_idx, float hdr_headroom, GL
         const int program = program_for_image(data + run_start);
         GLuint run_end = run_start + 1;
         while (run_end < end && program_for_image(data + run_end) == program) run_end++;
-        draw_graphics(program, ui->grd.images, run_start, run_end - run_start, ui->inactive_text_alpha, hdr_headroom);
+        draw_graphics(program, ui->grd.images, run_start, run_end - run_start, ui->inactive_text_alpha, hdr_headroom, ui->screen->magnification);
         run_start = run_end;
     }
 }
@@ -3289,12 +3309,19 @@ blank_canvas(float background_opacity, color_type color_in_srgb, bool for_final_
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+static FONTS_DATA_HANDLE
+screen_fonts_data(const Screen *screen, const OSWindow *os_window) {
+    if (os_window->magnified_fonts_data && (screen->magnification.scale > 1. || screen->desktop_magnification > 1.))
+        return os_window->magnified_fonts_data;
+    return os_window->fonts_data;
+}
+
 bool
 send_cell_data_to_gpu(ssize_t vao_idx, Screen *screen, OSWindow *os_window) {
     bool changed = false;
     if (vao_idx < 0) return false;  // see ensure_cell_vao()
     if (os_window->fonts_data) {
-        if (cell_prepare_to_render(vao_idx, screen, os_window->fonts_data)) changed = true;
+        if (cell_prepare_to_render(vao_idx, screen, screen_fonts_data(screen, os_window))) changed = true;
     }
     return changed;
 }
@@ -3324,8 +3351,10 @@ draw_cells(
                                                                                                                                     : inactive_text_alpha);
     float bg_alpha = effective_os_window_alpha(os_window);
 
+    FONTS_DATA_HANDLE fonts_data = screen_fonts_data(screen, os_window);
+    if (os_window->magnified_fonts_data) ensure_sprite_map(fonts_data);
     color_type default_bg = cell_update_uniform_block(
-        srd->vao_idx, screen, uniform_buffer, color_table_buffer, &screen->cursor_render_info, os_window, current_inactive_text_alpha, bg_alpha,
+        srd->vao_idx, screen, uniform_buffer, color_table_buffer, &screen->cursor_render_info, os_window, fonts_data, current_inactive_text_alpha, bg_alpha,
         is_tab_bar || title_bar_of != NULL);
     set_cell_uniforms(screen->reload_all_gpu_data);
     bind_deep_colors(screen);
@@ -3594,7 +3623,7 @@ draw_centered_alpha_mask(size_t screen_width, size_t screen_height, size_t width
     glUniform1i(program_uniform_location(GRAPHICS_ALPHA_MASK_PROGRAM, "image"), GRAPHICS_UNIT);
     color_vec3(program_uniform_location(GRAPHICS_ALPHA_MASK_PROGRAM, "amask_fg"), OPT(foreground));
     color_vec4_premult(program_uniform_location(GRAPHICS_ALPHA_MASK_PROGRAM, "amask_bg_premult"), OPT(background), background_opacity);
-    draw_graphics(GRAPHICS_ALPHA_MASK_PROGRAM, data, 0, 1, 1.0, 1.0);
+    draw_graphics(GRAPHICS_ALPHA_MASK_PROGRAM, data, 0, 1, 1.0, 1.0, (PaneMagnification){0});
 }
 
 static void

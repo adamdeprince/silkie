@@ -395,6 +395,10 @@ typedef struct {
 } CellPixelSize;
 
 typedef struct {
+    double scale, x, y;  // scale, and the center as fractions of the pane's size
+} PaneMagnification;
+
+typedef struct {
     int x;
 } *SPRITE_MAP_HANDLE;
 

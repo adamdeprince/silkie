@@ -11,6 +11,7 @@
 // docs/vector-protocol.rst for the format.
 
 #include "vector.h"
+#include "svg.h"
 #include "spatial.h"
 #include <stdlib.h>
 #include <string.h>
@@ -1229,6 +1230,7 @@ typedef struct {
 
 struct VectorDoc {
     unsigned width, height;
+    SvgTree *svg;
     elem_map by_id;
     Elem **order;  // creation order, NULL where deleted
     size_t count, capacity, live;
@@ -1307,9 +1309,30 @@ vector_doc_new(unsigned width, unsigned height) {
     return d;
 }
 
+const char *
+vector_doc_load_svg(VectorDoc *d, const uint8_t *data, size_t size, uint32_t *width, uint32_t *height) {
+    switch (silkie_svg_parse(data, size, width, height, &d->svg)) {
+        case SVG_OK:
+            d->width = *width;
+            d->height = *height;
+            // Account for the retained document using the transmitted size.
+            d->used_bytes = size;
+            return NULL;
+        case SVG_OVERFLOW: return "EOVERFLOW";
+        case SVG_NO_MEMORY: return "ENOMEM";
+        default: return "EINVAL";
+    }
+}
+
+bool
+vector_doc_is_svg(const VectorDoc *d) {
+    return d->svg != NULL;
+}
+
 void
 vector_doc_free(VectorDoc *d) {
     if (!d) return;
+    silkie_svg_free(d->svg);
     for (size_t i = 0; i < d->count; i++) elem_free(d->order[i]);
     free(d->order);
     free(d->sorted);
@@ -1722,6 +1745,7 @@ damage_appended(VectorDoc *d, Elem *e, size_t ncmds, size_t npts, PathCursor bef
 // False when there is no such group or its transforms cannot be undone.
 bool
 vector_doc_point_to_group(const VectorDoc *d, uint32_t group, double *x, double *y) {
+    if (d->svg) return false;
     Mat m = d->root.has_t ? d->root.t : identity, inv;
     if (group) {
         const Elem *g = lookup(d, group);
@@ -2402,6 +2426,7 @@ line_end(const char *s, const char *end, const char **next) {
 // is kept by the document anyway.
 const char *
 vector_doc_apply(VectorDoc *d, const uint8_t *text, size_t sz) {
+    if (d->svg) return "SVG images cannot be edited with vector records";
     static char errbuf[128];
     const char *const begin = (const char *)text, *end = begin + sz;
     const char *err = NULL;
@@ -3088,16 +3113,37 @@ view_is_valid(const VectorDoc *d, VectorView v) {
            isfinite(v.x) && isfinite(v.y) && v.x == floor(v.x) && v.y == floor(v.y) && v.cols && v.rows && v.cols <= INT32_MAX && v.rows <= INT32_MAX;
 }
 
+static float *
+render_svg(const SvgTree *svg, VectorView view, VectorRect rect, size_t count) {
+    uint8_t *rgba = calloc(count, 4);
+    if (!rgba) return NULL;
+    if (!silkie_svg_render(svg, view.width, view.height, view.x + rect.x, view.y + rect.y,
+                          rect.width, rect.height, rgba, count * 4)) {
+        free(rgba);
+        return NULL;
+    }
+    float *linear = malloc(count * 4 * sizeof(*linear));
+    if (linear) for (size_t i = 0; i < count * 4; i += 4) {
+        const uint8_t alpha = rgba[i + 3];
+        for (unsigned k = 0; k < 3; k++) linear[i + k] = alpha ? vector_decode_srgb((float)rgba[i + k] / alpha) : 0;
+        linear[i + 3] = alpha / 255.f;
+    }
+    free(rgba);
+    return linear;
+}
+
 float *
 vector_doc_render_view_stereo(VectorDoc *d, VectorView view, VectorRect rect, vector_image_lookup lookup, void *ctx, VectorStereo stereo) {
     if (!view_is_valid(d, view) || !rect.width || !rect.height) return NULL;
     if (rect.x >= view.cols || rect.y >= view.rows || rect.width > view.cols - rect.x || rect.height > view.rows - rect.y) return NULL;
+    size_t count;
+    if (__builtin_mul_overflow((size_t)rect.width, (size_t)rect.height, &count) || count > SIZE_MAX / (4 * sizeof(float))) return NULL;
+    if (d->svg) return render_svg(d->svg, view, rect, count);
     if (!sort_elements(d)) return NULL;
     const Rect area = {(int)rect.x, (int)rect.y, (int)(rect.x + rect.width), (int)(rect.y + rect.height)};
     Render r = {.doc = d, .sorted = d->sorted, .nsorted = d->nsorted, .area = area, .view = {0, 0, view.cols, view.rows}, .lookup = lookup,
         .lookup_ctx = ctx, .stereo = stereo};
-    if (rect_size(area) > SIZE_MAX / (4 * sizeof(float))) return NULL;
-    Canvas canvas = {.px = calloc(rect_size(area), 4 * sizeof(float)), .r = area};
+    Canvas canvas = {.px = calloc(count, 4 * sizeof(float)), .r = area};
     if (!canvas.px) return NULL;
     // The scale is that of the whole image whatever part of it is drawn, and
     // every step from here on works out a pixel from the geometry over that
@@ -3110,7 +3156,7 @@ vector_doc_render_view_stereo(VectorDoc *d, VectorView view, VectorRect rect, ve
         return NULL;
     }
     // Straight alpha, without gamut or brightness clipping.
-    for (size_t i = 0, n = rect_size(area); i < n; i++) {
+    for (size_t i = 0; i < count; i++) {
         float *p = canvas.px + 4 * i;
         if (p[3] > 0) for (unsigned k = 0; k < 3; k++) p[k] /= p[3];
     }

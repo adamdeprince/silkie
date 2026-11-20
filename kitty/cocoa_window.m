@@ -12,6 +12,7 @@
 #include "native_ui.h"
 #include "crypto.h"
 #include <Availability.h>
+#include <ApplicationServices/ApplicationServices.h>
 #include <Carbon/Carbon.h>
 #include <Cocoa/Cocoa.h>
 #import <IOKit/IOKitLib.h>
@@ -1913,7 +1914,21 @@ cocoa_keychain_list_accounts(PyObject *self UNUSED, PyObject *args) {
 }
 // }}}
 
+static PyObject *
+cocoa_desktop_magnification(PyObject *unused UNUSED, PyObject *noargs UNUSED) {
+    if (!UAZoomEnabled()) return PyFloat_FromDouble(1.);
+    // macOS has a public active-state API. Its Zoom preference is a
+    // best-effort estimate, so a missing or invalid value leaves the scale alone.
+    RAII_CoreFoundation(CFPropertyListRef, factor, CFPreferencesCopyAppValue(
+        CFSTR("closeViewZoomFactor"), CFSTR("com.apple.universalaccess")));
+    double scale = 1.;
+    if (factor && CFGetTypeID(factor) == CFNumberGetTypeID())
+        CFNumberGetValue((CFNumberRef)factor, kCFNumberDoubleType, &scale);
+    return PyFloat_FromDouble(scale);
+}
+
 static PyMethodDef module_methods[] = {
+    {"cocoa_desktop_magnification", cocoa_desktop_magnification, METH_NOARGS, ""},
     {"cocoa_keychain_list_accounts", (PyCFunction)cocoa_keychain_list_accounts, METH_VARARGS, ""},
     {"cocoa_keychain_store_secret", (PyCFunction)cocoa_keychain_store_secret, METH_VARARGS, ""},
     {"cocoa_keychain_read_secret", (PyCFunction)cocoa_keychain_read_secret, METH_VARARGS, ""},

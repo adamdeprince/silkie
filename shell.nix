@@ -45,6 +45,8 @@ in
 
       nativeBuildInputs =
         [
+          cargo
+          rustc
           ncurses
           pkg-config
           sphinx

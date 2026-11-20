@@ -266,8 +266,8 @@ class TestMonitorInfo(BaseTest):
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=3\x1b\\')
         self.ae(c.wtcbuf, (
             '\x1b]777;display;v=1:op=cap:id=3:mode=0:kind=eink:color=gray:bits=4:gamut=unknown:headroom=1:scale=0:period=0:ppi=0'
-            ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=model:output_bits=0:output_type=unknown:output_dither=0'
-            f':mfg=OBX:product=17:make={b64("OBX")}:model={b64("MIRA253")}:connector={b64("DP-7")}\x1b\\').encode())
+            ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=model:output_bits=0:output_type=unknown:output_dither=0:appearance=no_preference'
+            f':eink_scheme=light:mfg=OBX:product=17:make={b64("OBX")}:model={b64("MIRA253")}:connector={b64("DP-7")}\x1b\\').encode())
         # Never a serial number
         self.assertNotIn(b':serial=', c.wtcbuf)
         self.assertNotIn(b64('BOOX MIRA253').encode(), c.wtcbuf)
@@ -277,14 +277,14 @@ class TestMonitorInfo(BaseTest):
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=3\x1b\\')
         reply = c.wtcbuf.decode()
-        self.assertIn(f':output_dither=0:model={b64("Écran: 1")}:description={b64("x" * 5000)}\x1b\\', reply)
+        self.assertIn(f':model={b64("Écran: 1")}:description={b64("x" * 5000)}\x1b\\', reply)
         self.assertNotIn(':mfg=', reply)
         # No monitor: as before
         set_test_monitor_identity(None)
         s = self.create_screen()
         c = s.callbacks
         parse_bytes(s, b'\x1b]777;display;v=1:op=query:id=3\x1b\\')
-        self.assertTrue(c.wtcbuf.endswith(b':output_dither=0\x1b\\'))
+        self.assertTrue(c.wtcbuf.endswith(b':output_dither=0:appearance=no_preference\x1b\\'))
 
     def test_eink_colors_layer(self):
         opts = self.set_options({'foreground': Color(1, 2, 3), 'background': Color(4, 5, 6)})

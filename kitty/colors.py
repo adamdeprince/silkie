@@ -15,6 +15,7 @@ from .fast_data_types import (
     COLOR_LAYER_SESSION,
     Color,
     ColorProfile,
+    eink_color_scheme_for_appearance,
     get_boss,
     get_options,
     glfw_get_system_color_theme,
@@ -76,14 +77,14 @@ def color_scheme_spec(opts: Options) -> ColorsSpec | None:
     return scheme_colors(scheme)
 
 
-def eink_color_spec(opts: Options) -> ColorsSpec:
-    """
-    The colors of an OS window on a display that shows only gray: black on
-    white, or white on black with an explicit color_scheme dark. They are
-    shown over every color layer, including the colors of windows, sessions
-    and programs, which come back when the window moves to another display.
-    """
-    return scheme_colors('dark' if opts.color_scheme == 'dark' else 'light')
+def eink_color_spec(opts: Options, *, eink: bool = True, appearance: ColorSchemes | None = None) -> ColorsSpec:
+    """Select the high-contrast colors for e-paper or a grayscale display."""
+    if not eink:
+        return scheme_colors('dark' if opts.color_scheme == 'dark' else 'light')
+    mode = opts.eink_color_scheme
+    if mode in ('light', 'dark'):
+        return scheme_colors(mode)
+    return scheme_colors(eink_color_scheme_for_appearance(mode, appearance or glfw_get_system_color_theme()))
 
 
 def tab_bar_spec_from_options(opts: Options) -> ColorsSpec:
@@ -97,23 +98,24 @@ def tab_bar_spec_from_options(opts: Options) -> ColorsSpec:
     }
 
 
-def sync_eink_colors(os_window_ids: Iterable[int] | None = None) -> None:
-    """
-    Show the colors of a display that shows only gray in the OS windows on one
-    and the ordinary colors in the others, see os_window_eink_state(). Only
-    colors that change are redrawn and told to programs.
-    """
+def sync_eink_colors(
+    os_window_ids: Iterable[int] | None = None, *,
+    appearance: ColorSchemes | None = None, notify_on_bg_change: bool = True,
+) -> None:
+    """Apply the high-contrast palette to e-paper and grayscale windows."""
     from .fast_data_types import os_window_eink_state, set_os_window_eink_chrome
     boss = get_boss()
     opts = get_options()
-    spec = eink_color_spec(opts)
+    paper_spec = eink_color_spec(opts, appearance=appearance)
+    gray_spec = eink_color_spec(opts, eink=False)
     wanted = None if os_window_ids is None else frozenset(os_window_ids)
-    states: dict[int, bool] = {}
+    specs: dict[int, ColorsSpec | None] = {}
 
-    def is_gray(os_window_id: int) -> bool:
-        if (ans := states.get(os_window_id)) is None:
-            ans = states[os_window_id] = os_window_eink_state(os_window_id)[1]
-        return ans
+    def palette(os_window_id: int) -> ColorsSpec | None:
+        if os_window_id not in specs:
+            eink, gray = os_window_eink_state(os_window_id)
+            specs[os_window_id] = paper_spec if eink else gray_spec if gray else None
+        return specs[os_window_id]
 
     for w in tuple(boss.all_windows):
         os_window_id = getattr(w, 'os_window_id', 0)
@@ -121,21 +123,22 @@ def sync_eink_colors(os_window_ids: Iterable[int] | None = None) -> None:
             continue
         cp = w.screen.color_profile
         bg_before = cp.default_bg
-        if cp.set_eink_colors(spec if is_gray(os_window_id) else None):
-            if cp.default_bg != bg_before:
-                boss.default_bg_changed_for(w.id)
-            w.notify_child_of_color_change()
+        if cp.set_eink_colors(palette(os_window_id)):
+            if notify_on_bg_change:
+                if cp.default_bg != bg_before:
+                    boss.default_bg_changed_for(w.id)
+                w.notify_child_of_color_change()
             w.refresh()
     for tm in tuple(boss.all_tab_managers):
         if wanted is not None and tm.os_window_id not in wanted:
             continue
-        gray = is_gray(tm.os_window_id)
-        tm.tab_bar.patch_colors(spec if gray else tab_bar_spec_from_options(opts))
+        spec = palette(tm.os_window_id)
+        tm.tab_bar.patch_colors(spec if spec is not None else tab_bar_spec_from_options(opts))
         tm.tab_bar.layout()
         tm.mark_tab_bar_dirty()
         if (t := tm.active_tab) is not None:
             t.relayout_borders()
-        set_os_window_eink_chrome(tm.os_window_id, spec if gray else None)
+        set_os_window_eink_chrome(tm.os_window_id, spec)
 
 
 class BackgroundImageOptions(TypedDict, total=False):
@@ -338,11 +341,13 @@ class ThemeColors:
             if debug_rendering:
                 log_error(f'Applied {"built-in " if is_builtin else ""}{self.applied_theme} color theme')
 
-    def on_system_color_scheme_change(self, new_value: ColorSchemes, is_initial_value: bool = False) -> bool:
+    def on_system_color_scheme_change(
+        self, new_value: ColorSchemes, is_initial_value: bool = False, *, notify_on_bg_change: bool = True,
+    ) -> bool:
         if is_initial_value:
             return False
         self.refresh()
-        return self.apply_theme(new_value)
+        return self.apply_theme(new_value, notify_on_bg_change=notify_on_bg_change)
 
     def on_config_reload(self, opts_already_patched: bool = False) -> None:
         # opts_already_patched is True when patch_opts() was called with the
@@ -613,5 +618,5 @@ def patch_colors(
             if notify_on_bg_change and color_profile_signature(w.screen.color_profile) != colors_before[w.id]:
                 w.notify_child_of_color_change()
             w.refresh()
-    # The tab bars of OS windows on gray displays keep the colors of such displays
-    sync_eink_colors(os_window_ids)
+    # Reapply the per-display colors after changing the configured colors.
+    sync_eink_colors(os_window_ids, notify_on_bg_change=notify_on_bg_change)

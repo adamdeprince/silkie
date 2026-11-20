@@ -35,6 +35,9 @@ extern PyTypeObject Screen_Type;
 #endif
 
 #define EXTRA_FDS 2
+#define DISPLAY_POLL_INTERVAL ms_to_monotonic_t(250ll)
+// An e-paper frame may share a wakeup up to 30 ms after it becomes eligible.
+#define EINK_FRAME_TIMER_TOLERANCE ms_to_monotonic_t(30ll)
 #ifndef MSG_NOSIGNAL
 // Apple does not implement MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
@@ -168,13 +171,21 @@ reserve_child_slot(size_t count) {
 #define INCREF_CHILD(x) XREF_CHILD(x, Py_INCREF)
 #define DECREF_CHILD(x) XREF_CHILD(x, Py_DECREF)
 
-// The max time to wait for events from the window system
-// before ticking over the main loop. Negative values mean wait forever.
-static monotonic_t maximum_wait = -1;
+// The first eligible wakeup and the latest acceptable wakeup. A negative
+// value means there is no deadline.
+static monotonic_t wakeup_wait = -1, wakeup_deadline = -1;
 
 static void
-set_maximum_wait(monotonic_t val) {
-    if (val >= 0 && (val < maximum_wait || maximum_wait < 0)) maximum_wait = val;
+set_wakeup_wait(monotonic_t wait, monotonic_t tolerance) {
+    if (wait < 0) return;
+    const monotonic_t deadline = wait + MIN(tolerance, MONOTONIC_T_MAX - wait);
+    if (wakeup_wait < 0 || wait < wakeup_wait) wakeup_wait = wait;
+    if (wakeup_deadline < 0 || deadline < wakeup_deadline) wakeup_deadline = deadline;
+}
+
+static void
+set_maximum_wait(monotonic_t wait) {
+    set_wakeup_wait(wait, 0);
 }
 
 #define KITTY_HANDLED_SIGNALS SIGINT, SIGHUP, SIGTERM, SIGCHLD, SIGUSR1, SIGUSR2, 0
@@ -1000,6 +1011,14 @@ prepare_to_render_os_window(
     bool needs_render = os_window->needs_render;
     os_window->needs_render = false;
     bool was_previously_rendered_with_layers = os_window->needs_layers;
+    Tab *tab = os_window->tabs + os_window->active_tab;
+    double font_scale = 1.;
+    for (unsigned i = 0; i < tab->num_windows; i++) {
+        Window *w = tab->windows + i;
+        Screen *screen = w->render_data.screen;
+        if (w->visible && screen) font_scale = MAX(font_scale, MAX(screen->magnification.scale, screen->desktop_magnification));
+    }
+    update_magnified_fonts(os_window, font_scale);
     if (update_os_window_colorspace(os_window)) needs_render = true;
     // A window in a wide gamut is converted to it as a whole, after everything is drawn
     os_window->needs_layers =
@@ -1023,7 +1042,6 @@ prepare_to_render_os_window(
         if (now - os_window->last_mouse_activity_at >= OPT(mouse_hide.hide_wait)) hide_mouse(os_window);
         else set_maximum_wait(OPT(mouse_hide.hide_wait) - now + os_window->last_mouse_activity_at);
     }
-    Tab *tab = os_window->tabs + os_window->active_tab;
     *active_window_bg = os_window_background(os_window);
     *all_windows_have_same_bg = true;
     *num_visible_windows = 0;
@@ -1124,6 +1142,14 @@ prepare_to_render_os_window(
                 }
             }
             if (retry_cell_vao(&WD.vao_idx, WD.screen) && send_cell_data_to_gpu(WD.vao_idx, WD.screen, os_window)) needs_render = true;
+            if (WD.screen->magnification.scale > 1. || WD.screen->desktop_magnification > 1. || WD.screen->reported_raster_scale) {
+                const monotonic_t wait = DISPLAY_POLL_INTERVAL - (now - WD.screen->raster_resize_at);
+                if (WD.screen->raster_resize_at && wait > 0) set_maximum_wait(wait);
+                else if (screen_update_reported_raster_scale(WD.screen)) {
+                    WD.screen->raster_resize_at = now;
+                    call_boss(on_raster_resolution_change, "K", w->id);
+                }
+            }
             // Must be after send_cell_data_to_gpu() as that updates the graphics layers, which
             // determine whether there are images that need rendering in layers. Otherwise, a newly
             // placed image is not drawn until something else causes a re-render, see #10875
@@ -1312,6 +1338,11 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
         if (w->is_focused) change_menubar_title(w->window_title);
         return false;
     }
+    const monotonic_t wait = eink_frame_wait(w, now);
+    if (wait) {
+        set_wakeup_wait(wait, EINK_FRAME_TIMER_TOLERANCE);
+        return false;
+    }
     if (!w->keep_rendering_till_swap && USE_RENDER_FRAMES && w->render_state != RENDER_FRAME_READY) {
         if (w->render_state == RENDER_FRAME_NOT_REQUESTED || no_render_frame_received_recently(w, now, ms_to_monotonic_t(250ll))) request_frame_render(w);
         if (w->id != global_state.thumbnail_callback.os_window) {
@@ -1382,20 +1413,47 @@ render_os_window(OSWindow *w, monotonic_t now, bool scan_for_animated_images) {
     return needs_render;
 }
 
-static void
+// Returns the nominal wait for the next display poll. Output transitions can
+// still schedule a stricter deadline through set_maximum_wait().
+static monotonic_t
 poll_display_info(OSWindow *os_window, monotonic_t now) {
     // Output color changes invalidate application rendering just as a resize
     // does, including for applications that did not subscribe to OSC events.
-    const monotonic_t interval = ms_to_monotonic_t(250ll);
+    const monotonic_t interval = DISPLAY_POLL_INTERVAL;
     bool wanted = false;
     for (unsigned t = 0; t < os_window->num_tabs && !wanted; t++) {
         Tab *tab = os_window->tabs + t;
         for (unsigned i = 0; i < tab->num_windows && !wanted; i++) wanted = tab->windows[i].render_data.screen != NULL;
     }
-    if (!wanted) return;
-    if (now - os_window->display_info_at < interval) {
-        set_maximum_wait(interval - (now - os_window->display_info_at));
-        return;
+    if (!wanted) return -1;
+    if (now - os_window->display_info_at < interval) return interval - (now - os_window->display_info_at);
+    // The desktop magnifier is shared across windows. Sample it once on the
+    // existing display wakeup and consume the result in every pane.
+    static monotonic_t magnification_sampled_at;
+    static double desktop_magnification = 1.;
+    if (global_state.boss && (!magnification_sampled_at || now - magnification_sampled_at >= interval)) {
+        magnification_sampled_at = now;
+        RAII_PyObject(result, PyObject_CallMethod(global_state.boss, "desktop_zoom_factor", NULL));
+        if (result) {
+            double factor = PyFloat_AsDouble(result);
+            if (isfinite(factor) && factor >= 1.) desktop_magnification = factor;
+        }
+        if (PyErr_Occurred()) PyErr_Print();
+    }
+    bool zoom_changed = false;
+    for (unsigned t = 0; t < os_window->num_tabs; t++) {
+        Tab *tab = os_window->tabs + t;
+        for (unsigned i = 0; i < tab->num_windows; i++) {
+            Screen *screen = tab->windows[i].render_data.screen;
+            if (screen && screen->desktop_magnification != desktop_magnification) {
+                screen->desktop_magnification = desktop_magnification;
+                zoom_changed = true;
+            }
+        }
+    }
+    if (zoom_changed) {
+        os_window->needs_render = true;
+        set_maximum_wait(0);
     }
     // The depth of the display can change without anything being drawn
     if (os_window->handle) {
@@ -1407,12 +1465,11 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
             // the next report is of, so that programs get one event with the outcome
             os_window->needs_render = true;
             os_window->display_info_at = now;
-            set_maximum_wait(interval);
-            return;
+            return interval;
         }
     }
     update_display_info(os_window, now, false);
-    set_maximum_wait(interval);
+    return interval;
 }
 
 // Takes in what is now known of the display of the window, telling the programs that asked when it changed. explicit is
@@ -1444,7 +1501,7 @@ update_display_info(OSWindow *os_window, monotonic_t now, bool explicit) {
         strcmp(d.precision, o->precision) || d.headroom != o->headroom || d.output_bits != o->output_bits || strcmp(d.output_type, o->output_type) ||
         d.output_dither != o->output_dither);
     const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi ||
-        d.monitor != o->monitor));
+        d.monitor != o->monitor || d.appearance != o->appearance || d.eink_scheme != o->eink_scheme));
     *o = d;
     os_window->display_info_at = now;
     if (changed) {
@@ -1458,26 +1515,27 @@ update_display_info(OSWindow *os_window, monotonic_t now, bool explicit) {
     if (color_changed) call_boss(on_display_color_change, "K", os_window->id);
 }
 
-static void
+static monotonic_t
 render(monotonic_t now, bool input_read) {
     EVDBG("input_read: %d, check_for_active_animated_images: %d\n", input_read, global_state.check_for_active_animated_images);
     static monotonic_t last_render_at = MONOTONIC_T_MIN;
     monotonic_t time_since_last_render = last_render_at == MONOTONIC_T_MIN ? OPT(repaint_delay) : now - last_render_at;
     if (!input_read && time_since_last_render < OPT(repaint_delay) && !global_state.thumbnail_callback.os_window) {
         set_maximum_wait(OPT(repaint_delay) - time_since_last_render);
-        return;
+        return -1;
     }
 
     const bool scan_for_animated_images = global_state.check_for_active_animated_images;
     global_state.check_for_active_animated_images = false;
     call_boss(cache_process_data, "O", Py_True);
     bool waiting_for_frame = false;
+    monotonic_t display_poll_wait = -1;
 
     for (size_t i = 0; i < global_state.num_os_windows; i++) {
         OSWindow *w = global_state.os_windows + i;
 #ifdef __APPLE__
-        // rendering is done in cocoa_os_window_resized()
-        if (w->live_resize.in_progress) continue;
+        // E-paper also uses the main timer to paint resize events deferred by the frame cap.
+        if (w->live_resize.in_progress && !os_window_is_eink(w)) continue;
 #endif
         // Held bytes are not on this window yet. Painting it draws the old frame, and the
         // turn that parses them paints again because it ignores repaint_delay.
@@ -1493,7 +1551,8 @@ render(monotonic_t now, bool input_read) {
             // since we didn't scan the window for animations, force a rescan on next wakeup/render frame
             if (scan_for_animated_images) global_state.check_for_active_animated_images = true;
         }
-        poll_display_info(w, now);
+        const monotonic_t poll_wait = poll_display_info(w, now);
+        if (poll_wait >= 0 && (display_poll_wait < 0 || poll_wait < display_poll_wait)) display_poll_wait = poll_wait;
         if (w->keep_rendering_till_swap) {
             debug_rendering("Re-rendering window %llu on the %u attempt since swap did not happen\n", w->id, w->keep_rendering_till_swap);
             set_maximum_wait(OPT(repaint_delay));
@@ -1503,6 +1562,7 @@ render(monotonic_t now, bool input_read) {
     }
     if (!waiting_for_frame) last_render_at = now;
     call_boss(cache_process_data, "O", Py_False);
+    return display_poll_wait;
 #undef TD
 }
 
@@ -1938,8 +1998,7 @@ static void
 process_global_state(void *data) {
     EVDBG("Processing global state");
     ChildMonitor *self = data;
-    maximum_wait = -1;
-    bool state_check_timer_enabled = false;
+    wakeup_wait = wakeup_deadline = -1;
     bool input_read = false;
 
     monotonic_t now = monotonic();
@@ -1953,25 +2012,26 @@ process_global_state(void *data) {
     // Find: search the scrollback a slice at a time, see search.c
     const monotonic_t search_wait = screen_search_tick_all(now, ms_to_monotonic_t(8));
     if (search_wait >= 0) set_maximum_wait(search_wait);
-    render(now, input_read);
+    const monotonic_t display_poll_wait = render(now, input_read);
 #ifdef __APPLE__
+    // Allow macOS to coalesce monitor checks with other system activity.
+    set_wakeup_wait(display_poll_wait, ms_to_monotonic_t(100ll));
     if (has_cocoa_pending_actions) {
         process_cocoa_pending_actions();
-        maximum_wait = 0; // ensure loop ticks again so that the actions side effects are performed immediately
+        set_maximum_wait(0); // apply the actions' side effects immediately
     }
+#else
+    set_maximum_wait(display_poll_wait);
 #endif
     report_reaped_pids();
     bool should_quit = false;
     if (global_state.has_pending_closes) should_quit = process_pending_closes(self);
     if (should_quit) {
         stop_main_loop();
-    } else {
-        if (maximum_wait >= 0) {
-            if (maximum_wait == 0) request_tick_callback();
-            else state_check_timer_enabled = true;
-        }
-    }
-    update_main_loop_timer(state_check_timer, MAX(0, maximum_wait), state_check_timer_enabled);
+    } else if (wakeup_wait == 0) request_tick_callback();
+    const monotonic_t tolerance = wakeup_deadline - wakeup_wait;
+    EVDBG("State check wait %.3f s, tolerance %.3f s\n", monotonic_t_to_s_double(wakeup_wait), monotonic_t_to_s_double(tolerance));
+    update_main_loop_timer(state_check_timer, MAX(0, wakeup_wait), tolerance, !should_quit && wakeup_wait > 0);
 }
 
 static PyObject *

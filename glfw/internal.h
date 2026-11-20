@@ -911,7 +911,7 @@ extern GLFWeventloophookfun _glfwEventLoopHook;
 unsigned long long _glfwPlatformAddFDWatch(int fd, int events, GLFWfdwatchfun callback, void *callback_data);
 void _glfwPlatformRemoveFDWatch(unsigned long long watch_id);
 unsigned long long _glfwPlatformAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callback, void *callback_data, GLFWuserdatafun free_callback);
-void _glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool enabled);
+void _glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled);
 void _glfwPlatformRemoveTimer(unsigned long long timer_id);
 int _glfwPlatformSetWindowBlur(_GLFWwindow *handle, int value);
 float _glfwPlatformGetWindowHDRHeadroom(_GLFWwindow *window);

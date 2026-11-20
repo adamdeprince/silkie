@@ -65,6 +65,8 @@ typedef struct NativeUIBackend {
     bool (*find_bar)(struct OSWindow *w, PyObject *model, PyObject *callback);
     // For tests: draw the find bar of w to a PNG file
     bool (*snapshot_find_bar)(struct OSWindow *w, const char *path);
+    // A keyboard-accessible, read-only window for reviewing plain text.
+    bool (*show_text_review)(struct OSWindow *w, const char *title, const char *text);
 } NativeUIBackend;
 
 // What a module loaded at runtime can use. It cannot link against the symbols of fast_data_types.

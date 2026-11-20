@@ -1150,7 +1150,7 @@ remove_timer_at(size_t idx) {
 }
 
 static void
-schedule_timer(Timer *t) {
+schedule_timer(Timer *t, monotonic_t tolerance) {
     t->os_timer = [NSTimer scheduledTimerWithTimeInterval:monotonic_t_to_s_double(t->interval)
                                                   repeats:(t->repeats ? YES : NO)block:^(NSTimer *os_timer) {
                                                     for (size_t i = 0; i < num_timers; i++) {
@@ -1162,6 +1162,7 @@ schedule_timer(Timer *t) {
                                                         }
                                                     }
                                                   }];
+    if (tolerance > 0) t->os_timer.tolerance = monotonic_t_to_s_double(tolerance);
 }
 
 // Only needed where an external toolkit shares the event loop, Cocoa is the event loop
@@ -1180,7 +1181,7 @@ _glfwPlatformAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callba
     t->callback = callback;
     t->callback_data = callback_data;
     t->free_callback_data = free_callback;
-    schedule_timer(t);
+    schedule_timer(t, 0);
     return timer_counter;
 }
 
@@ -1195,7 +1196,7 @@ _glfwPlatformRemoveTimer(unsigned long long timer_id) {
 }
 
 void
-_glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool enabled) {
+_glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled) {
     for (size_t i = 0; i < num_timers; i++) {
         if (timers[i].id == timer_id) {
             Timer *t = timers + i;
@@ -1204,7 +1205,7 @@ _glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool
                 t->os_timer = NULL;
             }
             t->interval = interval;
-            if (enabled) schedule_timer(t);
+            if (enabled) schedule_timer(t, tolerance);
             break;
         }
     }

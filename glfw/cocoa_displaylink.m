@@ -153,7 +153,7 @@ void
 _glfwRequestRenderFrame(_GLFWwindow *w) {
     CGDirectDisplayID displayID = displayIDForWindow(w);
     if (display_link_shutdown_timer) {
-        _glfwPlatformUpdateTimer(display_link_shutdown_timer, DISPLAY_LINK_SHUTDOWN_CHECK_INTERVAL, true);
+        _glfwPlatformUpdateTimer(display_link_shutdown_timer, DISPLAY_LINK_SHUTDOWN_CHECK_INTERVAL, 0, true);
     } else {
         display_link_shutdown_timer = _glfwPlatformAddTimer(DISPLAY_LINK_SHUTDOWN_CHECK_INTERVAL, false, _glfwShutdownCVDisplayLink, NULL, NULL);
     }

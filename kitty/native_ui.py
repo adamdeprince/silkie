@@ -177,11 +177,20 @@ def view_items(s: dict[str, 'SingleKey']) -> list[dict[str, Any]]:
         menu_item(s, 'Make Text Bigger', 'change_font_size current +2.0', when='window'),
         menu_item(s, 'Make Text Smaller', 'change_font_size current -2.0', when='window'),
         menu_item(s, 'Actual Size', 'change_font_size current 0', when='window'),
+        {'title': 'Magnify Pane', 'items': [
+            menu_item(s, 'Zoom In', 'magnify_pane in', when='window'),
+            menu_item(s, 'Zoom Out', 'magnify_pane out', when='window'),
+            menu_item(s, 'Reset Zoom', 'magnify_pane reset', when='window'),
+            menu_item(s, 'Center on Text Cursor', 'magnify_pane caret', when='window'),
+        ]},
         SEPARATOR,
         menu_item(s, 'Next Layout', 'next_layout', when='window'),
         SEPARATOR,
         menu_item(s, 'Show Scrollback', 'show_scrollback', when='window'),
         menu_item(s, 'Show Last Command Output', 'show_last_command_output', when='window'),
+        SEPARATOR,
+        menu_item(s, 'Review Images', 'review_images', when='window'),
+        menu_item(s, 'Review All Images', 'review_all_images', when='window'),
     ]
 
 

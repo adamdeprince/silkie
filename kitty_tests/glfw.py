@@ -186,6 +186,7 @@ def main():
     cb_type = ctypes.CFUNCTYPE(None, ctypes.c_ulonglong, ctypes.c_void_p)
     lib.glfwAddTimer.restype = ctypes.c_ulonglong
     lib.glfwAddTimer.argtypes = (ctypes.c_int64, ctypes.c_bool, cb_type, ctypes.c_void_p, cb_type)
+    lib.glfwUpdateTimerWithTolerance.argtypes = (ctypes.c_ulonglong, ctypes.c_int64, ctypes.c_int64, ctypes.c_bool)
     lib.glfwRemoveTimer.argtypes = (ctypes.c_ulonglong,)
     fired, freed, added_in_callback = [], [], []
 
@@ -225,6 +226,15 @@ def main():
     for timer_id in ids:
         lib.glfwRemoveTimer(timer_id)
     check(sorted(freed) == list(range(1, n + 1)) and not fired)
+
+    fired.clear(), freed.clear()
+    timer_id = add(2, 3600 * 10**9)
+    lib.glfwUpdateTimerWithTolerance(timer_id, 0, 10**7, False)
+    cf.CFRunLoopRunInMode(default_mode, 0.05, False)
+    check(not fired)
+    lib.glfwUpdateTimerWithTolerance(timer_id, 0, 10**7, True)
+    run_until(lambda: fired and freed)
+    check(fired == freed == [2], fired, freed)
     print('ok', flush=True)
 
 

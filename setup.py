@@ -826,7 +826,7 @@ def kitty_env(args: Options) -> Env:
     lcms2 = pkg_config('lcms2', '--libs')
     ans.ldpaths += pylib + platform_libs + gl_libs + libpng + lcms2 + libcrypto_ldflags + xxhash[1] + zstd[1]
     if is_macos:
-        ans.ldpaths.extend('-framework Cocoa'.split())
+        ans.ldpaths.extend('-framework Cocoa -framework ApplicationServices'.split())
     elif not is_openbsd:
         ans.ldpaths += ['-lrt']
         if '-ldl' not in ans.ldpaths:
@@ -1124,6 +1124,7 @@ def compile_c_extension(
     headers: List[str],
     desc_prefix: str = '',
     build_dsym: bool = False,
+    extra_objects: Sequence[str] = (),
 ) -> None:
     prefix = os.path.basename(module)
     objects = [os.path.join(build_dir, f'{prefix}-{src.replace("/", "-")}.o') for src in sources]
@@ -1150,6 +1151,7 @@ def compile_c_extension(
     # warnings on some old systems)
     unsafe = {'-pthread', '-Werror', '-pedantic-errors'}
     linker_cflags = list(filter(lambda x: x not in unsafe, kenv.cflags))
+    objects.extend(extra_objects)
     cmd = kenv.cc + linker_cflags + kenv.ldflags + objects + kenv.ldpaths + ['-o', dest]
 
     def on_success() -> None:
@@ -1466,6 +1468,32 @@ def generate_shaders(kitty_exe: str) -> None:
         raise SystemExit(f'Generating shaders failed with exit code: {cp.returncode}')
 
 
+def build_svg(args: Options) -> tuple[str, list[str]]:
+    cargo = os.environ.get('CARGO') or shutil.which('cargo')
+    if not cargo:
+        raise SystemExit('Building SVG support requires Cargo and Rust 1.87 or later')
+    target = os.environ.get('CARGO_BUILD_TARGET')
+    if is_macos and args.building_arch:
+        arch = 'aarch64' if args.building_arch == 'arm64' else args.building_arch
+        target = f'{arch}-apple-darwin'
+    target_dir = os.path.join(build_dir, 'svg')
+    archive = os.path.join(target_dir, target or '', 'release', 'libsilkie_svg.a')
+    cmd = [cargo, 'rustc', '--locked', '--release', '--color', 'never',
+           '--manifest-path', 'kitty/svg/Cargo.toml', '--target-dir', target_dir]
+    if target:
+        cmd.extend(('--target', target))
+    cmd.extend(('--', '--print', 'native-static-libs'))
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if result.returncode or verbose:
+        print(result.stdout, end='', flush=True)
+    if result.returncode:
+        raise SystemExit('Building the SVG renderer failed')
+    for line in result.stdout.splitlines():
+        if line.startswith('note: native-static-libs:'):
+            return archive, shlex.split(line.removeprefix('note: native-static-libs:'))
+    raise SystemExit('Rust did not report the SVG renderer link flags')
+
+
 def build(args: Options, native_optimizations: bool = True, call_init: bool = True) -> None:
     if call_init:
         init_env_from_args(args, native_optimizations)
@@ -1473,13 +1501,17 @@ def build(args: Options, native_optimizations: bool = True, call_init: bool = Tr
     sources, headers = find_c_files()
     headers.append(build_ref_map(args.skip_code_generation))
     headers.append(build_cli_parser_specs(args.skip_code_generation))
+    kenv = kitty_env(args)
+    svg_archive, svg_libs = build_svg(args)
+    kenv.ldpaths.extend(svg_libs)
     compile_c_extension(
-        kitty_env(args),
+        kenv,
         'kitty/fast_data_types',
         args.compilation_database,
         sources,
         headers,
         build_dsym=args.build_dsym,
+        extra_objects=(svg_archive,),
     )
     compile_glfw(args.compilation_database, args.build_dsym)
     compile_native_ui(args.compilation_database)

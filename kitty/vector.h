@@ -18,7 +18,7 @@ unsigned long kitty_vector_depth_limit(void);
 unsigned long kitty_vector_dash_limit(void);
 unsigned long kitty_vector_curve_limit(void);
 
-// A vector image: the element table of a graphics protocol f=200 image, see docs/vector-protocol.rst
+// A retained f=200 scene or f=201 SVG image, see docs/vector-protocol.rst.
 typedef struct VectorDoc VectorDoc;
 typedef struct {
     double eye_pixels, positive, negative, fov, phase_pixels, phase_limit, multiplier;
@@ -41,6 +41,9 @@ typedef struct {
 } VectorRect;
 
 VectorDoc *vector_doc_new(unsigned width, unsigned height);
+// Returns a graphics protocol error code on failure, NULL on success.
+const char *vector_doc_load_svg(VectorDoc *doc, const uint8_t *data, size_t size, uint32_t *width, uint32_t *height);
+bool vector_doc_is_svg(const VectorDoc *doc);
 void vector_doc_set_font_session(VectorDoc *doc, PyObject *session);
 void vector_doc_free(VectorDoc *doc);
 // Applies the records in text. A record that cannot be parsed fails all of them, and then nothing is applied;

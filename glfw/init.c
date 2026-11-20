@@ -334,7 +334,12 @@ glfwAddTimer(monotonic_t interval, bool repeats, GLFWuserdatafun callback, void 
 
 GLFWAPI void
 glfwUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool enabled) {
-    _glfwPlatformUpdateTimer(timer_id, interval, enabled);
+    _glfwPlatformUpdateTimer(timer_id, interval, 0, enabled);
+}
+
+GLFWAPI void
+glfwUpdateTimerWithTolerance(unsigned long long timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled) {
+    _glfwPlatformUpdateTimer(timer_id, interval, tolerance > 0 ? tolerance : 0, enabled);
 }
 
 GLFWAPI void

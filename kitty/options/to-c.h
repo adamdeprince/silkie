@@ -16,6 +16,11 @@ PyFloat_AsFloat(PyObject *o) {
     return (float)PyFloat_AsDouble(o);
 }
 
+static inline unsigned
+eink_scheme_from_python(PyObject *val) {
+    return parse_eink_scheme(PyUnicode_AsUTF8(val));
+}
+
 static inline color_type
 color_as_int(PyObject *color) {
     if (!PyObject_TypeCheck(color, &Color_Type)) {

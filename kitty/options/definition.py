@@ -48,6 +48,23 @@ opt('spatial_wall_scale', '2', option_type='spatial_scale', long_text='Width and
 opt('spatial_tracking_address', '169.254.2.1:52998', long_text='XREAL One series IMU TCP endpoint on its USB network interface. Only contacted while Anchored Wall is selected.')
 egr()
 
+agr('accessibility', 'Accessibility')
+opt(
+    'magnify_raster_resolution',
+    'yes',
+    option_type='to_bool',
+    ctype='bool',
+    long_text="""
+During accessibility zoom, round the reported raster scale up to a whole
+number, capped at three times the base size, once a raster image becomes
+visible. Applications can use resize notifications to send an image at the
+reported resolution. Set this to :code:`no` to save bandwidth by reporting
+the base pixel size. Silkie scales the available image to the selected zoom
+level.
+""",
+)
+egr()
+
 # fonts {{{
 agr(
     'fonts',
@@ -2939,13 +2956,28 @@ opt(
 Use :code:`light` for black text on white or :code:`dark` for white text on
 black. These built-in high contrast schemes also set cursor, selection and
 tab colors. :code:`auto` uses your configured colors and automatic theme
-files, except that :opt:`eink_mode` selects the light scheme.
+files. E-paper uses :opt:`eink_color_scheme`.
 
 Switch at runtime with :code:`set_color_scheme light`, :code:`dark`,
 :code:`auto` or :code:`toggle`. The default shortcut is
-:code:`ctrl+shift+f12`. Changes apply to all windows, including new windows,
-until the configuration is reloaded. Applications that subscribe to kitty's
-color preference notifications are notified.
+:code:`ctrl+shift+f12`. Changes apply on ordinary displays until the
+configuration is reloaded. Applications that subscribe to kitty's color
+preference notifications are notified.
+""",
+)
+
+opt(
+    'eink_color_scheme',
+    'light',
+    choices=('light', 'dark', 'follow_os', 'invert_os'),
+    ctype='eink_scheme_from_python',
+    long_text="""
+Color scheme for windows on e-paper. Choose :code:`light` for black on white,
+:code:`dark` for white on black, :code:`follow_os` to follow the desktop, or
+:code:`invert_os` to use the opposite desktop appearance. When the desktop
+has no preference, both OS-based choices use light. The setting applies to
+both monochrome and color e-paper and is available under Color scheme in
+Settings.
 """,
 )
 
@@ -4102,13 +4134,11 @@ protocol </display-protocol>` and avoids what makes such a panel ghost: the
 cursor and text do not blink, there is no cursor trail, animated images stay
 on the frame they show, an indeterminate progress bar does not move, keyboard
 scrolling jumps rather than glides, and the output is not dithered. For now
-:opt:`custom_shaders`, the visual bell, :opt:`pixel_scroll` and the repaint
-timing stay as configured, and images are not reduced to the levels of gray
-of the panel, which the monitor does itself. Being e-paper does not make a
-display monochrome, as there is color e-paper. Black
-text on white, or white on black with an explicit :code:`color_scheme dark`,
-follows from a display that shows only gray (:code:`color=gray` or
-:code:`mono`). With this option a display whose colors nothing declares, in
+:code:`custom_shaders`, the visual bell and :code:`pixel_scroll` stay as
+configured. Silkie submits at most ten frames per second on e-paper. Images
+are reduced to the levels of gray by the monitor. The :opt:`eink_color_scheme`
+setting chooses the foreground and background on both color and monochrome
+e-paper. With this option a display whose colors nothing declares, in
 the built-in table, :opt:`monitor_info` or :opt:`display_info`, is taken to
 show gray, as before. For color e-paper declare its colors, for example
 :code:`display_info color=rgb`.
@@ -4144,13 +4174,13 @@ its model (the name the system gives, or the EDID name descriptor), the name
 of its connector, such as :code:`DP-7`, or its make, each compared whole and
 without regard to case; or by a part of the description the system gives of
 it. Serial numbers are not used, as they say whose monitor it is. :code:`kitten @ ls` shows these for the
-monitor of each OS window, and :option:`kitty --debug-rendering` logs them
+monitor of each OS window, and :code:`silkie --debug-rendering` logs them
 when a window moves to another monitor.
 
 Unlike :opt:`display_info`, which only changes what programs are told, this
 changes what Silkie does: a monitor declared :code:`kind=eink` gets the
 e-paper behavior described for :opt:`eink_mode`, and one declared
-:code:`color=gray` or :code:`mono` black text on white. The two are
+:code:`color=gray` or :code:`mono` gets a high-contrast palette. The two are
 independent, so color e-paper is :code:`kind=eink color=rgb`. Declarations
 here override the built-in table of e-paper monitors and what the operating
 system says. Use this option once per monitor; when several lines select a
@@ -4895,6 +4925,8 @@ jumped to or the last clicked position. Requires :ref:`shell integration
 
 map('Scroll to next shell prompt', 'scroll_to_next_prompt --allow-fallback=shifted,ascii kitty_mod+x scroll_to_prompt 1')
 
+map('Review visible images', 'review_images --allow-fallback=shifted,ascii kitty_mod+alt+i review_images')
+
 map(
     'Browse scrollback buffer in pager',
     'show_scrollback --allow-fallback=shifted,ascii kitty_mod+h show_scrollback',
@@ -5331,6 +5363,15 @@ map(
     'Increase font size',
     'increase_font_size kitty_mod+equal change_font_size current +2.0',
 )
+map('Magnify pane', 'magnify_pane_in ctrl+alt+equal magnify_pane in')
+map('Magnify pane', 'magnify_pane_in ctrl+alt+plus magnify_pane in')
+map('Reduce pane magnification', 'magnify_pane_out ctrl+alt+minus magnify_pane out')
+map('Reset pane magnification', 'magnify_pane_reset ctrl+alt+0 magnify_pane reset')
+map('Center magnified pane on text cursor', 'magnify_pane_caret ctrl+alt+c magnify_pane caret')
+map('Pan magnified pane left', 'magnify_pane_left ctrl+alt+left magnify_pane left')
+map('Pan magnified pane right', 'magnify_pane_right ctrl+alt+right magnify_pane right')
+map('Pan magnified pane up', 'magnify_pane_up ctrl+alt+up magnify_pane up')
+map('Pan magnified pane down', 'magnify_pane_down ctrl+alt+down magnify_pane down')
 map(
     'Increase font size',
     'increase_font_size kitty_mod+plus change_font_size current +2.0',

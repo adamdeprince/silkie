@@ -223,7 +223,7 @@ vertex_main(
     uint vertex_id: SV_VertexID,
     uint instance_id: SV_InstanceID,
     uniform uint draw_bg_bitfield, uniform float4 spatial_depth, uniform float2 spatial_phase, uniform float spatial_multiplier,
-    uniform float2 spatial_pixel_size, ) {
+    uniform float2 spatial_pixel_size, uniform float3 pane_magnification, ) {
     VertexOutput vo;
 
     BackgroundOutput bo = compute_background(colors, sprite_idx, is_selected, instance_id, vertex_id);
@@ -339,6 +339,7 @@ vertex_main(
 
     if (!ONLY_BACKGROUND) vo.cell_foreground = foreground;
 
+    vo.position.xy = (vo.position.xy - pane_magnification.yz) * pane_magnification.x;
     return vo;
 }
 

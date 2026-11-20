@@ -269,7 +269,7 @@ class TestPrecisionGraphics(BaseTest):
         self.ae(screen.grman.image_count, 0)
         screen.callbacks.clear()
         parse_bytes(screen, b'\x1b]777;caps;v=1:op=query:id=7\x1b\\')
-        self.assertIn(b':format=8,16,24,32,64,100,200,301,302,304,308,316,401,402,404,408,516,632,664\x1b\\', screen.callbacks.wtcbuf)
+        self.assertIn(b':format=8,16,24,32,64,100,200,201,301,302,304,308,316,401,402,404,408,516,632,664\x1b\\', screen.callbacks.wtcbuf)
 
     def test_vector_images_draw_high_precision_images(self):
         screen = self.create_screen()

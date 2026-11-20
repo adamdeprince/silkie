@@ -60,7 +60,6 @@ _glfwPlatformRemoveTimer(unsigned long long timer_id) {
 }
 
 void
-_glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, bool enabled) {
-    changeTimerInterval(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, timer_id, interval);
-    toggleTimer(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, timer_id, enabled);
+_glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled) {
+    updateTimer(&_glfw.GLFW_LOOP_BACKEND.eventLoopData, timer_id, interval, tolerance, enabled);
 }

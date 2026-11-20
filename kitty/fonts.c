@@ -228,6 +228,7 @@ save_window_font_groups(void) {
     for (size_t o = 0; o < global_state.num_os_windows; o++) {
         OSWindow *w = global_state.os_windows + o;
         w->temp_font_group_id = w->fonts_data ? ((FontGroup *)(w->fonts_data))->id : 0;
+        w->temp_magnified_font_group_id = w->magnified_fonts_data ? ((FontGroup *)w->magnified_fonts_data)->id : 0;
     }
 }
 
@@ -235,12 +236,11 @@ static void
 restore_window_font_groups(void) {
     for (size_t o = 0; o < global_state.num_os_windows; o++) {
         OSWindow *w = global_state.os_windows + o;
-        w->fonts_data = NULL;
+        w->fonts_data = w->magnified_fonts_data = NULL;
         for (size_t i = 0; i < num_font_groups; i++) {
-            if (font_groups[i].id == w->temp_font_group_id) {
-                w->fonts_data = (FONTS_DATA_HANDLE)(font_groups + i);
-                break;
-            }
+            FONTS_DATA_HANDLE fg = (FONTS_DATA_HANDLE)(font_groups + i);
+            if (font_groups[i].id == w->temp_font_group_id) w->fonts_data = fg;
+            if (font_groups[i].id == w->temp_magnified_font_group_id) w->magnified_fonts_data = fg;
         }
     }
 }
@@ -249,7 +249,7 @@ static bool
 font_group_is_unused(FontGroup *fg) {
     for (size_t o = 0; o < global_state.num_os_windows; o++) {
         OSWindow *w = global_state.os_windows + o;
-        if (w->temp_font_group_id == fg->id) return false;
+        if (w->temp_font_group_id == fg->id || w->temp_magnified_font_group_id == fg->id) return false;
     }
     return true;
 }
@@ -598,7 +598,10 @@ free_font_groups(void) {
     if (font_groups) {
         // Clear dangling pointers into font_groups, otherwise the next call to
         // save_window_font_groups() would read freed memory
-        for (size_t o = 0; o < global_state.num_os_windows; o++) global_state.os_windows[o].fonts_data = NULL;
+        for (size_t o = 0; o < global_state.num_os_windows; o++) {
+            OSWindow *w = global_state.os_windows + o;
+            w->fonts_data = w->magnified_fonts_data = NULL;
+        }
         for (size_t i = 0; i < num_font_groups; i++) del_font_group(font_groups + i);
         free(font_groups);
         font_groups = NULL;
@@ -626,6 +629,8 @@ adjust_ypos(unsigned int pos, unsigned int cell_height, int adjustment) {
     return pos - adjustment;
 }
 
+#define MAX_CELL_DIMENSION 1000
+
 static void
 calc_cell_metrics(FontGroup *fg, PyObject *face) {
     fg->fcm = cell_metrics(face);
@@ -634,7 +639,7 @@ calc_cell_metrics(FontGroup *fg, PyObject *face) {
     unsigned int cw = fg->fcm.cell_width, ch = fg->fcm.cell_height;
     adjust_metric(&cw, OPT(cell_width).val, OPT(cell_width).unit, fg->logical_dpi_x);
     adjust_metric(&ch, OPT(cell_height).val, OPT(cell_height).unit, fg->logical_dpi_y);
-#define MAX_DIM 1000
+#define MAX_DIM MAX_CELL_DIMENSION
 #define MIN_WIDTH 2
 #define MIN_HEIGHT 4
     if (cw >= MIN_WIDTH && cw <= MAX_DIM) fg->fcm.cell_width = cw;
@@ -2615,6 +2620,40 @@ initialize_font_group(FontGroup *fg) {
 void
 send_prerendered_sprites_for_window(OSWindow *w) {
     FontGroup *fg = (FontGroup *)w->fonts_data;
+    if (!fg->sprite_map) {
+        fg->sprite_map = alloc_sprite_map();
+        send_prerendered_sprites(fg);
+    }
+}
+
+id_type
+font_group_id(FONTS_DATA_HANDLE fonts) {
+    return ((FontGroup *)fonts)->id;
+}
+
+void
+update_magnified_fonts(OSWindow *w, double scale) {
+    if (scale <= 1.) {
+        w->magnified_fonts_data = NULL;
+        w->magnified_font_request = 1.;
+        return;
+    }
+    FontGroup *base = (FontGroup *)w->fonts_data;
+    if (w->magnified_font_request == scale && w->magnified_base_font_group == base->id) return;
+    w->magnified_font_request = scale;
+    w->magnified_base_font_group = base->id;
+    FontCellMetrics raw = cell_metrics(base->fonts[base->medium_font_idx].face);
+    unsigned dim = MAX(MAX(raw.cell_height, raw.cell_width), MAX(base->fcm.cell_height, base->fcm.cell_width));
+    // Use the same supported cell size as normal fonts. Round the requested
+    // resolution to whole glyph pixels so small gesture updates can reuse it.
+    scale = MIN(ceil(dim * scale), MAX_CELL_DIMENSION - 1.) / dim;
+    if (scale <= 1.) {
+        w->magnified_fonts_data = NULL;
+        return;
+    }
+    double sz = base->font_sz_in_pts, dx = base->logical_dpi_x * scale, dy = base->logical_dpi_y * scale;
+    FontGroup *fg = (FontGroup *)load_fonts_data(sz, dx, dy, w->font_set);
+    w->magnified_fonts_data = (FONTS_DATA_HANDLE)fg;
     if (!fg->sprite_map) {
         fg->sprite_map = alloc_sprite_map();
         send_prerendered_sprites(fg);

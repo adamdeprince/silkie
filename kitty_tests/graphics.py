@@ -634,6 +634,8 @@ class TestGraphics(BaseTest):
         self.ae(q('t', s=8, v=1, f=1), r(',e=t,s=8,v=1'))
         self.ae(q('t', s=1, v=1, f=316, G=3, T=2), r(',e=t,f=316,s=1,v=1'))
         self.ae(q('t', f=200), r(',e=t,f=200'))
+        self.ae(q('T', f=201), r(',e=T,f=201'))
+        self.ae(q('f', f=201), r(',e=f'))
         self.ae(q('f', f=200, G=2, T=1), r(',e=f,G=2'))
         if is_macos or sys.platform.startswith('linux'):
             self.ae(q('t', t='g'), r(',e=t,t=g'))

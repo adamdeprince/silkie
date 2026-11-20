@@ -159,6 +159,17 @@ prepare_ime_position_update_event(OSWindow *osw, Window *w, Screen *screen, GLFW
         left += screen->cursor->x * cell_width;
         top += screen->cursor->y * cell_height;
     }
+    if (screen->magnification.scale > 1.) {
+        const WindowGeometry *g = &w->render_data.geometry;
+        double width = g->right - g->left, height = g->bottom - g->top;
+        double x = left - g->left, y = top - g->top, right = x + cell_width, bottom = y + cell_height;
+        screen_magnify_point(screen, &x, &y, width, height);
+        screen_magnify_point(screen, &right, &bottom, width, height);
+        x = MIN(width, MAX(0., x)), y = MIN(height, MAX(0., y));
+        left = g->left + (unsigned)round(x), top = g->top + (unsigned)round(y);
+        cell_width = (unsigned)round(MAX(1., MIN(width, right) - x));
+        cell_height = (unsigned)round(MAX(1., MIN(height, bottom) - y));
+    }
     ev->cursor.left = left;
     ev->cursor.top = top;
     ev->cursor.width = cell_width;

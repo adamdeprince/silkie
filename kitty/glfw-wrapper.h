@@ -1461,7 +1461,7 @@ typedef struct GLFWLayerShellConfig {
 } GLFWLayerShellConfig;
 
 typedef struct GLFWTitlebarFont {
-    const char *family;  // NULL means use the default font
+    const char *family; // NULL means use the default font
     double point_size, text_scale;
     bool bold, italic;
 } GLFWTitlebarFont;
@@ -2448,6 +2448,10 @@ GFW_EXTERN glfwSetEventLoopHook_func glfwSetEventLoopHook_impl;
 typedef void (*glfwUpdateTimer_func)(unsigned long long, monotonic_t, bool);
 GFW_EXTERN glfwUpdateTimer_func glfwUpdateTimer_impl;
 #define glfwUpdateTimer glfwUpdateTimer_impl
+
+typedef void (*glfwUpdateTimerWithTolerance_func)(unsigned long long, monotonic_t, monotonic_t, bool);
+GFW_EXTERN glfwUpdateTimerWithTolerance_func glfwUpdateTimerWithTolerance_impl;
+#define glfwUpdateTimerWithTolerance glfwUpdateTimerWithTolerance_impl
 
 typedef void (*glfwRemoveTimer_func)(unsigned long);
 GFW_EXTERN glfwRemoveTimer_func glfwRemoveTimer_impl;

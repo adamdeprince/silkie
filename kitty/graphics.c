@@ -114,8 +114,14 @@ grman_alloc(bool for_paused_rendering) {
 #define iter_refs(img) vt_create_for_loop(ref_map_itr, i, &((img)->refs_by_internal_id))
 
 static void
+free_ref(ImageRef *ref) {
+    Py_XDECREF(ref->annotation);
+    free(ref);
+}
+
+static void
 free_refs_data(Image *img) {
-    iter_refs(img) free(i.data->val);
+    iter_refs(img) free_ref(i.data->val);
     vt_cleanup(&img->refs_by_internal_id);
     vt_cleanup(&img->refs_by_client_id);
 }
@@ -438,6 +444,16 @@ ref_by_client_id(const Image *img, uint32_t id) {
     return NULL;
 }
 
+bool
+grman_set_image_annotation(GraphicsManager *self, uint32_t image, uint32_t placement, PyObject *annotation) {
+    if (!image || !placement) return false;
+    Image *img = img_by_client_id(self, image);
+    ImageRef *ref = img && img->root_frame_data_loaded ? ref_by_client_id(img, placement) : NULL;
+    if (!ref) return false;
+    Py_XSETREF(ref->annotation, Py_XNewRef(annotation));
+    return true;
+}
+
 static void
 set_layers_dirty(GraphicsManager *self) {
     self->layers_dirty = true;
@@ -522,12 +538,13 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
                 continue;
             }
             memcpy(cr, i.data->val, sizeof(*cr));
+            cr->annotation = Py_XNewRef(cr->annotation);
             if (vt_is_end(vt_insert(&clone->refs_by_internal_id, cr->internal_id, cr))) {
-                free(cr);
+                free_ref(cr);
                 out_of_memory = true;
             } else if (cr->client_id && vt_is_end(vt_insert(&clone->refs_by_client_id, cr->client_id, cr))) {
                 vt_erase(&clone->refs_by_internal_id, cr->internal_id);
-                free(cr);
+                free_ref(cr);
                 out_of_memory = true;
             }
         }
@@ -1089,6 +1106,7 @@ enum FORMATS {
     RGBA16F = 64,
     PNG = 100,
     VECTOR = 200,
+    SVG = 201,
     GRAY1 = PACKED_FORMAT_BASE + 1,
     GRAY2 = PACKED_FORMAT_BASE + 2,
     GRAY4 = PACKED_FORMAT_BASE + 4,
@@ -1102,6 +1120,11 @@ enum FORMATS {
     RGB10A2 = RGBA_FORMAT_BASE + 32,
     RGBA16 = RGBA_FORMAT_BASE + 64,
 };
+
+static bool
+is_vector_format(uint32_t format) {
+    return format == VECTOR || format == SVG;
+}
 
 static bool
 is_gray_format(uint32_t format) {
@@ -1315,7 +1338,7 @@ load_image_data(
                 // Uncompressed pixels have a known size, the slack of DIRECT_SLACK past it is
                 // tolerated as before, more is too much. The buffer grows as the data arrives, so
                 // that the size a command claims is not allocated before its data comes.
-                const bool known_size = !g->compressed && data_fmt != PNG && data_fmt != VECTOR;
+                const bool known_size = !g->compressed && data_fmt != PNG && !is_vector_format(data_fmt);
                 const size_t most = known_size ? load_data->data_sz + DIRECT_SLACK : limit;
                 if (load_data->buf_used > most || g->payload_sz > most - load_data->buf_used) ABRT("EFBIG", "Too much data");
                 const size_t capacity = MIN(most, MAX(load_data->buf_capacity > limit/2 ? limit : 2*load_data->buf_capacity, load_data->buf_used+g->payload_sz));
@@ -1352,7 +1375,7 @@ load_image_data(
             // When the data needs further processing the entire (possibly
             // compressed) payload is needed, otherwise reading more than the
             // expected number of bytes is pointless.
-            const size_t max_to_read = (g->compressed || data_fmt == PNG || data_fmt == VECTOR) ? limit : load_data->data_sz;
+            const size_t max_to_read = (g->compressed || data_fmt == PNG || is_vector_format(data_fmt)) ? limit : load_data->data_sz;
             bool was_opened = false;
             const bool ok = load_image_data_from_file(self, g, transmission_type, fname, max_to_read, &was_opened);
             // Client created temporary files and shared memory objects that
@@ -1499,7 +1522,7 @@ unpack_palette_image(GraphicsManager *self, Image *img, uint32_t format) {
 
 static Image *
 process_image_data(GraphicsManager *self, Image *img, const GraphicsCommand *g, const uint32_t data_fmt, const bool is_frame) {
-    if (data_fmt == VECTOR) {  // text records of a size known only once loaded
+    if (is_vector_format(data_fmt)) {  // vector data of a size known only once loaded
         LoadData *ld = &self->currently_loading;
         switch (g->compressed) {
             case 'z':
@@ -1577,6 +1600,7 @@ initialize_load_data(
     switch (data_fmt) {
         case PNG:
         case VECTOR:
+        case SVG:
             self->currently_loading.is_4byte_aligned = true;
             self->currently_loading.is_opaque = false;
             self->currently_loading.data_sz = g->data_sz ? g->data_sz : 1024 * 100;
@@ -2053,7 +2077,8 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         self->currently_loading.loading_for = (const ImageAndFrame){0};
         // the response to a failure before the load data is initialized goes to this command, not an earlier one
         self->currently_loading.start_command = *g;
-        self->currently_loading.start_command.id = iid;
+        if (!is_query) self->currently_loading.start_command.id = iid;
+        if (fmt == SVG && tt == 'g') ABRT("EINVAL", "SVG requires a data transmission medium");
         remove_images(self, add_trim_predicate, 0);
         img = find_or_create_image(self, iid, &existing);
         if (!img) ABRT("ENOMEM", "Out of memory creating an image");
@@ -2094,11 +2119,11 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
         img->used_storage = 0;
         if (tt == 'g') {
             self->currently_loading.start_command = *g;
-            if (g->action != 'v') self->currently_loading.start_command.id = iid;
+            if (!is_query) self->currently_loading.start_command.id = iid;
             return load_surface_image(self, g, img, payload, is_query);
         }
         if (!initialize_load_data(self, g, img, tt, fmt, 0)) return NULL;
-        if (g->action != 'v') self->currently_loading.start_command.id = iid;
+        if (!is_query) self->currently_loading.start_command.id = iid;
     } else {
         INIT_CHUNKED_LOAD;
         img = img_by_internal_id(self, self->currently_loading.loading_for.image_id);
@@ -2112,7 +2137,7 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
     self->currently_loading.loading_for = (const ImageAndFrame){0};
     img = process_image_data(self, img, g, fmt, false);
     if (!img) return NULL;
-    if (fmt == VECTOR) {
+    if (is_vector_format(fmt)) {
         LoadData *ld = &self->currently_loading;
         if (g->action == 'v') {
             if (ld->data_sz > PY_SSIZE_T_MAX) ABRT("EOVERFLOW", "Vector request too large");
@@ -2122,14 +2147,24 @@ handle_add_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_
             if (!self->vector_response) { PyErr_Clear(); ABRT("ENOMEM", "Vector font service failed"); }
             return img;
         }
-        if (!ld->width || !ld->height) ABRT("EINVAL", "Zero width/height not allowed");
+        if (fmt == SVG) {
+            if (!!ld->width != !!ld->height) ABRT("EINVAL", "Specify both SVG dimensions or omit both");
+        } else if (!ld->width || !ld->height) ABRT("EINVAL", "Zero width/height not allowed");
         VectorDoc *doc = vector_doc_new(ld->width, ld->height);
         if (!doc) ABRT("ENOMEM", "Out of memory");
-        vector_doc_set_font_session(doc, self->vector_font_session);
-        const char *err = vector_doc_apply(doc, ld->data, ld->data_sz);
-        if (err) {
-            vector_doc_free(doc);
-            ABRT("EINVAL", "%s", err);
+        if (fmt == SVG) {
+            const char *code = vector_doc_load_svg(doc, ld->data, ld->data_sz, &ld->width, &ld->height);
+            if (code) {
+                vector_doc_free(doc);
+                ABRT(code, "Cannot load SVG document");
+            }
+        } else {
+            vector_doc_set_font_session(doc, self->vector_font_session);
+            const char *err = vector_doc_apply(doc, ld->data, ld->data_sz);
+            if (err) {
+                vector_doc_free(doc);
+                ABRT("EINVAL", "%s", err);
+            }
         }
         img->width = ld->width;
         img->height = ld->height;
@@ -2264,10 +2299,11 @@ supported_keys_for_query(const GraphicsCommand *g) {
             const bool is_indexed = fmt == INDEXED || fmt == INDEXED_ALPHA, is_palette = is_palette_format(fmt);
             const bool is_deep = deep_storage_of_format(fmt) != DEEP_NONE;
             const bool has_frames = fmt == RGB || fmt == RGBA || fmt == PNG || fmt == RGBA16F || is_packed_format(fmt);
-            if (has_frames || ((fmt == VECTOR || is_indexed || is_palette || is_deep) && action != 'f')) print(",f=%u", fmt);
+            if (has_frames || ((is_vector_format(fmt) || is_indexed || is_palette || is_deep) && action != 'f' && !(fmt == SVG && surface)))
+                print(",f=%u", fmt);
             // The colors of an indexed color image are those of the terminal, it has no gamut of its own and is never HDR.
             // The palette of a palette image can be in a gamut, but is never HDR.
-            if (!is_indexed && (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020)) print(",G=%u", g->gamut);
+            if (!is_indexed && fmt != SVG && (g->gamut == GAMUT_DISPLAY_P3 || g->gamut == GAMUT_REC2020)) print(",G=%u", g->gamut);
             // A transfer function other than sRGB, for the formats that take it, see transfer_of_command(). Frames are sRGB.
             uint8_t transfer;
             if (g->transfer && !surface && transfer_of_command(g, fmt ? fmt : RGBA, &transfer) && (action != 'f' || transfer == TRANSFER_SRGB)) print(",E=%u", g->transfer);
@@ -2446,10 +2482,13 @@ static ImageRef *
 create_ref(Image *img, ImageRef *clone_from) {
     ImageRef *ans = allocation_fails(ALLOCATION_REF) ? NULL : calloc(1, sizeof(ImageRef));
     if (!ans) return NULL;
-    if (clone_from) *ans = *clone_from;
+    if (clone_from) {
+        *ans = *clone_from;
+        ans->annotation = Py_XNewRef(ans->annotation);
+    }
     ans->internal_id = next_id(&img->ref_id_counter);
     if (vt_is_end(vt_insert(&img->refs_by_internal_id, ans->internal_id, ans))) {
-        free(ans);
+        free_ref(ans);
         return NULL;
     }
     return ans;
@@ -3124,7 +3163,20 @@ add_render_item(GraphicsManager *self, const ImageRenderData *rd) {
 
 bool
 grman_update_layers(
+    GraphicsManager *self, unsigned int scrolled_by, float scroll_offset_lines,
+    float screen_left, float screen_top, float dx, float dy,
+    unsigned int num_cols, unsigned int num_rows, CellPixelSize cell) {
+    return grman_update_magnified_layers(self, scrolled_by, scroll_offset_lines,
+        screen_left, screen_top, dx, dy, num_cols, num_rows, cell, (PaneMagnification){0}, 1.);
+}
 
+bool
+grman_has_visible_raster(const GraphicsManager *self) {
+    return self && self->render_data.has_visible_raster;
+}
+
+bool
+grman_update_magnified_layers(
     GraphicsManager *self,
     unsigned int scrolled_by,
     float scroll_offset_lines,
@@ -3134,10 +3186,15 @@ grman_update_layers(
     float dy,
     unsigned int num_cols,
     unsigned int num_rows,
-    CellPixelSize cell) {
-    if (self->last_scrolled_by != scrolled_by || self->last_scroll_offset_lines != scroll_offset_lines) set_layers_dirty(self);
+    CellPixelSize cell, PaneMagnification magnification, double raster_scale) {
+    if (self->last_scrolled_by != scrolled_by || self->last_scroll_offset_lines != scroll_offset_lines ||
+        self->last_magnification.scale != magnification.scale || self->last_magnification.x != magnification.x ||
+        self->last_magnification.y != magnification.y || self->last_raster_scale != raster_scale)
+        set_layers_dirty(self);
     self->last_scrolled_by = scrolled_by;
     self->last_scroll_offset_lines = scroll_offset_lines;
+    self->last_magnification = magnification;
+    self->last_raster_scale = raster_scale;
     if (!self->layers_dirty) return false;
     self->layers_dirty = false;
     size_t i;
@@ -3155,9 +3212,18 @@ grman_update_layers(
     // Iterate over all visible refs and create render data
     self->render_data.count = 0;
     self->render_data.has_hdr = false;
+    self->render_data.has_visible_raster = false;
     const monotonic_t now = monotonic();
     // what of the window is on screen, in normalized device coordinates, outside which no tile is drawn
-    const ImageRect screen = {.left = screen_left, .top = screen_top, .right = screen_left + screen_width, .bottom = screen_bottom};
+    ImageRect screen = {.left = screen_left, .top = screen_top, .right = screen_left + screen_width, .bottom = screen_bottom};
+    const double zoom = MAX(1., magnification.scale);
+    if (zoom > 1.) {
+        double half = 0.5 / zoom;
+        screen.left = screen_left + (magnification.x - half) * screen_width;
+        screen.right = screen_left + (magnification.x + half) * screen_width;
+        screen.top = screen_top - (magnification.y - half) * screen_height;
+        screen.bottom = screen_top - (magnification.y + half) * screen_height;
+    }
 
 
     for (image_map_itr imgitr = vt_first(&self->images_by_internal_id); !vt_is_end(imgitr);) {
@@ -3207,7 +3273,8 @@ grman_update_layers(
                 r.bottom = r.top - (float)((height_px / screen_height_px) * screen_height);
             }
 
-            if (r.top <= screen_bottom || r.bottom >= screen_top) {
+            if (r.top <= screen.bottom || r.bottom >= screen.top ||
+                (zoom > 1. && (r.left >= screen.right || r.right <= screen.left))) {
                 refitr = vt_next(refitr);
                 continue;
             } // not visible
@@ -3220,10 +3287,10 @@ grman_update_layers(
                 if (rw > 0 && rh > 0) {
                     // the part of the placement on screen, and so of the image, in doubles since a part of a
                     // large image is a tiny fraction of it
-                    const double fx0 = (MAX((double)r.left, (double)screen_left) - r.left) / rw;
-                    const double fx1 = (MIN((double)r.right, (double)screen_left + screen_width) - r.left) / rw;
-                    const double fy0 = ((double)r.top - MIN((double)r.top, (double)screen_top)) / rh;
-                    const double fy1 = ((double)r.top - MAX((double)r.bottom, (double)screen_bottom)) / rh;
+                    const double fx0 = (MAX((double)r.left, (double)screen.left) - r.left) / rw;
+                    const double fx1 = (MIN((double)r.right, (double)screen.right) - r.left) / rw;
+                    const double fy0 = ((double)r.top - MIN((double)r.top, (double)screen.top)) / rh;
+                    const double fy1 = ((double)r.top - MAX((double)r.bottom, (double)screen.bottom)) / rh;
                     if (fx0 < fx1 && fy0 < fy1) {
                         vector_shown.left = MIN(vector_shown.left, (ref->src_x + fx0 * ref->src_width) / img->width);
                         vector_shown.right = MAX(vector_shown.right, (ref->src_x + fx1 * ref->src_width) / img->width);
@@ -3231,7 +3298,7 @@ grman_update_layers(
                         vector_shown.bottom = MAX(vector_shown.bottom, (ref->src_y + fy1 * ref->src_height) / img->height);
                     }
                 }
-            }
+            } else if (r.right > screen.left && r.left < screen.right) self->render_data.has_visible_raster = true;
 
             ImageRenderData item = {0}, *rd = &item;
             rd->dest_rect = r;
@@ -3252,8 +3319,8 @@ grman_update_layers(
             rd->indexed_px_sz = img->indexed_px_sz;
             rd->palette_texture_id = img->palette ? img->palette->texture : 0;
             // The rect is in normalized device co-ordinates, so allow for rounding errors
-            const float width_px = (r.right - r.left) / screen_width * screen_width_px;
-            const float height_px = (r.top - r.bottom) / screen_height * screen_height_px;
+            const float width_px = (r.right - r.left) / screen_width * screen_width_px * zoom;
+            const float height_px = (r.top - r.bottom) / screen_height * screen_height_px * zoom;
             if (img->indexed_px_sz || rd->decode != IMAGE_DECODE_NONE)
                 rd->is_unscaled = fabsf(width_px - ref->src_width) < 0.01f && fabsf(height_px - ref->src_height) < 0.01f;
             rd->filter_decoded = rd->decode != IMAGE_DECODE_NONE && !rd->is_unscaled;
@@ -3294,7 +3361,8 @@ grman_update_layers(
             }
         }
         if (img->vector && img->is_drawn) {
-            update_vector_texture(self, img, vector_width, vector_height, vector_shown, screen_width_px, screen_height_px);
+            update_vector_texture(self, img, vector_width * raster_scale, vector_height * raster_scale, vector_shown,
+                screen_width_px * raster_scale / zoom, screen_height_px * raster_scale / zoom);
             const VectorView v = img->vector_view;
             for (size_t k = first_render_item; k < self->render_data.count; k++) {
                 ImageRenderData *rd = self->render_data.item + k;
@@ -3933,6 +4001,31 @@ ref_rect_in_pixels(const GraphicsManager *self, const ImageRef *ref, const InkVi
     return *width > 0 && *height > 0;
 }
 
+PyObject *
+grman_image_descriptions(GraphicsManager *self, const InkView *view, unsigned rows, unsigned columns) {
+    RAII_PyObject(ans, PyList_New(0));
+    if (!ans) return NULL;
+    const double screen_width = (double)columns * view->cell.width, screen_height = (double)rows * view->cell.height;
+    iter_images(self) {
+        Image *img = i.data->val;
+        if (!img->root_frame_data_loaded) continue;
+        vt_create_for_loop(ref_map_itr, ri, &img->refs_by_internal_id) {
+            const ImageRef *ref = ri.data->val;
+            double left, top, width, height;
+            if (!ref_rect_in_pixels(self, ref, view, &left, &top, &width, &height)) continue;
+            if (left >= screen_width || top >= screen_height || left + width <= 0 || top + height <= 0) continue;
+            // A Unicode placeholder's screen runs share the virtual placement's description.
+            const ImageRef *placement = ref->virtual_ref_id ? ref_by_internal_id(img, ref->virtual_ref_id) : ref;
+            if (!placement || (ref->virtual_ref_id && !placement->is_virtual_ref)) continue;
+            RAII_PyObject(item, Py_BuildValue("(ddKKIIO)", MAX(top, 0.) / view->cell.height, MAX(left, 0.) / view->cell.width,
+                (unsigned long long)img->internal_id, (unsigned long long)placement->internal_id,
+                img->client_id, placement->client_id, placement->annotation ? placement->annotation : Py_None));
+            if (!item || PyList_Append(ans, item) < 0) return NULL;
+        }
+    }
+    return Py_NewRef(ans);
+}
+
 // Takes a position in the cell area to the coordinate system of a group of
 // the image, through the placement it is shown in
 static bool
@@ -4078,6 +4171,7 @@ handle_animation_frame_load_command(GraphicsManager *self, GraphicsCommand *g, I
     if (is_chunked_continuation) {
         INIT_CHUNKED_LOAD; // g now points to the command that started the chunked load
     }
+    if (is_vector_format(fmt)) ABRT("EINVAL", "Vector payloads are not supported for animation frames");
     if (img->palette || is_palette_format(fmt)) ABRT("EINVAL", "Animation is not supported for palette images");
     if (img->indexed_px_sz || fmt == INDEXED || fmt == INDEXED_ALPHA) ABRT("EINVAL", "Animation is not supported for indexed color images");
     // Frames are blended on the CPU in eight bit sRGB or in half float, see docs/silkie/precision-image-protocol.rst
@@ -4251,6 +4345,7 @@ handle_vector_edit_command(GraphicsManager *self, GraphicsCommand *g, Image *img
         tt = g->transmission_type ? g->transmission_type : 'd';
     }
     if (!img->vector) ABRT("EINVAL", "Not a vector image");
+    if (vector_doc_is_svg(img->vector) || g->format == SVG) ABRT("EINVAL", "SVG images cannot be edited with vector records");
     if (!is_chunked_continuation) {
         self->currently_loading.loading_for = (const ImageAndFrame){0};
         if (!initialize_load_data(self, g, img, tt, VECTOR, 0)) return NULL;
@@ -4670,7 +4765,7 @@ handle_compose_command(GraphicsManager *self, bool *is_dirty, const GraphicsComm
 static ref_map_itr
 remove_ref_itr(Image *img, ref_map_itr x) {
     if (x.data->val->client_id) vt_erase(&img->refs_by_client_id, x.data->val->client_id);
-    free(x.data->val);
+    free_ref(x.data->val);
     return vt_erase_itr(&img->refs_by_internal_id, x);
 }
 
@@ -5101,30 +5196,33 @@ grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint
         case 't':
         case 'T':
         case 'q': {
-            uint32_t iid = g->id, q_iid = iid;
-            bool is_query = g->action == 'q';
-            if (is_query) {
-                iid = 0;
-                if (!q_iid) {
+            if (g->action == 'q' && g->report_supported) {
+                if (!g->id) {
                     REPORT_ERROR("Query graphics command without image id");
                     break;
                 }
-            }
-            if (is_query && g->report_supported) {
                 // A feature query transmits no image data, so it must not
                 // interfere with any chunked load that is in progress
-                ret = finish_command_response_with_keys(&(const GraphicsCommand){.id = q_iid, .quiet = g->quiet}, true, supported_keys_for_query(g));
+                ret = finish_command_response_with_keys(&(const GraphicsCommand){.id = g->id, .quiet = g->quiet}, true, supported_keys_for_query(g));
                 break;
             }
-            Image *image = handle_add_command(self, g, payload, is_dirty, iid, is_query);
+            const GraphicsCommand *start = self->currently_loading.loading_for.image_id && (!g->transmission_type || g->transmission_type == 'd')
+                ? &self->currently_loading.start_command : g;
+            const bool is_query = start->action == 'q';
+            const uint32_t q_iid = start->id;
+            if (is_query && !q_iid) {
+                REPORT_ERROR("Query graphics command without image id");
+                break;
+            }
+            Image *image = handle_add_command(self, g, payload, is_dirty, is_query ? 0 : g->id, is_query);
             if (!is_query && image && !image->vector && invalidate_vector_users(self, image->client_id)) *is_dirty = true;
             if (!self->currently_loading.loading_for.image_id) free_load_data(&self->currently_loading);
             GraphicsCommand *lg = &self->currently_loading.start_command;
             if (g->quiet) lg->quiet = g->quiet;
-            if (is_query) ret = finish_command_response(&(const GraphicsCommand){.id = q_iid, .quiet = g->quiet}, image != NULL);
+            if (is_query) ret = finish_command_response(&(const GraphicsCommand){.id = q_iid, .quiet = lg->quiet}, image != NULL);
             else ret = finish_command_response(lg, image != NULL);
             if (lg->action == 'T' && image && image->root_frame_data_loaded) handle_put_command(self, lg, c, is_dirty, image, cell);
-            if (g->action == 'q') remove_images(self, add_trim_predicate, 0);
+            if (is_query && !self->currently_loading.loading_for.image_id) remove_images(self, add_trim_predicate, 0);
             break;
         }
         case 'a':

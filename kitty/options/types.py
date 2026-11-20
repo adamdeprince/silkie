@@ -25,6 +25,7 @@ choices_for_cjk_font_locale = typing.Literal['auto', 'jp', 'kr', 'sc', 'tc', 'hk
 choices_for_color_scheme = typing.Literal['auto', 'light', 'dark']
 choices_for_deep_color = typing.Literal['always', 'never']
 choices_for_default_pointer_shape = typing.Literal['arrow', 'beam', 'text', 'pointer', 'hand', 'help', 'wait', 'progress', 'crosshair', 'cell', 'vertical-text', 'move', 'e-resize', 'ne-resize', 'nw-resize', 'n-resize', 'se-resize', 'sw-resize', 's-resize', 'w-resize', 'ew-resize', 'ns-resize', 'nesw-resize', 'nwse-resize', 'zoom-in', 'zoom-out', 'alias', 'copy', 'not-allowed', 'no-drop', 'grab', 'grabbing']
+choices_for_eink_color_scheme = typing.Literal['light', 'dark', 'follow_os', 'invert_os']
 choices_for_focus_follows_mouse = typing.Literal['no', 'n', 'false', 'y', 'yes', 'true', 'drop']
 choices_for_hdr = typing.Literal['no', 'detect', 'auto', 'always']
 choices_for_hyperlink_target_position = typing.Literal['top', 'bottom', 'below', 'tooltip']
@@ -381,6 +382,7 @@ option_names = (
     'draw_window_borders_for_single_window',
     'dynamic_background_opacity',
     'editor',
+    'eink_color_scheme',
     'eink_mode',
     'enable_audio_bell',
     'enabled_layouts',
@@ -437,6 +439,7 @@ option_names = (
     'macos_traditional_fullscreen',
     'macos_use_physical_screen_frame',
     'macos_window_resizable',
+    'magnify_raster_resolution',
     'map',
     'map_timeout',
     'mark1_background',
@@ -658,6 +661,7 @@ class Options:
     draw_window_borders_for_single_window: bool = False
     dynamic_background_opacity: bool = False
     editor: str = '.'
+    eink_color_scheme: choices_for_eink_color_scheme = 'light'
     eink_mode: bool = False
     enable_audio_bell: bool = True
     enabled_layouts: list[str] = ['fat', 'grid', 'horizontal', 'splits', 'stack', 'tall', 'vertical']
@@ -708,6 +712,7 @@ class Options:
     macos_traditional_fullscreen: bool = False
     macos_use_physical_screen_frame: bool = False
     macos_window_resizable: bool = True
+    magnify_raster_resolution: bool = True
     map_timeout: float = 0
     mark1_background: Color = Color(152, 211, 203)
     mark1_foreground: Color = Color(0, 0, 0)

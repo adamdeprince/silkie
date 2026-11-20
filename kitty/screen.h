@@ -236,7 +236,7 @@ typedef struct ExtraCursor {
 
 struct MonitorIdentity;
 typedef struct { // see docs/display-protocol.rst
-    const char *kind, *color, *gamut, *precision, *output_type;
+    const char *kind, *color, *gamut, *precision, *output_type, *appearance, *eink_scheme;
     int bits, red_bits, green_bits, blue_bits, gray_bits, output_bits, output_dither;
     unsigned period_us;
     float headroom, scale, ppi;
@@ -263,6 +263,11 @@ typedef struct {
         unsigned int columns,
         lines, margin_top, margin_bottom, scrolled_by, pixel_scroll_offset_y;
     CellPixelSize cell_size;
+    PaneMagnification magnification;
+    double desktop_magnification;
+    unsigned reported_raster_scale;
+    monotonic_t raster_resize_at;
+    id_type render_font_group;
     OverlayLine overlay_line;
     id_type window_id;
     Selections selections, url_ranges;
@@ -463,6 +468,7 @@ bool write_escape_code_to_child(Screen *self, unsigned char which, const char *d
 void screen_visibility_changed(Screen *self, bool potentially_visible);
 void screen_caps_query(Screen *self, const char *data, size_t sz);
 void screen_font_protocol(Screen *self, const char *data, size_t sz);
+void screen_accessibility_protocol(Screen *self, const char *data, size_t size);
 void screen_depth_protocol(Screen *self, const char *data, size_t sz);
 void screen_reset_extension_modes(Screen *self);
 void screen_display_protocol(Screen *self, const char *data, size_t sz);
@@ -554,6 +560,12 @@ void screen_apply_selection(Screen *self, void *address, size_t size);
 void screen_search_apply_highlights(Screen *self, uint8_t *data, size_t size, int extra_leading_rows, unsigned scrolled_by);
 bool screen_search_render_dirty(Screen *self);
 bool screen_update_graphics_layers(Screen *self);
+CellPixelSize screen_reported_cell_size(const Screen *self);
+bool screen_update_reported_raster_scale(Screen *self);
+void screen_set_magnification(Screen *self, double scale, double x, double y);
+void screen_unmagnify_point(const Screen *self, double *x, double *y, double width, double height);
+void screen_magnify_point(const Screen *self, double *x, double *y, double width, double height);
+void screen_pinch_magnification(Screen *self, double ratio, double old_x, double old_y, double x, double y);
 void screen_scrollbar_geometry(const Screen *self, float *handle_position, float *visible_fraction);
 bool screen_has_scrollbar(const Screen *self, bool is_hovering);
 bool screen_is_selection_dirty(Screen *self);

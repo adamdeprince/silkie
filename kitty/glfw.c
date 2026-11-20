@@ -53,19 +53,46 @@ get_platform_dependent_config_values(void *glfw_window) {
 
 static const char *
 appearance_name(GLFWColorScheme appearance) {
-    const char *which = NULL;
     switch (appearance) {
-        case GLFW_COLOR_SCHEME_NO_PREFERENCE: which = "no_preference"; break;
-        case GLFW_COLOR_SCHEME_DARK: which = "dark"; break;
-        case GLFW_COLOR_SCHEME_LIGHT: which = "light"; break;
+        case GLFW_COLOR_SCHEME_DARK: return "dark";
+        case GLFW_COLOR_SCHEME_LIGHT: return "light";
+        default: return "no_preference";
     }
-    return which;
+}
+
+static const char *
+resolve_eink_color_scheme(unsigned mode, const char *appearance) {
+    if (mode == EINK_SCHEME_DARK ||
+        (mode == EINK_SCHEME_FOLLOW_OS && strcmp(appearance, "dark") == 0) ||
+        (mode == EINK_SCHEME_INVERT_OS && strcmp(appearance, "light") == 0)) return "dark";
+    return "light";
+}
+
+static PyObject *
+eink_color_scheme_for_appearance(PyObject *self UNUSED, PyObject *args) {
+    const char *mode, *appearance;
+    if (!PyArg_ParseTuple(args, "ss", &mode, &appearance)) return NULL;
+    return PyUnicode_FromString(resolve_eink_color_scheme(parse_eink_scheme(mode), appearance));
 }
 
 static void
 on_system_color_scheme_change(GLFWColorScheme appearance, bool is_initial_value) {
     const char *which = appearance_name(appearance);
     debug("system color-scheme changed to: %s is_initial_value: %d\n", which, is_initial_value);
+    // Desktop changes can be reported immediately with the last known monitor information.
+    for (size_t i = 0; i < global_state.num_os_windows; i++) {
+        OSWindow *w = global_state.os_windows + i;
+        if (!w->display_info.appearance || w->display_info.appearance == which) continue;
+        w->display_info.appearance = which;
+        if (w->display_info.eink & EINK_REFRESH) w->display_info.eink_scheme = resolve_eink_color_scheme(OPT(eink_color_scheme), which);
+        for (unsigned t = 0; t < w->num_tabs; t++) {
+            Tab *tab = w->tabs + t;
+            for (unsigned j = 0; j < tab->num_windows; j++) {
+                Screen *screen = tab->windows[j].render_data.screen;
+                if (screen) screen_display_changed(screen, &w->display_info);
+            }
+        }
+    }
     call_boss(on_system_color_scheme_change, "sO", which, is_initial_value ? Py_True : Py_False);
 }
 
@@ -389,8 +416,8 @@ window_iconify_callback(GLFWwindow *window, int iconified) {
 #ifdef __APPLE__
 static void
 cocoa_out_of_sequence_render(OSWindow *window) {
-    make_os_window_context_current(window);
     window->needs_render = true;
+    make_os_window_context_current(window);
 
     // On macOS Tahoe, the default framebuffer can become undefined during
     // screen change events. Try to recover by recreating the drawable.
@@ -407,6 +434,10 @@ cocoa_out_of_sequence_render(OSWindow *window) {
         bind_shader_globals_to_current_context();
     }
 
+    if (eink_frame_wait(window, monotonic())) {
+        request_tick_callback();
+        return;
+    }
     bool rendered = false;
     if (window->fonts_data->sprite_map) {
         window->needs_render = true;
@@ -911,7 +942,7 @@ scroll_callback(GLFWwindow *w, const GLFWScrollEvent *ev) {
 #define TOUCH_TAP_SLOP 8.0
 #define TOUCH_SELECT_HOLD ms_to_monotonic_t(400ll)
 
-typedef enum TouchGestureState { TOUCH_IDLE, TOUCH_PENDING, TOUCH_SCROLLING, TOUCH_SELECTING, TOUCH_IGNORED } TouchGestureState;
+typedef enum TouchGestureState { TOUCH_IDLE, TOUCH_PENDING, TOUCH_SCROLLING, TOUCH_SELECTING, TOUCH_IGNORED, TOUCH_MAGNIFYING } TouchGestureState;
 
 static struct {
     TouchGestureState state;
@@ -919,6 +950,8 @@ static struct {
     int32_t point_id;
     double start_x, start_y, last_x, last_y;
     monotonic_t down_at;
+    id_type magnified_pane;
+    double last_distance;
 } touch_gesture = {0};
 
 static const char *
@@ -989,7 +1022,8 @@ touch_gesture_cancel(OSWindow *osw, int mods) {
             break;
         case TOUCH_IDLE:
         case TOUCH_PENDING:
-        case TOUCH_IGNORED: break;
+        case TOUCH_IGNORED:
+        case TOUCH_MAGNIFYING: break;
     }
     touch_gesture_reset();
 }
@@ -1015,7 +1049,8 @@ touch_gesture_moved(GLFWwindow *w, OSWindow *osw, const GLFWTouchPoint *p, int m
         case TOUCH_SELECTING: touch_move_mouse(osw, p->x, p->y, mods); break;
         case TOUCH_SCROLLING: touch_scroll(w, osw, p->x - touch_gesture.last_x, p->y - touch_gesture.last_y, false, mods, timestamp); break;
         case TOUCH_IDLE:
-        case TOUCH_IGNORED: break;
+        case TOUCH_IGNORED:
+        case TOUCH_MAGNIFYING: break;
     }
     touch_gesture.last_x = p->x;
     touch_gesture.last_y = p->y;
@@ -1032,7 +1067,8 @@ touch_gesture_released(GLFWwindow *w, OSWindow *osw, int mods, monotonic_t times
         case TOUCH_SELECTING: touch_press_left_button(osw, GLFW_RELEASE, mods); break;
         case TOUCH_SCROLLING: touch_scroll(w, osw, 0, 0, true, mods, timestamp); break;
         case TOUCH_IDLE:
-        case TOUCH_IGNORED: break;
+        case TOUCH_IGNORED:
+        case TOUCH_MAGNIFYING: break;
     }
     touch_gesture_reset();
 }
@@ -1049,6 +1085,54 @@ gesture_callback(GLFWwindow *w, const GLFWGestureEvent *ev) {
         ev->kind, ev->phase, ev->x, ev->y, ev->delta, ev->dx, ev->dy, ev->fingers, reported);
     if (reported) request_tick_callback();
     global_state.callback_os_window = NULL;
+}
+
+static bool
+touch_magnify(OSWindow *osw, const GLFWTouchEvent *ev) {
+    const bool tracking = touch_gesture.state == TOUCH_MAGNIFYING;
+    if (!tracking && touch_gesture.state != TOUCH_PENDING && touch_gesture.state != TOUCH_IDLE) return false;
+    size_t contacts = 0;
+    double x = 0., y = 0., distance = 0.;
+    for (size_t i = 0; i < ev->num_points; i++) {
+        const GLFWTouchPoint *p = ev->points + i;
+        if (p->state == GLFW_TOUCH_POINT_RELEASED || p->confidence == GLFW_TOUCH_ACCIDENTAL) continue;
+        const double px = p->x * osw->viewport_x_ratio, py = p->y * osw->viewport_y_ratio;
+        if (++contacts == 2) distance = hypot(px - x, py - y);
+        x += px;
+        y += py;
+    }
+    if (contacts != 2 || distance <= 0.) {
+        if (tracking) touch_gesture.state = ev->type == GLFW_TOUCH_END ? TOUCH_IDLE : TOUCH_IGNORED;
+        return tracking;
+    }
+    x *= 0.5;
+    y *= 0.5;
+    Window *pane = tracking ? window_for_window_id(touch_gesture.magnified_pane) : NULL;
+    if (!tracking && osw->active_tab < osw->num_tabs) {
+        Tab *tab = osw->tabs + osw->active_tab;
+        for (size_t i = 0; i < tab->num_windows; i++) {
+            Window *w = tab->windows + i;
+            const WindowGeometry *g = &w->render_data.geometry;
+            if (w->visible && w->render_data.screen &&
+                x >= g->left && x < g->right && y >= g->top && y < g->bottom) {
+                pane = w;
+                break;
+            }
+        }
+    }
+    if (!pane || !pane->render_data.screen) return tracking;
+    const WindowGeometry *g = &pane->render_data.geometry;
+    x = (x - g->left) / MAX(1u, g->right - g->left);
+    y = (y - g->top) / MAX(1u, g->bottom - g->top);
+    if (tracking) screen_pinch_magnification(pane->render_data.screen, distance / touch_gesture.last_distance,
+        touch_gesture.last_x, touch_gesture.last_y, x, y);
+    touch_gesture.state = TOUCH_MAGNIFYING;
+    touch_gesture.os_window_id = osw->id;
+    touch_gesture.magnified_pane = pane->id;
+    touch_gesture.last_x = x;
+    touch_gesture.last_y = y;
+    touch_gesture.last_distance = distance;
+    return true;
 }
 
 static void
@@ -1105,6 +1189,11 @@ touch_callback(GLFWwindow *w, const GLFWTouchEvent *ev) {
     }
     if (ev->type == GLFW_TOUCH_CANCEL) {
         touch_gesture_cancel(osw, mods);
+        request_tick_callback();
+        global_state.callback_os_window = NULL;
+        return;
+    }
+    if (touch_magnify(osw, ev)) {
         request_tick_callback();
         global_state.callback_os_window = NULL;
         return;
@@ -2867,7 +2956,11 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
     blank_canvas(is_semi_transparent ? OPT(background_opacity) : 1.0f, OPT(background), true);
     apply_swap_interval(-1);
     // On Wayland the initial swap is allowed only after the first XDG configure event
-    if (glfwAreSwapsAllowed(glfw_window)) glfwSwapBuffers(glfw_window);
+    monotonic_t initial_swap_at = 0;
+    if (glfwAreSwapsAllowed(glfw_window)) {
+        glfwSwapBuffers(glfw_window);
+        initial_swap_at = monotonic();
+    }
     glfwSetInputMode(glfw_window, GLFW_LOCK_KEY_MODS, true);
     PyObject *pret = PyObject_CallFunction(pre_show_callback, "N", native_window_handle(glfw_window));
     if (pret == NULL) return NULL;
@@ -2921,6 +3014,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         }
     }
     w->fonts_data = fonts_data;
+    w->last_frame_swap_at = initial_swap_at;
     w->shown_once = true;
     w->last_focused_counter = ++focus_counter;
     os_window_update_size_increments(w);
@@ -3673,6 +3767,7 @@ swap_window_buffers(OSWindow *os_window) {
     if (glfwAreSwapsAllowed(os_window->handle)) {
         scale_output_to_hdr_white_level(os_window);
         glfwSwapBuffers(os_window->handle);
+        os_window->last_frame_swap_at = monotonic();
         os_window->keep_rendering_till_swap = 0;
     }
 }
@@ -3799,6 +3894,7 @@ display_info_from(OSWindow *w, const GLFWdisplayinfo *g, const MonitorIdentity *
         .bits = g->bits, .red_bits = g->red_bits, .green_bits = g->green_bits, .blue_bits = g->blue_bits, .gray_bits = g->gray_bits,
         .precision = g->bits || g->red_bits || g->green_bits || g->blue_bits || g->gray_bits ? "framebuffer" : "unknown",
         .period_us = g->period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g->scale, .ppi = g->ppi, .output_type = "unknown",
+        .appearance = appearance_name(glfwGetCurrentSystemColorTheme ? glfwGetCurrentSystemColorTheme(false) : GLFW_COLOR_SCHEME_NO_PREFERENCE),
         .monitor = monitor};
     // What the surface Silkie draws into holds, as OpenGL says once the window has been drawn
     if (w && w->linear_output_checked) {
@@ -3846,6 +3942,9 @@ display_info_from(OSWindow *w, const GLFWdisplayinfo *g, const MonitorIdentity *
     }
     d->eink = (d->kind == display_kinds[GLFW_DISPLAY_KIND_EINK] ? EINK_REFRESH : 0) |
               (d->color != display_colors[GLFW_DISPLAY_COLOR_RGB] ? EINK_GRAY : 0);
+    if (d->eink & EINK_REFRESH) {
+        d->eink_scheme = resolve_eink_color_scheme(OPT(eink_color_scheme), d->appearance);
+    }
     // Overrides for what the OS cannot tell programs, which change nothing else
     apply_display_spec(d, OPT(display_info), "configured", !OPT(eink_mode), NULL);
 }
@@ -4395,8 +4494,8 @@ add_main_loop_timer(monotonic_t interval, bool repeats, timer_callback_fun callb
 }
 
 void
-update_main_loop_timer(id_type timer_id, monotonic_t interval, bool enabled) {
-    glfwUpdateTimer(timer_id, interval, enabled);
+update_main_loop_timer(id_type timer_id, monotonic_t interval, monotonic_t tolerance, bool enabled) {
+    glfwUpdateTimerWithTolerance(timer_id, interval, tolerance, enabled);
 }
 
 void
@@ -4841,6 +4940,7 @@ static PyMethodDef module_methods[] = {
     {"glfw_terminate", (PyCFunction)glfw_terminate, METH_NOARGS, ""},
     {"glfw_get_physical_dpi", (PyCFunction)glfw_get_physical_dpi, METH_NOARGS, ""},
     {"glfw_get_key_name", (PyCFunction)glfw_get_key_name, METH_VARARGS, ""},
+    {"eink_color_scheme_for_appearance", eink_color_scheme_for_appearance, METH_VARARGS, ""},
     {"glfw_get_system_color_theme", (PyCFunction)glfw_get_system_color_theme, METH_VARARGS, ""},
     {"glfw_primary_monitor_size", (PyCFunction)primary_monitor_size, METH_NOARGS, ""},
     {"glfw_get_monitor_workarea", (PyCFunction)get_monitor_workarea, METH_NOARGS, ""},

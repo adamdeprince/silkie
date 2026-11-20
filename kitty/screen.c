@@ -31,6 +31,7 @@
 #include "hyperlink.h"
 #include "monitor_info.h"
 #include <structmember.h>
+#include <float.h>
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -2146,11 +2147,12 @@ send_display_report(Screen *self, const char *op, int id, const DisplayInfo *d) 
         log_error("Out of memory formatting a display report, not sent");
         return;
     }
+    const char *scheme_key = d->eink_scheme ? ":eink_scheme=" : "";
     const char *format = "777;display;v=1:op=%s:%s=%llu%s:kind=%s:color=%s:bits=%d:gamut=%s:headroom=%g:scale=%g:period=%u:ppi=%g"
-        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d%s%s%s%s%s";
+        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d:appearance=%s%s%s%s%s%s%s%s";
 #define DISPLAY_REPORT_ARGS op, key, serial, mode, d->kind, d->color, d->bits, d->gamut, d->headroom, d->scale, d->period_us, d->ppi, \
     d->red_bits, d->green_bits, d->blue_bits, d->gray_bits, d->precision, d->output_bits, d->output_type ? d->output_type : "unknown", \
-    d->output_dither, ids, make, model, connector, description
+    d->output_dither, d->appearance, scheme_key, d->eink_scheme ? d->eink_scheme : "", ids, make, model, connector, description
     const int n = snprintf(NULL, 0, format, DISPLAY_REPORT_ARGS);
     if (n < 0) return;
     const size_t size = (size_t)n + 1;
@@ -3824,11 +3826,12 @@ void
 screen_report_size(Screen *self, unsigned which, unsigned modifier) {
     char buf[32] = {0};
     unsigned code = 0, width = 0, height = 0;
+    const CellPixelSize cell = screen_reported_cell_size(self);
     switch (which) {
         case 14:
             code = 4;
-            width = self->cell_size.width * self->columns;
-            height = self->cell_size.height * self->lines;
+            width = cell.width * self->columns;
+            height = cell.height * self->lines;
             if (modifier == 2 && self->window_id) {
                 OSWindow *osw = os_window_for_kitty_window(self->window_id);
                 if (osw) {
@@ -3841,8 +3844,8 @@ screen_report_size(Screen *self, unsigned which, unsigned modifier) {
             break;
         case 16:
             code = 6;
-            width = self->cell_size.width;
-            height = self->cell_size.height;
+            width = cell.width;
+            height = cell.height;
             break;
         case 18:
             code = 8;
@@ -3854,6 +3857,97 @@ screen_report_size(Screen *self, unsigned which, unsigned modifier) {
         snprintf(buf, sizeof(buf), "%u;%u;%ut", code, height, width);
         write_escape_code_to_child(self, ESC_CSI, buf);
     }
+}
+
+CellPixelSize
+screen_reported_cell_size(const Screen *self) {
+    const uint64_t scale = self->reported_raster_scale;
+    if (!scale) return self->cell_size;
+    return (CellPixelSize){
+        .width = (unsigned)MIN(scale * self->cell_size.width, UINT_MAX),
+        .height = (unsigned)MIN(scale * self->cell_size.height, UINT_MAX),
+    };
+}
+
+bool
+screen_update_reported_raster_scale(Screen *self) {
+    const double zoom = MAX(self->magnification.scale, self->desktop_magnification);
+    const GraphicsManager *grman = self->paused_rendering.expires_at ? self->paused_rendering.grman : self->grman;
+    // Continue reporting the zoom level while a program replaces its image.
+    const unsigned scale = OPT(magnify_raster_resolution) && zoom > 1. &&
+        (self->reported_raster_scale || grman_has_visible_raster(grman)) ? (unsigned)ceil(MIN(3., zoom)) : 0;
+    if (scale == self->reported_raster_scale) return false;
+    const CellPixelSize before = screen_reported_cell_size(self);
+    self->reported_raster_scale = scale;
+    const CellPixelSize after = screen_reported_cell_size(self);
+    return before.width != after.width || before.height != after.height;
+}
+
+void
+screen_set_magnification(Screen *self, double scale, double x, double y) {
+    // At this scale a float clip coordinate cannot distinguish steps of one
+    // output pixel. Keep valid coordinates for the renderer and inverse map.
+    scale = MIN(MAX(1., scale), 1. / FLT_EPSILON);
+    double half = 0.5 / scale;
+    self->magnification = (PaneMagnification){scale, MIN(MAX(x, half), 1. - half), MIN(MAX(y, half), 1. - half)};
+    self->overlay_line.last_ime_cursor.valid = false;
+    OSWindow *w = os_window_for_kitty_window(self->window_id);
+    if (w) {
+        w->needs_render = true;
+        request_tick_callback();
+    }
+}
+
+void
+screen_unmagnify_point(const Screen *self, double *x, double *y, double width, double height) {
+    const PaneMagnification m = self->magnification;
+    if (m.scale > 1.) {
+        *x = (*x - width * 0.5) / m.scale + m.x * width;
+        *y = (*y - height * 0.5) / m.scale + m.y * height;
+    }
+}
+
+void
+screen_magnify_point(const Screen *self, double *x, double *y, double width, double height) {
+    const PaneMagnification m = self->magnification;
+    if (m.scale > 1.) {
+        *x = (*x - m.x * width) * m.scale + width * 0.5;
+        *y = (*y - m.y * height) * m.scale + height * 0.5;
+    }
+}
+
+void
+screen_pinch_magnification(Screen *self, double ratio, double old_x, double old_y, double x, double y) {
+    PaneMagnification m = self->magnification;
+    if (!isfinite(ratio) || ratio <= 0.) return;
+    if (m.scale <= 1.) m = (PaneMagnification){1., 0.5, 0.5};
+    const double old_scale = MAX(1., m.scale);
+    const double scale = MIN(MAX(1., old_scale * ratio), 1. / FLT_EPSILON);
+    screen_set_magnification(self, scale,
+        m.x + (old_x - 0.5) / old_scale - (x - 0.5) / scale,
+        m.y + (old_y - 0.5) / old_scale - (y - 0.5) / scale);
+}
+
+static PyObject *
+pane_magnification(Screen *self, PyObject *args) {
+    double scale, x, y;
+    if (PyTuple_GET_SIZE(args)) {
+        if (!PyArg_ParseTuple(args, "ddd", &scale, &x, &y)) return NULL;
+        if (!isfinite(scale) || !isfinite(x) || !isfinite(y) || scale < 1.) {
+            PyErr_SetString(PyExc_ValueError, "Expected a finite magnification of at least 1 and a finite center");
+            return NULL;
+        }
+        screen_set_magnification(self, scale, x, y);
+    }
+    PaneMagnification m = self->magnification;
+    if (m.scale == 0.) m = (PaneMagnification){1., 0.5, 0.5};
+    return Py_BuildValue("ddd", m.scale, m.x, m.y);
+}
+
+static PyObject *
+reported_cell_size(Screen *self, PyObject *unused UNUSED) {
+    CellPixelSize cell = screen_reported_cell_size(self);
+    return Py_BuildValue("II", cell.width, cell.height);
 }
 
 void
@@ -5112,7 +5206,7 @@ screen_update_graphics_layers(Screen *self) {
     // While rendering is paused, the frozen image placements must be positioned using the
     // scroll position captured with the frozen text, not the live one, which new output may have changed
     GraphicsManager *grman = self->paused_rendering.expires_at ? self->paused_rendering.grman : self->grman;
-    return grman_update_layers(
+    return grman_update_magnified_layers(
         grman,
         rendered_scrolled_by(self),
         scroll_offset_lines_for_screen(self),
@@ -5122,7 +5216,7 @@ screen_update_graphics_layers(Screen *self) {
         2.f / self->lines,
         self->columns,
         self->lines,
-        self->cell_size);
+        self->cell_size, self->magnification, MAX(1., MAX(self->magnification.scale, self->desktop_magnification)));
 }
 
 bool
@@ -7979,7 +8073,19 @@ current_selections(Screen *self, PyObject *a UNUSED) {
 static PyObject *
 update_graphics_layers(Screen *self, PyObject *a UNUSED) {
     screen_update_graphics_layers(self);
+    screen_update_reported_raster_scale(self);
     return grman_render_data_as_python(self->paused_rendering.expires_at ? self->paused_rendering.grman : self->grman);
+}
+
+static PyObject *
+image_descriptions(Screen *self, PyObject *a UNUSED) {
+    GraphicsManager *grman = self->paused_rendering.expires_at ? self->paused_rendering.grman : self->grman;
+    const InkView view = {
+        .cell = self->cell_size,
+        .scrolled_by = rendered_scrolled_by(self),
+        .scroll_offset = pixel_scroll_enabled(self) ? rendered_pixel_scroll_offset_y(self) : 0,
+    };
+    return grman_image_descriptions(grman, &view, self->lines, self->columns);
 }
 
 static PyObject *
@@ -8296,11 +8402,13 @@ static PyMethodDef methods[] = {
         MND(cursor_up, METH_VARARGS) MND(cursor_up1, METH_VARARGS) MND(cursor_down, METH_VARARGS) MND(cursor_down1, METH_VARARGS)
             MND(cursor_forward, METH_VARARGS){"index", (PyCFunction)xxx_index, METH_VARARGS, ""},
     {"has_selection", (PyCFunction)has_selection, METH_VARARGS, ""},
+    MND(image_descriptions, METH_NOARGS)
     MND(as_text, METH_VARARGS) MND(as_text_non_visual, METH_VARARGS) MND(as_text_for_history_buf, METH_VARARGS) MND(as_text_alternate, METH_VARARGS)
         MND(cmd_output, METH_VARARGS) MND(tab, METH_NOARGS) MND(backspace, METH_NOARGS) MND(linefeed, METH_NOARGS) MND(carriage_return, METH_NOARGS)
             MND(set_tab_stop, METH_NOARGS) MND(clear_tab_stop, METH_VARARGS) MND(reset_tab_stops, METH_NOARGS) MND(start_selection, METH_VARARGS)
                 MND(update_selection, METH_VARARGS){"clear_selection", (PyCFunction)clear_selection_, METH_NOARGS, ""},
-    MND(reverse_index, METH_NOARGS) MND(mark_as_dirty, METH_NOARGS) MND(reload_all_gpu_data, METH_NOARGS) MND(resize, METH_VARARGS)
+        MND(reverse_index, METH_NOARGS) MND(mark_as_dirty, METH_NOARGS) MND(reload_all_gpu_data, METH_NOARGS) MND(resize, METH_VARARGS)
+        MND(pane_magnification, METH_VARARGS) MND(reported_cell_size, METH_NOARGS)
         MND(ignore_bells_for, METH_VARARGS) MND(set_margins, METH_VARARGS) MND(detect_url, METH_VARARGS) MND(rescale_images, METH_NOARGS)
             MND(current_key_encoding_flags, METH_NOARGS) MND(text_for_selection, METH_VARARGS) MND(text_for_marked_url, METH_VARARGS)
                 MND(is_rectangle_select, METH_NOARGS) MND(scroll, METH_VARARGS) MND(scroll_to_absolute, METH_O) MND(fractional_scroll, METH_O)

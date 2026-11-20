@@ -122,6 +122,7 @@ typedef struct {
     int32_t start_row, start_column;
     uint32_t client_id;
     ImageRect src_rect;
+    PyObject *annotation;  // immutable (purpose, name, description, details), or NULL
     // Indicates whether this reference represents a cell ref that should be
     // removed when the corresponding cells are modified.
     // The internal id of the virtual ref this cell image was created from. Is a cell ref if this is non-zero.
@@ -250,7 +251,7 @@ typedef struct {
     struct {
         size_t count, capacity;
         ImageRenderData *item;
-        bool has_hdr;
+        bool has_hdr, has_visible_raster;
     } render_data;
     bool layers_dirty;
     // The number of images below MIN_ZINDEX / 2, then the number of refs between MIN_ZINDEX / 2 and -1 inclusive, then the number of refs above 0 inclusive.
@@ -259,6 +260,8 @@ typedef struct {
     size_t num_of_indexed_refs;
     unsigned int last_scrolled_by;
     float last_scroll_offset_lines;
+    PaneMagnification last_magnification;
+    double last_raster_scale;
     size_t used_storage;  // the bytes of image data held, which tells how much evicting images frees, see image_alloc()
     // For the tests: the number of allocations of image data still to fail, as if memory had run out
     unsigned int simulated_alloc_failures;
@@ -323,6 +326,7 @@ GraphicsManager *grman_alloc(bool for_paused_rendering);
 void grman_share_vector_fonts(GraphicsManager *dest, GraphicsManager *source);
 void grman_clear(GraphicsManager *, bool, CellPixelSize fg);
 const char *grman_handle_command(GraphicsManager *self, const GraphicsCommand *g, const uint8_t *payload, Cursor *c, bool *is_dirty, CellPixelSize fg);
+bool grman_set_image_annotation(GraphicsManager *self, uint32_t image, uint32_t placement, PyObject *annotation);
 void grman_put_cell_image(
     GraphicsManager *self,
     uint32_t row,
@@ -345,12 +349,17 @@ bool grman_update_layers(
     unsigned int num_cols,
     unsigned int num_rows,
     CellPixelSize);
+bool grman_update_magnified_layers(
+    GraphicsManager*, unsigned int, float, float, float, float, float,
+    unsigned int, unsigned int, CellPixelSize, PaneMagnification, double);
+bool grman_has_visible_raster(const GraphicsManager *self);
 // Terminal-side ink, see docs/ink-protocol.rst
 typedef struct InkView {  // how the cells of a window are shown, which is what places an image in it
     CellPixelSize cell;
     unsigned scrolled_by;
     double scroll_offset;  // in pixels
 } InkView;
+PyObject *grman_image_descriptions(GraphicsManager *self, const InkView *view, unsigned rows, unsigned columns);
 typedef struct InkPoint {  // a position in pixels from the top left of the cell area and the width of the stroke there
     double x, y, width;
 } InkPoint;

@@ -347,6 +347,17 @@ native_find_bar_snapshot(PyObject *self UNUSED, PyObject *args) {
 }
 
 static PyObject *
+native_text_review(PyObject *self UNUSED, PyObject *args) {
+    unsigned long long id;
+    const char *title, *text;
+    if (!PyArg_ParseTuple(args, "Kss", &id, &title, &text)) return NULL;
+    OSWindow *w = window_arg(id);
+    if (!w) return NULL;
+    const NativeUIBackend *b = native_ui_backend();
+    return PyBool_FromLong(b && b->show_text_review && b->show_text_review(w, title, text));
+}
+
+static PyObject *
 native_tab_snapshot(PyObject *self UNUSED, PyObject *args) {
     unsigned long long id;
     const char *path;
@@ -412,6 +423,7 @@ static PyMethodDef methods[] = {
     {"native_tabs_members", native_tabs_members, METH_O, ""},
     {"native_tab_status", native_tab_status, METH_VARARGS, ""},
     {"native_find_bar", native_find_bar, METH_VARARGS, ""},
+    {"native_text_review", native_text_review, METH_VARARGS, ""},
     {"native_find_bar_snapshot", native_find_bar_snapshot, METH_VARARGS, ""},
     {"native_tab_snapshot", native_tab_snapshot, METH_VARARGS, ""},
     {"native_tab_settings_button", native_tab_settings_button, METH_VARARGS, ""},

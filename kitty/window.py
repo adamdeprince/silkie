@@ -87,6 +87,7 @@ from .fast_data_types import (
     monotonic,
     mouse_selection,
     move_cursor_to_mouse_if_in_prompt,
+    native_text_review,
     os_window_eink_state,
     pointer_name_to_css_name,
     pt_to_px,
@@ -961,8 +962,8 @@ class Window:
         self.remote_control_passwords = remote_control_passwords
         self.allow_remote_control = allow_remote_control
         self.scroll_animation = ScrollAnimation()
-        # A window opened on a display that shows only gray starts with its colors
-        self.screen.color_profile.set_eink_colors(eink_color_spec(opts) if os_window_eink_state(self.os_window_id)[1] else None)
+        eink, gray = os_window_eink_state(self.os_window_id)
+        self.screen.color_profile.set_eink_colors(eink_color_spec(opts, eink=eink) if eink or gray else None)
 
     def remote_control_allowed(self, pcmd: dict[str, Any], extra_data: dict[str, Any]) -> bool:
         if not self.allow_remote_control:
@@ -993,10 +994,11 @@ class Window:
             self.apply_eink_colors()
 
     def apply_eink_colors(self) -> None:
-        'The colors of a display that shows only gray when the OS window is on one, see sync_eink_colors()'
+        'Apply the palette for an e-paper or grayscale display, see sync_eink_colors()'
         cp = self.screen.color_profile
         bg_before = cp.default_bg
-        if cp.set_eink_colors(eink_color_spec(get_options()) if os_window_eink_state(self.os_window_id)[1] else None):
+        eink, gray = os_window_eink_state(self.os_window_id)
+        if cp.set_eink_colors(eink_color_spec(get_options(), eink=eink) if eink or gray else None):
             if cp.default_bg != bg_before:
                 get_boss().default_bg_changed_for(self.id)
             self.notify_child_of_color_change()
@@ -1424,7 +1426,8 @@ class Window:
             self.screen.resize(max(0, render_ynum), max(0, new_geometry.xnum))
             self.needs_layout = False
             call_watchers(weakref.ref(self), 'on_resize', {'old_geometry': self.geometry, 'new_geometry': new_geometry})
-        current_pty_size = (self.screen.lines, self.screen.columns, max(0, new_geometry.right - new_geometry.left), max(0, render_bottom - render_top))
+        self.pty_layout_pixels = (max(0, new_geometry.right - new_geometry.left), max(0, render_bottom - render_top))
+        current_pty_size = self.pty_size_for_layout()
         update_ime_position = False
         if current_pty_size != self.last_reported_pty_size:
             if self._pause_resize_notifications_to_child is None:
@@ -2054,17 +2057,17 @@ class Window:
         if bg_changed:
             get_boss().default_bg_changed_for(self.id, via_escape_code=True)
 
-    def apply_session_color_scheme(self, scheme: ColorSchemes | None = None) -> None:
+    def apply_session_color_scheme(self, scheme: ColorSchemes | None = None, *, notify_on_bg_change: bool = True) -> None:
         # On a display that shows only gray the e-ink colors are above the
         # session colors, which show again when the window leaves it
         cp = self.screen.color_profile
         bg_before = cp.default_bg
-        colors_before = color_profile_signature(cp)
+        colors_before = color_profile_signature(cp) if notify_on_bg_change else None
         self.session_color_schemes.apply(cp, glfw_get_system_color_theme() if scheme is None else scheme)
-        if cp.default_bg != bg_before:
+        if notify_on_bg_change and cp.default_bg != bg_before:
             get_boss().default_bg_changed_for(self.id)
         # This bypasses patch_colors(), which tells the program its colors changed
-        if color_profile_signature(cp) != colors_before:
+        if colors_before is not None and color_profile_signature(cp) != colors_before:
             self.notify_child_of_color_change()
         self.refresh()
 
@@ -2093,6 +2096,27 @@ class Window:
         pty_size = self.last_reported_pty_size
         if pty_size[0] > -1 and self.screen.in_band_resize_notification:
             self.screen.send_escape_code_to_child(ESC_CSI, f'48;{pty_size[0]};{pty_size[1]};{pty_size[3]};{pty_size[2]}t')
+
+    def pty_size_for_layout(self) -> tuple[int, int, int, int]:
+        width, height = self.pty_layout_pixels
+        cw, ch = self.screen.reported_cell_size()
+        base_cw, base_ch = cell_size_for_window(self.os_window_id)
+        # The pixel fields in the kernel's struct winsize are unsigned shorts.
+        if base_cw and cw != base_cw:
+            width = min(65535, round(width * cw / base_cw))
+        if base_ch and ch != base_ch:
+            height = min(65535, round(height * ch / base_ch))
+        return self.screen.lines, self.screen.columns, width, height
+
+    def update_pty_pixel_size(self) -> None:
+        if self.destroyed or self.child_died or not self.child_is_launched:
+            return
+        size = self.pty_size_for_layout()
+        if size != self.last_reported_pty_size:
+            if self._pause_resize_notifications_to_child is None:
+                self.resize_child(size)
+            else:
+                self._pause_resize_notifications_to_child = size
 
     def notify_child_of_color_change(self) -> None:
         # TIOCSWINSZ does not signal a resize when the dimensions are unchanged.
@@ -3012,6 +3036,61 @@ class Window:
     # }}}
 
     # actions {{{
+
+    def _review_images(self, include_decorative: bool) -> None:
+        from .accessibility import image_review_text
+        title = 'Review All Images' if include_decorative else 'Review Images'
+        text = image_review_text(self.screen.image_descriptions(), include_decorative)
+        if not native_text_review(self.os_window_id, title, text):
+            get_boss().display_scrollback(self, text, title=title, report_cursor=False)
+
+    @ac('sc', 'Review descriptions of visible images in the active pane, skipping decorative images')
+    def review_images(self) -> None:
+        self._review_images(False)
+
+    @ac('sc', 'Review descriptions of all visible images in the active pane, including decorative images')
+    def review_all_images(self) -> None:
+        self._review_images(True)
+
+    @ac('win', 'Magnify the pane or move its center. Use in, out, reset, caret, a direction, or a scale and optional row and column.')
+    def magnify_pane(self, operation: str = 'in') -> bool | None:
+        from math import isfinite
+
+        screen = self.screen
+        scale, x, y = screen.pane_magnification()
+        if scale == 1. and operation in ('left', 'right', 'up', 'down', 'caret'):
+            return True
+        if scale == 1. or operation == 'caret':
+            x = (screen.cursor.x + 0.5) / screen.columns
+            y = (screen.cursor.y + screen.scrolled_by + 0.5) / screen.lines
+        if operation == 'in':
+            scale *= 1.25
+        elif operation == 'out':
+            scale = max(1., scale / 1.25)
+        elif operation == 'reset':
+            scale = 1.
+        elif operation == 'left':
+            x -= 0.25 / scale
+        elif operation == 'right':
+            x += 0.25 / scale
+        elif operation == 'up':
+            y -= 0.25 / scale
+        elif operation == 'down':
+            y += 0.25 / scale
+        elif operation != 'caret':
+            try:
+                args = tuple(map(float, operation.split()))
+                if len(args) not in (1, 3) or not all(map(isfinite, args)) or args[0] < 1.:
+                    raise ValueError()
+                scale = args[0]
+                if len(args) == 3:
+                    y = (args[1] - 0.5) / screen.lines
+                    x = (args[2] - 0.5) / screen.columns
+            except ValueError:
+                log_error(f'Invalid magnify_pane argument: {operation}')
+                return
+        screen.pane_magnification(scale, x, y)
+        return None
 
     @ac('sc', 'Show scrollback in a pager like less')
     def show_scrollback(self) -> Optional['Window']:
