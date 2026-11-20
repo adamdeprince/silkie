@@ -72,3 +72,6 @@ msgstr ""
 "项目概览见 :doc:`index`，安装方法见 :doc:`install`。:doc:`developer-guide` 介绍这些扩展与 kitty 协议、kitten "
 "工具及基础终端约定之间的关系。"
 
+#: docs/silkie/reference.rst:44
+msgid "Accessibility"
+msgstr "无障碍功能"

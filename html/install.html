@@ -284,6 +284,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">Accessibility</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -430,6 +431,9 @@ reference links the font sources and explains regional glyph selection.</p>
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h2>
 <p>Install Git, a C compiler, and <a class="reference external" href="https://go.dev/doc/install">Go</a>. The minimum
 Go version is declared in <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/go.mod">go.mod on the silkie branch</a>.</p>
+<p>Building the native SVG renderer also requires Cargo and
+<a class="reference external" href="https://www.rust-lang.org/tools/install">Rust</a> 1.87 or later. Cargo downloads
+the locked SVG dependencies on the first source build.</p>
 <p>On macOS, install Apple’s command line developer tools with <code class="docutils literal notranslate"><span class="pre">xcode-select</span> <span class="pre">--install</span></code>
 if they are not already available. On Linux, install the X11 and D-Bus development
 libraries listed in <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/#x11-dev-libs">kitty’s build prerequisites</a>.</p>

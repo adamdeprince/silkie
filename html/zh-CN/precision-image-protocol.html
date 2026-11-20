@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">无障碍功能</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -379,7 +380,7 @@ keeps these pixels at their full precision all the way to the GPU.</p>
 <section id="discovery">
 <h2>Discovery<a class="headerlink" href="#discovery" title="链接到此标题。">¶</a></h2>
 <p>The <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a> lists <code class="docutils literal notranslate"><span class="pre">316</span></code>, <code class="docutils literal notranslate"><span class="pre">632</span></code> and <code class="docutils literal notranslate"><span class="pre">664</span></code> in its
-<code class="docutils literal notranslate"><span class="pre">format</span></code> field. A <span class="xref std std-ref">feature query</span> reports a
+<code class="docutils literal notranslate"><span class="pre">format</span></code> field. A <a class="reference internal" href="capabilities-protocol.html#graphics-query-features"><span class="std std-ref">feature query</span></a> reports a
 format and the transfer key together, for example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">q</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span><span class="n">e</span><span class="o">=</span><span class="n">t</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">632</span><span class="p">,</span><span class="n">E</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span><span class="n">G</span><span class="o">=</span><span class="mi">2</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
 </pre></div>

@@ -43,6 +43,12 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
 
 .. toctree::
    :maxdepth: 1
+   :caption: Accessibility
+
+   accessibility
+
+.. toctree::
+   :maxdepth: 1
    :caption: Graphics and color
 
    vector-protocol

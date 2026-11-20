@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">无障碍功能</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -425,49 +426,24 @@ manufacturer and product code, or a part of its description:</p>
 <span class="n">monitor_info</span> <span class="n">DP</span><span class="o">-</span><span class="mi">7</span> <span class="n">kind</span><span class="o">=</span><span class="n">eink</span> <span class="n">color</span><span class="o">=</span><span class="n">rgb</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">ls</span></code> shows what Silkie knows of the monitor of each OS window, under
-<code class="docutils literal notranslate"><span class="pre">display</span></code>, and <code class="docutils literal notranslate"><span class="pre">silkie</span> <span class="pre">--debug-rendering</span></code> logs it when a window moves to
-another monitor. What follows applies to the windows on that monitor only: a
-window dragged to an ordinary monitor looks and behaves as usual again once it
-has stayed there for a moment, and comes back when it returns.</p>
-<p>E-paper (<code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>) and gray (<code class="docutils literal notranslate"><span class="pre">color=gray</span></code> or <code class="docutils literal notranslate"><span class="pre">mono</span></code>) are independent,
-as there is color e-paper:</p>
+<p><code class="docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">ls</span></code> 的 <code class="docutils literal notranslate"><span class="pre">display</span></code> 字段显示 Silkie 掌握的各窗口显示器信息。窗口移到另一台显示器时，<code class="docutils literal notranslate"><span class="pre">silkie</span> <span class="pre">--debug-rendering</span></code> 会记录这些信息。可用 <a class="reference download internal" download="" href="_downloads/d9a95db25119afeb1f883dd34bb0ef48/monitor-identifiers.py"><code class="xref download docutils literal notranslate"><span class="pre">monitor-identifiers.py</span></code></a> 在 macOS 或 Linux 上列出已连接显示器的标识，以填写 <code class="docutils literal notranslate"><span class="pre">monitor_info</span></code>。</p>
+<p>这些设置仅作用于该显示器上的窗口。窗口移到普通显示器后，稍等片刻即可恢复常规显示；移回时会重新应用这些设置。</p>
+<p>电子纸（<code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>）和灰度（<code class="docutils literal notranslate"><span class="pre">color=gray</span></code> 或 <code class="docutils literal notranslate"><span class="pre">mono</span></code>）是独立的属性。电子纸也可以是彩色的。</p>
 <ul class="simple">
-<li><p>On e-paper, which ghosts when it changes, the cursor and blinking text do not
-blink, there is no cursor trail, animated images stay on the frame they show,
-an indeterminate progress bar stands still, a keyboard scroll jumps rather
-than glides and the output is not dithered, since dither shows as grain that
-ghosts. For now custom shaders, the visual bell, pixel scrolling and the
-repaint timing stay as configured. Programs are told <code class="docutils literal notranslate"><span class="pre">kind=eink</span></code> through the <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a>,
-so that they can avoid animation and frequent redraws themselves.</p></li>
-<li><p>On a display that shows only gray, text is black on white, or white on black
-with <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code>, over the colors of themes, profiles,
-<code class="docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--color</span></code>, sessions and programs, which come back when the window
-moves to another display. Images are shown as they are, and the monitor
-reduces them to its levels of gray.</p></li>
+<li><p>电子纸会在画面变化后留下残影，因此光标和闪烁文字保持静止，光标无拖尾，动态图像停在当前帧，不确定进度条停止移动，键盘滚动直接跳转，也不进行会产生颗粒残影的抖动。Silkie 对每个电子纸窗口最多每秒提交十帧。程序通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> 获知 <code class="docutils literal notranslate"><span class="pre">kind=eink</span></code>，可自行减少动画和频繁重绘。</p></li>
+<li><p>电子纸和灰度显示器会对主题、配置档、<code class="docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--color</span></code>、会话和程序的颜色应用高对比度文字配色。对于未启用电子纸模式的灰度显示器，<code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> 使用黑底白字，其他设置使用白底黑字。灰度显示器按面板本身的灰阶显示图像。</p></li>
 </ul>
-<p>To treat every window as on e-paper whatever its monitor, add:</p>
+<p>若要让所有窗口都使用电子纸模式，请添加:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">eink_mode</span> <span class="n">yes</span>
 </pre></div>
 </div>
-<p>With it a display whose colors nothing declares, in Silkie's table,
-<a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> or <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>, is taken to show gray, so a color
-e-paper monitor needs its colors declared, for example
-<code class="docutils literal notranslate"><span class="pre">monitor_info</span> <span class="pre">&quot;&lt;its</span> <span class="pre">model&gt;&quot;</span> <span class="pre">kind=eink</span> <span class="pre">color=rgb</span></code> or <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=rgb</span></code>.</p>
-<p>Press <code class="docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code> to switch between black on white and white on black.
-The display is still reported as e-paper in either scheme. Press
-<code class="docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code> to toggle <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a>. These shortcuts use
-<code class="docutils literal notranslate"><span class="pre">kitty_mod</span></code> (by default <code class="docutils literal notranslate"><span class="pre">ctrl+shift</span></code>). The actions are also available from
-the command palette. To choose your own shortcuts:</p>
+<p>在此模式下，若 Silkie 内置表、<a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> 和 <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> 均未声明显示器的颜色，Silkie 会将其视为灰度显示器。彩色电子纸可通过 <code class="docutils literal notranslate"><span class="pre">monitor_info</span> <span class="pre">&quot;&lt;型号&gt;&quot;</span> <span class="pre">kind=eink</span> <span class="pre">color=rgb</span></code> 或 <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=rgb</span></code> 声明颜色。</p>
+<p>在 <strong>Settings → Appearance → Color scheme → E-ink color scheme</strong> 中选择浅色（默认）、深色、跟随系统或反转系统。对应的配置选项为 <a class="reference internal" href="#opt-eink_color_scheme"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_color_scheme</span></code></a>。系统未报告偏好时，跟随和反转均使用浅色。此设置适用于彩色和单色电子纸。按 <code class="docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code> 切换普通显示器的配色，按 <code class="docutils literal notranslate"><span class="pre">ctrl+shift+alt+f12</span></code> 切换 <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a>。这些快捷键使用 <code class="docutils literal notranslate"><span class="pre">kitty_mod``（默认为</span> <span class="pre">``ctrl+shift</span></code>），相同操作也可从命令面板调用。自定义快捷键的示例:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">map</span> <span class="n">f6</span> <span class="n">set_color_scheme</span> <span class="n">toggle</span>
 <span class="nb">map</span> <span class="n">f7</span> <span class="n">set_eink_mode</span> <span class="n">toggle</span>
 </pre></div>
 </div>
-<p>Use <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">light</span></code> or <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> for a persistent color
-choice on any display. <code class="docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">auto</span></code> returns to configured colors
-and automatic themes. Explicit light and dark choices take precedence over
-automatic themes and OS appearance changes. Reloading the configuration
-restores the saved choices.</p>
+<p>使用 <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">light</span></code> 或 <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code> 为普通显示器固定配色。<code class="docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">auto</span></code> 恢复配置中的颜色和自动主题。显式选择浅色或深色优先于自动主题和系统外观变化。重新加载配置会恢复已保存的选择。</p>
 <p>With <code class="docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">auto</span></code>, Silkie follows the OS appearance: it uses
 <code class="file docutils literal notranslate"><span class="pre">dark-theme.auto.conf</span></code>, <code class="file docutils literal notranslate"><span class="pre">light-theme.auto.conf</span></code> or
 <code class="file docutils literal notranslate"><span class="pre">no-preference-theme.auto.conf</span></code> from the Silkie config directory when
@@ -478,6 +454,7 @@ customize the built-in theme, copy <code class="file docutils literal notranslat
 Silkie package to <code class="file docutils literal notranslate"><span class="pre">light-theme.auto.conf</span></code>. Colors from profiles, <code class="docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--color</span></code>, the
 ssh kitten and programs stay on top of any theme. The black on white of a gray
 display shows over all of them.</p>
+<p>程序可以通过 <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> 的 <code class="docutils literal notranslate"><span class="pre">appearance</span></code> 字段读取桌面外观偏好。桌面外观变化时，Silkie 会通知程序重绘，即使终端使用固定主题。</p>
 <p><a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> declares properties of every display that only change what
 programs are told, for example <code class="docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">kind=eink</span></code> reports e-paper
 without changing anything Silkie does.</p>
@@ -557,33 +534,34 @@ palette-change redraw loop.</p>
 </dd>
 </dl>
 </section>
+<section id="find-in-terminal-output">
+<span id="find-in-terminal"></span><h2>查找终端输出<a class="headerlink" href="#find-in-terminal-output" title="链接到此标题。">¶</a></h2>
+<p>选择 <strong>Edit → Find → Find…</strong>，即可搜索当前窗格可见的文字和回滚历史。在 macOS 上也可按 <code class="docutils literal notranslate"><span class="pre">Cmd+F</span></code>。用 <strong>Find Next</strong> 或在搜索框中按 <code class="docutils literal notranslate"><span class="pre">Enter</span></code> 查找更早的输出，用 <strong>Find Previous</strong> 或 <code class="docutils literal notranslate"><span class="pre">Shift+Enter</span></code> 查找较新的输出。<strong>Use Selection for Find</strong> 查找选中的文字。匹配项可以跨越自动换行处。</p>
+<p>用 <code class="docutils literal notranslate"><span class="pre">find_match_foreground</span></code> 和 <code class="docutils literal notranslate"><span class="pre">find_match_background</span></code> 设置普通匹配项的前景色和背景色，用 <code class="docutils literal notranslate"><span class="pre">find_current_foreground</span></code> 和 <code class="docutils literal notranslate"><span class="pre">find_current_background</span></code> 设置当前匹配项的颜色。</p>
+</section>
 <section id="compressed-scrollback">
-<h2>Compressed scrollback<a class="headerlink" href="#compressed-scrollback" title="链接到此标题。">¶</a></h2>
-<p>Silkie keeps unlimited scrollback by default, compressed with zstd at level
-9: <code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_lines</span></code> is <code class="code docutils literal notranslate"><span class="pre">unlimited</span></code> and <code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_compression</span></code>
-is <code class="code docutils literal notranslate"><span class="pre">9</span></code>. The two options are independent: a line limit, compression
-(<code class="code docutils literal notranslate"><span class="pre">none</span></code> or any zstd level, negative fast levels included) or both. The
-option documentation has the measured memory, CPU and latency for several
-levels, and what frames and a line limit cost.</p>
-<p>The newest 2048 lines stay uncompressed. Older lines go, 128 at a time, to a
-background thread that encodes them compactly and compresses them, so output
-does not wait for compression: <code class="code docutils literal notranslate"><span class="pre">benchmark.py</span></code> measured the same
-throughput as uncompressed scrollback. 1.5 million lines of colored log output
-take about 49 MB instead of 8.4 GB.</p>
-<p>The settings can differ per window and per tab:</p>
+<h2>压缩回滚历史<a class="headerlink" href="#compressed-scrollback" title="链接到此标题。">¶</a></h2>
+<p>Silkie 默认使用 zstd 级别 9 保存不限行数的回滚历史，<a class="reference internal" href="#opt-scrollback_lines"><code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_lines</span></code></a> 为 <code class="code docutils literal notranslate"><span class="pre">unlimited</span></code>，<a class="reference internal" href="#opt-scrollback_compression"><code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_compression</span></code></a> 为 <code class="code docutils literal notranslate"><span class="pre">9</span></code>。可独立指定行数上限和压缩级别。压缩级别支持 <code class="code docutils literal notranslate"><span class="pre">none</span></code> 和 zstd 的各级别，包括用于快速压缩的负数级别。</p>
+<p>最新的 2048 行保持未压缩。更早的行每 128 行交给后台线程紧凑编码并压缩，输出无需等待压缩。以 <code class="code docutils literal notranslate"><span class="pre">benchmark.py</span></code> 测试，吞吐量与未压缩时相同。150 万行彩色日志占用约 49 MB，未压缩时则为 8.4 GB。</p>
+<p>这些设置可因窗口和标签页而异。</p>
 <ul class="simple">
-<li><p>a profile can set <code class="code docutils literal notranslate"><span class="pre">scrollback_lines</span></code> and <code class="code docutils literal notranslate"><span class="pre">scrollback_compression</span></code>;</p></li>
-<li><p><code class="code docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--scrollback-lines</span> <span class="pre">N</span> <span class="pre">--scrollback-compression</span> <span class="pre">L</span></code> (also on a
-<code class="code docutils literal notranslate"><span class="pre">launch</span></code> line of a session file) sets them for the new window, and
-windows opened later in its tab get the same;</p></li>
-<li><p><code class="code docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">set-scrollback-compression</span> <span class="pre">L</span> <span class="pre">[--lines</span> <span class="pre">N]</span> <span class="pre">[--recompress]</span></code>
-changes them for the matched windows, or with <code class="code docutils literal notranslate"><span class="pre">--match-tab</span></code> for
-tabs, including windows opened in them later. <code class="code docutils literal notranslate"><span class="pre">--recompress</span></code> also
-recompresses what is already compressed, in the background.</p></li>
+<li><p>配置档可设置 <code class="code docutils literal notranslate"><span class="pre">scrollback_lines</span></code> 和 <code class="code docutils literal notranslate"><span class="pre">scrollback_compression</span></code>。</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">launch</span> <span class="pre">--scrollback-lines</span> <span class="pre">N</span> <span class="pre">--scrollback-compression</span> <span class="pre">L`（也可用于会话文件中的</span> <span class="pre">:code:`launch</span></code> 行）为新窗口设置这些参数。同一标签页中之后创建的窗口继承这些设置。</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">set-scrollback-compression</span> <span class="pre">L</span> <span class="pre">[--lines</span> <span class="pre">N]</span> <span class="pre">[--recompress]</span></code> 修改匹配窗口的设置。用 <code class="code docutils literal notranslate"><span class="pre">--match-tab</span></code> 可修改匹配标签页及其中之后创建的窗口。<code class="code docutils literal notranslate"><span class="pre">--recompress</span></code> 还会在后台重新压缩已有的压缩历史。</p></li>
 </ul>
-<p>A new level applies to lines compressed from then on. With unlimited
-scrollback the scrollback pager history (<code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_pager_history_size</span></code>)
-receives nothing, as no line ever leaves the scrollback.</p>
+<p>新的级别适用于之后开始压缩的行。回滚历史没有行数上限时，没有行被移出，因此分页器历史（<a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.scrollback_pager_history_size"><code class="xref std std-opt docutils literal notranslate"><span class="pre">scrollback_pager_history_size</span></code></a>）不会收到这些行。</p>
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-scrollback_lines">
+<span class="sig-name descname"><span class="pre">scrollback_lines</span></span><a class="headerlink" href="#opt-scrollback_lines" title="链接到此定义。">¶</a></dt>
+<dd><p>设置新窗格的回滚行数上限。默认为 <code class="docutils literal notranslate"><span class="pre">unlimited</span></code>。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-scrollback_compression">
+<span class="sig-name descname"><span class="pre">scrollback_compression</span></span><a class="headerlink" href="#opt-scrollback_compression" title="链接到此定义。">¶</a></dt>
+<dd><p>设置新窗格的 zstd 级别。默认为 <code class="docutils literal notranslate"><span class="pre">9</span></code>。用 <code class="docutils literal notranslate"><span class="pre">none</span></code> 可保持所有行未压缩。</p>
+</dd></dl>
+
 <dl class="std opt">
 <dt class="sig sig-object std" id="opt-hdr">
 <span class="sig-name descname"><span class="pre">hdr</span></span><a class="headerlink" href="#opt-hdr" title="链接到此定义。">¶</a></dt>
@@ -630,13 +608,11 @@ protocol</span></a> and avoids what makes such a panel ghost: the
 cursor and text do not blink, there is no cursor trail, animated images stay
 on the frame they show, an indeterminate progress bar does not move, keyboard
 scrolling jumps rather than glides, and the output is not dithered. For now
-<code class="xref std std-opt docutils literal notranslate"><span class="pre">custom_shaders</span></code>, the visual bell, <code class="xref std std-opt docutils literal notranslate"><span class="pre">pixel_scroll</span></code> and the repaint
-timing stay as configured, and images are not reduced to the levels of gray
-of the panel, which the monitor does itself. Being e-paper does not make a
-display monochrome, as there is color e-paper. Black
-text on white, or white on black with an explicit <code class="code docutils literal notranslate"><span class="pre">color_scheme</span> <span class="pre">dark</span></code>,
-follows from a display that shows only gray (<code class="code docutils literal notranslate"><span class="pre">color=gray</span></code> or
-<code class="code docutils literal notranslate"><span class="pre">mono</span></code>). With this option a display whose colors nothing declares, in
+<code class="code docutils literal notranslate"><span class="pre">custom_shaders</span></code>, the visual bell and <code class="code docutils literal notranslate"><span class="pre">pixel_scroll</span></code> stay as
+configured. Silkie submits at most ten frames per second on e-paper. Images
+are reduced to the levels of gray by the monitor. The <a class="reference internal" href="#opt-eink_color_scheme"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_color_scheme</span></code></a>
+setting chooses the foreground and background on both color and monochrome
+e-paper. With this option a display whose colors nothing declares, in
 the built-in table, <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a> or <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>, is taken to
 show gray, as before. For color e-paper declare its colors, for example
 <code class="code docutils literal notranslate"><span class="pre">display_info</span> <span class="pre">color=rgb</span></code>.</p>
@@ -645,6 +621,18 @@ show gray, as before. For color e-paper declare its colors, for example
 subscribers receive the change. Reloading the configuration restores the
 configured setting. This option takes precedence over <code class="code docutils literal notranslate"><span class="pre">kind=...</span></code> in
 <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a> and <a class="reference internal" href="#opt-monitor_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">monitor_info</span></code></a>.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-eink_color_scheme">
+<span class="sig-name descname"><span class="pre">eink_color_scheme</span></span><a class="headerlink" href="#opt-eink_color_scheme" title="链接到此定义。">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">light</span></code>.</p>
+<p>Color scheme for windows on e-paper. Choose <code class="code docutils literal notranslate"><span class="pre">light</span></code> for black on white,
+<code class="code docutils literal notranslate"><span class="pre">dark</span></code> for white on black, <code class="code docutils literal notranslate"><span class="pre">follow_os</span></code> to follow the desktop, or
+<code class="code docutils literal notranslate"><span class="pre">invert_os</span></code> to use the opposite desktop appearance. When the desktop
+has no preference, both OS-based choices use light. The setting applies to
+both monochrome and color e-paper and is available under Color scheme in
+Settings.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -667,12 +655,12 @@ its model (the name the system gives, or the EDID name descriptor), the name
 of its connector, such as <code class="code docutils literal notranslate"><span class="pre">DP-7</span></code>, or its make, each compared whole and
 without regard to case; or by a part of the description the system gives of
 it. Serial numbers are not used, as they say whose monitor it is. <code class="code docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">&#64;</span> <span class="pre">ls</span></code> shows these for the
-monitor of each OS window, and <code class="xref std std-option docutils literal notranslate"><span class="pre">kitty</span> <span class="pre">--debug-rendering</span></code> logs them
+monitor of each OS window, and <code class="code docutils literal notranslate"><span class="pre">silkie</span> <span class="pre">--debug-rendering</span></code> logs them
 when a window moves to another monitor.</p>
 <p>Unlike <a class="reference internal" href="#opt-display_info"><code class="xref std std-opt docutils literal notranslate"><span class="pre">display_info</span></code></a>, which only changes what programs are told, this
 changes what Silkie does: a monitor declared <code class="code docutils literal notranslate"><span class="pre">kind=eink</span></code> gets the
 e-paper behavior described for <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a>, and one declared
-<code class="code docutils literal notranslate"><span class="pre">color=gray</span></code> or <code class="code docutils literal notranslate"><span class="pre">mono</span></code> black text on white. The two are
+<code class="code docutils literal notranslate"><span class="pre">color=gray</span></code> or <code class="code docutils literal notranslate"><span class="pre">mono</span></code> gets a high-contrast palette. The two are
 independent, so color e-paper is <code class="code docutils literal notranslate"><span class="pre">kind=eink</span> <span class="pre">color=rgb</span></code>. Declarations
 here override the built-in table of e-paper monitors and what the operating
 system says. Use this option once per monitor; when several lines select a
@@ -684,8 +672,15 @@ still overrides what programs are told.</p>
 <dt class="sig sig-object std" id="opt-color_scheme">
 <span class="sig-name descname"><span class="pre">color_scheme</span></span><a class="headerlink" href="#opt-color_scheme" title="链接到此定义。">¶</a></dt>
 <dd><p>默认：<code class="docutils literal notranslate"><span class="pre">auto</span></code>。</p>
-<p>用 <code class="code docutils literal notranslate"><span class="pre">light</span></code> 选择白底黑字，<code class="code docutils literal notranslate"><span class="pre">dark</span></code> 选择黑底白字。这些内置高对比度配色也会设置光标、选区和标签栏颜色。<code class="code docutils literal notranslate"><span class="pre">auto</span></code> 使用配置的颜色和自动主题文件，但 <a class="reference internal" href="#opt-eink_mode"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_mode</span></code></a> 启用时会选择浅色配色。</p>
-<p>运行时可用 <code class="code docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">light</span></code>、<code class="code docutils literal notranslate"><span class="pre">dark</span></code>、<code class="code docutils literal notranslate"><span class="pre">auto</span></code> 或 <code class="code docutils literal notranslate"><span class="pre">toggle</span></code> 切换。默认快捷键为 <code class="code docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code>。变化适用于全部窗口，包括新窗口，直至重新加载配置。订阅 kitty 色彩偏好通知的应用会收到通知。</p>
+<p>Use <code class="code docutils literal notranslate"><span class="pre">light</span></code> for black text on white or <code class="code docutils literal notranslate"><span class="pre">dark</span></code> for white text on
+black. These built-in high contrast schemes also set cursor, selection and
+tab colors. <code class="code docutils literal notranslate"><span class="pre">auto</span></code> uses your configured colors and automatic theme
+files. E-paper uses <a class="reference internal" href="#opt-eink_color_scheme"><code class="xref std std-opt docutils literal notranslate"><span class="pre">eink_color_scheme</span></code></a>.</p>
+<p>Switch at runtime with <code class="code docutils literal notranslate"><span class="pre">set_color_scheme</span> <span class="pre">light</span></code>, <code class="code docutils literal notranslate"><span class="pre">dark</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">auto</span></code> or <code class="code docutils literal notranslate"><span class="pre">toggle</span></code>. The default shortcut is
+<code class="code docutils literal notranslate"><span class="pre">ctrl+shift+f12</span></code>. Changes apply on ordinary displays until the
+configuration is reloaded. Applications that subscribe to kitty's color
+preference notifications are notified.</p>
 </dd></dl>
 
 <dl class="std opt">
@@ -729,6 +724,72 @@ monitor and acts on them.</p>
 <span class="sig-name descname"><span class="pre">haptic_feedback</span></span><a class="headerlink" href="#opt-haptic_feedback" title="链接到此定义。">¶</a></dt>
 <dd><p>默认：<code class="docutils literal notranslate"><span class="pre">yes</span></code>。</p>
 <p>允许程序在触控板上播放触觉反馈，参阅 <a class="reference internal" href="haptic-protocol.html"><span class="doc">触觉反馈协议</span></a>。仅适用于 macOS。</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-magnify_raster_resolution">
+<span class="sig-name descname"><span class="pre">magnify_raster_resolution</span></span><a class="headerlink" href="#opt-magnify_raster_resolution" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">yes</span></code>。</p>
+<p>During accessibility zoom, round the reported raster scale up to a whole
+number, capped at three times the base size, once a raster image becomes
+visible. Applications can use resize notifications to send an image at the
+reported resolution. Set this to <code class="code docutils literal notranslate"><span class="pre">no</span></code> to save bandwidth by reporting
+the base pixel size. Silkie scales the available image to the selected zoom
+level.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-deep_color">
+<span class="sig-name descname"><span class="pre">deep_color</span></span><a class="headerlink" href="#opt-deep_color" title="链接到此定义。">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">always</span></code>.</p>
+<p>Draw into a window surface with more than 8 bits per color channel, so that
+smooth gradients, in images with 16 bits per channel for example, do not band
+on displays that show more than 256 levels. This does not make anything
+brighter, that is <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a>. With the default, <code class="code docutils literal notranslate"><span class="pre">always</span></code>, Silkie asks
+for a deep surface wherever the system has one, and how finely it dithers
+into it follows the display the window is on, see <a class="reference internal" href="#opt-output_dither"><code class="xref std std-opt docutils literal notranslate"><span class="pre">output_dither</span></code></a>.
+<code class="code docutils literal notranslate"><span class="pre">never</span></code> keeps an 8 bit surface, to save memory and bandwidth.</p>
+<p>What a deep surface costs differs. On Wayland and X11 it has 10 bits per
+channel and the same 32 bits per pixel as an 8 bit one, so it costs nothing
+more. Its alpha has at most 2 bits, so a transparent window gets a floating
+point surface on Wayland, where the graphics driver has one, and stays 8 bit
+otherwise. On X11 it needs a visual of depth 30. On macOS it is a floating
+point surface with 16 bits per channel, twice the memory and bandwidth of an
+8 bit one, on every screen; on a screen not known to show more than 8 bits it
+is dithered to 8 bit steps. Set <code class="code docutils literal notranslate"><span class="pre">never</span></code> to save that bandwidth. With
+<a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.macos_colorspace"><code class="xref std std-opt docutils literal notranslate"><span class="pre">macos_colorspace</span></code></a> set to <code class="code docutils literal notranslate"><span class="pre">default</span></code> the colors are passed to the
+display unmanaged, which a floating point surface cannot do, so that window
+stays 8 bit.</p>
+<p>HDR needs a floating point surface too: while <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> is in use for a
+window, which with the default <code class="code docutils literal notranslate"><span class="pre">detect</span></code> is whenever it is on an HDR
+capable screen, such as a MacBook Pro's, the window has one even with
+<code class="code docutils literal notranslate"><span class="pre">never</span></code>, and on macOS switches to and from it, like a resize, as it is
+moved between screens. Set <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> to <code class="code docutils literal notranslate"><span class="pre">no</span></code> as well to keep every
+window 8 bits deep.</p>
+<p>The surface Silkie actually got, and how it dithers, is reported by the
+<a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> as <code class="code docutils literal notranslate"><span class="pre">output_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">output_type</span></code> and
+<code class="code docutils literal notranslate"><span class="pre">output_dither</span></code>. On Wayland and X11 the choice is made for newly created
+OS windows.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-output_dither">
+<span class="sig-name descname"><span class="pre">output_dither</span></span><a class="headerlink" href="#opt-output_dither" title="链接到此定义。">¶</a></dt>
+<dd><p>默认：<code class="docutils literal notranslate"><span class="pre">yes</span></code>。</p>
+<p>Instead of rounding the colors Silkie computes with more precision than the
+display shows, such as gradients in images with 16 bits per channel, scaled
+images and the edges of text, to the nearest step, which shows as bands, add
+a faint ordered dither, below half a step. Colors that are exactly a step,
+solid text and backgrounds among them, are left exactly as they are. The step
+is that of the window surface when it is 8 bits deep. A deeper surface is
+dithered to the steps of 8 bits unless the system says the display the window
+is on shows more, since compositors and the system round a deep surface to an
+8 bit display without dithering it. Then a 10 bit surface is dithered to its
+own steps and a floating point one is not dithered at all. The system says
+so for HDR outputs on Wayland, for screens that support extended dynamic
+range or report more than 8 bits on macOS, and for screens 30 bits deep on
+X11. Dithering draws a window through an intermediate image, which costs one
+more pass over the window for every frame.</p>
 </dd></dl>
 
 </section>
@@ -798,7 +859,8 @@ monitor and acts on them.</p>
 <li><a class="reference internal" href="#display-channel-precision">Display channel precision</a></li>
 <li><a class="reference internal" href="#fonts-and-cjk-text">字体与中日韩文本</a></li>
 <li><a class="reference internal" href="#input-limits">输入限制</a></li>
-<li><a class="reference internal" href="#compressed-scrollback">Compressed scrollback</a></li>
+<li><a class="reference internal" href="#find-in-terminal-output">查找终端输出</a></li>
+<li><a class="reference internal" href="#compressed-scrollback">压缩回滚历史</a></li>
 </ul>
 </li>
 </ul>

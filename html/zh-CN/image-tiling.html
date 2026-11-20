@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">无障碍功能</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -351,7 +352,7 @@ and a payload of more than 400 MB. Silkie accepts any width and height up to
 the 32 bits of the <code class="docutils literal notranslate"><span class="pre">s</span></code> and <code class="docutils literal notranslate"><span class="pre">v</span></code> keys, PNG images up to the 2<sup>31</sup> - 1
 pixels the format allows, and payloads of any size. A size whose bytes do not
 fit in the address space is refused with <code class="docutils literal notranslate"><span class="pre">EOVERFLOW</span></code>, and one that does not
-fit in memory with <code class="docutils literal notranslate"><span class="pre">ENOMEM</span></code>. A <span class="xref std std-ref">feature query</span>
+fit in memory with <code class="docutils literal notranslate"><span class="pre">ENOMEM</span></code>. A <a class="reference internal" href="capabilities-protocol.html#graphics-query-features"><span class="std std-ref">feature query</span></a>
 echoes <code class="docutils literal notranslate"><span class="pre">s</span></code> and <code class="docutils literal notranslate"><span class="pre">v</span></code> whatever their value, so
 <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Ga=q,i=31,e=t,f=24,s=20000,v=100&lt;ESC&gt;\</span></code> tells a program that a
 20000 pixel wide image is accepted.</p>

@@ -297,7 +297,7 @@
 </section>
 <section id="vector-graphics-and-ink">
 <h3>矢量图形与墨迹<a class="headerlink" href="#vector-graphics-and-ink" title="链接到此标题。">¶</a></h3>
-<p>发送路径、带样式的文本和场景，由终端按显示尺寸渲染；支持会话字体、文本测量、嵌套窗口裁剪和 HDR 色彩。笔输入到达时即可由终端绘制笔迹，无须等待每个采样点往返应用。</p>
+<p>发送路径、带样式的文字和场景，由终端按显示尺寸渲染。支持会话字体、文本测量、嵌套窗口裁剪和 HDR 色彩。终端可随输入绘制笔迹，无需等待每个采样点往返应用。也可通过图形协议发送 <a class="reference internal" href="vector-protocol.html#svg-graphics"><span class="std std-ref">SVG 文档</span></a>，由 Silkie 按显示尺寸渲染。</p>
 <p><a class="reference internal" href="vector-protocol.html"><span class="doc">矢量图像</span></a> · <a class="reference internal" href="ink-protocol.html"><span class="doc">终端侧墨迹</span></a> · <a class="reference internal" href="gpu-surface-protocol.html"><span class="doc">GPU 表面</span></a></p>
 <p>Send one-, two-, four-, or eight-bit grayscale pixels and RGB565 without
 requiring compression; <a class="reference internal" href="packed-image-protocol.html"><span class="doc">Packed image formats</span></a> describes the compact
@@ -309,6 +309,14 @@ sRGB, linear, PQ or HLG, so that HDR10 frames go to the GPU as they are; see
 <a class="reference internal" href="precision-image-protocol.html"><span class="doc">High precision images</span></a>. Images of any size are drawn, from tiles when they
 are larger than a GPU texture, with mipmaps when shown smaller than they are,
 and stay without a storage quota; see <a class="reference internal" href="image-tiling.html"><span class="doc">Large images and image storage</span></a>.</p>
+</section>
+<section id="accessibility">
+<h3>无障碍功能<a class="headerlink" href="#accessibility" title="链接到此标题。">¶</a></h3>
+<p>放大和平移当前窗格，同时保持终端网格不变。Silkie 按所选倍率重绘文字和矢量图形。可用键盘或屏幕阅读器查看当前窗格中的图表、示意图和其他图像的说明。程序可以为每个图像放置添加说明，并标记装饰性图像。参见 <a class="reference internal" href="accessibility.html"><span class="doc">无障碍功能</span></a>。</p>
+</section>
+<section id="find-in-terminal-output">
+<h3>查找终端输出<a class="headerlink" href="#find-in-terminal-output" title="链接到此标题。">¶</a></h3>
+<p>用 <strong>Edit → Find</strong> 搜索当前窗格及其压缩回滚历史。Silkie 会在输入时突出显示匹配项。快捷键和设置见 <a class="reference internal" href="configuration.html#find-in-terminal"><span class="std std-ref">查找终端输出</span></a>。</p>
 </section>
 <section id="color-beyond-ordinary-sdr">
 <h3>超越普通 SDR 的色彩<a class="headerlink" href="#color-beyond-ordinary-sdr" title="链接到此标题。">¶</a></h3>

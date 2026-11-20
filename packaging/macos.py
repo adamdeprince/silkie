@@ -121,7 +121,7 @@ def stage(source: Path, output: Path, version: str) -> None:
   end
   caveats <<~EOS
     Launch with silkie; companion tools use silkie-kitten.
-    Configuration: ~/.config/kitty/kitty.conf.
+    Configuration: ~/.config/silkie/silkie.conf.
     This build is ad-hoc signed and is not Apple-notarized, so the cask
     clears its quarantine flag after installing it.
   EOS

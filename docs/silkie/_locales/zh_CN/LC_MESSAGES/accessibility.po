@@ -1,0 +1,193 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-18 18:03-0500\n"
+"PO-Revision-Date: 2026-11-18 18:03-0500\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: docs/silkie/accessibility.rst:2
+msgid "Accessibility"
+msgstr "无障碍功能"
+
+#: docs/silkie/accessibility.rst:5
+msgid "Review terminal images"
+msgstr "查看终端图像"
+
+#: docs/silkie/accessibility.rst:7
+msgid ""
+"Choose **View → Review Images** or press ``kitty_mod+alt+i`` to read the images in the active "
+"pane's viewport. The review uses a selectable, read-only text view on macOS or with the Linux GTK"
+" backend. When the native backend is unavailable, Silkie uses the configured scrollback pager. "
+"Close the review to return keyboard focus to the pane."
+msgstr ""
+"选择 **View → Review Images**，或按 ``kitty_mod+alt+i``，即可阅读当前窗格视口内的图像说明。在 macOS 或使用 Linux GTK "
+"后端时，查看器会打开可选择文本的只读视图。原生后端不可用时，Silkie 会使用已配置的回滚分页器。关闭查看器后，键盘焦点返回终端窗格。"
+
+#: docs/silkie/accessibility.rst:13
+msgid ""
+"The review lists images from top to bottom and left to right. It includes essential, informative,"
+" and unclassified images. Each entry identifies its purpose and location and includes the name, "
+"description, and details the program supplied. To include decorative images, choose **Review All "
+"Images**. Scroll the pane first to review images further back in its output."
+msgstr ""
+"查看器按从上到下、从左到右的顺序列出图像，包括核心、补充说明和未分类的图像。每项会标明用途和位置，并显示程序提供的名称、说明和详情。要查看装饰性图像，选择 **Review All "
+"Images**。要查看此前输出中的图像，请先滚动终端窗格。"
+
+#: docs/silkie/accessibility.rst:19
+msgid "Both actions can be bound in ``silkie.conf``::"
+msgstr "可以在 ``silkie.conf`` 中为这两个操作绑定快捷键::"
+
+#: docs/silkie/accessibility.rst:25
+msgid "Describe image placements"
+msgstr "描述图像放置"
+
+#: docs/silkie/accessibility.rst:27
+msgid ""
+"Any program using the `kitty graphics protocol <https://sw.kovidgoyal.net/kitty/graphics-"
+"protocol/>`_ can annotate a placement. This works with raster graphics and :doc:`vector-"
+"protocol`, including SVG. Give the image and its placement nonzero ``i`` and ``p`` IDs and send "
+"the annotation after placing the image."
+msgstr ""
+"任何使用 `kitty 图形协议 <https://sw.kovidgoyal.net/kitty/graphics-protocol/>`_ "
+"的程序都可以为图像放置添加注释。此功能适用于光栅图像和 :doc:`vector-protocol`，包括 SVG。请分别为图像和放置指定非零的 ``i`` 和 "
+"``p``，并在完成放置后发出注释。"
+
+#: docs/silkie/accessibility.rst:33
+msgid ""
+"Discover support by sending the :doc:`capabilities-protocol` query and looking for ``a11y.1`` in "
+"``ext``. The selector uses :doc:`extension-framing`."
+msgstr ""
+"发送 :doc:`capabilities-protocol` 查询，并检查 ``ext`` 中是否包含 ``a11y.1``，即可探测支持情况。此选择器使用 :doc:`extension-"
+"framing`。"
+
+#: docs/silkie/accessibility.rst:40
+msgid ""
+"``set-image`` replaces the annotation as a unit. ``clear-image`` takes the same placement IDs and"
+" removes the annotation. Omitting a descriptive field in ``set-image`` clears its previous value."
+msgstr "``set-image`` 会整体替换注释。``clear-image`` 接受同一组放置 ID 并移除注释。``set-image`` 中省略的说明字段会清除相应旧值。"
+
+#: docs/silkie/accessibility.rst:48
+msgid "Field"
+msgstr "字段"
+
+#: docs/silkie/accessibility.rst:49
+msgid "Value"
+msgstr "取值"
+
+#: docs/silkie/accessibility.rst:51
+msgid "Image ID, required. An unsigned 32-bit integer greater than zero."
+msgstr "图像 ID，必填。大于零的 32 位无符号整数。"
+
+#: docs/silkie/accessibility.rst:53
+msgid "Placement ID, required. An unsigned 32-bit integer greater than zero."
+msgstr "放置 ID，必填。大于零的 32 位无符号整数。"
+
+#: docs/silkie/accessibility.rst:55
+msgid ""
+"``essential`` for an image that carries the subject or result, ``informative`` for supporting "
+"material, or ``decorative`` for visual ornament. Omit the field to leave the purpose "
+"unclassified."
+msgstr "``essential`` 表示承载主题或结果的核心图像，``informative`` 表示提供补充说明的图像，``decorative`` 表示装饰性图像。省略此字段时，用途为未分类。"
+
+#: docs/silkie/accessibility.rst:59
+msgid "Optional short, single-line name."
+msgstr "可选的简短单行名称。"
+
+#: docs/silkie/accessibility.rst:61
+msgid "Optional summary of what the image communicates."
+msgstr "可选，概述图像传达的信息。"
+
+#: docs/silkie/accessibility.rst:63
+msgid ""
+"Optional longer plain-text explanation, data table, or reference URL. The review presents URLs as"
+" text that the user can copy."
+msgstr "可选，可提供较长的纯文本解释、数据表或参考网址。查看器以可复制的文本显示网址。"
+
+#: docs/silkie/accessibility.rst:66
+msgid "Optional reply correlation ID from zero to 2147483647."
+msgstr "可选，用于关联回复的 ID，范围为 0 到 2147483647。"
+
+#: docs/silkie/accessibility.rst:68
+msgid ""
+"Percent-encode the UTF-8 bytes of all three text fields, especially colons, percent signs, and "
+"non-ASCII bytes. Percent escapes take two hexadecimal digits. Invalid escapes, invalid UTF-8, and"
+" control characters reject the entire update. A description or details may include tabs and line "
+"breaks encoded as ``%09`` and ``%0A``."
+msgstr ""
+"对三个文本字段的 UTF-8 字节进行百分号编码，尤其是冒号、百分号和非 ASCII 字节。转义符由百分号和两位十六进制数字组成。无效转义、无效 UTF-8 "
+"或控制字符会导致整条更新被拒绝。说明和详情可分别用 ``%09`` 和 ``%0A`` 表示制表符和换行。"
+
+#: docs/silkie/accessibility.rst:74
+msgid ""
+"When the request includes ``id``, a successful update replies with ``OK``. A missing image or "
+"placement replies with ``ENOENT``. An allocation failure can reply with ``ENOMEM``. Malformed "
+"requests receive no reply."
+msgstr "请求包含 ``id`` 时，更新成功会回复 ``OK``。图像或放置不存在时回复 ``ENOENT``。内存分配失败时可能回复 ``ENOMEM``。格式有误的请求不会收到回复。"
+
+#: docs/silkie/accessibility.rst:83
+msgid ""
+"An annotation belongs to the active screen and follows its placement into scrollback. Moving an "
+"existing placement keeps the annotation. Deleting a placement or replacing the image data removes"
+" it along with the placement. Virtual placements describe the visible runs of their Unicode "
+"placeholders. The review shows one entry per visible virtual placement."
+msgstr ""
+"注释属于当前屏幕，并随对应的放置进入回滚缓冲区。移动已有的放置时，注释随之保留。删除放置或替换图像数据时，相应放置及其注释也会移除。虚拟放置的注释用于描述其 Unicode "
+"占位符的可见部分。查看器为每个可见的虚拟放置列出一项。"
+
+#: docs/silkie/accessibility.rst:90
+msgid "SVG example"
+msgstr "SVG 示例"
+
+#: docs/silkie/accessibility.rst:92
+msgid ""
+"This Python program places a small SVG plot and describes its result. Its standard output should "
+"go to a Silkie terminal with SVG and image annotation support::"
+msgstr "此 Python 程序会放置一张小型 SVG 图表，并描述图表结果。请将标准输出发送到支持 SVG 和图像注释的 Silkie 终端::"
+
+#: docs/silkie/accessibility.rst:110
+msgid ""
+"The application supplies the descriptions in the review. A future on-demand interpretation action"
+" could use the placement ID to identify the image the user selects."
+msgstr "查看器中的说明由应用程序提供。将来，按需解读功能可以用放置 ID 识别用户选中的图像。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:5
+msgid "Magnify a pane"
+msgstr "放大终端窗格"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:7
+msgid "Use **View → Magnify Pane**, or press ``Ctrl+Alt+=`` to zoom in, ``Ctrl+Alt+−`` to zoom out, and ``Ctrl+Alt+0`` to return to actual size. ``Ctrl+Alt+Arrow`` pans a magnified pane and ``Ctrl+Alt+C`` centers it on the text cursor. On a touchscreen that delivers direct touch events, spread two fingers to zoom and move both fingers together to pan. When a pane is already magnified, a trackpad pinch zooms around the pointer."
+msgstr "选择 **View → Magnify Pane**，或按 ``Ctrl+Alt+=`` 放大，按 ``Ctrl+Alt+−`` 缩小，按 ``Ctrl+Alt+0`` 恢复原始大小。用 ``Ctrl+Alt+方向键`` 平移已放大的窗格，用 ``Ctrl+Alt+C`` 将文字光标移到视图中央。支持直接触摸事件的触屏可用双指张开或捏合来缩放，双指同向移动可平移。窗格已放大时，触控板上的捏合手势以指针为中心缩放。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:14
+msgid "Magnification preserves the program's rows, columns, and text layout. Silkie rerasterizes glyphs and vector graphics at the requested resolution, subject to renderer and hardware limits."
+msgstr "放大保留程序的行数、列数和文本布局。Silkie 按所选分辨率重新栅格化字形和矢量图形，实际分辨率受渲染器和硬件约束。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:18
+msgid "By default, once a raster image becomes visible during zoom, Silkie reports pixel dimensions at the next whole-number scale, capped at three times the base size. It reports 2× for zoom above 1× through 2×, and 3× above 2×. At actual size it reports the base resolution. Silkie updates the PTY pixel dimensions when the reported scale changes, which delivers a ``SIGWINCH`` on systems that signal pixel-size changes, and sends an in-band resize report to applications that enabled one. A program can query the reported cell size with ``CSI 16 t`` and send an image at that pixel density while keeping the same placement in cells. Silkie scales the available image locally to the selected zoom level."
+msgstr "默认情况下，缩放时一旦显示光栅图像，Silkie 就按向上取整的倍数报告像素尺寸，最高为原始尺寸的三倍。缩放倍率大于 1× 且不超过 2× 时报告 2×，大于 2× 时报告 3×。恢复原始大小时报告基础分辨率。报告的倍率发生变化时，Silkie 会更新 PTY 像素尺寸。在支持像素尺寸变更信号的系统上，这会触发 ``SIGWINCH``；启用了带内尺寸报告的应用也会收到报告。程序可用 ``CSI 16 t`` 查询报告的单元格尺寸，再按相应像素密度发送图像，同时保持图像占用的单元格数量。Silkie 会在本地将现有图像缩放到所选倍率。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:29
+msgid "To save bandwidth, keep the reported pixel dimensions at their base values by setting :opt:`magnify_raster_resolution` in ``silkie.conf``::"
+msgstr "如需节省带宽，可在 ``silkie.conf`` 中设置 :opt:`magnify_raster_resolution`，使报告的像素尺寸保持为原始值::"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:34
+msgid "Bind ``magnify_pane`` in ``silkie.conf`` to customize the controls. A numeric argument sets the magnification. Optional one-based row and column arguments set the center in the visible terminal grid. For example::"
+msgstr "在 ``silkie.conf`` 中绑定 ``magnify_pane`` 可自定义操作。数字参数指定放大倍率，也可指定从 1 开始计数的行和列，作为可见终端网格中的中心。例如::"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:41
+msgid "Silkie also samples desktop zoom on its existing display-monitoring wakeup. It reads GNOME Zoom's settings, queries KWin versions that report the target zoom, and checks whether macOS Accessibility Zoom is active. The macOS zoom factor is available on a best-effort basis. With desktop zoom, final sharpness depends on how the compositor scales the window. Android tablets running Silkie in an X11 or Wayland session can use the pane magnifier. The Android system magnifier belongs to the Android host and its factor is available to Android accessibility services."
+msgstr "Silkie 在已有的显示器监测唤醒中读取桌面缩放状态，包括 GNOME Zoom 的设置、支持报告目标倍率的 KWin 版本以及 macOS 辅助功能缩放是否启用。macOS 的缩放倍率取决于系统可提供的信息。使用桌面缩放时，最终清晰度取决于合成器如何缩放窗口。在 X11 或 Wayland 会话中运行 Silkie 的 Android 平板可使用窗格放大功能。Android 系统放大镜由 Android 主机管理，Android 辅助功能服务可获取其倍率。"

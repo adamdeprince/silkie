@@ -40,6 +40,13 @@ msgstr "下面的默认值和说明来自 Silkie 的配置定义。"
 msgid "E-paper and color switching"
 msgstr "电子纸与配色切换"
 
+msgid ""
+"Programs can read the desktop preference from the ``appearance`` field of the "
+":doc:`display-protocol`. A change asks programs to redraw, even when the terminal has an explicit theme."
+msgstr ""
+"程序可以通过 :doc:`display-protocol` 的 ``appearance`` 字段读取桌面外观偏好。桌面外观变化时，"
+"Silkie 会通知程序重绘，即使终端使用固定主题。"
+
 #: docs/silkie/configuration.rst:14
 msgid ""
 "For an external e-paper monitor, including a BOOX monitor that the operating system treats as an "
@@ -399,3 +406,91 @@ msgid ""
 "available on macOS."
 msgstr "允许程序在触控板上播放触觉反馈，参阅 :doc:`/haptic-protocol`。仅适用于 macOS。"
 
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:102
+msgid "``kitten @ ls`` shows what Silkie knows of the monitor of each OS window, under ``display``, and ``silkie --debug-rendering`` logs it when a window moves to another monitor. Use :download:`monitor-identifiers.py <../../tools/monitor-identifiers.py>` to list connected monitor IDs on macOS or Linux for a ``monitor_info`` entry."
+msgstr "``kitten @ ls`` 的 ``display`` 字段显示 Silkie 掌握的各窗口显示器信息。窗口移到另一台显示器时，``silkie --debug-rendering`` 会记录这些信息。可用 :download:`monitor-identifiers.py <../../tools/monitor-identifiers.py>` 在 macOS 或 Linux 上列出已连接显示器的标识，以填写 ``monitor_info``。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:107
+msgid "What follows applies to the windows on that monitor only: a window dragged to an ordinary monitor looks and behaves as usual again once it has stayed there for a moment, and comes back when it returns."
+msgstr "这些设置仅作用于该显示器上的窗口。窗口移到普通显示器后，稍等片刻即可恢复常规显示；移回时会重新应用这些设置。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:111
+msgid "E-paper (``kind=eink``) and gray (``color=gray`` or ``mono``) are independent, as there is color e-paper:"
+msgstr "电子纸（``kind=eink``）和灰度（``color=gray`` 或 ``mono``）是独立的属性。电子纸也可以是彩色的。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:114
+msgid "On e-paper, which ghosts when it changes, the cursor and blinking text do not blink, there is no cursor trail, animated images stay on the frame they show, an indeterminate progress bar stands still, a keyboard scroll jumps rather than glides and the output is not dithered, since dither shows as grain that ghosts. Silkie submits at most ten frames per second for each e-paper window. Programs are told ``kind=eink`` through the :doc:`display-protocol`, so that they can avoid animation and frequent redraws themselves."
+msgstr "电子纸会在画面变化后留下残影，因此光标和闪烁文字保持静止，光标无拖尾，动态图像停在当前帧，不确定进度条停止移动，键盘滚动直接跳转，也不进行会产生颗粒残影的抖动。Silkie 对每个电子纸窗口最多每秒提交十帧。程序通过 :doc:`display-protocol` 获知 ``kind=eink``，可自行减少动画和频繁重绘。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:121
+msgid "E-paper and grayscale displays use a high-contrast text palette over the colors of themes, profiles, ``launch --color``, sessions and programs. For grayscale displays without e-paper mode, ``color_scheme dark`` selects white on black and other settings use black on white. A grayscale monitor reduces images to its own levels of gray."
+msgstr "电子纸和灰度显示器会对主题、配置档、``launch --color``、会话和程序的颜色应用高对比度文字配色。对于未启用电子纸模式的灰度显示器，``color_scheme dark`` 使用黑底白字，其他设置使用白底黑字。灰度显示器按面板本身的灰阶显示图像。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:127
+msgid "To treat every window as on e-paper whatever its monitor, add::"
+msgstr "若要让所有窗口都使用电子纸模式，请添加::"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:131
+msgid "With it a display whose colors nothing declares, in Silkie's table, :opt:`monitor_info` or :opt:`display_info`, is taken to show gray, so a color e-paper monitor needs its colors declared, for example ``monitor_info \"<its model>\" kind=eink color=rgb`` or ``display_info color=rgb``."
+msgstr "在此模式下，若 Silkie 内置表、:opt:`monitor_info` 和 :opt:`display_info` 均未声明显示器的颜色，Silkie 会将其视为灰度显示器。彩色电子纸可通过 ``monitor_info \"<型号>\" kind=eink color=rgb`` 或 ``display_info color=rgb`` 声明颜色。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:136
+msgid "In **Settings → Appearance → Color scheme → E-ink color scheme**, choose light (default), dark, follow OS, or invert OS. The equivalent configuration option is :opt:`eink_color_scheme`. Follow and invert both use light when the OS does not report a preference. This choice applies to color and monochrome e-paper. Press ``ctrl+shift+f12`` to switch the color scheme for ordinary displays. Press ``ctrl+shift+alt+f12`` to toggle :opt:`eink_mode`. These shortcuts use ``kitty_mod`` (by default ``ctrl+shift``). The actions are also available from the command palette. To choose your own shortcuts::"
+msgstr "在 **Settings → Appearance → Color scheme → E-ink color scheme** 中选择浅色（默认）、深色、跟随系统或反转系统。对应的配置选项为 :opt:`eink_color_scheme`。系统未报告偏好时，跟随和反转均使用浅色。此设置适用于彩色和单色电子纸。按 ``ctrl+shift+f12`` 切换普通显示器的配色，按 ``ctrl+shift+alt+f12`` 切换 :opt:`eink_mode`。这些快捷键使用 ``kitty_mod``（默认为 ``ctrl+shift``），相同操作也可从命令面板调用。自定义快捷键的示例::"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:149
+msgid "Use ``color_scheme light`` or ``color_scheme dark`` for a persistent color choice on ordinary displays. ``set_color_scheme auto`` returns to configured colors and automatic themes. Explicit light and dark choices take precedence over automatic themes and OS appearance changes. Reloading the configuration restores the saved choices."
+msgstr "使用 ``color_scheme light`` 或 ``color_scheme dark`` 为普通显示器固定配色。``set_color_scheme auto`` 恢复配置中的颜色和自动主题。显式选择浅色或深色优先于自动主题和系统外观变化。重新加载配置会恢复已保存的选择。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:289
+msgid "Find in terminal output"
+msgstr "查找终端输出"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:291
+msgid "Choose **Edit → Find → Find…** to search the visible text and scrollback of the active pane. On macOS, press ``Cmd+F``. Use **Find Next** or press ``Enter`` in the search field to move toward older output. **Find Previous** or ``Shift+Enter`` moves toward newer output. **Use Selection for Find** searches for the selected text. Matches may cross soft wraps."
+msgstr "选择 **Edit → Find → Find…**，即可搜索当前窗格可见的文字和回滚历史。在 macOS 上也可按 ``Cmd+F``。用 **Find Next** 或在搜索框中按 ``Enter`` 查找更早的输出，用 **Find Previous** 或 ``Shift+Enter`` 查找较新的输出。**Use Selection for Find** 查找选中的文字。匹配项可以跨越自动换行处。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:297
+msgid "Set ``find_match_foreground`` and ``find_match_background`` for all matches, and ``find_current_foreground`` and ``find_current_background`` for the selected match."
+msgstr "用 ``find_match_foreground`` 和 ``find_match_background`` 设置普通匹配项的前景色和背景色，用 ``find_current_foreground`` 和 ``find_current_background`` 设置当前匹配项的颜色。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:302
+msgid "Compressed scrollback"
+msgstr "压缩回滚历史"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:304
+msgid "Silkie keeps unlimited scrollback by default, compressed with zstd at level 9: :opt:`scrollback_lines` is :code:`unlimited` and :opt:`scrollback_compression` is :code:`9`. The two options are independent: a line limit, compression (:code:`none` or any zstd level, negative fast levels included) or both."
+msgstr "Silkie 默认使用 zstd 级别 9 保存不限行数的回滚历史，:opt:`scrollback_lines` 为 :code:`unlimited`，:opt:`scrollback_compression` 为 :code:`9`。可独立指定行数上限和压缩级别。压缩级别支持 :code:`none` 和 zstd 的各级别，包括用于快速压缩的负数级别。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:311
+msgid "The newest 2048 lines stay uncompressed. Older lines go, 128 at a time, to a background thread that encodes them compactly and compresses them, so output does not wait for compression: :code:`benchmark.py` measured the same throughput as uncompressed scrollback. 1.5 million lines of colored log output take about 49 MB instead of 8.4 GB."
+msgstr "最新的 2048 行保持未压缩。更早的行每 128 行交给后台线程紧凑编码并压缩，输出无需等待压缩。以 :code:`benchmark.py` 测试，吞吐量与未压缩时相同。150 万行彩色日志占用约 49 MB，未压缩时则为 8.4 GB。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:317
+msgid "The settings can differ per window and per tab:"
+msgstr "这些设置可因窗口和标签页而异。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:319
+msgid "a profile can set :code:`scrollback_lines` and :code:`scrollback_compression`;"
+msgstr "配置档可设置 :code:`scrollback_lines` 和 :code:`scrollback_compression`。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:320
+msgid ":code:`launch --scrollback-lines N --scrollback-compression L` (also on a :code:`launch` line of a session file) sets them for the new window, and windows opened later in its tab get the same;"
+msgstr ":code:`launch --scrollback-lines N --scrollback-compression L`（也可用于会话文件中的 :code:`launch` 行）为新窗口设置这些参数。同一标签页中之后创建的窗口继承这些设置。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:323
+msgid ":code:`kitten @ set-scrollback-compression L [--lines N] [--recompress]` changes them for the matched windows, or with :code:`--match-tab` for tabs, including windows opened in them later. :code:`--recompress` also recompresses what is already compressed, in the background."
+msgstr ":code:`kitten @ set-scrollback-compression L [--lines N] [--recompress]` 修改匹配窗口的设置。用 :code:`--match-tab` 可修改匹配标签页及其中之后创建的窗口。:code:`--recompress` 还会在后台重新压缩已有的压缩历史。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:328
+msgid "A new level applies to lines compressed from then on. With unlimited scrollback the scrollback pager history (:opt:`scrollback_pager_history_size`) receives nothing, as no line ever leaves the scrollback."
+msgstr "新的级别适用于之后开始压缩的行。回滚历史没有行数上限时，没有行被移出，因此分页器历史（:opt:`scrollback_pager_history_size`）不会收到这些行。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:334
+msgid "Set the line limit for new panes. The default is ``unlimited``."
+msgstr "设置新窗格的回滚行数上限。默认为 ``unlimited``。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:338
+msgid "Set the zstd level for new panes. The default is ``9``. Use ``none`` to keep every line uncompressed."
+msgstr "设置新窗格的 zstd 级别。默认为 ``9``。用 ``none`` 可保持所有行未压缩。"

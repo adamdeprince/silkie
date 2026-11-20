@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">无障碍功能</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -362,6 +363,7 @@
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">caps</span></code> 是该选择器支持能力的位集合：<code class="docutils literal notranslate"><span class="pre">1</span></code> 表示列举功能，<code class="docutils literal notranslate"><span class="pre">2</span></code> 表示下述重置请求。<code class="docutils literal notranslate"><span class="pre">ext</span></code> 以逗号分隔、顺序不定，列出终端接受的全部选择器，每项后接句点和该选择器支持的最高协议版本。其中始终包含 <code class="docutils literal notranslate"><span class="pre">caps.1</span></code>。列表只表示终端认识该选择器；当前显示器和输入设备实际能做什么，仍需通过该选择器自己的 <code class="docutils literal notranslate"><span class="pre">query</span></code> 查询。程序现在只需查询自己打算使用的选择器；由于回复按顺序到达，这些查询可与本查询在同一次写入中发送。</p>
 <p>同一终端的全部窗口得到相同答案，且终端运行期间不会变化，因此程序只需查询一次。不支持本协议的终端会忽略查询；程序必须设置超时，随后可回退为逐个探测所需选择器。</p>
+<p><code class="docutils literal notranslate"><span class="pre">a11y.1</span></code> 表示支持图像放置注释。有关此选择器的请求，请参阅 <a class="reference internal" href="accessibility.html"><span class="doc">无障碍功能</span></a>。</p>
 </section>
 <section id="sgr-extensions">
 <h2>SGR extensions<a class="headerlink" href="#sgr-extensions" title="链接到此标题。">¶</a></h2>
@@ -405,6 +407,18 @@ output capabilities rather than restricting input.</p>
 </pre></div>
 </div>
 <p>每个具有模式的选择器，其 <code class="docutils literal notranslate"><span class="pre">cap</span></code> 回复也包含同值的 <code class="docutils literal notranslate"><span class="pre">mode</span></code> 字段，因此一次 <code class="docutils literal notranslate"><span class="pre">query</span></code> 即可得知选择器提供什么，以及模式是否开启。终端可允许用户针对全部或部分程序拒绝某个模式或部分位。被拒绝的位读回为关闭，且不会产生本应由该位启用的报告。因此程序设置模式后应读回，而不是假定请求已获准。回复使用请求中的版本号。不支持的选择器不会回答这两类请求，这正是前述列举功能的用途。</p>
+</section>
+<section id="graphics-feature-queries">
+<span id="graphics-query-features"></span><h2>查询图形功能<a class="headerlink" href="#graphics-feature-queries" title="链接到此标题。">¶</a></h2>
+<p>发送图形协议查询，将 <code class="docutils literal notranslate"><span class="pre">a</span></code> 设为 <code class="docutils literal notranslate"><span class="pre">q</span></code>，将 <code class="docutils literal notranslate"><span class="pre">e</span></code> 设为待探测的操作。用非零图像 ID <code class="docutils literal notranslate"><span class="pre">i</span></code> 匹配答复，并附上要测试的参数。例如，以下查询检查终端是否支持传输并放置 SVG 图像:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">q</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span><span class="n">e</span><span class="o">=</span><span class="n">T</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">201</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+</pre></div>
+</div>
+<p>支持该功能的终端会在答复中同时返回 <code class="docutils literal notranslate"><span class="pre">e=T</span></code> 和 <code class="docutils literal notranslate"><span class="pre">f=201</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Gi</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span><span class="n">e</span><span class="o">=</span><span class="n">T</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">201</span><span class="p">;</span><span class="n">OK</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+</pre></div>
+</div>
+<p>检查答复中是否包含所查询的操作和参数值。功能查询只检查支持情况，不会上传或修改图像。</p>
 </section>
 <section id="turning-every-mode-off">
 <h2>关闭全部模式<a class="headerlink" href="#turning-every-mode-off" title="链接到此标题。">¶</a></h2>
@@ -486,6 +500,7 @@ output capabilities rather than restricting input.</p>
 <li><a class="reference internal" href="#sgr-extensions">SGR extensions</a></li>
 <li><a class="reference internal" href="#graphics-media-and-formats">图形传输介质与格式</a></li>
 <li><a class="reference internal" href="#reading-a-mode">读取模式</a></li>
+<li><a class="reference internal" href="#graphics-feature-queries">查询图形功能</a></li>
 <li><a class="reference internal" href="#turning-every-mode-off">关闭全部模式</a></li>
 <li><a class="reference internal" href="#relays-and-multiplexers">中继与多路复用器</a></li>
 </ul>

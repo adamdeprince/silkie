@@ -219,3 +219,20 @@ msgid ""
 "passes the request through."
 msgstr "多路复用器将重置请求应用于发出请求的窗格，再重新计算自己对后端终端的需求；其他窗格仍启用某模式时，不应继续转发重置请求。提示符标记同理：如果将各窗格的标记转发给遇标记即重置的终端，任何窗格出现提示符都会关闭终端模式，因此多路复用器应拦截标记或重新开启所需模式。字节透传中继则原样转发请求。"
 
+#: docs/capabilities-protocol.rst:57
+msgid ""
+"The ``a11y.1`` entry advertises image placement annotations. See :doc:`accessibility` for that "
+"selector's requests."
+msgstr "``a11y.1`` 表示支持图像放置注释。有关此选择器的请求，请参阅 :doc:`accessibility`。"
+
+msgid "Graphics feature queries"
+msgstr "查询图形功能"
+
+msgid "Use a graphics-protocol query with ``a=q`` and ``e`` set to the action to probe. Include a nonzero image ID in ``i`` to correlate the reply and the settings you want to test. For example, this query asks whether the terminal can transmit and place an SVG image::"
+msgstr "发送图形协议查询，将 ``a`` 设为 ``q``，将 ``e`` 设为待探测的操作。用非零图像 ID ``i`` 匹配答复，并附上要测试的参数。例如，以下查询检查终端是否支持传输并放置 SVG 图像::"
+
+msgid "A terminal that supports it replies with both ``e=T`` and ``f=201``::"
+msgstr "支持该功能的终端会在答复中同时返回 ``e=T`` 和 ``f=201``::"
+
+msgid "Check that the reply includes the requested action and values. A feature query probes support without uploading or changing an image."
+msgstr "检查答复中是否包含所查询的操作和参数值。功能查询只检查支持情况，不会上传或修改图像。"

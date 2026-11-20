@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">无障碍功能</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -388,6 +389,7 @@
 <section id="prerequisites">
 <h2>前置依赖<a class="headerlink" href="#prerequisites" title="链接到此标题。">¶</a></h2>
 <p>安装 Git、C 编译器和 <a class="reference external" href="https://go.dev/doc/install">Go</a>。Go 的最低版本在 <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/go.mod">silkie 分支的 go.mod</a> 中声明。</p>
+<p>构建原生 SVG 渲染器还需要 Cargo 和 <a class="reference external" href="https://www.rust-lang.org/tools/install">Rust</a> 1.87 或更高版本。首次从源码构建时，Cargo 会下载锁定版本的 SVG 依赖。</p>
 <p>在 macOS 上，若尚未安装 Apple 命令行开发工具，请运行 <code class="docutils literal notranslate"><span class="pre">xcode-select</span> <span class="pre">--install</span></code>。在 Linux 上，安装 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/#x11-dev-libs">kitty 构建前置条件</a> 列出的 X11 和 D-Bus 开发库。</p>
 <p><code class="docutils literal notranslate"><span class="pre">dev.sh</span></code> 使用支持平台的预构建依赖，包括 Python 环境。首次构建需要联网下载这些依赖。<a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/bypy/devenv.go">构建实现</a> 位于本仓库中。若要使用系统库构建，请参阅 <a class="reference external" href="https://sw.kovidgoyal.net/kitty/build/#dependencies">上游依赖列表</a>；macOS 还可参阅 Silkie 的 <a class="reference external" href="https://github.com/adamdeprince/silkie/blob/silkie/Brewfile">Brewfile</a>。</p>
 </section>

@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="Packed image formats" href="packed-image-protocol.html"><link rel="prev" title="SSH agent transport" href="ssh-agent-protocol.html">
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="搜索" href="search.html"><link rel="next" title="Packed image formats" href="packed-image-protocol.html"><link rel="prev" title="无障碍功能" href="accessibility.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/zh-CN/vector-protocol.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -283,6 +283,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">终端侧墨迹</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">无障碍功能</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">矢量图像</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -341,7 +342,7 @@
 <div class="versionadded">
 <p><span class="versionmodified added">在 0.50.0 版本加入.</span></p>
 </div>
-<p><a class="reference external" href="https://sw.kovidgoyal.net/kitty/graphics-protocol/"><span>终端图形协议</span></a> 传输像素。绘图程序、文档查看器、绘图库和笔应用原本必须自行栅格化全部内容，窗口调整大小、视图缩放或新增笔划时重新发送像素；在慢速连接上，这使它们明显带有远程操作的迟滞感。矢量图像是图形协议的像素格式 <code class="docutils literal notranslate"><span class="pre">f=200</span></code>，传输数据不是像素，而是由路径、整形文本、字形轮廓、笔划、光栅图像和渐变组成的小型场景。终端保留场景，自行按实际显示尺寸栅格化，因此任意缩放级别都清晰，程序只需用几字节的补丁更新。该格式足以渲染 PDF 页面，见 <a class="reference internal" href="#rendering-a-pdf">渲染 PDF</a>。</p>
+<p><a class="reference external" href="https://sw.kovidgoyal.net/kitty/graphics-protocol/"><span>终端图形协议</span></a> 传输像素。绘图程序、文档查看器、绘图库和笔应用原本必须自行栅格化全部内容，窗口调整大小、视图缩放或新增笔划时都要重新发送像素。在慢速连接上，这会造成明显的迟滞。Silkie 接受两种矢量图像格式。原生 <code class="docutils literal notranslate"><span class="pre">f=200</span></code> 场景格式描述路径、整形文本、字形轮廓、笔划、光栅图像和渐变。终端保留场景并按实际显示尺寸栅格化，程序可以用小型补丁更新场景。该格式足以渲染 PDF 页面，见 <a class="reference internal" href="#rendering-a-pdf">渲染 PDF</a>。 <code class="docutils literal notranslate"><span class="pre">f=201</span></code> 格式接受 <a class="reference internal" href="#svg-graphics"><span class="std std-ref">SVG 文档</span></a>。</p>
 <p>对协议其余部分而言，矢量图像仍是普通图像，其他机制均不变：<code class="docutils literal notranslate"><span class="pre">a=p</span></code> 放置、锚定字符单元以随文本滚入回滚缓冲区、备用屏幕、与文本的 <code class="docutils literal notranslate"><span class="pre">z</span></code> 层级、Unicode 占位符、相对放置、<code class="docutils literal notranslate"><span class="pre">m=1</span></code> 分块、<code class="docutils literal notranslate"><span class="pre">o=z</span></code> 压缩、全部传输介质、<code class="docutils literal notranslate"><span class="pre">a=d</span></code> 删除及 <code class="docutils literal notranslate"><span class="pre">a=q</span></code> 查询。存储图像的中继或多路复用器以相同方式存储矢量图像。</p>
 <section id="transmitting-a-vector-image">
 <h2>传输矢量图像<a class="headerlink" href="#transmitting-a-vector-image" title="链接到此标题。">¶</a></h2>
@@ -362,6 +363,20 @@ with <code class="docutils literal notranslate"><span class="pre">ENOMEM</span><
 one escape code when it is set. The terminal answers <code class="docutils literal notranslate"><span class="pre">OK</span></code> or, for a scene it
 cannot parse, <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code> with the line number and the problem, and nothing of
 such a transmission is kept.</p>
+</section>
+<section id="transmitting-an-svg-image">
+<span id="svg-graphics"></span><h2>传输 SVG 图像<a class="headerlink" href="#transmitting-an-svg-image" title="链接到此标题。">¶</a></h2>
+<p>用 <code class="docutils literal notranslate"><span class="pre">f=201</span></code> 发送 UTF-8 XML 格式的静态 SVG 文档。Silkie 使用 <a class="reference external" href="https://github.com/linebender/resvg">resvg</a> 解析文档并保留场景，按放置尺寸进行栅格化。SVG 字节通过常规图形载荷发送：:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">T</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">201</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span><span class="o">&lt;</span><span class="n">base64</span> <span class="n">of</span> <span class="n">the</span> <span class="n">SVG</span> <span class="n">below</span><span class="o">&gt;&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+
+<span class="o">&lt;</span><span class="n">svg</span> <span class="n">xmlns</span><span class="o">=</span><span class="s2">"http://www.w3.org/2000/svg"</span> <span class="n">viewBox</span><span class="o">=</span><span class="s2">"0 0 80 40"</span><span class="o">&gt;</span>
+  <span class="o">&lt;</span><span class="n">circle</span> <span class="n">cx</span><span class="o">=</span><span class="s2">"40"</span> <span class="n">cy</span><span class="o">=</span><span class="s2">"20"</span> <span class="n">r</span><span class="o">=</span><span class="s2">"16"</span> <span class="n">fill</span><span class="o">=</span><span class="s2">"tomato"</span><span class="o">/&gt;</span>
+<span class="o">&lt;/</span><span class="n">svg</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Silkie 从 SVG 推导固有像素尺寸，并将小数尺寸向上取整。可以同时指定 <code class="docutils literal notranslate"><span class="pre">s</span></code> 和 <code class="docutils literal notranslate"><span class="pre">v</span></code>，为放置和裁剪设定其他标称图像尺寸，也可以同时省略。 <code class="docutils literal notranslate"><span class="pre">c</span></code> 和 <code class="docutils literal notranslate"><span class="pre">r</span></code> 以字符单元为单位指定放置尺寸。与其他图像一样， <code class="docutils literal notranslate"><span class="pre">a=t</span></code> 上传图像， <code class="docutils literal notranslate"><span class="pre">a=T</span></code> 上传并放置图像， <code class="docutils literal notranslate"><span class="pre">a=p</span></code> 放置已上传的图像。要更改文档，请使用同一图像 ID 重新传输。 <code class="docutils literal notranslate"><span class="pre">a=e</span></code> 记录编辑和终端端墨迹功能适用于 <code class="docutils literal notranslate"><span class="pre">f=200</span></code> 场景。</p>
+<p>SVG 使用常规的直接、文件、临时文件和共享内存图形传输。直接传输的载荷采用 base64 编码，并可用 <code class="docutils literal notranslate"><span class="pre">m=1</span></code> 分块。 <code class="docutils literal notranslate"><span class="pre">o=z</span></code> 接受 zlib 压缩载荷，无须另行指定未压缩长度。<code class="docutils literal notranslate"><span class="pre">a=q,f=201,i=&lt;id&gt;</span></code> 验证载荷，返回 <code class="docutils literal notranslate"><span class="pre">OK</span></code> 或错误，并释放图像。功能查询 <code class="docutils literal notranslate"><span class="pre">a=q,e=T,f=201,i=&lt;id&gt;</span></code> 无须载荷即可探测格式支持。原生终端的 <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a> 回复也会列出此格式。</p>
+<p>SVG 渲染器支持路径、变换、渐变、SVG 样式、使用已安装字体的文本、文档内片段引用，以及嵌入的 PNG、JPEG、GIF 和 WebP 图像。渲染器在静态图像模式下运行，忽略脚本、动画以及对外部文件或 URL 的引用。带有 DTD 的 XML 文档会返回 <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code>。</p>
 </section>
 <section id="editing-a-vector-image">
 <h2>编辑矢量图像<a class="headerlink" href="#editing-a-vector-image" title="链接到此标题。">¶</a></h2>
@@ -584,14 +599,14 @@ is drawn at as well.</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="ssh-agent-protocol.html">
+          <a class="prev-page" href="accessibility.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">SSH agent transport</div>
+                <div class="title">无障碍功能</div>
                 
               </div>
             </a>
@@ -626,6 +641,7 @@ is drawn at as well.</p>
             <ul>
 <li><a class="reference internal" href="#">矢量图像</a><ul>
 <li><a class="reference internal" href="#transmitting-a-vector-image">传输矢量图像</a></li>
+<li><a class="reference internal" href="#transmitting-an-svg-image">传输 SVG 图像</a></li>
 <li><a class="reference internal" href="#editing-a-vector-image">编辑矢量图像</a></li>
 <li><a class="reference internal" href="#records">记录</a></li>
 <li><a class="reference internal" href="#nested-window-clips">嵌套窗口裁剪</a></li>

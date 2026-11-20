@@ -7,12 +7,12 @@ The :doc:`graphics-protocol` moves pixels. A program that draws, a document
 viewer, a plotting library or a pen application, has to rasterize everything
 itself and send the pixels again whenever the window is resized, the view is
 zoomed or a stroke is added, and over a slow link that is what makes such
-programs feel remote. Vector images are a pixel format of the graphics
-protocol, ``f=200``, whose data is not pixels but a small scene: paths, shaped
-text, glyph outlines, pen strokes, raster images and gradients. The terminal keeps the
-scene and rasterizes it itself, at the exact size the image is shown at, so it
-is crisp at any zoom, and a program changes it with patches a few bytes long.
-The format is rich enough to render a PDF page, see `Rendering a PDF`_.
+programs feel remote. Silkie accepts two vector image formats. The native
+``f=200`` scene format describes paths, shaped text, glyph outlines, pen
+strokes, raster images and gradients. The terminal keeps the scene and
+rasterizes it at the size the image is shown at. A program can update it
+with small patches. The format is rich enough to render a PDF page, see
+`Rendering a PDF`_. The ``f=201`` format accepts :ref:`SVG documents <svg_graphics>`.
 
 Because a vector image is an ordinary image to the rest of the protocol,
 everything else works unchanged: placement with ``a=p``, anchoring to cells so
@@ -47,6 +47,44 @@ with ``ENOMEM``, freeing what had arrived. ``escape_limit`` caps the size of
 one escape code when it is set. The terminal answers ``OK`` or, for a scene it
 cannot parse, ``EINVAL`` with the line number and the problem, and nothing of
 such a transmission is kept.
+
+.. _svg_graphics:
+
+Transmitting an SVG image
+-------------------------
+
+Use ``f=201`` to send a static SVG document as UTF-8 XML. Silkie parses it
+with `resvg <https://github.com/linebender/resvg>`_ and retains the scene for
+rasterization at the placement size. Send the SVG bytes in the usual graphics
+payload::
+
+    <ESC>_Ga=T,f=201,i=1;<base64 of the SVG below><ESC>\
+
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40">
+      <circle cx="40" cy="20" r="16" fill="tomato"/>
+    </svg>
+
+Silkie derives the intrinsic pixel size from the SVG, rounding fractional
+dimensions up. Supply both ``s`` and ``v`` to select a different nominal image
+size for placement and cropping, or omit both. ``c`` and ``r`` size the placement
+in cells. As with other graphics images, ``a=t`` uploads an image, ``a=T`` also
+places it, and ``a=p`` places a previously uploaded image. To change the
+document, retransmit it under the same image ID. The ``a=e`` record editor and
+terminal-side ink apply to ``f=200`` scenes.
+
+SVG uses the normal direct, file, temporary-file, and shared-memory graphics
+transports. Direct payloads use base64 and can be split across ``m=1`` chunks.
+``o=z`` accepts a zlib-compressed payload without a separate uncompressed
+length. ``a=q,f=201,i=<id>`` validates the payload and reports ``OK`` or an error
+without keeping an image. An ``a=q,e=T,f=201,i=<id>`` feature query advertises
+the format without a payload. It is also listed in the native terminal's
+:doc:`capabilities-protocol` reply.
+
+Paths, transforms, gradients, SVG styles, text using installed fonts, local
+fragment references, and embedded PNG, JPEG, GIF and WebP images are handled
+by the SVG renderer. The renderer operates in static image mode. It ignores
+scripts, animations and references to external files or URLs. XML documents
+with DTDs return ``EINVAL``.
 
 Editing a vector image
 -------------------------

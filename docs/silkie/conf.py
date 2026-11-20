@@ -93,10 +93,14 @@ UPSTREAM_DOCS = {
     'graphics-protocol': 'Terminal graphics protocol',
     'kittens/query_terminal': 'Query terminal',
 }
-UPSTREAM_OPTIONS = {'input_delay', 'repaint_delay', 'macos_colorspace'}
+UPSTREAM_OPTIONS = {
+    'background_opacity', 'input_delay', 'macos_colorspace', 'repaint_delay',
+    'scrollback_pager_history_size', 'transparent_background_colors',
+}
 SILKIE_OPTIONS = (
     'hdr', 'hdr_max_headroom', 'cursor_brightness', 'wayland_colorspace',
-    'eink_mode', 'monitor_info', 'color_scheme', 'display_info', 'tablet_hardware_ids', 'haptic_feedback',
+    'eink_mode', 'eink_color_scheme', 'monitor_info', 'color_scheme', 'display_info', 'tablet_hardware_ids', 'haptic_feedback',
+    'magnify_raster_resolution', 'deep_color', 'output_dither',
 )
 
 

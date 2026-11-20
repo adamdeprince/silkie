@@ -109,6 +109,10 @@ Install Git, a C compiler, and `Go <https://go.dev/doc/install>`_. The minimum
 Go version is declared in `go.mod on the silkie branch
 <https://github.com/adamdeprince/silkie/blob/silkie/go.mod>`_.
 
+Building the native SVG renderer also requires Cargo and
+`Rust <https://www.rust-lang.org/tools/install>`_ 1.87 or later. Cargo downloads
+the locked SVG dependencies on the first source build.
+
 On macOS, install Apple's command line developer tools with ``xcode-select --install``
 if they are not already available. On Linux, install the X11 and D-Bus development
 libraries listed in `kitty's build prerequisites

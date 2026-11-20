@@ -101,7 +101,10 @@ manufacturer and product code, or a part of its description::
 
 ``kitten @ ls`` shows what Silkie knows of the monitor of each OS window, under
 ``display``, and ``silkie --debug-rendering`` logs it when a window moves to
-another monitor. What follows applies to the windows on that monitor only: a
+another monitor. Use :download:`monitor-identifiers.py <../../tools/monitor-identifiers.py>`
+to list connected monitor IDs on macOS or Linux for a ``monitor_info`` entry.
+
+What follows applies to the windows on that monitor only: a
 window dragged to an ordinary monitor looks and behaves as usual again once it
 has stayed there for a moment, and comes back when it returns.
 
@@ -112,14 +115,14 @@ as there is color e-paper:
   blink, there is no cursor trail, animated images stay on the frame they show,
   an indeterminate progress bar stands still, a keyboard scroll jumps rather
   than glides and the output is not dithered, since dither shows as grain that
-  ghosts. For now custom shaders, the visual bell, pixel scrolling and the
-  repaint timing stay as configured. Programs are told ``kind=eink`` through the :doc:`display-protocol`,
+  ghosts. Silkie submits at most ten frames per second for each e-paper
+  window. Programs are told ``kind=eink`` through the :doc:`display-protocol`,
   so that they can avoid animation and frequent redraws themselves.
-* On a display that shows only gray, text is black on white, or white on black
-  with ``color_scheme dark``, over the colors of themes, profiles,
-  ``launch --color``, sessions and programs, which come back when the window
-  moves to another display. Images are shown as they are, and the monitor
-  reduces them to its levels of gray.
+* E-paper and grayscale displays use a high-contrast text palette over the
+  colors of themes, profiles, ``launch --color``, sessions and programs.
+  For grayscale displays without e-paper mode, ``color_scheme dark`` selects
+  white on black and other settings use black on white. A grayscale monitor
+  reduces images to its own levels of gray.
 
 To treat every window as on e-paper whatever its monitor, add::
 
@@ -130,8 +133,12 @@ With it a display whose colors nothing declares, in Silkie's table,
 e-paper monitor needs its colors declared, for example
 ``monitor_info "<its model>" kind=eink color=rgb`` or ``display_info color=rgb``.
 
-Press ``ctrl+shift+f12`` to switch between black on white and white on black.
-The display is still reported as e-paper in either scheme. Press
+In **Settings → Appearance → Color scheme → E-ink color scheme**, choose light (default),
+dark, follow OS, or invert OS. The equivalent configuration option is
+:opt:`eink_color_scheme`. Follow and invert both use light when the OS
+does not report a preference. This choice applies to color and monochrome
+e-paper. Press ``ctrl+shift+f12`` to switch the color scheme for ordinary
+displays. Press
 ``ctrl+shift+alt+f12`` to toggle :opt:`eink_mode`. These shortcuts use
 ``kitty_mod`` (by default ``ctrl+shift``). The actions are also available from
 the command palette. To choose your own shortcuts::
@@ -140,7 +147,7 @@ the command palette. To choose your own shortcuts::
     map f7 set_eink_mode toggle
 
 Use ``color_scheme light`` or ``color_scheme dark`` for a persistent color
-choice on any display. ``set_color_scheme auto`` returns to configured colors
+choice on ordinary displays. ``set_color_scheme auto`` returns to configured colors
 and automatic themes. Explicit light and dark choices take precedence over
 automatic themes and OS appearance changes. Reloading the configuration
 restores the saved choices.
@@ -155,6 +162,10 @@ customize the built-in theme, copy :file:`builtin-light-theme.conf` from the
 Silkie package to :file:`light-theme.auto.conf`. Colors from profiles, ``launch --color``, the
 ssh kitten and programs stay on top of any theme. The black on white of a gray
 display shows over all of them.
+
+Programs can read the desktop preference from the ``appearance`` field of
+the :doc:`display-protocol`. A change asks programs to redraw, even when the
+terminal has an explicit theme.
 
 :opt:`display_info` declares properties of every display that only change what
 programs are told, for example ``display_info kind=eink`` reports e-paper
@@ -272,15 +283,28 @@ limits apply when Silkie rasterizes a vector image.
     The maximum number of line segments used to flatten one curve or circle.
     ``0`` means as many segments as the flattening error asks for.
 
+.. _find-in-terminal:
+
+Find in terminal output
+-----------------------
+
+Choose **Edit → Find → Find…** to search the visible text and scrollback of
+the active pane. On macOS, press ``Cmd+F``. Use **Find Next** or press
+``Enter`` in the search field to move toward older output. **Find Previous**
+or ``Shift+Enter`` moves toward newer output. **Use Selection for Find**
+searches for the selected text. Matches may cross soft wraps.
+
+Set ``find_match_foreground`` and ``find_match_background`` for all matches,
+and ``find_current_foreground`` and ``find_current_background`` for the
+selected match.
+
 Compressed scrollback
 ---------------------
 
 Silkie keeps unlimited scrollback by default, compressed with zstd at level
 9: :opt:`scrollback_lines` is :code:`unlimited` and :opt:`scrollback_compression`
 is :code:`9`. The two options are independent: a line limit, compression
-(:code:`none` or any zstd level, negative fast levels included) or both. The
-option documentation has the measured memory, CPU and latency for several
-levels, and what frames and a line limit cost.
+(:code:`none` or any zstd level, negative fast levels included) or both.
 
 The newest 2048 lines stay uncompressed. Older lines go, 128 at a time, to a
 background thread that encodes them compactly and compresses them, so output
@@ -302,3 +326,12 @@ The settings can differ per window and per tab:
 A new level applies to lines compressed from then on. With unlimited
 scrollback the scrollback pager history (:opt:`scrollback_pager_history_size`)
 receives nothing, as no line ever leaves the scrollback.
+
+.. opt:: scrollback_lines
+
+   Set the line limit for new panes. The default is ``unlimited``.
+
+.. opt:: scrollback_compression
+
+   Set the zstd level for new panes. The default is ``9``. Use ``none`` to
+   keep every line uncompressed.

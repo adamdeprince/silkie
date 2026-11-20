@@ -284,6 +284,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">Accessibility</a></li>
 <li class="toctree-l2"><a class="reference internal" href="vector-protocol.html">Vector images</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -388,6 +389,8 @@ the same write as this query since replies arrive in order.</p>
 while the terminal runs, so a program needs it once. A terminal that does not
 support this protocol ignores the query, so a program must time out and may
 then fall back to probing the selectors it needs one at a time.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">a11y.1</span></code> entry advertises image placement annotations. See
+<a class="reference internal" href="accessibility.html"><span class="doc">Accessibility</span></a> for that selector’s requests.</p>
 </section>
 <section id="sgr-extensions">
 <h2>SGR extensions<a class="headerlink" href="#sgr-extensions" title="Link to this heading">¶</a></h2>
@@ -441,6 +444,22 @@ program reads a mode back after setting it rather than assume it was
 granted. The reply uses the version number
 the request asked for. A selector the terminal does not speak answers neither,
 which is what the listing above is for.</p>
+</section>
+<section id="graphics-feature-queries">
+<span id="graphics-query-features"></span><h2>Graphics feature queries<a class="headerlink" href="#graphics-feature-queries" title="Link to this heading">¶</a></h2>
+<p>Use a graphics-protocol query with <code class="docutils literal notranslate"><span class="pre">a=q</span></code> and <code class="docutils literal notranslate"><span class="pre">e</span></code> set to the action to
+probe. Include a nonzero image ID in <code class="docutils literal notranslate"><span class="pre">i</span></code> to correlate the reply and
+the settings you want to test. For example, this query asks whether the
+terminal can transmit and place an SVG image:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">q</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span><span class="n">e</span><span class="o">=</span><span class="n">T</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">201</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+</pre></div>
+</div>
+<p>A terminal that supports it replies with both <code class="docutils literal notranslate"><span class="pre">e=T</span></code> and <code class="docutils literal notranslate"><span class="pre">f=201</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Gi</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span><span class="n">e</span><span class="o">=</span><span class="n">T</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">201</span><span class="p">;</span><span class="n">OK</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+</pre></div>
+</div>
+<p>Check that the reply includes the requested action and values. A feature
+query probes support without uploading or changing an image.</p>
 </section>
 <section id="turning-every-mode-off">
 <h2>Turning every mode off<a class="headerlink" href="#turning-every-mode-off" title="Link to this heading">¶</a></h2>
@@ -556,6 +575,7 @@ relay that passes bytes through passes the request through.</p>
 <li><a class="reference internal" href="#sgr-extensions">SGR extensions</a></li>
 <li><a class="reference internal" href="#graphics-media-and-formats">Graphics media and formats</a></li>
 <li><a class="reference internal" href="#reading-a-mode">Reading a mode</a></li>
+<li><a class="reference internal" href="#graphics-feature-queries">Graphics feature queries</a></li>
 <li><a class="reference internal" href="#turning-every-mode-off">Turning every mode off</a></li>
 <li><a class="reference internal" href="#relays-and-multiplexers">Relays and multiplexers</a></li>
 </ul>

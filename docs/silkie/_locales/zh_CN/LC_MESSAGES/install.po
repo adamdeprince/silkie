@@ -143,6 +143,15 @@ msgstr ""
 "安装 Git、C 编译器和 `Go <https://go.dev/doc/install>`_。Go 的最低版本在 `silkie 分支的 go.mod "
 "<https://github.com/adamdeprince/silkie/blob/silkie/go.mod>`_ 中声明。"
 
+#: docs/silkie/install.rst:112
+msgid ""
+"Building the native SVG renderer also requires Cargo and "
+"`Rust <https://www.rust-lang.org/tools/install>`_ 1.87 or later. Cargo downloads the locked SVG "
+"dependencies on the first source build."
+msgstr ""
+"构建原生 SVG 渲染器还需要 Cargo 和 `Rust <https://www.rust-lang.org/tools/install>`_ 1.87 或更高版本。"
+"首次从源码构建时，Cargo 会下载锁定版本的 SVG 依赖。"
+
 #: docs/silkie/install.rst:83
 msgid ""
 "On macOS, install Apple's command line developer tools with ``xcode-select --install`` if they "

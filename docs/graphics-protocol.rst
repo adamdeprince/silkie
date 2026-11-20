@@ -282,9 +282,9 @@ PNG. This is specified using the ``f`` key in the control data. ``f=32`` (which 
 default) indicates 32-bit RGBA data and ``f=24`` indicates 24-bit RGB data and ``f=100``
 indicates PNG data. The PNG format is supported both for convenience, and as a compact way
 of transmitting paletted images. Terminals may additionally support ``f=64``, 64-bit
-floating point RGBA data for HDR images, see the :doc:`hdr-protocol`, and
-``f=200``, which is not pixels at all but a scene of paths that the terminal
-rasterizes itself, see `Vector images`_.
+floating point RGBA data for HDR images, see the :doc:`hdr-protocol`.
+Silkie rasterizes retained vector scenes (``f=200``) and SVG documents
+(``f=201``), see `Vector images`_.
 Additionally, ``f=8`` and ``f=16`` indicate :ref:`indexed color data
 <indexed_color_data>`, whose colors come from the terminal color scheme.
 Silkie also accepts compact gray and RGB565 pixels, see
@@ -384,6 +384,10 @@ queried like any other, and is changed afterwards with the ``a=e`` action,
 which applies a patch to it. Animation frames and composition are not
 supported for such images. The records, the editing action and how a relay
 holds such images are specified in :doc:`vector-protocol`.
+
+With ``f=201`` the data is a UTF-8 SVG document. Silkie parses it and rasterizes
+the retained scene at the placement size. See :ref:`svg_graphics` for sizing,
+transmission and capability discovery.
 
 Compression
 ~~~~~~~~~~~~~
@@ -1399,7 +1403,7 @@ Key      Value                 Default    Description
 -----------------------------------------------------------
 ``f``    Positive integer.     ``32``     The format in which the image data is sent.
          ``(8, 16, 24, 32,``              Silkie adds the packed, palette and high precision formats ``301, 302,``
-         ``64, 100, 200)``.               ``304, 308, 316, 401, 402, 404, 408, 516, 632, 664``.
+         ``64, 100, 200, 201)``.          ``304, 308, 316, 401, 402, 404, 408, 516, 632, 664``.
 ``t``    Single character.     ``d``      The transmission medium used.
          ``(d, f, t, s, g)``.
 ``s``    Positive integer.     ``0``      The width of the image being sent.
@@ -1420,7 +1424,7 @@ Key      Value                 Default    Description
 ``T``    ``0, 1``              ``0``      Whether to compress the bright parts of an HDR image into the range the
                                           display can show, see the :doc:`hdr-protocol`.
 ``G``    ``0, 1, 2``           ``0``      The gamut the pixel data is in: sRGB, Display P3 or Rec. 2020, see
-                                          :doc:`wide-gamut-protocol`. Ignored for ``f=64``, ``f=100`` and ``f=200``.
+                                          :doc:`wide-gamut-protocol`. Ignored for ``f=64``, ``f=100``, ``f=200`` and ``f=201``.
 ``E``    ``0, 8, 13, 16, 18``  ``0``      The transfer function of the pixel data, an ITU-T H.273 code point: sRGB
                                           (``0`` or ``13``), linear (``8``), PQ (``16``) or HLG (``18``), see
                                           :doc:`precision-image-protocol`. Raw RGB, RGBA and gray formats only.

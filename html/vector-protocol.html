@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Packed image formats" href="packed-image-protocol.html"><link rel="prev" title="SSH agent transport" href="ssh-agent-protocol.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Packed image formats" href="packed-image-protocol.html"><link rel="prev" title="Accessibility" href="accessibility.html">
         <link rel="canonical" href="https://silkie.goblinreactor.com/vector-protocol.html">
 
     <link rel="shortcut icon" href="_static/kitty.png"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
@@ -284,6 +284,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ink-protocol.html">Terminal-side ink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="notification-routing.html">Desktop notification routing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ssh-agent-protocol.html">SSH agent transport</a></li>
+<li class="toctree-l2"><a class="reference internal" href="accessibility.html">Accessibility</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Vector images</a></li>
 <li class="toctree-l2"><a class="reference internal" href="packed-image-protocol.html">Packed image formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="palette-image-protocol.html">Palette images</a></li>
@@ -346,12 +347,12 @@
 viewer, a plotting library or a pen application, has to rasterize everything
 itself and send the pixels again whenever the window is resized, the view is
 zoomed or a stroke is added, and over a slow link that is what makes such
-programs feel remote. Vector images are a pixel format of the graphics
-protocol, <code class="docutils literal notranslate"><span class="pre">f=200</span></code>, whose data is not pixels but a small scene: paths, shaped
-text, glyph outlines, pen strokes, raster images and gradients. The terminal keeps the
-scene and rasterizes it itself, at the exact size the image is shown at, so it
-is crisp at any zoom, and a program changes it with patches a few bytes long.
-The format is rich enough to render a PDF page, see <a class="reference internal" href="#rendering-a-pdf">Rendering a PDF</a>.</p>
+programs feel remote. Silkie accepts two vector image formats. The native
+<code class="docutils literal notranslate"><span class="pre">f=200</span></code> scene format describes paths, shaped text, glyph outlines, pen
+strokes, raster images and gradients. The terminal keeps the scene and
+rasterizes it at the size the image is shown at. A program can update it
+with small patches. The format is rich enough to render a PDF page, see
+<a class="reference internal" href="#rendering-a-pdf">Rendering a PDF</a>. The <code class="docutils literal notranslate"><span class="pre">f=201</span></code> format accepts <a class="reference internal" href="#svg-graphics"><span class="std std-ref">SVG documents</span></a>.</p>
 <p>Because a vector image is an ordinary image to the rest of the protocol,
 everything else works unchanged: placement with <code class="docutils literal notranslate"><span class="pre">a=p</span></code>, anchoring to cells so
 the image scrolls with the text and into the scrollback, the alternate screen,
@@ -383,6 +384,39 @@ with <code class="docutils literal notranslate"><span class="pre">ENOMEM</span><
 one escape code when it is set. The terminal answers <code class="docutils literal notranslate"><span class="pre">OK</span></code> or, for a scene it
 cannot parse, <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code> with the line number and the problem, and nothing of
 such a transmission is kept.</p>
+</section>
+<section id="transmitting-an-svg-image">
+<span id="svg-graphics"></span><h2>Transmitting an SVG image<a class="headerlink" href="#transmitting-an-svg-image" title="Link to this heading">¶</a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">f=201</span></code> to send a static SVG document as UTF-8 XML. Silkie parses it
+with <a class="reference external" href="https://github.com/linebender/resvg">resvg</a> and retains the scene for
+rasterization at the placement size. Send the SVG bytes in the usual graphics
+payload:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">T</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">201</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">;</span><span class="o">&lt;</span><span class="n">base64</span> <span class="n">of</span> <span class="n">the</span> <span class="n">SVG</span> <span class="n">below</span><span class="o">&gt;&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
+
+<span class="o">&lt;</span><span class="n">svg</span> <span class="n">xmlns</span><span class="o">=</span><span class="s2">"http://www.w3.org/2000/svg"</span> <span class="n">viewBox</span><span class="o">=</span><span class="s2">"0 0 80 40"</span><span class="o">&gt;</span>
+  <span class="o">&lt;</span><span class="n">circle</span> <span class="n">cx</span><span class="o">=</span><span class="s2">"40"</span> <span class="n">cy</span><span class="o">=</span><span class="s2">"20"</span> <span class="n">r</span><span class="o">=</span><span class="s2">"16"</span> <span class="n">fill</span><span class="o">=</span><span class="s2">"tomato"</span><span class="o">/&gt;</span>
+<span class="o">&lt;/</span><span class="n">svg</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Silkie derives the intrinsic pixel size from the SVG, rounding fractional
+dimensions up. Supply both <code class="docutils literal notranslate"><span class="pre">s</span></code> and <code class="docutils literal notranslate"><span class="pre">v</span></code> to select a different nominal image
+size for placement and cropping, or omit both. <code class="docutils literal notranslate"><span class="pre">c</span></code> and <code class="docutils literal notranslate"><span class="pre">r</span></code> size the placement
+in cells. As with other graphics images, <code class="docutils literal notranslate"><span class="pre">a=t</span></code> uploads an image, <code class="docutils literal notranslate"><span class="pre">a=T</span></code> also
+places it, and <code class="docutils literal notranslate"><span class="pre">a=p</span></code> places a previously uploaded image. To change the
+document, retransmit it under the same image ID. The <code class="docutils literal notranslate"><span class="pre">a=e</span></code> record editor and
+terminal-side ink apply to <code class="docutils literal notranslate"><span class="pre">f=200</span></code> scenes.</p>
+<p>SVG uses the normal direct, file, temporary-file, and shared-memory graphics
+transports. Direct payloads use base64 and can be split across <code class="docutils literal notranslate"><span class="pre">m=1</span></code> chunks.
+<code class="docutils literal notranslate"><span class="pre">o=z</span></code> accepts a zlib-compressed payload without a separate uncompressed
+length. <code class="docutils literal notranslate"><span class="pre">a=q,f=201,i=&lt;id&gt;</span></code> validates the payload and reports <code class="docutils literal notranslate"><span class="pre">OK</span></code> or an error
+without keeping an image. An <code class="docutils literal notranslate"><span class="pre">a=q,e=T,f=201,i=&lt;id&gt;</span></code> feature query advertises
+the format without a payload. It is also listed in the native terminal’s
+<a class="reference internal" href="capabilities-protocol.html"><span class="doc">Extension capabilities protocol</span></a> reply.</p>
+<p>Paths, transforms, gradients, SVG styles, text using installed fonts, local
+fragment references, and embedded PNG, JPEG, GIF and WebP images are handled
+by the SVG renderer. The renderer operates in static image mode. It ignores
+scripts, animations and references to external files or URLs. XML documents
+with DTDs return <code class="docutils literal notranslate"><span class="pre">EINVAL</span></code>.</p>
 </section>
 <section id="editing-a-vector-image">
 <h2>Editing a vector image<a class="headerlink" href="#editing-a-vector-image" title="Link to this heading">¶</a></h2>
@@ -806,14 +840,14 @@ implementation can accept base scenes while lacking these additions.</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="ssh-agent-protocol.html">
+          <a class="prev-page" href="accessibility.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">SSH agent transport</div>
+                <div class="title">Accessibility</div>
                 
               </div>
             </a>
@@ -848,6 +882,7 @@ implementation can accept base scenes while lacking these additions.</p>
             <ul>
 <li><a class="reference internal" href="#">Vector images</a><ul>
 <li><a class="reference internal" href="#transmitting-a-vector-image">Transmitting a vector image</a></li>
+<li><a class="reference internal" href="#transmitting-an-svg-image">Transmitting an SVG image</a></li>
 <li><a class="reference internal" href="#editing-a-vector-image">Editing a vector image</a></li>
 <li><a class="reference internal" href="#records">Records</a></li>
 <li><a class="reference internal" href="#nested-window-clips">Nested window clips</a></li>

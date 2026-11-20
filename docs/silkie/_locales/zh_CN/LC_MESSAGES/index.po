@@ -394,3 +394,30 @@ msgstr "安装脚本会在添加或修改 Goblin Reactor 软件源之前征求�
 # Unsigned macOS app and installer dequarantine.
 msgid "The macOS app is not signed with an Apple Developer ID or notarized by Apple, so macOS would refuse to open it as downloaded. On macOS the install script and the Homebrew cask clear the quarantine flag from ``silkie.app`` after installing it, so Silkie opens normally. If macOS still blocks it, approve Silkie in System Settings > Privacy & Security, or run ``xattr -dr com.apple.quarantine /Applications/silkie.app``."
 msgstr "macOS 应用没有使用 Apple Developer ID 签名，也未经 Apple 公证，因此 macOS 会拒绝直接打开下载的应用。在 macOS 上，安装脚本和 Homebrew cask 会在安装后清除 ``silkie.app`` 的隔离标记，让 Silkie 可以正常打开。如果 macOS 仍然阻止打开，请在“系统设置 > 隐私与安全性”中批准 Silkie，或运行 ``xattr -dr com.apple.quarantine /Applications/silkie.app``。"
+
+#: docs/silkie/index.rst:115
+msgid "Accessibility"
+msgstr "无障碍功能"
+
+#: docs/silkie/index.rst:117
+msgid ""
+"Review the descriptions of charts, diagrams, and other images in the active pane with a keyboard "
+"or screen reader. Programs can describe each placement and identify decorative artwork. See "
+":doc:`accessibility`."
+msgstr "可以使用键盘或屏幕阅读器查看当前窗格内图表、示意图和其他图像的说明。程序可以描述每个放置，并标记装饰性图像。详见 :doc:`accessibility`。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/index.rst:95
+msgid "Send paths, styled text and scenes for the terminal to render at the displayed size, with session fonts, text measurement, nested window clips and HDR color. Let the terminal draw pen strokes as input arrives, without waiting for each sample to make a round trip to the application. Transmit :ref:`SVG documents <svg_graphics>` through the graphics protocol and let Silkie render them at the displayed size."
+msgstr "发送路径、带样式的文字和场景，由终端按显示尺寸渲染。支持会话字体、文本测量、嵌套窗口裁剪和 HDR 色彩。终端可随输入绘制笔迹，无需等待每个采样点往返应用。也可通过图形协议发送 :ref:`SVG 文档 <svg_graphics>`，由 Silkie 按显示尺寸渲染。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/index.rst:119
+msgid "Magnify and pan the active pane while keeping the same terminal grid. Silkie redraws text and vector graphics at the selected scale. Review the descriptions of charts, diagrams, and other images in the active pane with a keyboard or screen reader. Programs can describe each placement and identify decorative artwork. See :doc:`accessibility`."
+msgstr "放大和平移当前窗格，同时保持终端网格不变。Silkie 按所选倍率重绘文字和矢量图形。可用键盘或屏幕阅读器查看当前窗格中的图表、示意图和其他图像的说明。程序可以为每个图像放置添加说明，并标记装饰性图像。参见 :doc:`accessibility`。"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/index.rst:126
+msgid "Find in terminal output"
+msgstr "查找终端输出"
+
+#: ../../../Users/adam/dev/silkie/docs/silkie/index.rst:128
+msgid "Search the active pane and its compressed scrollback with **Edit → Find**. Silkie highlights matches as you type. See :ref:`find-in-terminal` for shortcuts and settings."
+msgstr "用 **Edit → Find** 搜索当前窗格及其压缩回滚历史。Silkie 会在输入时突出显示匹配项。快捷键和设置见 :ref:`find-in-terminal`。"

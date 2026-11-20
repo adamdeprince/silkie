@@ -54,6 +54,9 @@ while the terminal runs, so a program needs it once. A terminal that does not
 support this protocol ignores the query, so a program must time out and may
 then fall back to probing the selectors it needs one at a time.
 
+The ``a11y.1`` entry advertises image placement annotations. See
+:doc:`accessibility` for that selector's requests.
+
 SGR extensions
 -----------------
 
@@ -110,6 +113,25 @@ program reads a mode back after setting it rather than assume it was
 granted. The reply uses the version number
 the request asked for. A selector the terminal does not speak answers neither,
 which is what the listing above is for.
+
+.. _graphics_query_features:
+
+Graphics feature queries
+------------------------
+
+Use a graphics-protocol query with ``a=q`` and ``e`` set to the action to
+probe. Include a nonzero image ID in ``i`` to correlate the reply and
+the settings you want to test. For example, this query asks whether the
+terminal can transmit and place an SVG image::
+
+    <ESC>_Ga=q,i=31,e=T,f=201<ESC>\
+
+A terminal that supports it replies with both ``e=T`` and ``f=201``::
+
+    <ESC>_Gi=31,e=T,f=201;OK<ESC>\
+
+Check that the reply includes the requested action and values. A feature
+query probes support without uploading or changing an image.
 
 Turning every mode off
 -------------------------

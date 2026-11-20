@@ -39,7 +39,7 @@ A program asks about the display its window is on::
 the reply so replies can be matched to queries. A supporting terminal
 answers::
 
-    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=16 : output_type=float : output_dither=0 <ST>
+    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=16 : output_type=float : output_dither=0 : appearance=dark <ST>
 
 A terminal that does not support the protocol ignores the query, so a program
 must time out and fall back to assuming an ordinary color display.
@@ -143,6 +143,18 @@ applies equally to its active channels.
     in an inch of the screen, so that it can draw at a true size. ``0`` when
     unknown.
 
+``appearance``
+    The desktop appearance preference of the host running the terminal.
+    Values are ``light``, ``dark``, and ``no_preference``. The last value
+    also covers desktops that do not expose a preference. This field is
+    independent of the terminal's configured theme and the pane's background.
+    Clients can treat a missing or unrecognized value as ``no_preference``.
+
+``eink_scheme``
+    The effective e-paper palette, ``light`` or ``dark``, reported when
+    Silkie treats the window as being on e-paper. It can change with the
+    desktop appearance or when the user changes the e-paper setting.
+
 The monitor the window is on, where the terminal knows it, which a program
 can use to recognize a monitor whose properties it knows better than the
 system, or to show the user which monitor the window is on. Each of these
@@ -229,9 +241,10 @@ Turning the mode on sends one event with the current values, so a program
 needs no separate query. After that, while the mode is on, the terminal sends
 one event whenever any field changes: the window was moved to a display with
 a different scale or refresh rate, the display's brightness setting changed
-the headroom, its color profile was switched::
+the headroom, its color profile was switched, or the desktop appearance
+preference changed::
 
-    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=10 : output_type=fixed : output_dither=8 <ST>
+    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=10 : output_type=fixed : output_dither=8 : appearance=light <ST>
 
 The fields are those of the ``cap`` reply, without ``id`` and ``mode``, and
 ``t``, the time the terminal learnt of the change, in milliseconds on the
@@ -241,6 +254,12 @@ again reports the current values once and then only changes. A change can be
 reported a short while after it happens, and a program that has turned the
 mode off may still receive an event that was already on its way. An event is
 never merged with another or dropped, by the terminal or by a relay.
+
+On a desktop appearance change, Silkie sends ``SIGWINCH`` to the foreground
+process group of each pane. Programs that enabled in-band resize reports
+also receive a resize report with the current dimensions, even though the
+dimensions are unchanged. Both notifications work without display mode, so
+a program can reissue the display query after a resize notification.
 
 Relays and multiplexers
 ---------------------------

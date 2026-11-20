@@ -96,6 +96,8 @@ Send paths, styled text and scenes for the terminal to render at the displayed
 size, with session fonts, text measurement, nested window clips and HDR color.
 Let the terminal draw pen strokes as input arrives, without waiting for
 each sample to make a round trip to the application.
+Transmit :ref:`SVG documents <svg_graphics>` through the graphics protocol
+and let Silkie render them at the displayed size.
 
 :doc:`Vector images <vector-protocol>` · :doc:`Terminal-side ink <ink-protocol>` ·
 :doc:`GPU surfaces <gpu-surface-protocol>`
@@ -110,6 +112,22 @@ sRGB, linear, PQ or HLG, so that HDR10 frames go to the GPU as they are; see
 :doc:`precision-image-protocol`. Images of any size are drawn, from tiles when they
 are larger than a GPU texture, with mipmaps when shown smaller than they are,
 and stay without a storage quota; see :doc:`image-tiling`.
+
+Accessibility
+~~~~~~~~~~~~~
+
+Magnify and pan the active pane while keeping the same terminal grid.
+Silkie redraws text and vector graphics at the selected scale.
+Review the descriptions of charts, diagrams, and other images in the active
+pane with a keyboard or screen reader. Programs can describe each placement
+and identify decorative artwork. See :doc:`accessibility`.
+
+Find in terminal output
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Search the active pane and its compressed scrollback with **Edit → Find**.
+Silkie highlights matches as you type. See :ref:`find-in-terminal` for
+shortcuts and settings.
 
 Color beyond ordinary SDR
 ~~~~~~~~~~~~~~~~~~~~~~~~~
