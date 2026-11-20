@@ -1,6 +1,6 @@
 cask "silkie" do
-  version "0.49.2-silkie20261117.2"
-  sha256 "8bb9e41823d0738e208aff42215349dfc6f8bf8036c32775da13f7485e407b49"
+  version "0.49.2-silkie20261119.1"
+  sha256 "b0532cd0b59da2f42c2283cc5e4d81f69fd746418f7b702526d2c7c7c18bf6e8"
   url "https://brew.goblinreactor.com/casks/silkie-#{version}.zip"
   name "Silkie"
   desc "Silkie terminal emulator"
@@ -23,7 +23,7 @@ cask "silkie" do
   end
   caveats <<~EOS
     Launch with silkie; companion tools use silkie-kitten.
-    Configuration: ~/.config/kitty/kitty.conf.
+    Configuration: ~/.config/silkie/silkie.conf.
     This build is ad-hoc signed and is not Apple-notarized, so the cask
     clears its quarantine flag after installing it.
   EOS
