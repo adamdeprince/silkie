@@ -3219,10 +3219,10 @@ grman_update_magnified_layers(
     const double zoom = MAX(1., magnification.scale);
     if (zoom > 1.) {
         double half = 0.5 / zoom;
-        screen.left = screen_left + (magnification.x - half) * screen_width;
-        screen.right = screen_left + (magnification.x + half) * screen_width;
-        screen.top = screen_top - (magnification.y - half) * screen_height;
-        screen.bottom = screen_top - (magnification.y + half) * screen_height;
+        screen.left = (float)(screen_left + (magnification.x - half) * screen_width);
+        screen.right = (float)(screen_left + (magnification.x + half) * screen_width);
+        screen.top = (float)(screen_top - (magnification.y - half) * screen_height);
+        screen.bottom = (float)(screen_top - (magnification.y + half) * screen_height);
     }
 
 
@@ -3319,8 +3319,8 @@ grman_update_magnified_layers(
             rd->indexed_px_sz = img->indexed_px_sz;
             rd->palette_texture_id = img->palette ? img->palette->texture : 0;
             // The rect is in normalized device co-ordinates, so allow for rounding errors
-            const float width_px = (r.right - r.left) / screen_width * screen_width_px * zoom;
-            const float height_px = (r.top - r.bottom) / screen_height * screen_height_px * zoom;
+            const float width_px = (float)((r.right - r.left) / screen_width * screen_width_px * zoom);
+            const float height_px = (float)((r.top - r.bottom) / screen_height * screen_height_px * zoom);
             if (img->indexed_px_sz || rd->decode != IMAGE_DECODE_NONE)
                 rd->is_unscaled = fabsf(width_px - ref->src_width) < 0.01f && fabsf(height_px - ref->src_height) < 0.01f;
             rd->filter_decoded = rd->decode != IMAGE_DECODE_NONE && !rd->is_unscaled;
