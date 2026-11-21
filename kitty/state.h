@@ -75,6 +75,8 @@ struct MenuItem {
     const char *definition;
 };
 
+typedef enum { ACCESSIBILITY_AUTO, ACCESSIBILITY_OFF, ACCESSIBILITY_ON } AccessibilityOverride;
+
 typedef struct Options {
     monotonic_t visual_bell_duration, cursor_blink_interval, cursor_stop_blinking_after, click_interval;
     struct {
@@ -130,6 +132,7 @@ typedef struct Options {
 
     char *default_window_logo;
     char *display_info;
+    AccessibilityOverride high_contrast, differentiate_without_color;
     unsigned eink_color_scheme;
     bool eink_mode;
     bool magnify_raster_resolution;
@@ -918,6 +921,8 @@ OSWindow *os_window_for_kitty_window(id_type);
 void os_window_display_info(OSWindow *w, DisplayInfo *d);
 void log_window_monitor(OSWindow *w, const DisplayInfo *d);
 void update_display_info(OSWindow *os_window, monotonic_t now, bool explicit);
+void report_display_change(OSWindow *os_window);
+const char *desktop_preferred_languages(void);
 unsigned os_window_refresh_period_us(OSWindow *w);
 OSWindow *os_window_for_id(id_type);
 void spatial_map_pointer(OSWindow *, double *, double *);

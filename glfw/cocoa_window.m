@@ -33,6 +33,7 @@
 #include <Availability.h>
 #import <CoreServices/CoreServices.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#include <objc/runtime.h>
 #include <errno.h>
 #include <float.h>
 #include <string.h>
@@ -2864,12 +2865,26 @@ _glfwPlatformUpdateIMEState(_GLFWwindow *w, const GLFWIMEUpdateEvent *ev) {
     return YES;
 }
 
+- (NSArray *)accessibilityChildren {
+    objc_setAssociatedObject(self, @selector(accessibilityFocusedUIElement), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    NSArray *panes = objc_getAssociatedObject(self, @selector(accessibilityChildren));
+    return panes ? panes : [super accessibilityChildren];
+}
+
+- (id)accessibilityFocusedUIElement {
+    for (id element in [self accessibilityChildren]) {
+        if ([element isAccessibilityFocused]) return element;
+    }
+    return [super accessibilityFocusedUIElement];
+}
+
 - (BOOL)isAccessibilitySelectorAllowed:(SEL)selector {
     // Allow accessibility selectors needed for dictation and other accessibility features
     // See https://github.com/kovidgoyal/kitty/issues/3732
     if (selector == @selector(accessibilityRole) || selector == @selector(accessibilitySelectedText) || selector == @selector(accessibilitySelectedTextRange) ||
         selector == @selector(accessibilityNumberOfCharacters) || selector == @selector(accessibilityInsertionPointLineNumber) ||
-        selector == @selector(accessibilityValue) || selector == @selector(setAccessibilityValue:) || selector == @selector(accessibilityStringForRange:))
+        selector == @selector(accessibilityValue) || selector == @selector(setAccessibilityValue:) || selector == @selector(accessibilityStringForRange:) ||
+        selector == @selector(accessibilityChildren) || selector == @selector(accessibilityFocusedUIElement))
         return YES;
 
     // Allow accessibility selectors needed for external window management tools
@@ -2885,6 +2900,8 @@ _glfwPlatformUpdateIMEState(_GLFWwindow *w, const GLFWIMEUpdateEvent *ev) {
 #if (TARGET_OS_OSX && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400)
 
 - (NSAccessibilityRole)accessibilityRole {
+    NSArray *panes = objc_getAssociatedObject(self, @selector(accessibilityChildren));
+    if (panes.count) return NSAccessibilityGroupRole;
     return NSAccessibilityTextAreaRole;
 }
 

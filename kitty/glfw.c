@@ -60,6 +60,20 @@ appearance_name(GLFWColorScheme appearance) {
     }
 }
 
+static GLFWColorScheme fallback_appearance;
+static unsigned fallback_accessibility;
+static char *preferred_languages;
+
+const char *
+desktop_preferred_languages(void) {
+    return preferred_languages ? preferred_languages : "und";
+}
+
+static GLFWColorScheme
+desktop_appearance(GLFWColorScheme appearance) {
+    return appearance != GLFW_COLOR_SCHEME_NO_PREFERENCE ? appearance : fallback_appearance;
+}
+
 static const char *
 resolve_eink_color_scheme(unsigned mode, const char *appearance) {
     if (mode == EINK_SCHEME_DARK ||
@@ -77,7 +91,7 @@ eink_color_scheme_for_appearance(PyObject *self UNUSED, PyObject *args) {
 
 static void
 on_system_color_scheme_change(GLFWColorScheme appearance, bool is_initial_value) {
-    const char *which = appearance_name(appearance);
+    const char *which = appearance_name(desktop_appearance(appearance));
     debug("system color-scheme changed to: %s is_initial_value: %d\n", which, is_initial_value);
     // Desktop changes can be reported immediately with the last known monitor information.
     for (size_t i = 0; i < global_state.num_os_windows; i++) {
@@ -85,15 +99,82 @@ on_system_color_scheme_change(GLFWColorScheme appearance, bool is_initial_value)
         if (!w->display_info.appearance || w->display_info.appearance == which) continue;
         w->display_info.appearance = which;
         if (w->display_info.eink & EINK_REFRESH) w->display_info.eink_scheme = resolve_eink_color_scheme(OPT(eink_color_scheme), which);
-        for (unsigned t = 0; t < w->num_tabs; t++) {
-            Tab *tab = w->tabs + t;
-            for (unsigned j = 0; j < tab->num_windows; j++) {
-                Screen *screen = tab->windows[j].render_data.screen;
-                if (screen) screen_display_changed(screen, &w->display_info);
-            }
-        }
+        report_display_change(w);
     }
     call_boss(on_system_color_scheme_change, "sO", which, is_initial_value ? Py_True : Py_False);
+}
+
+static void
+apply_display_accessibility(DisplayInfo *d, unsigned flags) {
+    const AccessibilityOverride high_contrast = OPT(high_contrast), differentiate = OPT(differentiate_without_color);
+    d->high_contrast = high_contrast == ACCESSIBILITY_ON || (high_contrast == ACCESSIBILITY_AUTO &&
+        ((flags & GLFW_DISPLAY_ACCESSIBILITY_HIGH_CONTRAST) || (d->eink & EINK_REFRESH) || strcmp(d->kind, "eink") == 0));
+    d->differentiate_without_color = differentiate == ACCESSIBILITY_ON || (differentiate == ACCESSIBILITY_AUTO &&
+        ((flags & GLFW_DISPLAY_ACCESSIBILITY_DIFFERENTIATE_WITHOUT_COLOR) || (d->eink & EINK_GRAY) || strcmp(d->color, "rgb") != 0));
+}
+
+static void
+notify_display_accessibility_change(unsigned flags, unsigned previous_flags) {
+    for (size_t i = 0; i < global_state.num_os_windows; i++) {
+        OSWindow *w = global_state.os_windows + i;
+        DisplayInfo *d = &w->display_info;
+        if (!d->appearance) {
+            os_window_display_info(w, d);
+            apply_display_accessibility(d, previous_flags);
+        }
+        const bool high_contrast = d->high_contrast, differentiate = d->differentiate_without_color;
+        apply_display_accessibility(d, flags);
+        if (d->high_contrast == high_contrast && d->differentiate_without_color == differentiate) continue;
+        report_display_change(w);
+        call_boss(on_display_color_change, "K", w->id);
+    }
+}
+
+static void
+on_system_display_accessibility_change(unsigned flags, unsigned previous_flags) {
+    notify_display_accessibility_change(flags | fallback_accessibility, previous_flags | fallback_accessibility);
+}
+
+static PyObject *
+set_desktop_appearance_fallback(PyObject *self UNUSED, PyObject *args) {
+    const char *appearance;
+    int high_contrast;
+    if (!PyArg_ParseTuple(args, "sp", &appearance, &high_contrast)) return NULL;
+    const GLFWColorScheme raw = glfwGetCurrentSystemColorTheme ? glfwGetCurrentSystemColorTheme(false) : GLFW_COLOR_SCHEME_NO_PREFERENCE;
+    const GLFWColorScheme previous = desktop_appearance(raw);
+    const unsigned previous_accessibility = fallback_accessibility;
+    fallback_appearance = !strcmp(appearance, "dark") ? GLFW_COLOR_SCHEME_DARK :
+        !strcmp(appearance, "light") ? GLFW_COLOR_SCHEME_LIGHT : GLFW_COLOR_SCHEME_NO_PREFERENCE;
+    fallback_accessibility = high_contrast ? GLFW_DISPLAY_ACCESSIBILITY_HIGH_CONTRAST : 0;
+    if (desktop_appearance(raw) != previous) on_system_color_scheme_change(raw, false);
+    if (fallback_accessibility != previous_accessibility) {
+        const unsigned flags = glfwGetDisplayAccessibility ? glfwGetDisplayAccessibility() : 0;
+        notify_display_accessibility_change(flags | fallback_accessibility, flags | previous_accessibility);
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+set_desktop_preferred_languages(PyObject *self UNUSED, PyObject *value) {
+    Py_ssize_t size;
+    const char *languages = PyUnicode_AsUTF8AndSize(value, &size);
+    if (!languages) return NULL;
+    if (!size || strspn(languages, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-,") != (size_t)size) {
+        PyErr_SetString(PyExc_ValueError, "Invalid preferred language report");
+        return NULL;
+    }
+    if (strcmp(languages, desktop_preferred_languages()) == 0) Py_RETURN_NONE;
+    char *replacement = strdup(languages);
+    if (!replacement) return PyErr_NoMemory();
+    free(preferred_languages);
+    preferred_languages = replacement;
+    for (size_t i = 0; i < global_state.num_os_windows; i++) {
+        OSWindow *w = global_state.os_windows + i;
+        if (!w->display_info.appearance) os_window_display_info(w, &w->display_info);
+        report_display_change(w);
+        call_boss(on_display_color_change, "K", w->id);
+    }
+    Py_RETURN_NONE;
 }
 
 static void
@@ -2815,6 +2896,7 @@ create_os_window(PyObject UNUSED *self, PyObject *args, PyObject *kw) {
         glfwSetIMECursorPositionCallback(get_ime_cursor_position);
         glfwSetIMETextAroundCursorCallback(get_ime_text_around_cursor);
         glfwSetSystemColorThemeChangeCallback(on_system_color_scheme_change);
+        glfwSetDisplayAccessibilityChangeCallback(on_system_display_accessibility_change);
         glfwSetClipboardLostCallback(on_clipboard_lost);
         // Request SRGB output buffer
         // Prevents kitty from starting on Wayland + NVIDIA, sigh: https://github.com/kovidgoyal/kitty/issues/7021
@@ -3398,7 +3480,7 @@ glfw_get_system_color_theme(PyObject UNUSED *self, PyObject *args) {
         PyErr_SetString(PyExc_RuntimeError, "must initialize GFLW before calling this function");
         return NULL;
     }
-    const char *which = appearance_name(glfwGetCurrentSystemColorTheme(query_if_unintialized));
+    const char *which = appearance_name(desktop_appearance(glfwGetCurrentSystemColorTheme(query_if_unintialized)));
     return PyUnicode_FromString(which);
 }
 
@@ -3894,7 +3976,8 @@ display_info_from(OSWindow *w, const GLFWdisplayinfo *g, const MonitorIdentity *
         .bits = g->bits, .red_bits = g->red_bits, .green_bits = g->green_bits, .blue_bits = g->blue_bits, .gray_bits = g->gray_bits,
         .precision = g->bits || g->red_bits || g->green_bits || g->blue_bits || g->gray_bits ? "framebuffer" : "unknown",
         .period_us = g->period_us, .headroom = w ? effective_hdr_headroom(w) : 1.f, .scale = g->scale, .ppi = g->ppi, .output_type = "unknown",
-        .appearance = appearance_name(glfwGetCurrentSystemColorTheme ? glfwGetCurrentSystemColorTheme(false) : GLFW_COLOR_SCHEME_NO_PREFERENCE),
+        .appearance = appearance_name(desktop_appearance(
+            glfwGetCurrentSystemColorTheme ? glfwGetCurrentSystemColorTheme(false) : GLFW_COLOR_SCHEME_NO_PREFERENCE)),
         .monitor = monitor};
     // What the surface Silkie draws into holds, as OpenGL says once the window has been drawn
     if (w && w->linear_output_checked) {
@@ -3947,6 +4030,7 @@ display_info_from(OSWindow *w, const GLFWdisplayinfo *g, const MonitorIdentity *
     }
     // Overrides for what the OS cannot tell programs, which change nothing else
     apply_display_spec(d, OPT(display_info), "configured", !OPT(eink_mode), NULL);
+    apply_display_accessibility(d, (glfwGetDisplayAccessibility ? glfwGetDisplayAccessibility() : 0) | fallback_accessibility);
 }
 
 // The monitor the window is on, NULL when not known
@@ -4885,6 +4969,8 @@ start_drag_with_data(PyObject *self UNUSED, PyObject *args, PyObject *kw) {
 // Boilerplate {{{
 
 static PyMethodDef module_methods[] = {
+    METHODB(set_desktop_appearance_fallback, METH_VARARGS),
+    METHODB(set_desktop_preferred_languages, METH_O),
     METHODB(set_custom_cursor, METH_VARARGS),
     METHODB(is_css_pointer_name_valid, METH_O),
     {"toggle_os_window_visibility", (PyCFunction)(void (*)(void))(toggle_os_window_visibility), METH_VARARGS | METH_KEYWORDS, NULL},
@@ -4953,6 +5039,8 @@ static PyMethodDef module_methods[] = {
 
 void
 cleanup_glfw(void) {
+    free(preferred_languages);
+    preferred_languages = NULL;
     if (logo.pixels) free((void *)logo.pixels);
     logo.pixels = NULL;
     Py_CLEAR(edge_spacing_func);

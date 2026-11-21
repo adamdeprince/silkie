@@ -1293,6 +1293,32 @@ convert_from_opts_eink_color_scheme(PyObject *py_opts, Options *opts) {
 }
 
 static void
+convert_from_python_high_contrast(PyObject *val, Options *opts) {
+    opts->high_contrast = accessibility_override_from_python(val);
+}
+
+static void
+convert_from_opts_high_contrast(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "high_contrast");
+    if (ret == NULL) return;
+    convert_from_python_high_contrast(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
+convert_from_python_differentiate_without_color(PyObject *val, Options *opts) {
+    opts->differentiate_without_color = accessibility_override_from_python(val);
+}
+
+static void
+convert_from_opts_differentiate_without_color(PyObject *py_opts, Options *opts) {
+    PyObject *ret = PyObject_GetAttrString(py_opts, "differentiate_without_color");
+    if (ret == NULL) return;
+    convert_from_python_differentiate_without_color(ret, opts);
+    Py_DECREF(ret);
+}
+
+static void
 convert_from_python_minimum_contrast(PyObject *val, Options *opts) {
     opts->minimum_contrast = minimum_contrast(val);
 }
@@ -2128,6 +2154,10 @@ convert_opts_from_python_opts(PyObject *py_opts, Options *opts) {
     convert_from_opts_tab_bar_margin_color(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_eink_color_scheme(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_high_contrast(py_opts, opts);
+    if (PyErr_Occurred()) return false;
+    convert_from_opts_differentiate_without_color(py_opts, opts);
     if (PyErr_Occurred()) return false;
     convert_from_opts_minimum_contrast(py_opts, opts);
     if (PyErr_Occurred()) return false;

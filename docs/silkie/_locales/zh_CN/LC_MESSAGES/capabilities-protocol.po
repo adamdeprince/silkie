@@ -221,9 +221,12 @@ msgstr "多路复用器将重置请求应用于发出请求的窗格，再重新
 
 #: docs/capabilities-protocol.rst:57
 msgid ""
-"The ``a11y.1`` entry advertises image placement annotations. See :doc:`accessibility` for that "
-"selector's requests."
-msgstr "``a11y.1`` 表示支持图像放置注释。有关此选择器的请求，请参阅 :doc:`accessibility`。"
+"The ``a11y.1`` entry advertises image placement annotations, ``a11y.2`` adds text annotations "
+"and announcements, and ``speech.1`` advertises native speech requests. See :doc:`accessibility` "
+"for these protocols."
+msgstr ""
+"``a11y.1`` 表示支持图像放置注释，``a11y.2`` 增加文本注释和播报，"
+"``speech.1`` 表示支持调用系统语音合成。协议详见 :doc:`accessibility`。"
 
 msgid "Graphics feature queries"
 msgstr "查询图形功能"

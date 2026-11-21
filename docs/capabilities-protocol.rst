@@ -54,8 +54,9 @@ while the terminal runs, so a program needs it once. A terminal that does not
 support this protocol ignores the query, so a program must time out and may
 then fall back to probing the selectors it needs one at a time.
 
-The ``a11y.1`` entry advertises image placement annotations. See
-:doc:`accessibility` for that selector's requests.
+The ``a11y.1`` entry advertises image placement annotations, ``a11y.2``
+adds text annotations and announcements, and ``speech.1`` advertises
+native speech requests. See :doc:`accessibility` for these protocols.
 
 SGR extensions
 -----------------

@@ -20,6 +20,7 @@
 #define FDO_DESKTOP_NAMESPACE "org.freedesktop.appearance"
 static const char *supported_namespaces[3] = {FDO_DESKTOP_NAMESPACE, GNOME_DESKTOP_NAMESPACE, GNOME_WM_NAMESPACE};
 #define FDO_APPEARANCE_KEY "color-scheme"
+#define FDO_CONTRAST_KEY "contrast"
 
 
 static char *theme_name = NULL;  // the cursor theme, NULL when not known
@@ -313,6 +314,7 @@ process_wm_setting(const char *key, DBusMessageIter *value) {
 static int theme_size = -1;
 static GLFWColorScheme appearance = GLFW_COLOR_SCHEME_NO_PREFERENCE;
 static bool cursor_theme_changed = false, appearance_initialized = false;
+static bool contrast_received = false;
 static bool desktop_settings_pending = false, desktop_settings_received = false;
 
 static void
@@ -438,21 +440,28 @@ glfw_current_system_color_theme(bool query_if_unintialized) {
 }
 
 static void
-process_fdo_setting(const char *key, DBusMessageIter *value) {
+apply_appearance_setting(const char *key, DBusMessageIter *value, bool initial) {
+    if (dbus_message_iter_get_arg_type(value) != DBUS_TYPE_UINT32) return;
+    uint32_t val;
+    dbus_message_iter_get_basic(value, &val);
     if (strcmp(key, FDO_APPEARANCE_KEY) == 0) {
-        if (dbus_message_iter_get_arg_type(value) == DBUS_TYPE_UINT32) {
-            uint32_t val;
-            dbus_message_iter_get_basic(value, &val);
-            if (val > 2) val = 0;
-            if (!appearance_initialized) {
-                appearance_initialized = true;
-                if (val != appearance) {
-                    appearance = val;
-                    _glfwInputColorScheme(appearance, true);
-                }
-            }
+        if (initial && appearance_initialized) return;
+        appearance_initialized = true;
+        if (val > 2) val = 0;
+        if (val != appearance) {
+            appearance = val;
+            _glfwInputColorScheme(appearance, initial);
         }
+    } else if (strcmp(key, FDO_CONTRAST_KEY) == 0) {
+        if (initial && contrast_received) return;
+        contrast_received = true;
+        _glfwInputDisplayAccessibility(val == 1 ? GLFW_DISPLAY_ACCESSIBILITY_HIGH_CONTRAST : 0);
     }
+}
+
+static void
+process_fdo_setting(const char *key, DBusMessageIter *value) {
+    apply_appearance_setting(key, value, true);
 }
 
 static void
@@ -590,62 +599,31 @@ get_cursor_theme_from_env(void) {
     }
 }
 
-static void
-on_color_scheme_change(DBusMessage *message) {
-    DBusMessageIter iter[2];
-    dbus_message_iter_init(message, &iter[0]);
-    int current_type;
-    while ((current_type = dbus_message_iter_get_arg_type(&iter[0])) != DBUS_TYPE_INVALID) {
-        if (current_type == DBUS_TYPE_VARIANT) {
-            dbus_message_iter_recurse(&iter[0], &iter[1]);
-            if (dbus_message_iter_get_arg_type(&iter[1]) == DBUS_TYPE_UINT32) {
-                uint32_t val = 0;
-                dbus_message_iter_get_basic(&iter[1], &val);
-                if (val > 2) val = 0;
-                if (val != appearance) {
-                    appearance = val;
-                    appearance_initialized = true;
-                    _glfwInputColorScheme(appearance, false);
-                }
-            }
-            break;
-        }
-        dbus_message_iter_next(&iter[0]);
-    }
-}
-
 static DBusHandlerResult
 setting_changed(DBusConnection *conn UNUSED, DBusMessage *msg, void *user_data UNUSED) {
-    /* printf("session_bus settings_changed invoked interface: %s member: %s\n", dbus_message_get_interface(msg), dbus_message_get_member(msg)); */
-    if (dbus_message_is_signal(msg, DESKTOP_INTERFACE, "SettingChanged")) {
-        const char *namespace = NULL, *key = NULL;
-        if (glfw_dbus_get_args(
-                msg,
-                "Failed to get namespace and key from SettingChanged notification signal",
-                DBUS_TYPE_STRING,
-                &namespace,
-                DBUS_TYPE_STRING,
-                &key,
-                DBUS_TYPE_INVALID)) {
-            if (strcmp(namespace, FDO_DESKTOP_NAMESPACE) == 0) {
-                if (strcmp(key, FDO_APPEARANCE_KEY) == 0) { on_color_scheme_change(msg); }
-            } else if (strcmp(namespace, GNOME_DESKTOP_NAMESPACE) == 0 || strcmp(namespace, GNOME_WM_NAMESPACE) == 0) {
-                DBusMessageIter iter, value;
-                if (dbus_message_iter_init(msg, &iter) && dbus_message_iter_next(&iter) && dbus_message_iter_next(&iter) &&
-                    dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_VARIANT) {
-                    dbus_message_iter_recurse(&iter, &value);
-                    if (strcmp(namespace, GNOME_WM_NAMESPACE) == 0) process_wm_setting(key, &value);
-                    else {
-                        cursor_theme_changed = false;
-                        process_gnome_setting(key, &value);
+    if (!dbus_message_is_signal(msg, DESKTOP_INTERFACE, "SettingChanged") || !dbus_message_has_signature(msg, "ssv")) {
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    const char *namespace, *key;
+    DBusMessageIter iter, value;
+    dbus_message_iter_init(msg, &iter);
+    dbus_message_iter_get_basic(&iter, &namespace);
+    dbus_message_iter_next(&iter);
+    dbus_message_iter_get_basic(&iter, &key);
+    dbus_message_iter_next(&iter);
+    dbus_message_iter_recurse(&iter, &value);
+    if (strcmp(namespace, FDO_DESKTOP_NAMESPACE) == 0) {
+        apply_appearance_setting(key, &value, false);
+    } else if (strcmp(namespace, GNOME_WM_NAMESPACE) == 0) {
+        process_wm_setting(key, &value);
+        schedule_titlebar_redraw();
+    } else if (strcmp(namespace, GNOME_DESKTOP_NAMESPACE) == 0) {
+        cursor_theme_changed = false;
+        process_gnome_setting(key, &value);
 #ifndef _GLFW_X11
-                        if (cursor_theme_changed) _glfwPlatformChangeCursorTheme();
+        if (cursor_theme_changed) _glfwPlatformChangeCursorTheme();
 #endif
-                    }
-                    schedule_titlebar_redraw();
-                }
-            }
-        }
+        schedule_titlebar_redraw();
     }
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -653,6 +631,7 @@ setting_changed(DBusConnection *conn UNUSED, DBusMessage *msg, void *user_data U
 
 void
 glfw_initialize_desktop_settings(void) {
+    contrast_received = false;
     get_cursor_theme_from_env();
     DBusConnection *session_bus = glfw_dbus_session_bus();
     if (session_bus) {

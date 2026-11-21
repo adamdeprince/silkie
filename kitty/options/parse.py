@@ -1025,6 +1025,14 @@ class Parser:
     def detect_urls(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['detect_urls'] = to_bool(val)
 
+    def differentiate_without_color(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_differentiate_without_color:
+            raise ValueError(f"The value {val} is not a valid choice for differentiate_without_color")
+        ans["differentiate_without_color"] = val
+
+    choices_for_differentiate_without_color = frozenset(('auto', 'off', 'on'))
+
     def dim_opacity(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['dim_opacity'] = unit_float(val)
 
@@ -1155,6 +1163,14 @@ class Parser:
 
     def hide_window_decorations(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['hide_window_decorations'] = hide_window_decorations(val)
+
+    def high_contrast(self, val: str, ans: dict[str, typing.Any]) -> None:
+        val = val.lower()
+        if val not in self.choices_for_high_contrast:
+            raise ValueError(f"The value {val} is not a valid choice for high_contrast")
+        ans["high_contrast"] = val
+
+    choices_for_high_contrast = choices_for_differentiate_without_color
 
     def hyperlink_target_position(self, val: str, ans: dict[str, typing.Any]) -> None:
         val = val.lower()

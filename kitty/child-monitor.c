@@ -1472,6 +1472,17 @@ poll_display_info(OSWindow *os_window, monotonic_t now) {
     return interval;
 }
 
+void
+report_display_change(OSWindow *os_window) {
+    for (unsigned t = 0; t < os_window->num_tabs; t++) {
+        Tab *tab = os_window->tabs + t;
+        for (unsigned i = 0; i < tab->num_windows; i++) {
+            Screen *screen = tab->windows[i].render_data.screen;
+            if (screen) screen_display_changed(screen, &os_window->display_info);
+        }
+    }
+}
+
 // Takes in what is now known of the display of the window, telling the programs that asked when it changed. explicit is
 // for a change the user made, such as of eink_mode, which is acted on at once rather than once it has lasted.
 void
@@ -1499,17 +1510,12 @@ update_display_info(OSWindow *os_window, monotonic_t now, bool explicit) {
     const bool color_changed = os_window->display_info_at && (d.kind != o->kind || d.color != o->color || d.gamut != o->gamut || d.bits != o->bits ||
         d.red_bits != o->red_bits || d.green_bits != o->green_bits || d.blue_bits != o->blue_bits || d.gray_bits != o->gray_bits ||
         strcmp(d.precision, o->precision) || d.headroom != o->headroom || d.output_bits != o->output_bits || strcmp(d.output_type, o->output_type) ||
-        d.output_dither != o->output_dither);
+        d.output_dither != o->output_dither || d.high_contrast != o->high_contrast || d.differentiate_without_color != o->differentiate_without_color);
     const bool changed = color_changed || (os_window->display_info_at && (d.period_us != o->period_us || d.scale != o->scale || d.ppi != o->ppi ||
         d.monitor != o->monitor || d.appearance != o->appearance || d.eink_scheme != o->eink_scheme));
     *o = d;
     os_window->display_info_at = now;
-    if (changed) {
-        for (unsigned t = 0; t < os_window->num_tabs; t++) {
-            Tab *tab = os_window->tabs + t;
-            for (unsigned i = 0; i < tab->num_windows; i++) if (tab->windows[i].render_data.screen) screen_display_changed(tab->windows[i].render_data.screen, &d);
-        }
-    }
+    if (changed) report_display_change(os_window);
     if (eink_changed) call_boss(on_os_window_eink_change, "KOO", os_window->id, os_window_is_eink(os_window) ? Py_True : Py_False,
         os_window_is_gray(os_window) ? Py_True : Py_False);
     if (color_changed) call_boss(on_display_color_change, "K", os_window->id);

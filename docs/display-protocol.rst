@@ -39,7 +39,7 @@ A program asks about the display its window is on::
 the reply so replies can be matched to queries. A supporting terminal
 answers::
 
-    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=16 : output_type=float : output_dither=0 : appearance=dark <ST>
+    <OSC> 777 ; display ; v=1 : op=cap : id=42 : mode=0 : kind=lcd : color=rgb : bits=8 : gamut=p3 : headroom=1 : scale=2 : period=8333 : ppi=254 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=16 : output_type=float : output_dither=0 : appearance=dark : high_contrast=0 : differentiate_without_color=0 : languages=en-US,fr-CA <ST>
 
 A terminal that does not support the protocol ignores the query, so a program
 must time out and fall back to assuming an ordinary color display.
@@ -149,6 +149,29 @@ applies equally to its active channels.
     also covers desktops that do not expose a preference. This field is
     independent of the terminal's configured theme and the pane's background.
     Clients can treat a missing or unrecognized value as ``no_preference``.
+    On Kylin's UKUI desktop, Silkie can also read the UKUI style and MATE
+    GTK theme when a desktop portal preference is unavailable.
+
+``high_contrast``
+    In :opt:`high_contrast` ``auto``, the value is ``1`` on e-paper or when
+    macOS Increase Contrast or the Linux desktop requests higher contrast.
+    Linux uses the XDG Settings portal and recognizes high-contrast GTK
+    themes on UKUI. Explicit ``off`` and ``on`` report ``0`` and ``1``.
+    Clients can treat a missing or unrecognized value as ``0``.
+
+``differentiate_without_color``
+    In :opt:`differentiate_without_color` ``auto``, the value is ``1`` on
+    grayscale and monochrome displays or when macOS Differentiate Without
+    Color is enabled. Explicit ``off`` and ``on`` report ``0`` and ``1``.
+    Clients can treat a missing or unrecognized value as ``0``.
+
+``languages``
+    A comma-separated list of preferred language tags from the terminal
+    host, with the primary language first. macOS may report more than one
+    tag, such as ``en-US,fr-CA``. Linux reports one tag from the user's
+    account preference or the system or session locale. ``und`` means
+    undetermined. The value follows changes as the OS exposes them to the
+    running terminal.
 
 ``eink_scheme``
     The effective e-paper palette, ``light`` or ``dark``, reported when
@@ -241,10 +264,10 @@ Turning the mode on sends one event with the current values, so a program
 needs no separate query. After that, while the mode is on, the terminal sends
 one event whenever any field changes: the window was moved to a display with
 a different scale or refresh rate, the display's brightness setting changed
-the headroom, its color profile was switched, or the desktop appearance
-preference changed::
+the headroom, its color profile was switched, or a desktop appearance,
+accessibility, or language preference changed::
 
-    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=10 : output_type=fixed : output_dither=8 : appearance=light <ST>
+    <OSC> 777 ; display ; v=1 : op=event : t=408211 : kind=lcd : color=rgb : bits=8 : gamut=srgb : headroom=1 : scale=1 : period=16666 : ppi=96 : red_bits=8 : green_bits=8 : blue_bits=8 : gray_bits=0 : precision=framebuffer : output_bits=10 : output_type=fixed : output_dither=8 : appearance=light : high_contrast=1 : differentiate_without_color=1 : languages=fr-CA,en-US <ST>
 
 The fields are those of the ``cap`` reply, without ``id`` and ``mode``, and
 ``t``, the time the terminal learnt of the change, in milliseconds on the
@@ -255,11 +278,12 @@ reported a short while after it happens, and a program that has turned the
 mode off may still receive an event that was already on its way. An event is
 never merged with another or dropped, by the terminal or by a relay.
 
-On a desktop appearance change, Silkie sends ``SIGWINCH`` to the foreground
-process group of each pane. Programs that enabled in-band resize reports
-also receive a resize report with the current dimensions, even though the
-dimensions are unchanged. Both notifications work without display mode, so
-a program can reissue the display query after a resize notification.
+When ``appearance``, ``high_contrast``, ``differentiate_without_color``, or ``languages``
+changes, Silkie sends ``SIGWINCH`` to the foreground process group of each
+affected pane. Programs that enabled in-band resize reports also receive a
+resize report with the current dimensions. Both notifications work without
+display mode, so a program can reissue the display query after a resize
+notification.
 
 Relays and multiplexers
 ---------------------------

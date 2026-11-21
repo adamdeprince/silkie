@@ -1778,6 +1778,12 @@ class Boss:
             run_update_check(get_options().update_check_interval * 60 * 60)
             self.update_check_started = True
         self.monitor_desktop_session_if_needed()
+        if not hasattr(self, 'accessibility_bridge'):
+            from .accessibility_bridge import AccessibilityBridge
+            self.accessibility_bridge = AccessibilityBridge(self)
+        if not hasattr(self, 'desktop_preferences'):
+            from .desktop_preferences import DesktopPreferences
+            self.desktop_preferences = DesktopPreferences()
         if opts.auto_reload_config >= 0 and not hasattr(self, 'config_reload_watcher_process') and opts.all_config_paths:
             self.config_reload_watcher_process = subprocess.Popen(
                 [kitten_exe(), '__watch_conf__', str(os.getpid()), str(int(opts.auto_reload_config * 1000))] + list(opts.all_config_paths),
@@ -3453,6 +3459,12 @@ class Boss:
     def destroy(self) -> None:
         from .spatial import controller
         controller.close()
+        if hasattr(self, 'accessibility_bridge'):
+            self.accessibility_bridge.close()
+        if hasattr(self, 'desktop_preferences'):
+            self.desktop_preferences.close()
+        if hasattr(self, 'speech_controller'):
+            self.speech_controller.close()
         self.shutting_down = True
         self.child_monitor.shutdown_monitor()
         self.set_update_check_process()

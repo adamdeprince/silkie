@@ -1640,6 +1640,11 @@ typedef void (*GLFWapplicationclosefun)(int);
  */
 typedef void (*GLFWsystemcolorthemechangefun)(GLFWColorScheme, bool);
 
+#define GLFW_DISPLAY_ACCESSIBILITY_HIGH_CONTRAST 1u
+#define GLFW_DISPLAY_ACCESSIBILITY_DIFFERENTIATE_WITHOUT_COLOR 2u
+// The current and previous display accessibility flags.
+typedef void (*GLFWdisplayaccessibilitychangefun)(unsigned, unsigned);
+
 
 /*! @brief The function pointer type for window content refresh callbacks.
  *
@@ -2804,6 +2809,14 @@ GFW_EXTERN glfwSetClipboardLostCallback_func glfwSetClipboardLostCallback_impl;
 typedef GLFWColorScheme (*glfwGetCurrentSystemColorTheme_func)(bool);
 GFW_EXTERN glfwGetCurrentSystemColorTheme_func glfwGetCurrentSystemColorTheme_impl;
 #define glfwGetCurrentSystemColorTheme glfwGetCurrentSystemColorTheme_impl
+
+typedef GLFWdisplayaccessibilitychangefun (*glfwSetDisplayAccessibilityChangeCallback_func)(GLFWdisplayaccessibilitychangefun);
+GFW_EXTERN glfwSetDisplayAccessibilityChangeCallback_func glfwSetDisplayAccessibilityChangeCallback_impl;
+#define glfwSetDisplayAccessibilityChangeCallback glfwSetDisplayAccessibilityChangeCallback_impl
+
+typedef unsigned (*glfwGetDisplayAccessibility_func)(void);
+GFW_EXTERN glfwGetDisplayAccessibility_func glfwGetDisplayAccessibility_impl;
+#define glfwGetDisplayAccessibility glfwGetDisplayAccessibility_impl
 
 typedef GLFWTitlebarFont (*glfwGetTitlebarFont_func)(void);
 GFW_EXTERN glfwGetTitlebarFont_func glfwGetTitlebarFont_impl;

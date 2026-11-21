@@ -240,6 +240,7 @@ typedef struct { // see docs/display-protocol.rst
     int bits, red_bits, green_bits, blue_bits, gray_bits, output_bits, output_dither;
     unsigned period_us;
     float headroom, scale, ppi;
+    bool high_contrast, differentiate_without_color;
     // The monitor, NULL when not known. Interned, so a different monitor is a different pointer, see monitor_info.c
     const struct MonitorIdentity *monitor;
     // What Silkie does for this display, EINK_REFRESH and EINK_GRAY, from what is known of it before the display_info
@@ -469,6 +470,7 @@ void screen_visibility_changed(Screen *self, bool potentially_visible);
 void screen_caps_query(Screen *self, const char *data, size_t sz);
 void screen_font_protocol(Screen *self, const char *data, size_t sz);
 void screen_accessibility_protocol(Screen *self, const char *data, size_t size);
+void screen_speech_protocol(Screen *self, const char *data, size_t size);
 void screen_depth_protocol(Screen *self, const char *data, size_t sz);
 void screen_reset_extension_modes(Screen *self);
 void screen_display_protocol(Screen *self, const char *data, size_t sz);

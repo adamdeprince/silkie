@@ -626,6 +626,7 @@ struct _GLFWlibrary {
     _GLFWmutex errorLock;
 
     bool ignoreOSKeyboardProcessing, keyboard_grabbed;
+    unsigned display_accessibility;
     // remap_modifier: modifierRemap[i] is the GLFW modifier mask that the
     // modifier at bit i is presented as, or 0 to leave it alone.
     int modifierRemap[GLFW_MOD_REMAP_SZ];
@@ -659,6 +660,7 @@ struct _GLFWlibrary {
         GLFWapplicationclosefun application_close;
         GLFWclipboardlostfun clipboard_lost;
         GLFWsystemcolorthemechangefun system_color_theme_change;
+        GLFWdisplayaccessibilitychangefun display_accessibility_change;
         GLFWdrawtextfun draw_text;
         GLFWcurrentselectionfun get_current_selection;
         GLFWhascurrentselectionfun has_current_selection;
@@ -856,6 +858,7 @@ int _glfwPlatformChangeDragImage(const GLFWimage *thumbnail);
 
 
 void _glfwInputColorScheme(GLFWColorScheme, bool);
+void _glfwInputDisplayAccessibility(unsigned);
 void _glfwPlatformInputColorScheme(GLFWColorScheme);
 void _glfwInputJoystick(_GLFWjoystick *js, int event);
 void _glfwInputJoystickAxis(_GLFWjoystick *js, int axis, float value);

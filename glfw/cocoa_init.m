@@ -425,6 +425,22 @@ glfwGetCurrentSystemColorTheme(bool query_if_unintialized) {
     }
 }
 
+static void
+read_display_accessibility(void) {
+    NSWorkspace *workspace = NSWorkspace.sharedWorkspace;
+    unsigned flags = 0;
+    if (workspace.accessibilityDisplayShouldIncreaseContrast) flags |= GLFW_DISPLAY_ACCESSIBILITY_HIGH_CONTRAST;
+    if (workspace.accessibilityDisplayShouldDifferentiateWithoutColor) flags |= GLFW_DISPLAY_ACCESSIBILITY_DIFFERENTIATE_WITHOUT_COLOR;
+    _glfwInputDisplayAccessibility(flags);
+}
+
+- (void)accessibilityDisplayOptionsDidChange:(NSNotification *)notification {
+    (void)notification;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_glfw.initialized) read_display_accessibility();
+    });
+}
+
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
     (void)aNotification;
     CGDisplayRemoveReconfigurationCallback(display_reconfigured, NULL);
@@ -835,6 +851,11 @@ _glfwPlatformInit(bool *supports_window_occlusion) {
                                                                selector:@selector(applicationDidActivate:)
                                                                    name:NSWorkspaceDidActivateApplicationNotification
                                                                  object:nil];
+        [NSWorkspace.sharedWorkspace.notificationCenter addObserver:_glfw.ns.delegate
+                                                           selector:@selector(accessibilityDisplayOptionsDidChange:)
+                                                               name:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+                                                             object:nil];
+        read_display_accessibility();
         static struct {
             unsigned short virtual_key_code;
             NSEventModifierFlags input_source_switch_modifiers;
@@ -1015,6 +1036,7 @@ _glfwPlatformTerminate(void) {
         }
 
         if (_glfw.ns.delegate) {
+            [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:_glfw.ns.delegate];
             [NSApp setDelegate:nil];
             [_glfw.ns.delegate release];
             _glfw.ns.delegate = nil;

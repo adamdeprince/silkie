@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from kitty.accessibility import image_review_text
+from kitty.accessibility import TextAnnotations, image_review_text, pane_text
 from kitty.fast_data_types import SCROLL_LINE
 
 from .base import BaseTest, parse_bytes
@@ -102,7 +102,7 @@ class TestImageAccessibility(BaseTest):
         original = s.image_descriptions()
         self.ae(original[0][6], ('informative', '', description, ''))
         for fields in (
-            'v=2:i=9:p=1', 'v=1:p=1', 'v=1:i=9', 'v=1:i=0:p=1', 'v=1:i=9:p=0', 'v=1:i=9:p=4294967296',
+            'v=3:i=9:p=1', 'v=1:p=1', 'v=1:i=9', 'v=1:i=0:p=1', 'v=1:i=9:p=0', 'v=1:i=9:p=4294967296',
             'v=1:i=9:p=1:purpose=important', 'v=1:i=9:p=1:name=x%4', 'v=1:i=9:p=1:name=x%zz', 'v=1:i=9:p=1:name=%FF',
             'v=1:i=9:p=1:name=%00', 'v=1:i=9:p=1:name=%0A', 'v=1:i=9:p=1:details=%1B', 'v=1:i=9:p=1:details=%C2%9B',
             'v=1:i=9:p=1:p=2', 'v=1:i=9:p=1:description=a:description=b',
@@ -159,3 +159,46 @@ class TestImageAccessibility(BaseTest):
         s.update_only_line_graphics_data()
         self.assertIn('Chart\nEssential image', image_review_text(s.image_descriptions()))
         self.ae(image_review_text(s.image_descriptions()).count('Chart'), 1)
+
+
+class TestPaneAccessibility(BaseTest):
+    def test_viewport_text_and_navigation(self):
+        screen = self.create_screen(cols=8, lines=2)
+        screen.draw('a😀b')
+        screen.carriage_return()
+        screen.linefeed()
+        screen.draw('cafe\u0301')
+        snapshot = pane_text(screen)
+        self.ae(snapshot['text'], 'a😀b\ncafe\u0301')
+        self.ae(snapshot['caret'], len(snapshot['text']))
+        screen.start_selection(0, 0)
+        screen.update_selection(3, 0)
+        snapshot = pane_text(screen)
+        self.ae([snapshot['text'][first:last] for first, last in snapshot['selections']], ['a😀b'])
+        screen.cursor_position(1, 4)
+        self.ae(pane_text(screen)['caret'], 2)
+
+    def test_text_annotations_and_one_shot_announcements(self):
+        screen = self.create_screen(cols=18, lines=2)
+        annotations = TextAnnotations()
+        messages = []
+        screen.callbacks.accessibility_set_text = lambda *args: annotations.set(screen, *args)
+        screen.callbacks.accessibility_clear_text = annotations.clear
+        screen.callbacks.accessibility_announce = lambda text, assertive: messages.append((text, assertive)) or 'OK'
+        screen.draw('❯ *.txt')
+        prompt = 'v=2:op=set-text:range=1:row=1:column=1:end_row=1:end_column=2:role=prompt:label=Search%3A:id=1'
+        decor = 'v=2:op=set-text:range=2:row=1:column=3:end_row=1:end_column=4:role=decorative'
+        success = b'\x1b]777;a11y;v=2:op=ack:id=1:status=OK\x1b\\'
+        self.ae(annotate(screen, prompt), success)
+        self.ae(annotate(screen, decor), b'')
+        self.ae(annotate(screen, 'v=2:op=announce:text=Search%20failed:priority=assertive:id=1'), success)
+        for _ in range(128):
+            snapshot = pane_text(screen, annotations)
+            self.ae(snapshot['text'], 'Search: .txt\n')
+            self.ae(snapshot['roles'], [(0, 7, 'prompt')])
+        self.ae(messages, [('Search failed', True)])
+        self.ae(annotate(screen, 'v=2:op=announce:text=%00:priority=assertive:id=1'), b'')
+        self.ae(annotate(screen, 'v=2:op=clear-text:range=1:id=1'), success)
+        screen.cursor_position(1, 3)
+        screen.draw('+')
+        self.ae(pane_text(screen, annotations)['text'], '❯ +.txt\n')

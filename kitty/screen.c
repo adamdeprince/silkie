@@ -2149,10 +2149,12 @@ send_display_report(Screen *self, const char *op, int id, const DisplayInfo *d) 
     }
     const char *scheme_key = d->eink_scheme ? ":eink_scheme=" : "";
     const char *format = "777;display;v=1:op=%s:%s=%llu%s:kind=%s:color=%s:bits=%d:gamut=%s:headroom=%g:scale=%g:period=%u:ppi=%g"
-        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d:appearance=%s%s%s%s%s%s%s%s";
+        ":red_bits=%d:green_bits=%d:blue_bits=%d:gray_bits=%d:precision=%s:output_bits=%d:output_type=%s:output_dither=%d:appearance=%s:high_contrast=%d"
+        ":differentiate_without_color=%d:languages=%s%s%s%s%s%s%s%s";
 #define DISPLAY_REPORT_ARGS op, key, serial, mode, d->kind, d->color, d->bits, d->gamut, d->headroom, d->scale, d->period_us, d->ppi, \
     d->red_bits, d->green_bits, d->blue_bits, d->gray_bits, d->precision, d->output_bits, d->output_type ? d->output_type : "unknown", \
-    d->output_dither, d->appearance, scheme_key, d->eink_scheme ? d->eink_scheme : "", ids, make, model, connector, description
+    d->output_dither, d->appearance, d->high_contrast, d->differentiate_without_color, \
+    desktop_preferred_languages(), scheme_key, d->eink_scheme ? d->eink_scheme : "", ids, make, model, connector, description
     const int n = snprintf(NULL, 0, format, DISPLAY_REPORT_ARGS);
     if (n < 0) return;
     const size_t size = (size_t)n + 1;
@@ -6593,6 +6595,29 @@ pyvisual_line(Screen *self, PyObject *args) {
 }
 
 static PyObject *
+accessible_selection(Screen *self, PyObject *args UNUSED) {
+    RAII_PyObject(ranges, PyList_New(0));
+    if (!ranges || !screen_has_selection(self)) return ranges ? Py_NewRef(ranges) : NULL;
+    for (index_type y = 0; y < self->lines; y++) {
+        index_type start = self->columns;
+        for (index_type x = 0; x < self->columns; x++) {
+            if (screen_is_cell_selected(self, x, y)) {
+                if (start == self->columns) start = x;
+                if (x + 1 == self->columns) {
+                    RAII_PyObject(span, Py_BuildValue("(III)", y, start, self->columns));
+                    if (!span || PyList_Append(ranges, span) < 0) return NULL;
+                }
+            } else if (start < x) {
+                RAII_PyObject(span, Py_BuildValue("(III)", y, start, x));
+                if (!span || PyList_Append(ranges, span) < 0) return NULL;
+                start = self->columns;
+            }
+        }
+    }
+    return Py_NewRef(ranges);
+}
+
+static PyObject *
 draw(Screen *self, PyObject *src) {
     if (!PyUnicode_Check(src)) {
         PyErr_SetString(PyExc_TypeError, "A unicode string is required");
@@ -8385,6 +8410,7 @@ static PyMethodDef methods[] = {
     METHODB(restore_scrollback, METH_O),
     METHODB(cursor_prompt_line, METH_NOARGS),
     MND(overlay_line_start, METH_NOARGS) MND(line_edge_colors, METH_NOARGS) MND(ime_text_around_cursor, METH_NOARGS) MND(line, METH_O)
+    MND(accessible_selection, METH_NOARGS)
         MND(dump_lines_with_attrs, METH_VARARGS) MND(cpu_cells, METH_VARARGS)
             MND(cursor_at_prompt, METH_NOARGS){"visual_line", (PyCFunction)pyvisual_line, METH_VARARGS, ""},
     MND(current_url_text, METH_NOARGS) MND(draw, METH_O) MND(apply_sgr, METH_O) MND(cursor_position, METH_VARARGS) MND(erase_last_command, METH_NOARGS)

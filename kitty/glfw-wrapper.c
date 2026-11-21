@@ -308,6 +308,12 @@ load_glfw(const char* path) {
     *(void **) (&glfwGetCurrentSystemColorTheme_impl) = dlsym(handle, "glfwGetCurrentSystemColorTheme");
     if (glfwGetCurrentSystemColorTheme_impl == NULL) fail("Failed to load glfw function glfwGetCurrentSystemColorTheme with error: %s", dlerror());
 
+    *(void **) (&glfwSetDisplayAccessibilityChangeCallback_impl) = dlsym(handle, "glfwSetDisplayAccessibilityChangeCallback");
+    if (glfwSetDisplayAccessibilityChangeCallback_impl == NULL) fail("Failed to load glfw function glfwSetDisplayAccessibilityChangeCallback with error: %s", dlerror());
+
+    *(void **) (&glfwGetDisplayAccessibility_impl) = dlsym(handle, "glfwGetDisplayAccessibility");
+    if (glfwGetDisplayAccessibility_impl == NULL) fail("Failed to load glfw function glfwGetDisplayAccessibility with error: %s", dlerror());
+
     *(void **) (&glfwGetTitlebarFont_impl) = dlsym(handle, "glfwGetTitlebarFont");
     if (glfwGetTitlebarFont_impl == NULL) fail("Failed to load glfw function glfwGetTitlebarFont with error: %s", dlerror());
 

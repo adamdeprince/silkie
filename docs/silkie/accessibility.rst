@@ -1,6 +1,23 @@
 Accessibility
 =============
 
+Navigate terminal text
+----------------------
+
+VoiceOver on macOS and Orca on Linux can navigate each visible pane as
+text. Silkie exposes the viewport, the terminal caret, and the selection.
+Moving keyboard focus to another pane also updates screen reader focus.
+Use the terminal's scroll controls to bring earlier output into the viewport.
+Silkie uses `AppKit text navigation
+<https://developer.apple.com/documentation/appkit/nsaccessibilitynavigablestatictext>`_
+and `AT-SPI Text
+<https://gnome.pages.gitlab.gnome.org/at-spi2-core/devel-docs/doc-org.a11y.atspi.Text.html>`_.
+
+Programs can use the :doc:`display-protocol` to read the current high
+contrast and color-independent rendering hints. Set :opt:`high_contrast`
+or :opt:`differentiate_without_color` to ``auto``, ``off``, or ``on`` in
+``silkie.conf``.
+
 Magnify a pane
 --------------
 
@@ -131,6 +148,88 @@ scrollback. Moving an existing placement keeps the annotation. Deleting a
 placement or replacing the image data removes it along with the placement.
 Virtual placements describe the visible runs of their Unicode placeholders.
 The review shows one entry per visible virtual placement.
+
+Label text and make announcements
+---------------------------------
+
+Look for ``a11y.2`` in the :doc:`capabilities-protocol` reply to discover
+text labels and announcements. Image operations also accept version 2.
+
+After drawing text, send ``set-text`` to label a range of terminal cells::
+
+    <OSC> 777 ; a11y ; v=2 : op=set-text : range=7 : row=2 : column=1 : end_row=2 : end_column=4 : role=prompt : label=Search <ST>
+
+``range`` is a nonzero unsigned 32-bit ID local to the pane. The start is
+inclusive and the end is exclusive. Rows and columns are one-based
+coordinates on the active terminal screen, independent of user scrollback
+position. The end column may be one past the last column. ``role`` is
+``prompt``, ``status``, ``completion``, or ``decorative``. An optional
+percent-encoded UTF-8 ``label`` replaces the text exposed to screen readers.
+Decorative ranges are omitted from accessible text.
+
+A new range replaces any overlapping ranges. An annotation expires when
+its cells change, the pane is resized, or it switches terminal screens.
+Use ``clear-text`` with the same ``range`` ID to remove it explicitly.
+
+Send ``announce`` when an event occurs::
+
+    <OSC> 777 ; a11y ; v=2 : op=announce : text=Search%20failed : priority=assertive <ST>
+
+``text`` is percent-encoded, nonempty, single-line UTF-8. The default
+``priority=polite`` requests a normal announcement. ``assertive`` requests
+an interruption. Each command requests one announcement. Repainting the
+pane or updating a text label never requests it again.
+
+An optional ``id`` requests a version-2 acknowledgment. Statuses are ``OK``,
+``EINVAL`` for coordinates outside the grid, ``ENOENT`` for an unknown
+range ID, ``ENOTSUP`` when native announcements are unavailable, and
+``ENOMEM`` if allocating text fails. Malformed requests receive no reply.
+
+Speech over the terminal
+------------------------
+
+Programs can queue speech with per-utterance voice settings. Silkie uses
+`AVSpeechSynthesizer <https://developer.apple.com/documentation/AVFAudio/AVSpeechSynthesizer>`_
+on macOS and `Speech Dispatcher <https://github.com/brailcom/speechd>`_ on
+Linux. The interface supports queued and interruptible speech, character
+echo, and reusable voice styles as in
+`Emacspeak Voice Lock <https://tvraman.github.io/emacspeak/manual/Voice-Lock.html>`_.
+
+Look for ``speech.1`` in the :doc:`capabilities-protocol` reply and query
+the terminal host for its backend::
+
+    <OSC> 777 ; speech ; v=1 : op=query : id=17 <ST>
+    <OSC> 777 ; speech ; v=1 : op=cap : id=17 : available=1 : engine=avspeech : pitch_range=0 <ST>
+
+``available=1`` indicates that a native speech backend is installed.
+``engine`` is ``avspeech``, ``speech_dispatcher``, or ``none``.
+``pitch_range=1`` means the backend accepts pitch-range settings.
+The protocol uses :doc:`extension-framing`. Percent-encode text and names
+as with the accessibility protocol above.
+
+To speak a styled sequence, define styles and queue text using them::
+
+    <OSC> 777 ; speech ; v=1 : op=set-style : style=comment : pitch=-25 : rate=-10 <ST>
+    <OSC> 777 ; speech ; v=1 : op=queue : text=Line%2017 <ST>
+    <OSC> 777 ; speech ; v=1 : op=queue : style=comment : text=Save%20the%20buffer <ST>
+    <OSC> 777 ; speech ; v=1 : op=dispatch <ST>
+
+``speak`` adds text to playback without a separate dispatch. ``character``
+takes a single Unicode character for key echo. Set ``interrupt=1`` to
+clear the pane's speech before adding new output. ``sound`` takes a native
+sound ``name`` and ``silence`` takes a ``duration`` in milliseconds.
+Use ``queued=1`` with either to include it in a later dispatch.
+
+``stop`` interrupts playback and clears the pane's queues. ``pause`` and
+``resume`` control playback. ``reset`` also clears the pane's styles.
+``clear-style`` removes the named style. A style can set any subset of
+``voice``, ``language``, ``rate``, ``pitch``, ``pitch_range``, ``volume``,
+``punctuation``, and ``split_caps``. An individual utterance can override
+those fields. Rate, pitch, and pitch range are from −100 to 100 with zero
+neutral. Volume is from 0 to 100. Punctuation is ``none``, ``some`` or
+``all``. ``split_caps=1`` separates words in mixed-case identifiers.
+Voice identifiers and speech rendering depend on the installed synthesizer.
+An optional ``id`` requests an acknowledgment of the command.
 
 SVG example
 -----------

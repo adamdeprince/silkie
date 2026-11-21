@@ -845,6 +845,25 @@ pen, a tablet or a pad is reported as before.</p>
 </dd></dl>
 
 <dl class="std opt">
+<dt class="sig sig-object std" id="opt-high_contrast">
+<span class="sig-name descname"><span class="pre">high_contrast</span></span><a class="headerlink" href="#opt-high_contrast" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">auto</span></code>.</p>
+<p>The high contrast hint sent to terminal programs. <code class="code docutils literal notranslate"><span class="pre">auto</span></code> follows the
+desktop accessibility setting and requests high contrast on e-paper.
+<code class="code docutils literal notranslate"><span class="pre">off</span></code> and <code class="code docutils literal notranslate"><span class="pre">on</span></code> explicitly set the hint to 0 or 1.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-differentiate_without_color">
+<span class="sig-name descname"><span class="pre">differentiate_without_color</span></span><a class="headerlink" href="#opt-differentiate_without_color" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">auto</span></code>.</p>
+<p>The differentiate without color hint sent to terminal programs.
+<code class="code docutils literal notranslate"><span class="pre">auto</span></code> follows the macOS accessibility setting and always enables the
+hint on grayscale and monochrome displays. <code class="code docutils literal notranslate"><span class="pre">off</span></code> and <code class="code docutils literal notranslate"><span class="pre">on</span></code>
+explicitly set the hint to 0 or 1.</p>
+</dd></dl>
+
+<dl class="std opt">
 <dt class="sig sig-object std" id="opt-magnify_raster_resolution">
 <span class="sig-name descname"><span class="pre">magnify_raster_resolution</span></span><a class="headerlink" href="#opt-magnify_raster_resolution" title="Link to this definition">¶</a></dt>
 <dd><p>Default: <code class="docutils literal notranslate"><span class="pre">yes</span></code>.</p>
@@ -854,6 +873,60 @@ visible. Applications can use resize notifications to send an image at the
 reported resolution. Set this to <code class="code docutils literal notranslate"><span class="pre">no</span></code> to save bandwidth by reporting
 the base pixel size. Silkie scales the available image to the selected zoom
 level.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-deep_color">
+<span class="sig-name descname"><span class="pre">deep_color</span></span><a class="headerlink" href="#opt-deep_color" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">always</span></code>.</p>
+<p>Draw into a window surface with more than 8 bits per color channel, so that
+smooth gradients, in images with 16 bits per channel for example, do not band
+on displays that show more than 256 levels. This does not make anything
+brighter, that is <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a>. With the default, <code class="code docutils literal notranslate"><span class="pre">always</span></code>, Silkie asks
+for a deep surface wherever the system has one, and how finely it dithers
+into it follows the display the window is on, see <a class="reference internal" href="#opt-output_dither"><code class="xref std std-opt docutils literal notranslate"><span class="pre">output_dither</span></code></a>.
+<code class="code docutils literal notranslate"><span class="pre">never</span></code> keeps an 8 bit surface, to save memory and bandwidth.</p>
+<p>What a deep surface costs differs. On Wayland and X11 it has 10 bits per
+channel and the same 32 bits per pixel as an 8 bit one, so it costs nothing
+more. Its alpha has at most 2 bits, so a transparent window gets a floating
+point surface on Wayland, where the graphics driver has one, and stays 8 bit
+otherwise. On X11 it needs a visual of depth 30. On macOS it is a floating
+point surface with 16 bits per channel, twice the memory and bandwidth of an
+8 bit one, on every screen; on a screen not known to show more than 8 bits it
+is dithered to 8 bit steps. Set <code class="code docutils literal notranslate"><span class="pre">never</span></code> to save that bandwidth. With
+<a class="reference external" href="https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.macos_colorspace"><code class="xref std std-opt docutils literal notranslate"><span class="pre">macos_colorspace</span></code></a> set to <code class="code docutils literal notranslate"><span class="pre">default</span></code> the colors are passed to the
+display unmanaged, which a floating point surface cannot do, so that window
+stays 8 bit.</p>
+<p>HDR needs a floating point surface too: while <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> is in use for a
+window, which with the default <code class="code docutils literal notranslate"><span class="pre">detect</span></code> is whenever it is on an HDR
+capable screen, such as a MacBook Pro’s, the window has one even with
+<code class="code docutils literal notranslate"><span class="pre">never</span></code>, and on macOS switches to and from it, like a resize, as it is
+moved between screens. Set <a class="reference internal" href="#opt-hdr"><code class="xref std std-opt docutils literal notranslate"><span class="pre">hdr</span></code></a> to <code class="code docutils literal notranslate"><span class="pre">no</span></code> as well to keep every
+window 8 bits deep.</p>
+<p>The surface Silkie actually got, and how it dithers, is reported by the
+<a class="reference internal" href="display-protocol.html"><span class="doc">Display protocol</span></a> as <code class="code docutils literal notranslate"><span class="pre">output_bits</span></code>, <code class="code docutils literal notranslate"><span class="pre">output_type</span></code> and
+<code class="code docutils literal notranslate"><span class="pre">output_dither</span></code>. On Wayland and X11 the choice is made for newly created
+OS windows.</p>
+</dd></dl>
+
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-output_dither">
+<span class="sig-name descname"><span class="pre">output_dither</span></span><a class="headerlink" href="#opt-output_dither" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">yes</span></code>.</p>
+<p>Instead of rounding the colors Silkie computes with more precision than the
+display shows, such as gradients in images with 16 bits per channel, scaled
+images and the edges of text, to the nearest step, which shows as bands, add
+a faint ordered dither, below half a step. Colors that are exactly a step,
+solid text and backgrounds among them, are left exactly as they are. The step
+is that of the window surface when it is 8 bits deep. A deeper surface is
+dithered to the steps of 8 bits unless the system says the display the window
+is on shows more, since compositors and the system round a deep surface to an
+8 bit display without dithering it. Then a 10 bit surface is dithered to its
+own steps and a floating point one is not dithered at all. The system says
+so for HDR outputs on Wayland, for screens that support extended dynamic
+range or report more than 8 bits on macOS, and for screens 30 bits deep on
+X11. Dithering draws a window through an intermediate image, which costs one
+more pass over the window for every frame.</p>
 </dd></dl>
 
 </section>

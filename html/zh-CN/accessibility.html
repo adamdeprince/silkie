@@ -339,6 +339,19 @@
         <article role="main" id="furo-main-content">
           <section id="accessibility">
 <h1>无障碍功能<a class="headerlink" href="#accessibility" title="链接到此标题。">¶</a></h1>
+<section id="navigate-terminal-text">
+<h2>Navigate terminal text<a class="headerlink" href="#navigate-terminal-text" title="链接到此标题。">¶</a></h2>
+<p>VoiceOver on macOS and Orca on Linux can navigate each visible pane as
+text. Silkie exposes the viewport, the terminal caret, and the selection.
+Moving keyboard focus to another pane also updates screen reader focus.
+Use the terminal's scroll controls to bring earlier output into the viewport.
+Silkie uses <a class="reference external" href="https://developer.apple.com/documentation/appkit/nsaccessibilitynavigablestatictext">AppKit text navigation</a>
+and <a class="reference external" href="https://gnome.pages.gitlab.gnome.org/at-spi2-core/devel-docs/doc-org.a11y.atspi.Text.html">AT-SPI Text</a>.</p>
+<p>Programs can use the <a class="reference internal" href="display-protocol.html"><span class="doc">显示信息协议</span></a> to read the current high
+contrast and color-independent rendering hints. Set <a class="reference internal" href="configuration.html#opt-high_contrast"><code class="xref std std-opt docutils literal notranslate"><span class="pre">high_contrast</span></code></a>
+or <a class="reference internal" href="configuration.html#opt-differentiate_without_color"><code class="xref std std-opt docutils literal notranslate"><span class="pre">differentiate_without_color</span></code></a> to <code class="docutils literal notranslate"><span class="pre">auto</span></code>, <code class="docutils literal notranslate"><span class="pre">off</span></code>, or <code class="docutils literal notranslate"><span class="pre">on</span></code> in
+<code class="docutils literal notranslate"><span class="pre">silkie.conf</span></code>.</p>
+</section>
 <section id="magnify-a-pane">
 <h2>放大终端窗格<a class="headerlink" href="#magnify-a-pane" title="链接到此标题。">¶</a></h2>
 <p>选择 <strong>View → Magnify Pane</strong>，或按 <code class="docutils literal notranslate"><span class="pre">Ctrl+Alt+=</span></code> 放大，按 <code class="docutils literal notranslate"><span class="pre">Ctrl+Alt+−</span></code> 缩小，按 <code class="docutils literal notranslate"><span class="pre">Ctrl+Alt+0</span></code> 恢复原始大小。用 <code class="docutils literal notranslate"><span class="pre">Ctrl+Alt+方向键</span></code> 平移已放大的窗格，用 <code class="docutils literal notranslate"><span class="pre">Ctrl+Alt+C</span></code> 将文字光标移到视图中央。支持直接触摸事件的触屏可用双指张开或捏合来缩放，双指同向移动可平移。窗格已放大时，触控板上的捏合手势以指针为中心缩放。</p>
@@ -417,6 +430,79 @@
 </div>
 <p>注释属于当前屏幕，并随对应的放置进入回滚缓冲区。移动已有的放置时，注释随之保留。删除放置或替换图像数据时，相应放置及其注释也会移除。虚拟放置的注释用于描述其 Unicode 占位符的可见部分。查看器为每个可见的虚拟放置列出一项。</p>
 </section>
+<section id="label-text-and-make-announcements">
+<h2>Label text and make announcements<a class="headerlink" href="#label-text-and-make-announcements" title="链接到此标题。">¶</a></h2>
+<p>Look for <code class="docutils literal notranslate"><span class="pre">a11y.2</span></code> in the <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a> reply to discover
+text labels and announcements. Image operations also accept version 2.</p>
+<p>After drawing text, send <code class="docutils literal notranslate"><span class="pre">set-text</span></code> to label a range of terminal cells:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">a11y</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="nb">set</span><span class="o">-</span><span class="n">text</span> <span class="p">:</span> <span class="nb">range</span><span class="o">=</span><span class="mi">7</span> <span class="p">:</span> <span class="n">row</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">column</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">end_row</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">end_column</span><span class="o">=</span><span class="mi">4</span> <span class="p">:</span> <span class="n">role</span><span class="o">=</span><span class="n">prompt</span> <span class="p">:</span> <span class="n">label</span><span class="o">=</span><span class="n">Search</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">range</span></code> is a nonzero unsigned 32-bit ID local to the pane. The start is
+inclusive and the end is exclusive. Rows and columns are one-based
+coordinates on the active terminal screen, independent of user scrollback
+position. The end column may be one past the last column. <code class="docutils literal notranslate"><span class="pre">role</span></code> is
+<code class="docutils literal notranslate"><span class="pre">prompt</span></code>, <code class="docutils literal notranslate"><span class="pre">status</span></code>, <code class="docutils literal notranslate"><span class="pre">completion</span></code>, or <code class="docutils literal notranslate"><span class="pre">decorative</span></code>. An optional
+percent-encoded UTF-8 <code class="docutils literal notranslate"><span class="pre">label</span></code> replaces the text exposed to screen readers.
+Decorative ranges are omitted from accessible text.</p>
+<p>A new range replaces any overlapping ranges. An annotation expires when
+its cells change, the pane is resized, or it switches terminal screens.
+Use <code class="docutils literal notranslate"><span class="pre">clear-text</span></code> with the same <code class="docutils literal notranslate"><span class="pre">range</span></code> ID to remove it explicitly.</p>
+<p>Send <code class="docutils literal notranslate"><span class="pre">announce</span></code> when an event occurs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">a11y</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">2</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">announce</span> <span class="p">:</span> <span class="n">text</span><span class="o">=</span><span class="n">Search</span><span class="o">%</span><span class="mi">20</span><span class="n">failed</span> <span class="p">:</span> <span class="n">priority</span><span class="o">=</span><span class="n">assertive</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">text</span></code> is percent-encoded, nonempty, single-line UTF-8. The default
+<code class="docutils literal notranslate"><span class="pre">priority=polite</span></code> requests a normal announcement. <code class="docutils literal notranslate"><span class="pre">assertive</span></code> requests
+an interruption. Each command requests one announcement. Repainting the
+pane or updating a text label never requests it again.</p>
+<p>An optional <code class="docutils literal notranslate"><span class="pre">id</span></code> requests a version-2 acknowledgment. Statuses are <code class="docutils literal notranslate"><span class="pre">OK</span></code>,
+<code class="docutils literal notranslate"><span class="pre">EINVAL</span></code> for coordinates outside the grid, <code class="docutils literal notranslate"><span class="pre">ENOENT</span></code> for an unknown
+range ID, <code class="docutils literal notranslate"><span class="pre">ENOTSUP</span></code> when native announcements are unavailable, and
+<code class="docutils literal notranslate"><span class="pre">ENOMEM</span></code> if allocating text fails. Malformed requests receive no reply.</p>
+</section>
+<section id="speech-over-the-terminal">
+<h2>Speech over the terminal<a class="headerlink" href="#speech-over-the-terminal" title="链接到此标题。">¶</a></h2>
+<p>Programs can queue speech with per-utterance voice settings. Silkie uses
+<a class="reference external" href="https://developer.apple.com/documentation/AVFAudio/AVSpeechSynthesizer">AVSpeechSynthesizer</a>
+on macOS and <a class="reference external" href="https://github.com/brailcom/speechd">Speech Dispatcher</a> on
+Linux. The interface supports queued and interruptible speech, character
+echo, and reusable voice styles as in
+<a class="reference external" href="https://tvraman.github.io/emacspeak/manual/Voice-Lock.html">Emacspeak Voice Lock</a>.</p>
+<p>Look for <code class="docutils literal notranslate"><span class="pre">speech.1</span></code> in the <a class="reference internal" href="capabilities-protocol.html"><span class="doc">扩展能力协议</span></a> reply and query
+the terminal host for its backend:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">speech</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">query</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">17</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">speech</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">cap</span> <span class="p">:</span> <span class="nb">id</span><span class="o">=</span><span class="mi">17</span> <span class="p">:</span> <span class="n">available</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">engine</span><span class="o">=</span><span class="n">avspeech</span> <span class="p">:</span> <span class="n">pitch_range</span><span class="o">=</span><span class="mi">0</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">available=1</span></code> indicates that a native speech backend is installed.
+<code class="docutils literal notranslate"><span class="pre">engine</span></code> is <code class="docutils literal notranslate"><span class="pre">avspeech</span></code>, <code class="docutils literal notranslate"><span class="pre">speech_dispatcher</span></code>, or <code class="docutils literal notranslate"><span class="pre">none</span></code>.
+<code class="docutils literal notranslate"><span class="pre">pitch_range=1</span></code> means the backend accepts pitch-range settings.
+The protocol uses <a class="reference internal" href="extension-framing.html"><span class="doc">OSC 777 扩展封装</span></a>. Percent-encode text and names
+as with the accessibility protocol above.</p>
+<p>To speak a styled sequence, define styles and queue text using them:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">speech</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="nb">set</span><span class="o">-</span><span class="n">style</span> <span class="p">:</span> <span class="n">style</span><span class="o">=</span><span class="n">comment</span> <span class="p">:</span> <span class="n">pitch</span><span class="o">=-</span><span class="mi">25</span> <span class="p">:</span> <span class="n">rate</span><span class="o">=-</span><span class="mi">10</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">speech</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">queue</span> <span class="p">:</span> <span class="n">text</span><span class="o">=</span><span class="n">Line</span><span class="o">%</span><span class="mi">2017</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">speech</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">queue</span> <span class="p">:</span> <span class="n">style</span><span class="o">=</span><span class="n">comment</span> <span class="p">:</span> <span class="n">text</span><span class="o">=</span><span class="n">Save</span><span class="o">%</span><span class="mi">20</span><span class="n">the</span><span class="o">%</span><span class="mi">20</span><span class="n">buffer</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+<span class="o">&lt;</span><span class="n">OSC</span><span class="o">&gt;</span> <span class="mi">777</span> <span class="p">;</span> <span class="n">speech</span> <span class="p">;</span> <span class="n">v</span><span class="o">=</span><span class="mi">1</span> <span class="p">:</span> <span class="n">op</span><span class="o">=</span><span class="n">dispatch</span> <span class="o">&lt;</span><span class="n">ST</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">speak</span></code> adds text to playback without a separate dispatch. <code class="docutils literal notranslate"><span class="pre">character</span></code>
+takes a single Unicode character for key echo. Set <code class="docutils literal notranslate"><span class="pre">interrupt=1</span></code> to
+clear the pane's speech before adding new output. <code class="docutils literal notranslate"><span class="pre">sound</span></code> takes a native
+sound <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">silence</span></code> takes a <code class="docutils literal notranslate"><span class="pre">duration</span></code> in milliseconds.
+Use <code class="docutils literal notranslate"><span class="pre">queued=1</span></code> with either to include it in a later dispatch.</p>
+<p><code class="docutils literal notranslate"><span class="pre">stop</span></code> interrupts playback and clears the pane's queues. <code class="docutils literal notranslate"><span class="pre">pause</span></code> and
+<code class="docutils literal notranslate"><span class="pre">resume</span></code> control playback. <code class="docutils literal notranslate"><span class="pre">reset</span></code> also clears the pane's styles.
+<code class="docutils literal notranslate"><span class="pre">clear-style</span></code> removes the named style. A style can set any subset of
+<code class="docutils literal notranslate"><span class="pre">voice</span></code>, <code class="docutils literal notranslate"><span class="pre">language</span></code>, <code class="docutils literal notranslate"><span class="pre">rate</span></code>, <code class="docutils literal notranslate"><span class="pre">pitch</span></code>, <code class="docutils literal notranslate"><span class="pre">pitch_range</span></code>, <code class="docutils literal notranslate"><span class="pre">volume</span></code>,
+<code class="docutils literal notranslate"><span class="pre">punctuation</span></code>, and <code class="docutils literal notranslate"><span class="pre">split_caps</span></code>. An individual utterance can override
+those fields. Rate, pitch, and pitch range are from −100 to 100 with zero
+neutral. Volume is from 0 to 100. Punctuation is <code class="docutils literal notranslate"><span class="pre">none</span></code>, <code class="docutils literal notranslate"><span class="pre">some</span></code> or
+<code class="docutils literal notranslate"><span class="pre">all</span></code>. <code class="docutils literal notranslate"><span class="pre">split_caps=1</span></code> separates words in mixed-case identifiers.
+Voice identifiers and speech rendering depend on the installed synthesizer.
+An optional <code class="docutils literal notranslate"><span class="pre">id</span></code> requests an acknowledgment of the command.</p>
+</section>
 <section id="svg-example">
 <h2>SVG 示例<a class="headerlink" href="#svg-example" title="链接到此标题。">¶</a></h2>
 <p>此 Python 程序会放置一张小型 SVG 图表，并描述图表结果。请将标准输出发送到支持 SVG 和图像注释的 Silkie 终端:</p>
@@ -494,9 +580,12 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">无障碍功能</a><ul>
+<li><a class="reference internal" href="#navigate-terminal-text">Navigate terminal text</a></li>
 <li><a class="reference internal" href="#magnify-a-pane">放大终端窗格</a></li>
 <li><a class="reference internal" href="#review-terminal-images">查看终端图像</a></li>
 <li><a class="reference internal" href="#describe-image-placements">描述图像放置</a></li>
+<li><a class="reference internal" href="#label-text-and-make-announcements">Label text and make announcements</a></li>
+<li><a class="reference internal" href="#speech-over-the-terminal">Speech over the terminal</a></li>
 <li><a class="reference internal" href="#svg-example">SVG 示例</a></li>
 </ul>
 </li>

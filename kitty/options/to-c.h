@@ -21,6 +21,14 @@ eink_scheme_from_python(PyObject *val) {
     return parse_eink_scheme(PyUnicode_AsUTF8(val));
 }
 
+static inline AccessibilityOverride
+accessibility_override_from_python(PyObject *val) {
+    const char *s = PyUnicode_AsUTF8(val);
+    if (s && strcmp(s, "on") == 0) return ACCESSIBILITY_ON;
+    if (s && strcmp(s, "off") == 0) return ACCESSIBILITY_OFF;
+    return ACCESSIBILITY_AUTO;
+}
+
 static inline color_type
 color_as_int(PyObject *color) {
     if (!PyObject_TypeCheck(color, &Color_Type)) {

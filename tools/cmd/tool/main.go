@@ -4,6 +4,7 @@ package tool
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/kovidgoyal/kitty/kittens/ask"
 	"github.com/kovidgoyal/kitty/kittens/broadcast"
@@ -29,6 +30,7 @@ import (
 	"github.com/kovidgoyal/kitty/kittens/themes"
 	"github.com/kovidgoyal/kitty/kittens/transfer"
 	"github.com/kovidgoyal/kitty/kittens/unicode_input"
+	"github.com/kovidgoyal/kitty/tools/atspi"
 	"github.com/kovidgoyal/kitty/tools/cli"
 	"github.com/kovidgoyal/kitty/tools/cmd/at"
 	"github.com/kovidgoyal/kitty/tools/cmd/atexit"
@@ -149,6 +151,12 @@ func KittyToolEntryPoints(root *cli.Command) {
 	})
 	// __watch_conf__
 	watch.EntryPoint(root)
+	root.AddSubCommand(&cli.Command{
+		Name: "__atspi__", Hidden: true, OnlyArgsAllowed: true,
+		Run: func(cmd *cli.Command, args []string) (int, error) {
+			return 0, atspi.Run(os.Stdin, os.Stdout)
+		},
+	})
 	// __convert_image__
 	images.ConvertEntryPoint(root)
 	// __atexit__

@@ -506,6 +506,14 @@ _glfwInputColorScheme(GLFWColorScheme value, bool is_initial_value) {
 }
 
 void
+_glfwInputDisplayAccessibility(unsigned value) {
+    const unsigned previous = _glfw.display_accessibility;
+    if (previous == value) return;
+    _glfw.display_accessibility = value;
+    if (_glfw.callbacks.display_accessibility_change) _glfw.callbacks.display_accessibility_change(value, previous);
+}
+
+void
 _glfwInputClipboardLost(GLFWClipboardType which) {
     if (_glfw.callbacks.clipboard_lost) _glfw.callbacks.clipboard_lost(which);
 }

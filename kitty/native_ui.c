@@ -409,7 +409,76 @@ native_saved_height_adjustment(PyObject *self UNUSED, PyObject *pyid) {
     return PyLong_FromLong(w && w->hosted_in_native_window && backend && backend->saved_height_adjustment ? backend->saved_height_adjustment(w) : 0);
 }
 
+#ifdef __APPLE__
+static PyObject *
+cocoa_speech_control(PyObject *self UNUSED, PyObject *args) {
+    id_type pane;
+    const char *op;
+    if (!PyArg_ParseTuple(args, "Ks", &pane, &op)) return NULL;
+    return PyBool_FromLong(native_ui_cocoa_speech_control(pane, op));
+}
+
+static PyObject *
+cocoa_speak(PyObject *self UNUSED, PyObject *args) {
+    id_type pane;
+    const char *text, *voice, *language;
+    int rate, pitch, volume;
+    if (!PyArg_ParseTuple(args, "Ksssiii", &pane, &text, &voice, &language, &rate, &pitch, &volume)) return NULL;
+    return PyBool_FromLong(native_ui_cocoa_speak(pane, text, voice, language, rate, pitch, volume));
+}
+
+static PyObject *
+cocoa_speech_sound(PyObject *self UNUSED, PyObject *args) {
+    id_type pane;
+    const char *name;
+    if (!PyArg_ParseTuple(args, "Ks", &pane, &name)) return NULL;
+    return PyFloat_FromDouble(native_ui_cocoa_speech_sound(pane, name));
+}
+
+static PyObject *
+cocoa_preferred_languages(PyObject *self UNUSED, PyObject *args UNUSED) {
+    return native_ui_cocoa_preferred_languages();
+}
+
+static PyObject *
+cocoa_accessibility_active(PyObject *self UNUSED, PyObject *args UNUSED) {
+    if (native_ui_cocoa_accessibility_active()) Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
+}
+
+static PyObject *
+cocoa_accessibility_update(PyObject *self UNUSED, PyObject *args) {
+    id_type id;
+    PyObject *panes;
+    if (!PyArg_ParseTuple(args, "KO", &id, &panes)) return NULL;
+    OSWindow *w = os_window_for_id(id);
+    if (w) native_ui_cocoa_accessibility_update(w, panes);
+    if (PyErr_Occurred()) return NULL;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+cocoa_accessibility_announce(PyObject *self UNUSED, PyObject *args) {
+    id_type id;
+    const char *text;
+    int assertive;
+    if (!PyArg_ParseTuple(args, "Ksp", &id, &text, &assertive)) return NULL;
+    OSWindow *w = os_window_for_id(id);
+    if (w) native_ui_cocoa_accessibility_announce(w, text, assertive);
+    Py_RETURN_NONE;
+}
+#endif
+
 static PyMethodDef methods[] = {
+#ifdef __APPLE__
+    {"cocoa_speech_control", cocoa_speech_control, METH_VARARGS, ""},
+    {"cocoa_speak", cocoa_speak, METH_VARARGS, ""},
+    {"cocoa_speech_sound", cocoa_speech_sound, METH_VARARGS, ""},
+    {"cocoa_preferred_languages", cocoa_preferred_languages, METH_NOARGS, ""},
+    {"cocoa_accessibility_active", cocoa_accessibility_active, METH_NOARGS, ""},
+    {"cocoa_accessibility_update", cocoa_accessibility_update, METH_VARARGS, ""},
+    {"cocoa_accessibility_announce", cocoa_accessibility_announce, METH_VARARGS, ""},
+#endif
     {"native_ui_available", native_ui_available, METH_NOARGS, ""},
     {"native_tabs_supported", native_tabs_supported, METH_NOARGS, ""},
 #ifndef __APPLE__

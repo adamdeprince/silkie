@@ -2982,6 +2982,31 @@ Settings.
 )
 
 opt(
+    'high_contrast',
+    'auto',
+    choices=('auto', 'off', 'on'),
+    ctype='accessibility_override_from_python',
+    long_text="""
+The high contrast hint sent to terminal programs. :code:`auto` follows the
+desktop accessibility setting and requests high contrast on e-paper.
+:code:`off` and :code:`on` explicitly set the hint to 0 or 1.
+""",
+)
+
+opt(
+    'differentiate_without_color',
+    'auto',
+    choices=('auto', 'off', 'on'),
+    ctype='accessibility_override_from_python',
+    long_text="""
+The differentiate without color hint sent to terminal programs.
+:code:`auto` follows the macOS accessibility setting and always enables the
+hint on grayscale and monochrome displays. :code:`off` and :code:`on`
+explicitly set the hint to 0 or 1.
+""",
+)
+
+opt(
     'minimum_contrast',
     '0',
     option_type='minimum_contrast',

@@ -16,7 +16,7 @@
 static const struct { const char *selector; unsigned version; } extensions[] = {
     {"depth", 1},
     {"ssh-agent", 1},
-    {"a11y", 1}, {"caps", 1}, {"display", 1}, {"font", 1}, {"frame", 1}, {"gesture", 1}, {"haptic", 1}, {"ink", 1}, {"latency", 1}, {"scroll", 1}, {"tablet-pointer", 1},
+    {"a11y", 1}, {"a11y", 2}, {"caps", 1}, {"display", 1}, {"font", 1}, {"frame", 1}, {"gesture", 1}, {"haptic", 1}, {"ink", 1}, {"latency", 1}, {"scroll", 1}, {"speech", 1}, {"tablet-pointer", 1},
 };
 
 void
@@ -110,13 +110,51 @@ annotation_text(const char *encoded, bool multiline) {
 }
 
 static void
-image_annotation_reply(Screen *self, long long id, const char *status) {
+accessibility_reply(Screen *self, int version, long long id, const char *status) {
     if (id < 0) return;
-    RAII_PyObject(response, PyUnicode_FromFormat("777;a11y;v=1:op=ack:id=%lld:status=%s", id, status));
+    RAII_PyObject(response, PyUnicode_FromFormat("777;a11y;v=%d:op=ack:id=%lld:status=%s", version, id, status));
     if (response) {
         const char *reply = PyUnicode_AsUTF8(response);
         if (reply) write_escape_code_to_child(self, ESC_OSC, reply);
     }
+    if (PyErr_Occurred()) PyErr_Clear();
+}
+
+static void
+accessible_text_request(Screen *self, const ExtensionFields *f, const char *op, long long id) {
+    RAII_PyObject(response, NULL);
+    if (!strcmp(op, "announce")) {
+        const char *priority = extension_field(f, "priority");
+        if (priority && strcmp(priority, "polite") && strcmp(priority, "assertive")) return;
+        RAII_PyObject(text, annotation_text(extension_field(f, "text"), false));
+        if (text && PyUnicode_GET_LENGTH(text) && self->callbacks) {
+            response = PyObject_CallMethod(self->callbacks, "accessibility_announce", "OO", text,
+                priority && !strcmp(priority, "assertive") ? Py_True : Py_False);
+        }
+    } else {
+        long long key, row, column, end_row, end_column;
+        if (!extension_int(extension_field(f, "range"), 1, UINT32_MAX, &key)) return;
+        if (!strcmp(op, "clear-text")) {
+            if (self->callbacks) response = PyObject_CallMethod(self->callbacks, "accessibility_clear_text", "K", (unsigned long long)key);
+        } else if (!strcmp(op, "set-text")) {
+            const char *role = extension_field(f, "role");
+            if (!role || (strcmp(role, "prompt") && strcmp(role, "status") && strcmp(role, "completion") && strcmp(role, "decorative"))) return;
+            if (!extension_int(extension_field(f, "row"), 1, INT32_MAX, &row) ||
+                !extension_int(extension_field(f, "column"), 1, INT32_MAX, &column) ||
+                !extension_int(extension_field(f, "end_row"), 1, INT32_MAX, &end_row) ||
+                !extension_int(extension_field(f, "end_column"), 1, INT32_MAX, &end_column)) return;
+            RAII_PyObject(label, annotation_text(extension_field(f, "label"), false));
+            if (label && self->callbacks) {
+                response = PyObject_CallMethod(self->callbacks, "accessibility_set_text", "K(LL)(LL)sO",
+                    (unsigned long long)key, row - 1, column - 1, end_row - 1, end_column - 1, role, label);
+            }
+        }
+    }
+    if (response && PyUnicode_Check(response)) {
+        const char *status = PyUnicode_AsUTF8(response);
+        if (status) accessibility_reply(self, 2, id, status);
+    }
+    if (PyErr_ExceptionMatches(PyExc_MemoryError)) accessibility_reply(self, 2, id, "ENOMEM");
     if (PyErr_Occurred()) PyErr_Clear();
 }
 
@@ -125,10 +163,15 @@ screen_accessibility_protocol(Screen *self, const char *data, size_t size) {
     EXTENSION_FIELDS(f);
     const char *op;
     long long image, placement, id = -1;
-    if (memchr(data, 0, size) || !extension_fields_parse(&f, data, size) || !extension_frame_header(&f, 1, &op) ||
-        !extension_int(extension_field(&f, "i"), 1, UINT32_MAX, &image) ||
-        !extension_int(extension_field(&f, "p"), 1, UINT32_MAX, &placement) ||
-        !extension_field_int(&f, "id", 0, INT32_MAX, &id)) return;
+    if (memchr(data, 0, size) || !extension_fields_parse(&f, data, size) || !extension_field_int(&f, "id", 0, INT32_MAX, &id)) return;
+    const int version = extension_frame_header(&f, 1, &op) ? 1 : extension_frame_header(&f, 2, &op) ? 2 : 0;
+    if (!version) return;
+    if (strcmp(op, "set-image") && strcmp(op, "clear-image")) {
+        if (version == 2) accessible_text_request(self, &f, op, id);
+        return;
+    }
+    if (!extension_int(extension_field(&f, "i"), 1, UINT32_MAX, &image) ||
+        !extension_int(extension_field(&f, "p"), 1, UINT32_MAX, &placement)) return;
 
     RAII_PyObject(annotation, NULL);
     if (!strcmp(op, "set-image")) {
@@ -141,13 +184,50 @@ screen_accessibility_protocol(Screen *self, const char *data, size_t size) {
         if (!annotation) {
             const bool no_memory = PyErr_ExceptionMatches(PyExc_MemoryError);
             PyErr_Clear();
-            if (no_memory) image_annotation_reply(self, id, "ENOMEM");
+            if (no_memory) accessibility_reply(self, version, id, "ENOMEM");
             return;
         }
-    } else if (strcmp(op, "clear-image")) return;
+    }
 
     const bool found = grman_set_image_annotation(self->grman, (uint32_t)image, (uint32_t)placement, annotation);
-    image_annotation_reply(self, id, found ? "OK" : "ENOENT");
+    accessibility_reply(self, version, id, found ? "OK" : "ENOENT");
+}
+
+void
+screen_speech_protocol(Screen *self, const char *data, size_t size) {
+    EXTENSION_FIELDS(f);
+    const char *op;
+    long long id = -1;
+    if (memchr(data, 0, size) || !extension_fields_parse(&f, data, size) ||
+        !extension_frame_header(&f, 1, &op) || !extension_field_int(&f, "id", 0, INT32_MAX, &id) || !self->callbacks) return;
+    // Only the fields defined by the speech protocol are forwarded to the backend.
+    static const char *keys[] = {"text", "style", "voice", "language", "rate", "pitch", "pitch_range",
+                                 "volume", "punctuation", "split_caps", "name", "duration", "queued", "interrupt"};
+    RAII_PyObject(fields, PyDict_New());
+    if (!fields) { PyErr_Clear(); return; }
+    for (size_t i = 0; i < arraysz(keys); i++) {
+        const char *value = extension_field(&f, keys[i]);
+        if (!value) continue;
+        RAII_PyObject(decoded, annotation_text(value, i == 0));
+        if (!decoded || PyDict_SetItemString(fields, keys[i], decoded) < 0) {
+            PyErr_Clear();
+            return;
+        }
+    }
+    RAII_PyObject(answer, PyObject_CallMethod(self->callbacks, "speech_command", "sO", op, fields));
+    if (id >= 0 && answer && PyUnicode_Check(answer)) {
+        const char *reply = PyUnicode_AsUTF8(answer);
+        if (reply) {
+            const bool capability = strncmp(reply, "op=cap:", 7) == 0;
+            RAII_PyObject(response, PyUnicode_FromFormat("777;speech;v=1:op=%s:id=%lld:%s",
+                capability ? "cap" : "ack", id, reply + (capability ? 7 : 0)));
+            if (response) {
+                const char *text = PyUnicode_AsUTF8(response);
+                if (text) write_escape_code_to_child(self, ESC_OSC, text);
+            }
+        }
+    }
+    if (PyErr_Occurred()) PyErr_Clear();
 }
 
 // The graphics protocol transmission media (the t key) and pixel formats (the

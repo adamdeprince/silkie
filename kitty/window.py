@@ -105,6 +105,7 @@ from .fast_data_types import (
     update_window_visibility,
     wakeup_main_loop,
 )
+from .accessibility import TextAnnotations
 from .keys import keyboard_mode_name, mod_mask
 from .notifications import NotificationManager
 from .options.types import Options
@@ -891,6 +892,8 @@ class Window:
         self.keys_redirected_till_ready_from: int = 0
         self.last_focused_at = 0.0
         self.is_focused: bool = False
+        self.accessibility_annotations = TextAnnotations()
+        self.accessibility_frame = (0, 0, 0, 0)
         self.progress = Progress()
         self.program_status = ProgramStatus()
         self.clear_progress_timer: int = 0
@@ -1427,6 +1430,7 @@ class Window:
             self.needs_layout = False
             call_watchers(weakref.ref(self), 'on_resize', {'old_geometry': self.geometry, 'new_geometry': new_geometry})
         self.pty_layout_pixels = (max(0, new_geometry.right - new_geometry.left), max(0, render_bottom - render_top))
+        self.accessibility_frame = new_geometry.left, render_top, *self.pty_layout_pixels
         current_pty_size = self.pty_size_for_layout()
         update_ime_position = False
         if current_pty_size != self.last_reported_pty_size:
@@ -2083,6 +2087,8 @@ class Window:
 
         if is_hard_reset and self.program_status.clear():
             self.program_status_changed()
+        if hasattr(self, 'accessibility_annotations'):
+            self.accessibility_annotations.ranges.clear()
         # A reset clears the color stack, so the session color schemes, which
         # are associated with color stack entries, are cleared as well
         if self.session_color_schemes.clear():
@@ -2091,6 +2097,24 @@ class Window:
             self.progress.update(0)  # unset
             if (tab := self.tabref()) is not None:
                 tab.update_progress()
+
+    def accessibility_set_text(self, key: int, start: tuple[int, int], end: tuple[int, int], role: str, label: str) -> str:
+        return self.accessibility_annotations.set(self.screen, key, start, end, role, label)
+
+    def accessibility_clear_text(self, key: int) -> str:
+        self.accessibility_annotations.prune(self.screen)
+        return self.accessibility_annotations.clear(key)
+
+    def accessibility_announce(self, message: str, assertive: bool) -> str:
+        bridge = getattr(get_boss(), 'accessibility_bridge', None)
+        return bridge.announce(self, message, assertive) if bridge is not None else 'ENOTSUP'
+
+    def speech_command(self, op: str, fields: dict[str, str]) -> str:
+        boss = get_boss()
+        if not hasattr(boss, 'speech_controller'):
+            from .speech import SpeechController
+            boss.speech_controller = SpeechController()
+        return boss.speech_controller.request(self.id, op, fields)
 
     def notify_child_of_resize(self) -> None:
         pty_size = self.last_reported_pty_size
@@ -2623,6 +2647,8 @@ class Window:
 
         if hasattr(self, '_ssh_agent_provider'):
             self._ssh_agent_provider.close()
+        if speech := getattr(get_boss(), 'speech_controller', None):
+            speech.release(self.id)
         if close_event is None:
             close_event = {'reason': 'window', 'cause': 'closed', 'confirmed': self.close_confirmed}
         self.call_watchers(self.watchers.on_close, dict(close_event))

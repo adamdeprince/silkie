@@ -36,6 +36,7 @@ class TestDisplayPrecision(BaseTest):
                 screen = self.create_screen(options={'display_info': overrides})
                 report = self.report(screen)
                 self.ae(report['color'], color)
+                self.ae(report['differentiate_without_color'], '0' if color == 'rgb' else '1')
                 self.ae(tuple(int(report[key]) for key in keys), widths)
                 self.ae(report['precision'], precision)
 
@@ -63,5 +64,28 @@ class TestDisplayPrecision(BaseTest):
         screen = self.create_screen(options={'display_info': 'color=rgb bits=10'})
         report = self.report(screen)
         self.ae((report['output_bits'], report['output_type'], report['output_dither']), ('0', 'unknown', '0'))
+
+    def test_accessibility_overrides_and_languages(self):
+        from kitty.desktop_preferences import language_tag, primary_language, ukui_appearance
+        from kitty.fast_data_types import set_desktop_appearance_fallback, set_desktop_preferred_languages
+
+        self.ae(language_tag('sr_RS.UTF-8@latin'), 'sr-Latn-RS')
+        self.ae(primary_language({'LANGUAGE': 'fr_CA:fr', 'LANG': 'en_US.UTF-8'}), 'fr-CA')
+        self.ae(ukui_appearance('ukui-default', 'ukui-white'), ('light', False))
+        self.ae(ukui_appearance('ukui-dark', 'ukui-black'), ('dark', False))
+        self.ae(ukui_appearance('ukui-default', 'HighContrastInverse'), ('dark', True))
+        self.addCleanup(set_desktop_preferred_languages, 'und')
+        screen = self.create_screen()
+        self.addCleanup(set_desktop_appearance_fallback, 'no_preference', False)
+        set_desktop_appearance_fallback('dark', True)
+        report = self.report(screen)
+        self.ae((report['appearance'], report['high_contrast']), ('dark', '1'))
+        for i in range(128):
+            for mode, color, value in (('auto', 'mono', '1'), ('off', 'mono', '0'), ('on', 'rgb', '1')):
+                self.set_options({'display_info': f'kind=eink color={color}', 'high_contrast': mode, 'differentiate_without_color': mode})
+                language = 'fr-CA,ja-JP' if i % 2 else 'en-US'
+                set_desktop_preferred_languages(language)
+                report = self.report(screen)
+                self.ae((report['high_contrast'], report['differentiate_without_color'], report['languages']), (value, value, language))
         report = self.report(screen, 'mode:mode=1')
         self.ae((report['output_bits'], report['output_type'], report['output_dither']), ('0', 'unknown', '0'))

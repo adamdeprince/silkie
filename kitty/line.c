@@ -432,6 +432,19 @@ text_at(Line *self, Py_ssize_t xval) {
     return PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, &ch, 1);
 }
 
+static PyObject *
+accessible_cell(Line *self, PyObject *arg) {
+#define accessible_cell_doc "Text at the cell, including a wide glyph only at its first cell"
+    const Py_ssize_t x = PyLong_AsSsize_t(arg);
+    if (x < 0 || (size_t)x >= self->xnum) {
+        if (!PyErr_Occurred()) PyErr_SetString(PyExc_IndexError, "Column number out of bounds");
+        return NULL;
+    }
+    const CPUCell *cell = self->cpu_cells + x;
+    if (cell->is_multicell && (cell->x || cell->y)) return PyUnicode_New(0, 0);
+    return text_at(self, x);
+}
+
 size_t
 cell_as_unicode_for_fallback(const ListOfChars *lc, Py_UCS4 *buf, size_t sz) {
     size_t n = 1;
@@ -1321,6 +1334,7 @@ static PyMethodDef methods[] = {
         METHOD(clear_text, METH_VARARGS) METHOD(copy_char, METH_VARARGS) METHOD(set_char, METH_VARARGS) METHOD(set_attribute, METH_VARARGS)
             METHOD(as_ansi, METH_NOARGS) METHOD(last_char_has_wrapped_flag, METH_NOARGS) METHODB(set_wrapped_flag, METH_O),
     METHOD(hyperlink_ids, METH_NOARGS) METHOD(width, METH_O) METHOD(url_start_at, METH_O) METHOD(url_end_at, METH_VARARGS) METHOD(sprite_at, METH_O)
+    METHOD(accessible_cell, METH_O)
             METHOD(gpu_attrs_at, METH_O)
 
         {NULL} /* Sentinel */

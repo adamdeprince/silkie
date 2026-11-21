@@ -1900,6 +1900,11 @@ typedef void (*GLFWapplicationclosefun)(int);
  */
 typedef void (*GLFWsystemcolorthemechangefun)(GLFWColorScheme, bool);
 
+#define GLFW_DISPLAY_ACCESSIBILITY_HIGH_CONTRAST 1u
+#define GLFW_DISPLAY_ACCESSIBILITY_DIFFERENTIATE_WITHOUT_COLOR 2u
+// The current and previous display accessibility flags.
+typedef void (*GLFWdisplayaccessibilitychangefun)(unsigned, unsigned);
+
 
 /*! @brief The function pointer type for window content refresh callbacks.
  *
@@ -4853,6 +4858,8 @@ GLFWAPI GLFWapplicationclosefun glfwSetApplicationCloseCallback(GLFWapplicationc
 GLFWAPI GLFWsystemcolorthemechangefun glfwSetSystemColorThemeChangeCallback(GLFWsystemcolorthemechangefun callback);
 GLFWAPI GLFWclipboardlostfun glfwSetClipboardLostCallback(GLFWclipboardlostfun callback);
 GLFWAPI GLFWColorScheme glfwGetCurrentSystemColorTheme(bool query_if_unintialized);
+GLFWAPI GLFWdisplayaccessibilitychangefun glfwSetDisplayAccessibilityChangeCallback(GLFWdisplayaccessibilitychangefun callback);
+GLFWAPI unsigned glfwGetDisplayAccessibility(void);
 
 /*! @brief Returns the font to use for client side decoration titlebars, as
  * configured in the desktop settings. */

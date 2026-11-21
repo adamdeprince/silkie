@@ -361,6 +361,18 @@ glfwSetSystemColorThemeChangeCallback(GLFWsystemcolorthemechangefun cbfun) {
     return cbfun;
 }
 
+GLFWAPI GLFWdisplayaccessibilitychangefun
+glfwSetDisplayAccessibilityChangeCallback(GLFWdisplayaccessibilitychangefun cbfun) {
+    _GLFW_REQUIRE_INIT_OR_RETURN(NULL);
+    _GLFW_SWAP_POINTERS(_glfw.callbacks.display_accessibility_change, cbfun);
+    return cbfun;
+}
+
+GLFWAPI unsigned
+glfwGetDisplayAccessibility(void) {
+    return _glfw.display_accessibility;
+}
+
 GLFWAPI GLFWclipboardlostfun
 glfwSetClipboardLostCallback(GLFWclipboardlostfun cbfun) {
     _GLFW_REQUIRE_INIT_OR_RETURN(NULL);

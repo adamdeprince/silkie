@@ -13,6 +13,7 @@
 #include "cocoa_window.h"
 #include "glfw-wrapper.h"
 #include <Cocoa/Cocoa.h>
+#import <AVFoundation/AVFoundation.h>
 #include <objc/runtime.h>
 #include <dlfcn.h>
 
@@ -69,6 +70,306 @@ array_of(NSDictionary *d, NSString *key) {
 static NSWindow *
 ns_window(OSWindow *w) {
     return w && w->handle ? (NSWindow *)glfwGetCocoaWindow(w->handle) : nil;
+}
+
+static NSMutableDictionary<NSNumber *, AVSpeechSynthesizer *> *speakers;
+static NSMutableDictionary<NSNumber *, NSSound *> *speech_sounds;
+
+bool
+native_ui_cocoa_speech_control(id_type pane, const char *op) {
+    @autoreleasepool {
+        AVSpeechSynthesizer *speaker = speakers[@(pane)];
+        NSSound *sound = speech_sounds[@(pane)];
+        if (!speaker && !sound) return false;
+        if (strcmp(op, "stop") == 0) {
+            [speaker stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+            [speakers removeObjectForKey:@(pane)];
+            [sound stop];
+            [speech_sounds removeObjectForKey:@(pane)];
+            return true;
+        }
+        if (strcmp(op, "pause") == 0) {
+            [sound pause];
+            return [speaker pauseSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+        }
+        if (strcmp(op, "resume") == 0) {
+            [sound resume];
+            return [speaker continueSpeaking];
+        }
+        return speaker.speaking || speaker.paused;
+    }
+}
+
+bool
+native_ui_cocoa_speak(id_type pane, const char *text, const char *voice, const char *language, int rate, int pitch, int volume) {
+    @autoreleasepool {
+        AVSpeechUtterance *utterance = [AVSpeechUtterance speechUtteranceWithString:@(text)];
+        if (!utterance) return false;
+        if (*voice) {
+            utterance.voice = [AVSpeechSynthesisVoice voiceWithIdentifier:@(voice)];
+            if (!utterance.voice) {
+                for (AVSpeechSynthesisVoice *candidate in AVSpeechSynthesisVoice.speechVoices) {
+                    if ([candidate.name isEqualToString:@(voice)]) { utterance.voice = candidate; break; }
+                }
+            }
+        }
+        if (!utterance.voice && *language) utterance.voice = [AVSpeechSynthesisVoice voiceWithLanguage:@(language)];
+        if (rate) {
+            const float limit = rate > 0 ? AVSpeechUtteranceMaximumSpeechRate : AVSpeechUtteranceMinimumSpeechRate;
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate +
+                (limit - AVSpeechUtteranceDefaultSpeechRate) * ((float)abs(rate) / 100.0f);
+        }
+        if (pitch) utterance.pitchMultiplier = pitch > 0 ? 1.0f + (float)pitch / 100.0f : 1.0f + (float)pitch / 200.0f;
+        if (volume >= 0) utterance.volume = (float)volume / 100.0f;
+        if (!speakers) speakers = [[NSMutableDictionary alloc] init];
+        AVSpeechSynthesizer *speaker = speakers[@(pane)];
+        if (!speaker) {
+            speaker = [[[AVSpeechSynthesizer alloc] init] autorelease];
+            speakers[@(pane)] = speaker;
+        }
+        [speaker speakUtterance:utterance];
+        return true;
+    }
+}
+
+double
+native_ui_cocoa_speech_sound(id_type pane, const char *name) {
+    @autoreleasepool {
+        NSSound *sound = [[[NSSound soundNamed:@(name)] copy] autorelease];
+        if (sound && [sound play]) {
+            if (!speech_sounds) speech_sounds = [[NSMutableDictionary alloc] init];
+            speech_sounds[@(pane)] = sound;
+            return sound.duration;
+        }
+        if (strcmp(name, "bell") == 0) NSBeep();
+        return 0;
+    }
+}
+
+@interface SilkieAccessiblePane : NSAccessibilityElement <NSAccessibilityNavigableStaticText> {
+    NSDictionary *pane;
+    NSString *text;
+    NSArray<NSNumber *> *utf16Offsets;
+    NSPointerArray *parent;
+}
+- (instancetype)initWithView:(NSView *)parent;
+- (void)update:(NSDictionary *)data;
+- (NSNumber *)paneID;
+@end
+
+@implementation SilkieAccessiblePane
+- (instancetype)initWithView:(NSView *)container {
+    if ((self = [super init])) {
+        parent = [[NSPointerArray weakObjectsPointerArray] retain];
+        [parent addPointer:container];
+    }
+    return self;
+}
+
+- (void)dealloc {
+    [pane release];
+    [text release];
+    [utf16Offsets release];
+    [parent release];
+    [super dealloc];
+}
+
+- (NSNumber *)paneID { return pane[@"id"]; }
+- (NSString *)accessibilityIdentifier { return [NSString stringWithFormat:@"silkie-pane-%@", self.paneID]; }
+- (id)accessibilityParent { return [parent pointerAtIndex:0]; }
+- (NSString *)accessibilityRole { return NSAccessibilityTextAreaRole; }
+- (NSString *)accessibilityLabel { return str_of(pane, @"title"); }
+- (BOOL)isAccessibilityFocused { return bool_of(pane, @"focused"); }
+- (NSString *)accessibilityValue { return text; }
+- (void)setAccessibilityValue:(id)value {
+    NSView *view = self.accessibilityParent;
+    if (self.isAccessibilityFocused && [value isKindOfClass:[NSString class]]) [view setAccessibilityValue:value];
+}
+- (NSInteger)accessibilityNumberOfCharacters { return (NSInteger)text.length; }
+- (NSRange)accessibilityVisibleCharacterRange { return NSMakeRange(0, text.length); }
+
+- (NSUInteger)indexForOffset:(NSNumber *)offset {
+    const NSUInteger n = offset.unsignedIntegerValue;
+    return n < utf16Offsets.count ? utf16Offsets[n].unsignedIntegerValue : text.length;
+}
+
+- (NSRange)rangeFrom:(NSNumber *)start to:(NSNumber *)end {
+    const NSUInteger first = [self indexForOffset:start], last = [self indexForOffset:end];
+    return NSMakeRange(first, last >= first ? last - first : 0);
+}
+
+- (NSArray *)accessibilitySelectedTextRanges {
+    NSMutableArray *ranges = [NSMutableArray array];
+    for (NSArray *pair in array_of(pane, @"selections")) {
+        if (pair.count == 2) [ranges addObject:[NSValue valueWithRange:[self rangeFrom:pair[0] to:pair[1]]]];
+    }
+    return ranges;
+}
+
+- (NSRange)accessibilitySelectedTextRange {
+    NSValue *selection = self.accessibilitySelectedTextRanges.firstObject;
+    if (selection) return selection.rangeValue;
+    NSNumber *caret = pane[@"caret"];
+    return caret.integerValue < 0 ? NSMakeRange(NSNotFound, 0) : [self rangeFrom:caret to:caret];
+}
+
+- (NSString *)accessibilitySelectedText {
+    return [self accessibilityStringForRange:self.accessibilitySelectedTextRange];
+}
+
+- (NSString *)accessibilityStringForRange:(NSRange)range {
+    if (range.location > text.length) return nil;
+    range.length = MIN(range.length, text.length - range.location);
+    return [text substringWithRange:range];
+}
+
+- (NSInteger)accessibilityLineForIndex:(NSInteger)index {
+    if (index < 0 || (NSUInteger)index > text.length) return NSNotFound;
+    NSInteger line = -1;
+    for (NSArray *row in array_of(pane, @"rows")) {
+        if ([self indexForOffset:row.firstObject] > (NSUInteger)index) break;
+        line++;
+    }
+    return line < 0 ? NSNotFound : line;
+}
+
+- (NSInteger)accessibilityInsertionPointLineNumber {
+    NSNumber *caret = pane[@"caret"];
+    return caret.integerValue < 0 ? NSNotFound : [self accessibilityLineForIndex:(NSInteger)[self indexForOffset:caret]];
+}
+
+- (NSRange)accessibilityRangeForLine:(NSInteger)line {
+    NSArray *rows = array_of(pane, @"rows");
+    if (line < 0 || (NSUInteger)line >= rows.count) return NSMakeRange(NSNotFound, 0);
+    NSArray *row = rows[(NSUInteger)line];
+    return [self rangeFrom:row.firstObject to:row.lastObject];
+}
+
+- (NSRect)screenRect:(NSRect)pixels {
+    NSView *view = self.accessibilityParent;
+    if (!view.window) return NSZeroRect;
+    NSRect rect = [view convertRectFromBacking:pixels];
+    if (!view.isFlipped) rect.origin.y = NSHeight(view.bounds) - NSMaxY(rect);
+    return NSAccessibilityFrameInView(view, rect);
+}
+
+- (NSRect)accessibilityFrame {
+    NSArray *r = array_of(pane, @"frame");
+    return r.count == 4 ? [self screenRect:NSMakeRect([r[0] doubleValue], [r[1] doubleValue], [r[2] doubleValue], [r[3] doubleValue])] : NSZeroRect;
+}
+
+- (NSRect)accessibilityFrameForRange:(NSRange)range {
+    if (range.location > text.length) return NSZeroRect;
+    NSArray *r = array_of(pane, @"frame"), *rows = array_of(pane, @"rows");
+    if (r.count != 4 || !rows.count) return NSZeroRect;
+    const CGFloat x = [r[0] doubleValue], y = [r[1] doubleValue], h = [r[3] doubleValue] / rows.count;
+    NSUInteger first = (NSUInteger)[self accessibilityLineForIndex:(NSInteger)range.location];
+    NSUInteger last = (NSUInteger)[self accessibilityLineForIndex:(NSInteger)(range.location + MIN(range.length ? range.length - 1 : 0, text.length - range.location))];
+    if (first >= rows.count || last >= rows.count || first > last) return NSZeroRect;
+    NSRect rect = NSZeroRect;
+    for (NSUInteger row = first; row <= last; row++) {
+        NSArray *columns = rows[row];
+        if (columns.count < 2) continue;
+        const CGFloat w = [r[2] doubleValue] / (columns.count - 1);
+        NSUInteger start = 0, end = columns.count - 1;
+        if (row == first) {
+            while (start + 1 < end && [self indexForOffset:columns[start + 1]] <= range.location) start++;
+        }
+        if (row == last) {
+            NSUInteger limit = range.location + MIN(range.length, text.length - range.location);
+            while (end > start + 1 && [self indexForOffset:columns[end - 1]] >= limit) end--;
+        }
+        NSRect part = NSMakeRect(x + w * start, y + h * row, w * (end - start), h);
+        rect = row == first ? part : NSUnionRect(rect, part);
+    }
+    return [self screenRect:rect];
+}
+
+- (void)update:(NSDictionary *)data {
+    NSString *newText = str_of(data, @"text");
+    const BOOL textChanged = ![text isEqualToString:newText];
+    const BOOL selectionChanged = ![pane[@"selections"] isEqual:data[@"selections"]] || ![pane[@"caret"] isEqual:data[@"caret"]];
+    const BOOL focusGained = bool_of(data, @"focused") && !bool_of(pane, @"focused");
+    const BOOL newPane = !pane;
+    [pane release];
+    pane = [data retain];
+    if (textChanged) {
+        [text release];
+        text = [newText copy];
+        NSMutableArray *offsets = [NSMutableArray arrayWithCapacity:text.length];
+        for (NSUInteger i = 0; i < text.length; i++) {
+            [offsets addObject:@(i)];
+            if (CFStringIsSurrogateHighCharacter([text characterAtIndex:i]) && i + 1 < text.length &&
+                    CFStringIsSurrogateLowCharacter([text characterAtIndex:i + 1])) i++;
+        }
+        [offsets addObject:@(text.length)];
+        [utf16Offsets release];
+        utf16Offsets = [offsets retain];
+    }
+    if (!newPane && textChanged) NSAccessibilityPostNotification(self, NSAccessibilityValueChangedNotification);
+    if (!newPane && selectionChanged) NSAccessibilityPostNotification(self, NSAccessibilitySelectedTextChangedNotification);
+    if (focusGained) NSAccessibilityPostNotification(self, NSAccessibilityFocusedUIElementChangedNotification);
+}
+@end
+
+void
+native_ui_cocoa_accessibility_update(OSWindow *w, PyObject *panes) {
+    @autoreleasepool {
+        NSView *view = ns_window(w).contentView;
+        if (!view) return;
+        SEL key = @selector(accessibilityChildren);
+        NSArray<SilkieAccessiblePane *> *old = objc_getAssociatedObject(view, key);
+        NSMutableDictionary *byID = [NSMutableDictionary dictionary];
+        for (SilkieAccessiblePane *item in old) byID[item.paneID] = item;
+        NSMutableArray *children = [NSMutableArray array];
+        for (NSDictionary *data in ns_from_python(panes)) {
+            SilkieAccessiblePane *item = byID[data[@"id"]];
+            if (!item) item = [[[SilkieAccessiblePane alloc] initWithView:view] autorelease];
+            [item update:data];
+            [children addObject:item];
+        }
+        if (![children isEqualToArray:old]) {
+            objc_setAssociatedObject(view, key, children, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            NSAccessibilityPostNotification(view, NSAccessibilityLayoutChangedNotification);
+        }
+    }
+}
+
+void
+native_ui_cocoa_accessibility_announce(OSWindow *w, const char *message, bool assertive) {
+    @autoreleasepool {
+        NSWindow *window = ns_window(w);
+        if (window) NSAccessibilityPostNotificationWithUserInfo(window, NSAccessibilityAnnouncementRequestedNotification,
+            @{NSAccessibilityAnnouncementKey: @(message),
+              NSAccessibilityPriorityKey: @(assertive ? NSAccessibilityPriorityHigh : NSAccessibilityPriorityMedium)});
+    }
+}
+
+bool
+native_ui_cocoa_accessibility_active(void) {
+    if (NSWorkspace.sharedWorkspace.voiceOverEnabled) return true;
+    for (size_t i = 0; i < global_state.num_os_windows; i++) {
+        NSView *view = ns_window(global_state.os_windows + i).contentView;
+        if (view && objc_getAssociatedObject(view, @selector(accessibilityFocusedUIElement))) return true;
+    }
+    return false;
+}
+
+PyObject *
+native_ui_cocoa_preferred_languages(void) {
+    @autoreleasepool {
+        NSArray<NSString *> *languages = NSLocale.preferredLanguages;
+        RAII_PyObject(result, PyList_New(0));
+        if (!result) return NULL;
+        for (NSString *language in languages) {
+            const char *value = language.UTF8String;
+            if (value) {
+                RAII_PyObject(tag, PyUnicode_FromString(value));
+                if (!tag || PyList_Append(result, tag) < 0) return NULL;
+            }
+        }
+        return Py_NewRef(result);
+    }
 }
 
 static OSWindow *

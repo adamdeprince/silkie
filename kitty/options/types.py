@@ -25,9 +25,11 @@ choices_for_cjk_font_locale = typing.Literal['auto', 'jp', 'kr', 'sc', 'tc', 'hk
 choices_for_color_scheme = typing.Literal['auto', 'light', 'dark']
 choices_for_deep_color = typing.Literal['always', 'never']
 choices_for_default_pointer_shape = typing.Literal['arrow', 'beam', 'text', 'pointer', 'hand', 'help', 'wait', 'progress', 'crosshair', 'cell', 'vertical-text', 'move', 'e-resize', 'ne-resize', 'nw-resize', 'n-resize', 'se-resize', 'sw-resize', 's-resize', 'w-resize', 'ew-resize', 'ns-resize', 'nesw-resize', 'nwse-resize', 'zoom-in', 'zoom-out', 'alias', 'copy', 'not-allowed', 'no-drop', 'grab', 'grabbing']
+choices_for_differentiate_without_color = typing.Literal['auto', 'off', 'on']
 choices_for_eink_color_scheme = typing.Literal['light', 'dark', 'follow_os', 'invert_os']
 choices_for_focus_follows_mouse = typing.Literal['no', 'n', 'false', 'y', 'yes', 'true', 'drop']
 choices_for_hdr = typing.Literal['no', 'detect', 'auto', 'always']
+choices_for_high_contrast = choices_for_differentiate_without_color
 choices_for_hyperlink_target_position = typing.Literal['top', 'bottom', 'below', 'tooltip']
 choices_for_linux_display_server = typing.Literal['auto', 'wayland', 'x11']
 choices_for_macos_colorspace = typing.Literal['srgb', 'default', 'displayp3']
@@ -372,6 +374,7 @@ option_names = (
     'default_profile',
     'detect_url_regex',
     'detect_urls',
+    'differentiate_without_color',
     'dim_opacity',
     'disable_ligatures',
     'display_info',
@@ -409,6 +412,7 @@ option_names = (
     'hdr',
     'hdr_max_headroom',
     'hide_window_decorations',
+    'high_contrast',
     'hyperlink_target_position',
     'inactive_border_color',
     'inactive_tab_background',
@@ -651,6 +655,7 @@ class Options:
     default_pointer_shape: choices_for_default_pointer_shape = 'beam'
     default_profile: str = 'default'
     detect_urls: bool = True
+    differentiate_without_color: choices_for_differentiate_without_color = 'auto'
     dim_opacity: float = 0.4
     disable_ligatures: int = 2
     display_info: str = ''
@@ -683,6 +688,7 @@ class Options:
     hdr: choices_for_hdr = 'detect'
     hdr_max_headroom: float = 4.0
     hide_window_decorations: int = 0
+    high_contrast: choices_for_high_contrast = 'auto'
     hyperlink_target_position: choices_for_hyperlink_target_position = 'top'
     inactive_border_color: Color = Color(204, 204, 204)
     inactive_tab_background: Color = Color(153, 153, 153)
@@ -1034,6 +1040,8 @@ defaults.map = [
     KeyDefinition(trigger=SingleKey(mods=256, key=122), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='scroll_to_prompt -1'),
     # scroll_to_next_prompt
     KeyDefinition(trigger=SingleKey(mods=256, key=120), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='scroll_to_prompt 1'),
+    # review_images
+    KeyDefinition(trigger=SingleKey(mods=258, key=105), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='review_images'),
     # show_scrollback
     KeyDefinition(trigger=SingleKey(mods=256, key=104), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='show_scrollback'),
     # show_last_command_output
@@ -1112,6 +1120,24 @@ defaults.map = [
     KeyDefinition(trigger=SingleKey(mods=256, key=108), options=KeyMapOptions(when_focus_on='', new_mode='', mode='', on_unknown='beep', on_action='keep', timeout=None, allow_fallback=(KeyFallbackType.shifted, KeyFallbackType.alternate)), definition='next_layout'),
     # increase_font_size
     KeyDefinition(trigger=SingleKey(mods=256, key=61), definition='change_font_size current +2.0'),
+    # magnify_pane_in
+    KeyDefinition(trigger=SingleKey(mods=6, key=61), definition='magnify_pane in'),
+    # magnify_pane_in
+    KeyDefinition(trigger=SingleKey(mods=6, key=43), definition='magnify_pane in'),
+    # magnify_pane_out
+    KeyDefinition(trigger=SingleKey(mods=6, key=45), definition='magnify_pane out'),
+    # magnify_pane_reset
+    KeyDefinition(trigger=SingleKey(mods=6, key=48), definition='magnify_pane reset'),
+    # magnify_pane_caret
+    KeyDefinition(trigger=SingleKey(mods=6, key=99), definition='magnify_pane caret'),
+    # magnify_pane_left
+    KeyDefinition(trigger=SingleKey(mods=6, key=57350), definition='magnify_pane left'),
+    # magnify_pane_right
+    KeyDefinition(trigger=SingleKey(mods=6, key=57351), definition='magnify_pane right'),
+    # magnify_pane_up
+    KeyDefinition(trigger=SingleKey(mods=6, key=57352), definition='magnify_pane up'),
+    # magnify_pane_down
+    KeyDefinition(trigger=SingleKey(mods=6, key=57353), definition='magnify_pane down'),
     # increase_font_size
     KeyDefinition(trigger=SingleKey(mods=256, key=43), definition='change_font_size current +2.0'),
     # increase_font_size

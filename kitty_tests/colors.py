@@ -135,7 +135,8 @@ class TestColorSchemes(BaseTest):
                 parse_bytes(screen, b'\x1b]777;display;v=1:op=query:id=7\x1b\\')
                 expected = (
                     f'\x1b]777;display;v=1:op=cap:id=7:mode=0:kind={kind}:color=gray:bits=4:gamut=unknown:headroom=1:scale=0:period=0:ppi=226'
-                    ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured:output_bits=0:output_type=unknown:output_dither=0:appearance=no_preference\x1b\\'
+                    ':red_bits=0:green_bits=0:blue_bits=0:gray_bits=4:precision=configured:output_bits=0:output_type=unknown:output_dither=0'
+                    f':appearance=no_preference:high_contrast={int(enabled)}:differentiate_without_color=1:languages=und\x1b\\'
                 ).encode()
                 if enabled:
                     expected = expected[:-2] + b':eink_scheme=light' + expected[-2:]
