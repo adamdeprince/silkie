@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <pattern id="grid" width="12" height="12" patternUnits="userSpaceOnUse">
+      <path d="M 12 0 H 0 V 12" fill="none" stroke="#708369" stroke-opacity=".43" stroke-width=".55"/>
+    </pattern>
+  </defs>
+  <rect width="192" height="192" fill="#1a291d"/>
+  <rect x="9" y="9" width="174" height="174" fill="url(#grid)" stroke="#597656" stroke-width=".65"/>
+  <g fill="none" stroke="#afcb85" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="1.7" d="M47 155 C55 128 59 100 82 71 C105 43 139 30 160 29 C157 51 149 77 133 102 C110 135 74 153 47 155Z"/>
+    <path stroke-width="1.1" d="M52 149 C63 127 63 107 85 78 C104 54 130 42 151 38 C147 60 140 80 126 101 C108 125 85 139 52 149Z"/>
+    <path stroke-width=".9" d="M58 141 C71 122 70 107 89 83 C105 63 126 50 143 47 C139 66 132 83 120 100 C104 121 83 133 58 141Z"/>
+    <path stroke-width=".8" d="M66 131 C78 116 77 104 93 87 C107 71 121 62 134 57 C131 70 124 87 115 99 C102 114 84 127 66 131Z"/>
+    <path stroke-width=".8" d="M78 119 C85 107 86 101 98 90 C108 80 116 73 124 70 C120 83 115 91 108 99 C99 108 89 116 78 119Z"/>
+    <path stroke="#e4efb2" stroke-width="1.4" d="M33 171 C74 128 108 88 150 42"/>
+    <path stroke-width=".65" d="M118 48 L143 23 H167 M48 154 L34 168 H22 M121 119 L153 119 L172 100"/>
+    <circle cx="151" cy="42" r="3.8" fill="#273c26" stroke-width="1"/>
+    <circle cx="47" cy="155" r="3" fill="#273c26" stroke-width=".9"/>
+    <circle cx="121" cy="119" r="2.7" fill="#273c26" stroke-width=".8"/>
+    <path stroke-width=".9" d="M15 22 H28 M21.5 15.5 V28.5 M164 171 H177 M170.5 164.5 V177.5"/>
+  </g>
+</svg>
