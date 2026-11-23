@@ -275,6 +275,7 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="flow-protocol.html">Writing direction and reading order</a></li>
 <li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
@@ -381,6 +382,16 @@ add this to <code class="docutils literal notranslate"><span class="pre">silkie.
 </div>
 <p>The application menu’s Quit command remains available without a keyboard
 shortcut unless you configure one.</p>
+</section>
+<section id="function-keys-on-macos">
+<h2>Function keys on macOS<a class="headerlink" href="#function-keys-on-macos" title="Link to this heading">¶</a></h2>
+<p>Plain F11 sends <code class="docutils literal notranslate"><span class="pre">ESC</span> <span class="pre">[</span> <span class="pre">23</span> <span class="pre">~</span></code> to a terminal program using legacy key reporting.
+Use <code class="docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">show-key</span></code> to see the received event. A shell prompt may have no
+visible action bound to it. If macOS reserves F11 for Show Desktop, either
+change that shortcut in <strong>System Settings → Keyboard → Keyboard Shortcuts →
+Mission Control</strong>, or start Silkie with <code class="docutils literal notranslate"><span class="pre">--grab-keyboard</span></code> to request system
+shortcuts while it is frontmost. macOS may require Accessibility permission
+for the latter. On media-first keyboards, use Fn-F11 for the function key.</p>
 </section>
 <section id="spatial-display">
 <h2>Spatial display<a class="headerlink" href="#spatial-display" title="Link to this heading">¶</a></h2>
@@ -929,6 +940,16 @@ X11. Dithering draws a window through an intermediate image, which costs one
 more pass over the window for every frame.</p>
 </dd></dl>
 
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-text_flow">
+<span class="sig-name descname"><span class="pre">text_flow</span></span><a class="headerlink" href="#opt-text_flow" title="Link to this definition">¶</a></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">right</span> <span class="pre">down</span></code>.</p>
+<p>The directions of character advance and line advance, respectively.
+Use two perpendicular directions from right, left, down and up.
+For traditional vertical Chinese use <code class="docutils literal notranslate"><span class="pre">down</span> <span class="pre">left</span></code>. Applications can
+override this per pane using Silkie’s writing direction protocol.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -989,6 +1010,7 @@ more pass over the window for every frame.</p>
 <li><a class="reference internal" href="#">Silkie configuration</a><ul>
 <li><a class="reference internal" href="#configuration-paths">Configuration paths</a></li>
 <li><a class="reference internal" href="#quitting-on-macos">Quitting on macOS</a></li>
+<li><a class="reference internal" href="#function-keys-on-macos">Function keys on macOS</a></li>
 <li><a class="reference internal" href="#spatial-display">Spatial display</a></li>
 <li><a class="reference internal" href="#ssh-agent-forwarding">SSH agent forwarding</a></li>
 <li><a class="reference internal" href="#e-paper-and-color-switching">E-paper and color switching</a></li>

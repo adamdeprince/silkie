@@ -253,6 +253,7 @@ typedef struct {
         ImageRenderData *item;
         bool has_hdr, has_visible_raster;
     } render_data;
+    unsigned flow;  // FLOW_* flags shared with the screen
     bool layers_dirty;
     // The number of images below MIN_ZINDEX / 2, then the number of refs between MIN_ZINDEX / 2 and -1 inclusive, then the number of refs above 0 inclusive.
     size_t num_of_below_refs, num_of_negative_refs, num_of_positive_refs;
@@ -283,6 +284,7 @@ typedef struct {
     bool has_margins;
     // The history scrolls with the screen: lines move into it (amt < 0) or are popped back from it (amt > 0)
     bool scroll_history;
+    unsigned flow;
 } ScrollData;
 
 
@@ -385,6 +387,7 @@ bool image_path_to_bitmap(const char *path, uint8_t **data, unsigned int *width,
 bool scan_active_animations(GraphicsManager *self, const monotonic_t now, monotonic_t *minimum_gap, bool os_window_context_set);
 void grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest);
 PyObject *grman_render_data_as_python(GraphicsManager *self);
+void grman_set_flow(GraphicsManager *self, unsigned flow);
 void grman_mark_layers_dirty(GraphicsManager *self);
 void grman_set_window_id(GraphicsManager *self, id_type id);
 bool grman_has_images(GraphicsManager *self);

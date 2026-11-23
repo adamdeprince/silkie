@@ -148,8 +148,8 @@ new_screen_object(PyTypeObject *type, PyObject *args, PyObject UNUSED *kwds) {
         self->reload_all_gpu_data = true;
         self->cell_size.width = cell_width;
         self->cell_size.height = cell_height;
-        self->columns = columns;
-        self->lines = lines;
+        self->physical_columns = self->columns = columns;
+        self->physical_lines = self->lines = lines;
         self->write_buf_sz = BUFSIZ;
         self->write_buf = PyMem_RawMalloc(self->write_buf_sz);
         if (self->write_buf == NULL) {
@@ -233,6 +233,8 @@ do_screen_reset(Screen *self, bool is_hard_reset) {
     self->main_pointer_shape_stack.count = 0;
     self->alternate_pointer_shape_stack.count = 0;
     self->display_events = false;
+    self->reading_direction = 0;
+    if (is_hard_reset && !screen_set_flow(self, self->default_flow)) PyErr_Print();
     self->low_latency = false;
     self->frame_feedback.on = false;
     self->scroll_reports = 0;
@@ -948,6 +950,56 @@ screen_resize(Screen *self, unsigned int lines, unsigned int columns) {
         }
     }
     return true;
+}
+
+// Preserve the font's advance along the writing axis and line height across it.
+static bool
+resize_for_flow(Screen *self, unsigned rows, unsigned cols, unsigned flow) {
+    unsigned lines = rows, columns = cols;
+    if (flow & FLOW_VERTICAL) {
+        uint64_t x = (uint64_t)rows * self->cell_size.height / MAX(1u, self->cell_size.width);
+        uint64_t y = (uint64_t)cols * self->cell_size.width / MAX(1u, self->cell_size.height);
+        if (x > UINT_MAX || y > UINT_MAX) { PyErr_SetString(PyExc_OverflowError, "Writing grid too large"); return false; }
+        lines = MAX(1u, (unsigned)y);
+        columns = MAX(1u, (unsigned)x);
+    }
+    if ((self->lines != lines || self->columns != columns) && !screen_resize(self, lines, columns)) return false;
+    self->physical_lines = rows;
+    self->physical_columns = cols;
+    return true;
+}
+
+bool
+screen_set_flow(Screen *self, unsigned flow) {
+    if (self->flow == flow) return true;
+    screen_pause_rendering(self, false, 0);
+    screen_pointer_cancel(self, 0);
+    screen_gesture_cancel(self);
+    if (!resize_for_flow(self, self->physical_lines, self->physical_columns, flow)) return false;
+    self->flow = flow;
+    grman_set_flow(self->main_grman, flow);
+    grman_set_flow(self->alt_grman, flow);
+    screen_rescale_images(self);
+    screen_dirty_sprite_positions(self);
+    self->is_dirty = self->scroll_changed = true;
+    if (self->window_id) CALLBACK("update_pty_pixel_size", NULL);
+    return true;
+}
+
+// Convert a pane-local sample to a logical pixel address. unit is the distance
+// between successive reportable positions (one pixel or one subpixel).
+void
+screen_logical_pointer(const Screen *s, double *x, double *y, double unit) {
+    if (!s->flow) return;
+    const double pw = MAX(1., (double)s->physical_columns * s->cell_size.width);
+    const double ph = MAX(1., (double)s->physical_lines * s->cell_size.height);
+    const bool vertical = s->flow & FLOW_VERTICAL;
+    const double inline_span = vertical ? ph : pw, line_span = vertical ? pw : ph;
+    double u = vertical ? *y : *x, v = vertical ? *x : *y;
+    if (s->flow & FLOW_REVERSE_INLINE) u = inline_span - unit - u;
+    if (s->flow & FLOW_REVERSE_LINE) v = line_span - unit - v;
+    *x = u * ((double)s->columns * s->cell_size.width / inline_span);
+    *y = v * ((double)s->lines * s->cell_size.height / line_span);
 }
 
 void
@@ -1768,7 +1820,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
                 } else nuke_multicell_char_at(self, self->cursor->x + 1, self->cursor->y, true);
             }
             zero_cells(s, fc, s->gp + self->cursor->x);
-            *fc = (CPUCell){.ch_or_idx = ch, .is_multicell = true, .width = 2, .scale = 1, .natural_width = true, .hyperlink_id = s->cc.hyperlink_id};
+            *fc = (CPUCell){.ch_or_idx = ch, .is_multicell = true, .width = 2, .scale = 1, .natural_width = true, .hyperlink_id = s->cc.hyperlink_id, .reading_direction = s->cc.reading_direction};
             *second = *fc;
             second->x = 1;
             s->gp[self->cursor->x + 1] = s->gp[self->cursor->x];
@@ -1796,7 +1848,7 @@ draw_text_loop(Screen *self, const uint32_t *chars, size_t num_chars, text_loop_
     CellAttrs attrs = cursor_to_attrs(self->cursor);                                                                                \
     if (force_underline) attrs.decoration = OPT(url_style);                                                                         \
     text_loop_state s = {                                                                                                           \
-        .cc = (CPUCell){.hyperlink_id = self->active_hyperlink_id},                                                                 \
+        .cc = (CPUCell){.hyperlink_id = self->active_hyperlink_id, .reading_direction = self->reading_direction},                                                                 \
         .g = (GPUCell){                                                                                                             \
             .attrs = attrs,                                                                                                         \
             .text_style = self->cursor->sgr.text_style,                                                                               \
@@ -1866,6 +1918,7 @@ handle_fixed_width_multicell_command(Screen *self, CPUCell mcd, ListOfChars *lc)
     if (width > self->columns || height > max_height) return;
     lc->count = MIN(lc->count, MAX_NUM_CODEPOINTS_PER_CELL);
     PREPARE_FOR_DRAW_TEXT;
+    mcd.reading_direction = s.cc.reading_direction;
     mcd.hyperlink_id = s.cc.hyperlink_id;
     cell_set_chars(&mcd, self->text_cache, lc);
     move_cursor_past_multicell(self, width);
@@ -2945,6 +2998,7 @@ screen_tab(Screen *self) {
                 for (combining_type i = 0; i < diff; i++) {
                     CPUCell *c = cpu_cell + i;
                     cell_set_char(c, ' ');
+                    c->reading_direction = self->reading_direction;
                 }
                 char_type idx;
                 if (diff < arraysz(self->tab_cache.idx_plus_1) && self->tab_cache.idx_plus_1[diff]) idx = self->tab_cache.idx_plus_1[diff] - 1;
@@ -4701,9 +4755,16 @@ get_line_edge_colors(Screen *self, color_type *left, color_type *right) {
 
 
 static void
-update_line_data(Line *line, unsigned int dest_y, uint8_t *data) {
+update_line_data(Line *line, unsigned int dest_y, uint8_t *data, unsigned flow) {
     size_t base = sizeof(GPUCell) * dest_y * line->xnum;
-    memcpy(data + base, line->gpu_cells, line->xnum * sizeof(GPUCell));
+    GPUCell *dest = (GPUCell *)(data + base);
+    memcpy(dest, line->gpu_cells, line->xnum * sizeof(GPUCell));
+    // Text styling has already been rasterized. Use its word in the upload
+    // copy to describe this sprite's place within an upright glyph.
+    if (flow) for (index_type x = 0; x < line->xnum; ++x) {
+        const CPUCell *c = line->cpu_cells + x;
+        dest[x].text_style = c->is_multicell ? c->x | (c->y << 8) | (mcd_x_limit(c) << 16) | (c->scale << 24) : 0;
+    }
 }
 
 static void
@@ -4899,12 +4960,12 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
                 if (linebuf->line->attrs.has_dirty_text) {
                     // The extra leading row is never the cursor row
                     const index_type lnum = y < row_offset ? self->lines : y - row_offset;
-                    render_line(fonts_data, linebuf->line, lnum, &self->paused_rendering.cursor, self->disable_ligatures, self->lc);
+                    render_line(fonts_data, linebuf->line, lnum, &self->paused_rendering.cursor, self->disable_ligatures, self->lc, self->flow);
                     // Cell images are not rendered here: this would modify the live grman using snapshot row numbers
                     if (linebuf->line->attrs.has_dirty_text && screen_has_marker(self)) mark_text_in_line(self->marker, linebuf->line, &self->as_ansi_buf);
                     linebuf_mark_line_clean(linebuf, y);
                 }
-                update_line_data(linebuf->line, y, address);
+                update_line_data(linebuf->line, y, address, self->flow);
             }
         }
         return;
@@ -4933,20 +4994,20 @@ screen_update_cell_data(Screen *self, void *address, FONTS_DATA_HANDLE fonts_dat
             // the unicode placeholder was first scanned can alter it.
             screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
             if (force_history_render || linep->attrs.has_dirty_text) {
-                render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
+                render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc, self->flow);
                 if (screen_has_marker(self)) mark_text_in_line(self->marker, linep, &self->as_ansi_buf);
                 historybuf_mark_line_clean(self->historybuf, lnum);
             }
         } else {
             if (linep->attrs.has_dirty_text || (cursor_has_moved && (self->cursor->y == lnum || self->last_rendered.cursor.y == lnum))) {
-                render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc);
+                render_line(fonts_data, linep, lnum, self->cursor, self->disable_ligatures, self->lc, self->flow);
                 screen_render_line_graphics(self, linep, virtual_y - (int)self->scrolled_by);
                 if (linep->attrs.has_dirty_text && screen_has_marker(self)) mark_text_in_line(self->marker, linep, &self->as_ansi_buf);
                 if (is_overlay_active && lnum == self->overlay_line.ynum) render_overlay_line(self, linep, fonts_data);
                 linebuf_mark_line_clean(self->linebuf, lnum);
             }
         }
-        update_line_data(linep, render_row, address);
+        update_line_data(linep, render_row, address, self->flow);
     }
     if (is_overlay_active && self->overlay_line.ynum + self->scrolled_by < self->lines) {
         if (self->overlay_line.is_dirty) {
@@ -6051,7 +6112,7 @@ render_overlay_line(Screen *self, Line *line, FONTS_DATA_HANDLE fonts_data) {
 #define ol self->overlay_line
     line_save_cells(line, 0, line->xnum, ol.original_line.gpu_cells, ol.original_line.cpu_cells);
     screen_draw_overlay_line(self);
-    render_line(fonts_data, line, ol.ynum, self->cursor, self->disable_ligatures, self->lc);
+    render_line(fonts_data, line, ol.ynum, self->cursor, self->disable_ligatures, self->lc, self->flow);
     line_save_cells(line, 0, line->xnum, ol.gpu_cells, ol.cpu_cells);
     line_reset_cells(line, 0, line->xnum, ol.original_line.gpu_cells, ol.original_line.cpu_cells);
     ol.is_dirty = false;
@@ -6068,8 +6129,8 @@ render_overlay_line(Screen *self, Line *line, FONTS_DATA_HANDLE fonts_data) {
 static void
 update_overlay_line_data(Screen *self, uint8_t *data) {
     const int render_row_offset = pixel_scroll_enabled(self);
-    const size_t base = sizeof(GPUCell) * (self->overlay_line.ynum + self->scrolled_by + render_row_offset) * self->columns;
-    memcpy(data + base, self->overlay_line.gpu_cells, self->columns * sizeof(GPUCell));
+    Line line = {.gpu_cells = self->overlay_line.gpu_cells, .cpu_cells = self->overlay_line.cpu_cells, .xnum = self->columns};
+    update_line_data(&line, self->overlay_line.ynum + self->scrolled_by + render_row_offset, data, self->flow);
 }
 
 // }}}
@@ -6861,10 +6922,23 @@ clear_selection_(Screen *s, PyObject *args UNUSED) {
 }
 
 static PyObject *
+set_default_flow(Screen *self, PyObject *arg) {
+    unsigned long value = PyLong_AsUnsignedLong(arg);
+    if (PyErr_Occurred()) return NULL;
+    if (value > (FLOW_VERTICAL | FLOW_REVERSE_INLINE | FLOW_REVERSE_LINE)) {
+        PyErr_SetString(PyExc_ValueError, "Invalid text flow");
+        return NULL;
+    }
+    if (self->flow == self->default_flow && !screen_set_flow(self, (unsigned)value)) return NULL;
+    self->default_flow = (unsigned)value;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 resize(Screen *self, PyObject *args) {
     unsigned int a = 1, b = 1;
     if (!PyArg_ParseTuple(args, "|II", &a, &b)) return NULL;
-    screen_resize(self, a, b);
+    if (!resize_for_flow(self, MAX(1u, a), MAX(1u, b), self->flow)) return NULL;
     if (PyErr_Occurred()) return NULL;
     Py_RETURN_NONE;
 }
@@ -8433,7 +8507,7 @@ static PyMethodDef methods[] = {
         MND(cmd_output, METH_VARARGS) MND(tab, METH_NOARGS) MND(backspace, METH_NOARGS) MND(linefeed, METH_NOARGS) MND(carriage_return, METH_NOARGS)
             MND(set_tab_stop, METH_NOARGS) MND(clear_tab_stop, METH_VARARGS) MND(reset_tab_stops, METH_NOARGS) MND(start_selection, METH_VARARGS)
                 MND(update_selection, METH_VARARGS){"clear_selection", (PyCFunction)clear_selection_, METH_NOARGS, ""},
-        MND(reverse_index, METH_NOARGS) MND(mark_as_dirty, METH_NOARGS) MND(reload_all_gpu_data, METH_NOARGS) MND(resize, METH_VARARGS)
+        MND(reverse_index, METH_NOARGS) MND(mark_as_dirty, METH_NOARGS) MND(reload_all_gpu_data, METH_NOARGS) MND(resize, METH_VARARGS) MND(set_default_flow, METH_O)
         MND(pane_magnification, METH_VARARGS) MND(reported_cell_size, METH_NOARGS)
         MND(ignore_bells_for, METH_VARARGS) MND(set_margins, METH_VARARGS) MND(detect_url, METH_VARARGS) MND(rescale_images, METH_NOARGS)
             MND(current_key_encoding_flags, METH_NOARGS) MND(text_for_selection, METH_VARARGS) MND(text_for_marked_url, METH_VARARGS)
@@ -8483,6 +8557,9 @@ static PyMemberDef members[] = {
     {"alternate_screen_exited_at", T_LONGLONG, offsetof(Screen, alternate_screen.exited_at), READONLY, "alternate_screen_exited_at"},
     {"scrolled_by", T_UINT, offsetof(Screen, scrolled_by), READONLY, "scrolled_by"},
     {"pixel_scroll_offset_y", T_UINT, offsetof(Screen, pixel_scroll_offset_y), READONLY, "pixel_scroll_offset_y"},
+    {"flow", T_UINT, offsetof(Screen, flow), READONLY, "Writing direction flags"},
+    {"physical_lines", T_UINT, offsetof(Screen, physical_lines), READONLY, "Layout rows"},
+    {"physical_columns", T_UINT, offsetof(Screen, physical_columns), READONLY, "Layout columns"},
     {"lines", T_UINT, offsetof(Screen, lines), READONLY, "lines"},
     {"columns", T_UINT, offsetof(Screen, columns), READONLY, "columns"},
     {"margin_top", T_UINT, offsetof(Screen, margin_top), READONLY, "margin_top"},

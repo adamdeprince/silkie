@@ -726,6 +726,15 @@ def to_font_size(x: str) -> float:
     return max(MINIMUM_FONT_SIZE, float(x))
 
 
+def text_flow(value: str) -> int:
+    """Encode the writing axes in the screen's FLOW_* bits."""
+    directions = ('right', 'left', 'down', 'up')
+    inline, line = (directions.index(word) for word in value.lower().split())
+    if inline // 2 == line // 2:
+        raise ValueError('text_flow requires perpendicular writing directions')
+    return (4 if inline >= 2 else 0) | (inline & 1) | ((line & 1) << 1)
+
+
 def disable_ligatures(x: str) -> int:
     cmap = {'never': 0, 'cursor': 1, 'always': 2}
     return cmap.get(x.lower(), 0)

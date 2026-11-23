@@ -262,6 +262,24 @@ native_ui_cocoa_speech_sound(id_type pane, const char *name) {
     if (range.location > text.length) return NSZeroRect;
     NSArray *r = array_of(pane, @"frame"), *rows = array_of(pane, @"rows");
     if (r.count != 4 || !rows.count) return NSZeroRect;
+    NSArray *cells = array_of(pane, @"cells");
+    if (cells.count) {
+        NSRect bounds = NSZeroRect;
+        NSUInteger y = 0;
+        CGFloat h = [r[3] doubleValue] / cells.count;
+        for (NSArray *row in cells) {
+            CGFloat w = [r[2] doubleValue] / MAX(1u, row.count);
+            NSUInteger x = 0;
+            for (NSArray *cell in row) {
+                NSRange span = [self rangeFrom:cell.firstObject to:cell.lastObject];
+                if (NSIntersectionRange(span, range).length || (!range.length && NSLocationInRange(range.location, span)))
+                    bounds = NSUnionRect(bounds, NSMakeRect([r[0] doubleValue] + x*w, [r[1] doubleValue] + y*h, w, h));
+                x++;
+            }
+            y++;
+        }
+        return [self screenRect:bounds];
+    }
     const CGFloat x = [r[0] doubleValue], y = [r[1] doubleValue], h = [r[3] doubleValue] / rows.count;
     NSUInteger first = (NSUInteger)[self accessibilityLineForIndex:(NSInteger)range.location];
     NSUInteger last = (NSUInteger)[self accessibilityLineForIndex:(NSInteger)(range.location + MIN(range.length ? range.length - 1 : 0, text.length - range.location))];

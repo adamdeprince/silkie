@@ -953,6 +953,7 @@ class Window:
         self.scrollback_override: tuple[int, int] | None = getattr(tab, 'scrollback_settings', None)
         scrollback_lines = self.scrollback_override[0] if self.scrollback_override else self.default_scrollback_settings(profile)[0]
         self.screen: Screen = Screen(self, 24, 80, scrollback_lines, cell_width, cell_height, self.id)
+        self.screen.set_default_flow(opts.text_flow)
         self.apply_scrollback_settings(profile=profile)
         if profile is not None:
             apply_to_window(self, profile)
@@ -1066,6 +1067,7 @@ class Window:
 
     def apply_options(self, is_active: bool) -> None:
         self.update_effective_padding()
+        self.screen.set_default_flow(get_options().text_flow)
         self.screen.track_activity = bool(get_options().tab_activity_symbol)
         self.screen.color_profile.reload_from_opts()
         if (tab := self.tabref()) is not None:
@@ -1425,10 +1427,14 @@ class Window:
             render_top = new_geometry.top
             render_bottom = new_geometry.bottom
 
-        if self.needs_layout or new_geometry.xnum != self.screen.columns or render_ynum != self.screen.lines:
+        resized = self.needs_layout or new_geometry.xnum != self.screen.physical_columns or render_ynum != self.screen.physical_lines
+        if resized or self.screen.flow & 4:
+            # Vertical writing can change the grid when the font aspect changes.
+            old_grid = self.screen.lines, self.screen.columns
             self.screen.resize(max(0, render_ynum), max(0, new_geometry.xnum))
             self.needs_layout = False
-            call_watchers(weakref.ref(self), 'on_resize', {'old_geometry': self.geometry, 'new_geometry': new_geometry})
+            if resized or old_grid != (self.screen.lines, self.screen.columns):
+                call_watchers(weakref.ref(self), 'on_resize', {'old_geometry': self.geometry, 'new_geometry': new_geometry})
         self.pty_layout_pixels = (max(0, new_geometry.right - new_geometry.left), max(0, render_bottom - render_top))
         self.accessibility_frame = new_geometry.left, render_top, *self.pty_layout_pixels
         current_pty_size = self.pty_size_for_layout()
@@ -2126,6 +2132,8 @@ class Window:
         cw, ch = self.screen.reported_cell_size()
         base_cw, base_ch = cell_size_for_window(self.os_window_id)
         # The pixel fields in the kernel's struct winsize are unsigned shorts.
+        if self.screen.flow & 4:
+            return self.screen.lines, self.screen.columns, min(65535, self.screen.columns * cw), min(65535, self.screen.lines * ch)
         if base_cw and cw != base_cw:
             width = min(65535, round(width * cw / base_cw))
         if base_ch and ch != base_ch:
@@ -3083,12 +3091,21 @@ class Window:
         from math import isfinite
 
         screen = self.screen
+
+        def cell_center(column: float, row: float) -> tuple[float, float]:
+            u = (column + 0.5) / screen.columns
+            v = (row + 0.5) / screen.lines
+            if screen.flow & 1:
+                u = 1. - u
+            if screen.flow & 2:
+                v = 1. - v
+            return (v, u) if screen.flow & 4 else (u, v)
+
         scale, x, y = screen.pane_magnification()
         if scale == 1. and operation in ('left', 'right', 'up', 'down', 'caret'):
             return True
         if scale == 1. or operation == 'caret':
-            x = (screen.cursor.x + 0.5) / screen.columns
-            y = (screen.cursor.y + screen.scrolled_by + 0.5) / screen.lines
+            x, y = cell_center(screen.cursor.x, screen.cursor.y + screen.scrolled_by)
         if operation == 'in':
             scale *= 1.25
         elif operation == 'out':
@@ -3110,8 +3127,7 @@ class Window:
                     raise ValueError()
                 scale = args[0]
                 if len(args) == 3:
-                    y = (args[1] - 0.5) / screen.lines
-                    x = (args[2] - 0.5) / screen.columns
+                    x, y = cell_center(args[2] - 1, args[1] - 1)
             except ValueError:
                 log_error(f'Invalid magnify_pane argument: {operation}')
                 return

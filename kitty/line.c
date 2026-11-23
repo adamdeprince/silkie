@@ -433,6 +433,30 @@ text_at(Line *self, Py_ssize_t xval) {
 }
 
 static PyObject *
+reading_directions(Line *self, PyObject *unused UNUSED) {
+#define reading_directions_doc "Outgoing reading direction at each column, or None for ordinary logical order"
+    for (index_type x = 0; x < self->xnum; x++) {
+        if (!self->cpu_cells[x].reading_direction) continue;
+        PyObject *result = PyBytes_FromStringAndSize(NULL, self->xnum);
+        if (!result) return NULL;
+        char *p = PyBytes_AS_STRING(result);
+        for (index_type i = 0; i < self->xnum; i++) p[i] = self->cpu_cells[i].reading_direction;
+        return result;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+cell_tile_offset(Line *self, PyObject *arg) {
+#define cell_tile_offset_doc "Offset of this tile from the logical origin of its character"
+    const size_t x = PyLong_AsSize_t(arg);
+    if (PyErr_Occurred()) return NULL;
+    if (x >= self->xnum) { PyErr_SetString(PyExc_IndexError, "Column number out of bounds"); return NULL; }
+    const CPUCell *c = self->cpu_cells + x;
+    return Py_BuildValue("II", c->is_multicell ? (unsigned)c->x : 0u, c->is_multicell ? (unsigned)c->y : 0u);
+}
+
+static PyObject *
 accessible_cell(Line *self, PyObject *arg) {
 #define accessible_cell_doc "Text at the cell, including a wide glyph only at its first cell"
     const Py_ssize_t x = PyLong_AsSsize_t(arg);
@@ -1334,6 +1358,8 @@ static PyMethodDef methods[] = {
         METHOD(clear_text, METH_VARARGS) METHOD(copy_char, METH_VARARGS) METHOD(set_char, METH_VARARGS) METHOD(set_attribute, METH_VARARGS)
             METHOD(as_ansi, METH_NOARGS) METHOD(last_char_has_wrapped_flag, METH_NOARGS) METHODB(set_wrapped_flag, METH_O),
     METHOD(hyperlink_ids, METH_NOARGS) METHOD(width, METH_O) METHOD(url_start_at, METH_O) METHOD(url_end_at, METH_VARARGS) METHOD(sprite_at, METH_O)
+    METHOD(reading_directions, METH_NOARGS)
+    METHOD(cell_tile_offset, METH_O)
     METHOD(accessible_cell, METH_O)
             METHOD(gpu_attrs_at, METH_O)
 

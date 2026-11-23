@@ -1,6 +1,6 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 if TYPE_CHECKING:
     from .fast_data_types import Line, Screen
@@ -94,6 +94,7 @@ class TextAnnotations:
 class PaneText(TypedDict):
     text: str
     rows: list[list[int]]
+    cells: NotRequired[list[list[tuple[int, int]]]]
     caret: int
     selections: list[tuple[int, int]]
     roles: list[tuple[int, int, str]]
@@ -112,8 +113,12 @@ def pane_text(screen: 'Screen', annotations: TextAnnotations | None = None) -> P
     lines: list[str] = []
     roles: list[tuple[int, int, str]] = []
     offset = 0
+    directions = {}
     for y in range(screen.lines):
-        cells = list(raw_cells(screen.visual_line(y), 0, screen.columns))
+        line = screen.visual_line(y)
+        if hints := line.reading_directions():
+            directions[y] = hints
+        cells = list(raw_cells(line, 0, screen.columns))
         last = len(cells)
         while last and cells[last - 1] == '\0':
             last -= 1
@@ -165,4 +170,139 @@ def pane_text(screen: 'Screen', annotations: TextAnnotations | None = None) -> P
                 selections[-1] = selections[-1][0], end
             else:
                 selections.append((start, end))
-    return {'text': '\n'.join(lines), 'rows': rows, 'caret': caret, 'selections': selections, 'roles': roles}
+    snapshot: PaneText = {'text': '\n'.join(lines), 'rows': rows, 'caret': caret, 'selections': selections, 'roles': roles}
+    if directions or screen.flow:
+        apply_reading_order(snapshot, screen, directions)
+    return snapshot
+
+
+def apply_reading_order(snapshot: PaneText, screen: 'Screen', directions: dict[int, bytes]) -> None:
+    rows, cols, flow = snapshot['rows'], screen.columns, screen.flow
+    nrows = len(rows)
+    text = snapshot['text']
+    # Character offsets for logical cells. Continuations have zero length.
+    offsets = [(row[x], row[x + 1]) for row in rows for x in range(cols)]
+    owners = {}
+    blank = set()
+    for y in range(nrows):
+        line = screen.visual_line(y)
+        for x in range(cols):
+            raw = line.accessible_cell(x)
+            if raw == '':
+                dx, dy = line.cell_tile_offset(x)
+                if (dx or dy) and dx <= x and dy <= y:
+                    owners[y * cols + x] = (y - dy) * cols + x - dx
+            elif directions and raw == '\0':
+                blank.add(y * cols + x)
+    if directions:
+        steps = ((1, 0), (-1, 0), (0, 1), (0, -1))
+        following: dict[int, int | None] = {}
+        for y, hints in directions.items():
+            for x, hint in enumerate(hints):
+                if not hint or rows[y][x] == rows[y][x + 1]:
+                    continue
+                if hint == 5:  # Explicit end of the accessible text
+                    following[y * cols + x] = None
+                    continue
+                dx, dy = steps[hint - 1]
+                if flow & 4:
+                    dx, dy = dy, dx
+                if flow & 1:
+                    dx = -dx
+                if flow & 2:
+                    dy = -dy
+                u, v = x + dx, y + dy
+                while 0 <= u < cols and 0 <= v < nrows:
+                    target = owners.get(v * cols + u, v * cols + u)
+                    if target != y * cols + x:
+                        if offsets[target][0] < offsets[target][1] and target not in blank:
+                            following[y * cols + x] = target
+                        break
+                    u, v = u + dx, v + dy
+
+        # Start at heads in logical order, then at cycles without a head.
+        # A directed edge back to any emitted character ends the entire read.
+        incoming = set(following.values())
+        visited: set[int] = set()
+
+        def reading_order() -> Iterator[int]:
+            for cycles in (False, True):
+                for i, (start, end) in enumerate(offsets):
+                    if start == end or i in visited or (not cycles and i in incoming):
+                        continue
+                    while True:
+                        visited.add(i)
+                        yield i
+                        if i not in following:
+                            break
+                        target = following[i]
+                        if target is None or target in visited:
+                            return
+                        i = target
+
+        pieces: list[str] = []
+        spoken_rows: list[list[int]] = []
+        mapped = offsets.copy()
+        pos = 0
+        previous = -1
+        for i in reading_order():
+            adjacent = i == previous + 1 and i // cols == previous // cols
+            if not adjacent and following.get(previous) != i:
+                if pieces:
+                    pieces.append('\n')
+                    pos += 1
+                spoken_rows.append([pos])
+            start, end = offsets[i]
+            pieces.append(text[start:end])
+            mapped[i] = pos, pos + end - start
+            pos += end - start
+            spoken_rows[-1].append(pos)
+            previous = i
+        # Empty and continuation cells point to the nearest insertion point in
+        # their own line. This also preserves a caret at the wrap boundary.
+        caret_row = screen.cursor.y + screen.scrolled_by
+        for y in range(nrows):
+            boundary = next((mapped[i][0] for i in range(y * cols, (y + 1) * cols) if i in visited), pos)
+            for i in range(y * cols, (y + 1) * cols):
+                if i not in visited:
+                    if offsets[i][0] != offsets[i][1]:
+                        boundary = pos  # A character beyond the end of the read
+                    mapped[i] = boundary, boundary
+                boundary = mapped[i][1]
+            if y == caret_row and snapshot['caret'] >= 0:
+                x = screen.cursor.x
+                snapshot['caret'] = mapped[y * cols + x][0] if x < cols else boundary
+
+        def remap(start: int, end: int) -> list[tuple[int, int]]:
+            from bisect import bisect_left
+            i = bisect_left(offsets, (start, -1))  # ranges start at cell boundaries
+            parts = []
+            while i < len(mapped) and offsets[i][0] < end:
+                if i in visited:
+                    parts.append(mapped[i])
+                i += 1
+            merged: list[tuple[int, int]] = []
+            for a, b in sorted(parts):
+                if merged and merged[-1][1] == a:
+                    merged[-1] = merged[-1][0], b
+                else:
+                    merged.append((a, b))
+            return merged
+
+        snapshot['roles'] = [(a, b, role) for start, end, role in snapshot['roles'] for a, b in remap(start, end)]
+        snapshot['selections'] = sorted(part for start, end in snapshot['selections'] for part in remap(start, end))
+        snapshot['text'] = ''.join(pieces)
+        snapshot['rows'] = spoken_rows
+        offsets = mapped
+
+    # Native accessibility APIs need physical hit rectangles even when
+    # successive offsets in the spoken string are in different columns.
+    cells = [[(0, 0)] * (nrows if flow & 4 else cols) for _ in range(cols if flow & 4 else nrows)]
+    for y in range(nrows):
+        for x in range(cols):
+            u = cols - 1 - x if flow & 1 else x
+            v = nrows - 1 - y if flow & 2 else y
+            if flow & 4:
+                u, v = v, u
+            cells[v][u] = offsets[owners.get(y * cols + x, y * cols + x)]
+    snapshot['cells'] = cells

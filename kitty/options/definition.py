@@ -130,6 +130,16 @@ process locale and defaults to Simplified Chinese when unspecified.
 opt('font_size', '11.0', option_type='to_font_size', ctype='double', long_text='Font size (in pts).')
 
 opt(
+    'text_flow', 'right down', option_type='text_flow',
+    long_text="""
+The directions of character advance and line advance, respectively.
+Use two perpendicular directions from right, left, down and up.
+For traditional vertical Chinese use ``down left``. Applications can
+override this per pane using Silkie's writing direction protocol.
+""",
+)
+
+opt(
     'force_ltr',
     'no',
     option_type='to_bool',

@@ -494,3 +494,19 @@ msgstr "设置新窗格的回滚行数上限。默认为 ``unlimited``。"
 #: ../../../Users/adam/dev/silkie/docs/silkie/configuration.rst:338
 msgid "Set the zstd level for new panes. The default is ``9``. Use ``none`` to keep every line uncompressed."
 msgstr "设置新窗格的 zstd 级别。默认为 ``9``。用 ``none`` 可保持所有行未压缩。"
+
+#: docs/silkie/configuration.rst:52
+msgid "Function keys on macOS"
+msgstr "macOS 功能键"
+
+#: docs/silkie/configuration.rst:54
+msgid "Plain F11 sends ``ESC [ 23 ~`` to a terminal program using legacy key reporting. Use ``kitten show-key`` to see the received event. A shell prompt may have no visible action bound to it. If macOS reserves F11 for Show Desktop, either change that shortcut in **System Settings → Keyboard → Keyboard Shortcuts → Mission Control**, or start Silkie with ``--grab-keyboard`` to request system shortcuts while it is frontmost. macOS may require Accessibility permission for the latter. On media-first keyboards, use Fn-F11 for the function key."
+msgstr "使用传统按键报告时，单按 F11 会向终端程序发送 ``ESC [ 23 ~``。使用 ``kitten show-key`` 查看接收到的事件。shell 提示符可能没有为此键绑定可见操作。如果 macOS 将 F11 保留给“显示桌面”，可在 **系统设置 → 键盘 → 键盘快捷键 → 调度中心** 中更改快捷键，或以 ``--grab-keyboard`` 启动 Silkie，请求在前台接收系统快捷键。macOS 可能要求授予辅助功能权限。如果键盘默认使用媒体键，请按 Fn-F11 输入功能键。"
+
+#: docs/silkie/configuration.rst:632
+msgid "Default: ``right down``."
+msgstr "默认值：``right down``。"
+
+#: docs/silkie/configuration.rst:634
+msgid "The directions of character advance and line advance, respectively. Use two perpendicular directions from right, left, down and up. For traditional vertical Chinese use ``down left``. Applications can override this per pane using Silkie's writing direction protocol."
+msgstr "依次设置字符前进和换行的方向。从 right、left、down 和 up 中选择相互垂直的两个方向。传统中文竖排使用 ``down left``。应用程序可通过 Silkie 书写方向协议逐窗格覆盖此设置。"

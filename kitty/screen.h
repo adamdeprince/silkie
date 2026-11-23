@@ -263,6 +263,8 @@ typedef struct {
 
         unsigned int columns,
         lines, margin_top, margin_bottom, scrolled_by, pixel_scroll_offset_y;
+    unsigned flow, default_flow, physical_lines, physical_columns;
+    unsigned reading_direction;  // 0 = logical order, 1..4 = right, left, down, up, 5 = end
     CellPixelSize cell_size;
     PaneMagnification magnification;
     double desktop_magnification;
@@ -470,6 +472,9 @@ void screen_visibility_changed(Screen *self, bool potentially_visible);
 void screen_caps_query(Screen *self, const char *data, size_t sz);
 void screen_font_protocol(Screen *self, const char *data, size_t sz);
 void screen_accessibility_protocol(Screen *self, const char *data, size_t size);
+void screen_flow_protocol(Screen *, const char *, size_t);
+bool screen_set_flow(Screen *, unsigned);
+void screen_logical_pointer(const Screen *, double *x, double *y, double unit);
 void screen_speech_protocol(Screen *self, const char *data, size_t size);
 void screen_depth_protocol(Screen *self, const char *data, size_t sz);
 void screen_reset_extension_modes(Screen *self);

@@ -1,0 +1,155 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026 Adam DePrince. Silkie is a fork of kitty, Copyright © 2016-2026 Kovid Goyal and
+# contributors
+# This file is distributed under the same license as the Silkie package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Silkie \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 02:31-0400\n"
+"PO-Revision-Date: 2026-10-29 06:47+0000\n"
+"Last-Translator: Silkie contributors\n"
+"Language: zh_CN\n"
+"Language-Team: Simplified Chinese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+
+#: docs/silkie/flow-protocol.rst:2
+msgid "Writing direction and reading order"
+msgstr "书写方向与朗读顺序"
+
+#: docs/silkie/flow-protocol.rst:4
+msgid "A pane has two writing directions. The inline direction advances one logical column. The line direction advances one logical row. Programs choose both with OSC 777. Glyphs and images stay upright."
+msgstr "每个窗格有两个书写方向。行内方向决定逻辑列的递增方向，换行方向决定逻辑行的递增方向。程序可通过 OSC 777 选择这两个方向。字形和图像始终正立。"
+
+#: docs/silkie/flow-protocol.rst:8
+msgid "Set :opt:`text_flow` in ``silkie.conf``, for example ``text_flow down left``. Programs can override it for the duration of an interaction."
+msgstr "在 ``silkie.conf`` 中设置 :opt:`text_flow`，例如 ``text_flow down left``。程序可在交互期间覆盖此设置。"
+
+#: docs/silkie/flow-protocol.rst:11
+msgid "For example, this shell command writes two columns of Chinese. The first starts at the top right. The second appears immediately to its left::"
+msgstr "例如，以下 shell 命令输出两列中文。第一列从右上角开始，第二列紧靠其左侧::"
+
+#: docs/silkie/flow-protocol.rst:16
+msgid "The logical home position is row 1, column 1. Changing direction keeps the cursor with the content, so the example explicitly homes the cursor. At the last logical line, another line feed scrolls the contents toward the first line. Scrollback retains the logical lines. Switching between horizontal and vertical writing reflows the pane to its new dimensions."
+msgstr "逻辑起点是第 1 行第 1 列。切换方向时光标随内容移动，因此示例显式将光标移回起点。在最后一个逻辑行继续换行，内容便向第一行滚动。回滚缓冲区保留逻辑行。横写与竖写之间切换时，窗格按新尺寸重新排版。"
+
+#: docs/silkie/flow-protocol.rst:25
+msgid "Inline"
+msgstr "行内方向"
+
+#: docs/silkie/flow-protocol.rst:26
+msgid "Next line"
+msgstr "换行方向"
+
+#: docs/silkie/flow-protocol.rst:27
+msgid "Home"
+msgstr "起点"
+
+#: docs/silkie/flow-protocol.rst:28
+msgid "Old lines scroll off"
+msgstr "旧行滚出边缘"
+
+#: docs/silkie/flow-protocol.rst:29
+msgid "right"
+msgstr "向右"
+
+#: docs/silkie/flow-protocol.rst:30
+msgid "down"
+msgstr "向下"
+
+#: docs/silkie/flow-protocol.rst:31
+msgid "top left"
+msgstr "左上角"
+
+#: docs/silkie/flow-protocol.rst:32
+msgid "top"
+msgstr "上边缘"
+
+#: docs/silkie/flow-protocol.rst:33
+msgid "left"
+msgstr "向左"
+
+#: docs/silkie/flow-protocol.rst:35
+msgid "top right"
+msgstr "右上角"
+
+#: docs/silkie/flow-protocol.rst:38
+msgid "up"
+msgstr "向上"
+
+#: docs/silkie/flow-protocol.rst:39
+msgid "bottom left"
+msgstr "左下角"
+
+#: docs/silkie/flow-protocol.rst:40
+msgid "bottom"
+msgstr "下边缘"
+
+#: docs/silkie/flow-protocol.rst:43
+msgid "bottom right"
+msgstr "右下角"
+
+#: docs/silkie/flow-protocol.rst:63
+msgid "Coordinates"
+msgstr "坐标"
+
+#: docs/silkie/flow-protocol.rst:65
+msgid "Cursor addressing, wrapping, margins, selection, image placements and mouse cell reports use the logical grid. A carriage return goes to its first column. Programs can query the dimensions with CSI 18 t or the PTY window size. Wide characters still occupy two inline cells. A placement's columns span the inline axis and its rows span the line axis. Image source rectangles use the original image's pixel coordinates."
+msgstr "光标寻址、自动折行、边距、选区、图像放置和鼠标单元格报告均使用逻辑网格。回车移至当前逻辑行的首列。程序可通过 CSI 18 t 或伪终端的窗口尺寸查询网格大小。宽字符仍占两个行内单元格。图像放置的列数沿行内方向延伸，行数沿换行方向延伸。图像源矩形使用原图像素坐标。"
+
+#: docs/silkie/flow-protocol.rst:72
+msgid "Pane-relative pixel positions in mouse, scroll, gesture, tablet tool and direct-touch reports use the writing axes. Device-surface coordinates, including indirect touch positions, describe the hardware. A captured contact is cancelled in its old coordinates before the axes change."
+msgstr "鼠标、滚动、手势、数位笔及直接触摸报告中的窗格相对像素位置使用书写坐标轴。设备表面坐标（包括间接触摸位置）描述硬件本身。更改坐标轴前，会按原坐标取消已捕获的接触点。"
+
+#: docs/silkie/flow-protocol.rst:78
+msgid "Reading order"
+msgstr "朗读顺序"
+
+#: docs/silkie/flow-protocol.rst:80
+msgid "An application can direct screen reader navigation independently of writing direction. Set the direction **before** writing the character whose successor it describes. For example, write a label above its value and have the reader continue down from the last character of the label::"
+msgstr "应用程序可独立于书写方向指定屏幕阅读器的导航顺序。应在写入字符 **之前** 设置方向，指定阅读器接下来应移向哪个相邻字符。例如，可在值的上方绘制标签，并让阅读器在读完标签的最后一个字符后向下继续::"
+
+#: docs/silkie/flow-protocol.rst:88
+msgid "The hint stays active for subsequent writes. Each character retains its hint through scrolling and reflow. Overwriting the character replaces its hint. Use ``right``, ``left``, ``down``, or ``up`` for a physical direction and ``auto`` for ordinary logical order."
+msgstr "提示对后续写入的字符持续生效。滚动和重新排版会保留每个字符的提示。覆盖字符会替换其提示。使用 ``right``、``left``、``down`` 或 ``up`` 指定屏幕上的实际方向，使用 ``auto`` 按常规逻辑顺序朗读。"
+
+msgid "Use ``next=end`` before writing the last character to include it and end the pane’s accessible text there. For example, the following displays ``Done. Extra`` and exposes ``Done.`` to the screen reader::"
+msgstr "在写入最后一个字符前设置 ``next=end``，阅读器会读出该字符，并在此结束窗格的无障碍文本。例如，以下命令显示 ``Done. Extra``，屏幕阅读器只读出 ``Done.``::"
+
+msgid "The reader starts at chain heads in logical order, then visits any remaining cycles. A link to a blank or past the viewport edge ends that chain. The reader tracks every character position it has emitted during this read. If a link points to any of those positions, reading stops immediately, before repeating the character or starting another chain. Direct speech requests continue to speak the supplied string."
+msgstr "阅读器按逻辑顺序从各链的起点开始，随后访问余下的环路。链接指向空白单元格或超出视口边界时，当前链结束。阅读器记录本次已读出的每个字符的位置。如果链接指向任何已读位置，朗读会立即结束，不会重复该字符，也不会开始下一条链。直接语音请求仍朗读所提供的字符串。"
+
+#: docs/silkie/flow-protocol.rst:97
+msgid "Protocol"
+msgstr "协议"
+
+#: docs/silkie/flow-protocol.rst:99
+msgid "Discover support through the entry ``flow.1`` in :doc:`capabilities-protocol`. Frames follow :doc:`extension-framing`. The default is ``inline=right``, ``line=down``, ``next=auto``."
+msgstr "通过 :doc:`capabilities-protocol` 中的 ``flow.1`` 条目探测支持情况。帧格式遵循 :doc:`extension-framing`。默认设置为 ``inline=right``、``line=down``、``next=auto``。"
+
+#: docs/silkie/flow-protocol.rst:103
+msgid "``op=set:inline=DIRECTION:line=DIRECTION`` sets both writing axes. They must be perpendicular."
+msgstr "``op=set:inline=DIRECTION:line=DIRECTION`` 设置两个书写轴，方向必须相互垂直。"
+
+#: docs/silkie/flow-protocol.rst:105
+msgid "``op=reading:next=DIRECTION`` changes the hint for subsequent writes."
+msgstr "``op=reading:next=DIRECTION`` 设置后续写入字符的朗读提示。"
+
+#: docs/silkie/flow-protocol.rst:106
+msgid "``op=query:id=N`` returns the current settings. Either setter also accepts an optional request ID and replies with the resulting settings."
+msgstr "``op=query:id=N`` 返回当前设置。两种设置命令也可携带请求 ID，以获取设置结果。"
+
+#: docs/silkie/flow-protocol.rst:109
+msgid "A state reply has the following form::"
+msgstr "状态回复格式如下::"
+
+#: docs/silkie/flow-protocol.rst:113
+msgid "A hard reset, the shared extension reset, or a shell integration prompt mark restores the configured writing directions and automatic reading order. Existing characters retain their individual reading hints until overwritten or erased."
+msgstr "硬重置、通用扩展重置或 shell 集成的提示符标记都会恢复配置文件中的书写方向，并启用自动朗读顺序。现有字符保留各自的朗读提示，直至被覆盖或擦除。"

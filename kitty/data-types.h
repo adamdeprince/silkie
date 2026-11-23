@@ -88,6 +88,17 @@ typedef uint32_t char_type;
 static_assert(sizeof(Py_UCS4) == sizeof(char_type), "PyUCS4 and char_type dont match");
 #define MAX_CHAR_TYPE_VALUE UINT32_MAX
 typedef uint32_t color_type;
+// Axes of the terminal grid. The zero value is the traditional terminal.
+enum { FLOW_REVERSE_INLINE = 1, FLOW_REVERSE_LINE = 2, FLOW_VERTICAL = 4 };
+// Normalized rectangles, with positive extents and the origin at the top left.
+static inline void
+flow_rect(unsigned flow, double *x, double *y, double *w, double *h) {
+    if (flow & FLOW_REVERSE_INLINE) *x = 1. - *x - *w;
+    if (flow & FLOW_REVERSE_LINE) *y = 1. - *y - *h;
+    if (flow & FLOW_VERTICAL) {
+        double a = *x, b = *w; *x = *y; *w = *h; *y = a; *h = b;
+    }
+}
 typedef uint16_t hyperlink_id_type;
 typedef int key_type;
 #define HYPERLINK_MAX_NUMBER UINT16_MAX

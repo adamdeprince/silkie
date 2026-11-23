@@ -9,6 +9,9 @@ To update |kitty|, :doc:`follow the instructions <binary>`.
 Recent major new features
 ---------------------------
 
+Silkie adds programmable writing directions, upright vertical text, and
+per-character screen reader navigation.
+
 Custom shaders [0.49]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 

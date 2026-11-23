@@ -44,6 +44,7 @@ type Pane struct {
 	Focused     bool
 	Caret       int32
 	Selections  [][2]int32
+	Cells       [][][2]int32
 	Rows        [][]int32
 	Roles       []Role
 	Frame       [4]int32
@@ -423,9 +424,39 @@ func frame(n node, coords uint32) rectangle {
 	return r
 }
 
+// Physical cells may have disjoint ranges in the spoken text.
+func mappedRangeRect(n node, start, end int32, coords uint32) rectangle {
+	f := frame(n, coords)
+	var result rectangle
+	found := false
+	for y, row := range n.pane.Cells {
+		for x, span := range row {
+			if span[1] <= start || span[0] >= end || span[0] == span[1] {
+				continue
+			}
+			left := f.X + int32(int64(x)*int64(f.Width)/int64(len(row)))
+			top := f.Y + int32(int64(y)*int64(f.Height)/int64(len(n.pane.Cells)))
+			right := f.X + int32(int64(x+1)*int64(f.Width)/int64(len(row)))
+			bottom := f.Y + int32(int64(y+1)*int64(f.Height)/int64(len(n.pane.Cells)))
+			if found {
+				right = max(right, result.X+result.Width)
+				bottom = max(bottom, result.Y+result.Height)
+				left = min(left, result.X)
+				top = min(top, result.Y)
+			}
+			found = true
+			result = rectangle{left, top, right - left, bottom - top}
+		}
+	}
+	return result
+}
+
 func characterRect(n node, offset int32, coords uint32) rectangle {
 	if n.pane == nil || len(n.pane.Rows) == 0 || offset < 0 || int(offset) > len(n.runes) {
 		return rectangle{}
+	}
+	if len(n.pane.Cells) != 0 {
+		return mappedRangeRect(n, offset, offset+1, coords)
 	}
 	r := frame(n, coords)
 	y := 0
@@ -454,6 +485,10 @@ func (t text) GetRangeExtents(m dbus.Message, start, end int32, coords uint32) (
 	if start < 0 || start >= end || int(end) > len(n.runes) {
 		return 0, 0, 0, 0, nil
 	}
+	if n.pane != nil && len(n.pane.Cells) != 0 {
+		r := mappedRangeRect(n, start, end, coords)
+		return r.X, r.Y, r.Width, r.Height, nil
+	}
 	a, z := characterRect(n, start, coords), characterRect(n, end-1, coords)
 	if a.Y != z.Y {
 		f := frame(n, coords)
@@ -467,6 +502,10 @@ func (t text) GetOffsetAtPoint(m dbus.Message, x, y int32, coords uint32) (int32
 	x, y = x-f.X, y-f.Y
 	if x < 0 || y < 0 || x >= f.Width || y >= f.Height || n.pane == nil || len(n.pane.Rows) == 0 {
 		return -1, nil
+	}
+	if len(n.pane.Cells) != 0 {
+		row := n.pane.Cells[int(y)*len(n.pane.Cells)/int(f.Height)]
+		return row[int(x)*len(row)/int(f.Width)][0], nil
 	}
 	row := n.pane.Rows[int(y)*len(n.pane.Rows)/int(f.Height)]
 	return row[int(x)*(len(row)-1)/int(f.Width)], nil

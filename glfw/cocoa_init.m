@@ -203,6 +203,7 @@ display_reconfigured(CGDirectDisplayID display UNUSED, CGDisplayChangeSummaryFla
 }
 
 static NSDictionary<NSString *, NSNumber *> *global_shortcuts = nil;
+static void *symbolic_hotkey_token;
 
 @interface GLFWHelper : NSObject
 @end
@@ -998,6 +999,7 @@ get_process_start_time(pid_t pid) {
 
 void
 _glfwPlatformTerminate(void) {
+    _glfwPlatformGrabKeyboard(false);
     @autoreleasepool {
         // Kill the AutoFill helper process that macOS Tahoe starts and fails to
         // shutdown on application exit, see https://github.com/kovidgoyal/kitty/issues/9299
@@ -1236,6 +1238,14 @@ _glfwPlatformUpdateTimer(unsigned long long timer_id, monotonic_t interval, mono
 void
 _glfwPlatformInputColorScheme(GLFWColorScheme appearance UNUSED) {}
 bool
-_glfwPlatformGrabKeyboard(bool grab UNUSED) {
-    return true; /* directly uses _glfw.keyboard_grabbed */
+_glfwPlatformGrabKeyboard(bool grab) {
+    // Carbon applies this request only while this application is frontmost.
+    // Keep system accessibility shortcuts available during a terminal grab.
+    if (grab && !symbolic_hotkey_token)
+        symbolic_hotkey_token = PushSymbolicHotKeyMode(kHIHotKeyModeAllDisabledExceptUniversalAccess);
+    if (!grab && symbolic_hotkey_token) {
+        PopSymbolicHotKeyMode(symbolic_hotkey_token);
+        symbolic_hotkey_token = NULL;
+    }
+    return !grab || symbolic_hotkey_token != NULL;
 }

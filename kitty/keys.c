@@ -159,6 +159,17 @@ prepare_ime_position_update_event(OSWindow *osw, Window *w, Screen *screen, GLFW
         left += screen->cursor->x * cell_width;
         top += screen->cursor->y * cell_height;
     }
+    if (screen->flow) {
+        const WindowGeometry *g = &w->render_data.geometry;
+        double dx = 1. / screen->columns, dy = 1. / screen->lines;
+        double u = MIN((left - g->left) / cell_width, screen->columns - 1) * dx;
+        double v = MIN((top - g->top) / cell_height, screen->lines - 1) * dy;
+        flow_rect(screen->flow, &u, &v, &dx, &dy);
+        left = g->left + (unsigned)round(u * (g->right - g->left));
+        top = g->top + (unsigned)round(v * (g->bottom - g->top));
+        cell_width = (unsigned)round(dx * (g->right - g->left));
+        cell_height = (unsigned)round(dy * (g->bottom - g->top));
+    }
     if (screen->magnification.scale > 1.) {
         const WindowGeometry *g = &w->render_data.geometry;
         double width = g->right - g->left, height = g->bottom - g->top;

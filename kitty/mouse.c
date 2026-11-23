@@ -320,6 +320,7 @@ cell_for_pos(Window *w, unsigned int *x, unsigned int *y, bool *in_left_half_of_
     double left = g->left, top = g->top, right = g->right, bottom = g->bottom;
     double local_x = mouse_x - left, local_y = mouse_y - top;
     screen_unmagnify_point(screen, &local_x, &local_y, right - left, bottom - top);
+    screen_logical_pointer(screen, &local_x, &local_y, 1.);
     w->mouse_pos.global_x = local_x;
     w->mouse_pos.global_y = local_y;
     if (clamp_to_window) {
@@ -327,6 +328,16 @@ cell_for_pos(Window *w, unsigned int *x, unsigned int *y, bool *in_left_half_of_
         mouse_y = MIN(MAX(mouse_y, top), bottom);
     }
     if (mouse_x < left || mouse_y < top || mouse_x > right || mouse_y > bottom) return false;
+    if (screen->flow) {
+        local_x = mouse_x - left; local_y = mouse_y - top;
+        screen_unmagnify_point(screen, &local_x, &local_y, right - left, bottom - top);
+        screen_logical_pointer(screen, &local_x, &local_y, 1.);
+        const double column = MAX(0., local_x) / screen->cell_size.width;
+        *x = (unsigned)MIN(column, screen->columns - 1.);
+        *y = (unsigned)MIN(MAX(0., local_y - screen->pixel_scroll_offset_y) / screen->cell_size.height, screen->lines - 1.);
+        *in_left_half_of_cell = column - floor(column) <= .5;
+        return true;
+    }
     if (screen->magnification.scale > 1.) {
         local_x = mouse_x - left, local_y = mouse_y - top;
         screen_unmagnify_point(screen, &local_x, &local_y, right - left, bottom - top);
@@ -391,10 +402,13 @@ do_drag_scroll(Window *w, bool upwards) {
 
 bool
 drag_scroll(Window *w, OSWindow *frame) {
-    unsigned int margin = frame->fonts_data->fcm.cell_height / 2;
-    double y = frame->mouse_y;
-    bool upwards = y <= (w->render_data.geometry.top + margin);
-    if (upwards || y >= w->render_data.geometry.bottom - margin) {
+    Screen *screen = w->render_data.screen;
+    if (!screen) return false;
+    double x = frame->mouse_x - w->render_data.geometry.left, y = frame->mouse_y - w->render_data.geometry.top;
+    screen_logical_pointer(screen, &x, &y, 1.);
+    const double margin = screen->cell_size.height / 2.;
+    bool upwards = y <= margin;
+    if (upwards || y >= (double)screen->lines * screen->cell_size.height - margin) {
         if (do_drag_scroll(w, upwards)) {
             frame->last_mouse_activity_at = monotonic();
             return true;
@@ -1951,6 +1965,7 @@ scroll_delta(double offset, GLFWOffsetType type, unsigned cell_size) {
 static bool
 screen_scroll_report(Screen *screen, const GLFWScrollEvent *ev, double x, double y) {
     if (!screen->scroll_reports) return false;
+    screen_logical_pointer(screen, &x, &y, 1. / 256);
     char buf[192];
     const int m = ev->keyboard_modifiers;
     const int mods = (m & GLFW_MOD_SHIFT ? 1 : 0) | (m & GLFW_MOD_ALT ? 2 : 0) | (m & GLFW_MOD_CONTROL ? 4 : 0) | (m & GLFW_MOD_SUPER ? 8 : 0);
@@ -2197,10 +2212,22 @@ write_gesture_report(
     write_escape_code_to_child(screen, ESC_OSC, buf);
 }
 
+// The pane-relative extension coordinates are signed 1/256 pixel samples.
+static void
+logical_subpixel_point(Screen *s, int *x, int *y) {
+    if (!s->flow && s->magnification.scale <= 1.) return;
+    double u = *x / 256., v = *y / 256.;
+    screen_unmagnify_point(s, &u, &v, (double)s->physical_columns * s->cell_size.width, (double)s->physical_lines * s->cell_size.height);
+    screen_logical_pointer(s, &u, &v, 1. / 256);
+    *x = (int)round(MIN(1073741823., MAX(-1073741823., u * 256)));
+    *y = (int)round(MIN(1073741823., MAX(-1073741823., v * 256)));
+}
+
 bool
 screen_gesture_report(
     Screen *screen, int kind, int phase, monotonic_t timestamp, bool fine, int x, int y, int mods, double delta, int dx, int dy, unsigned fingers) {
     if (kind < GESTURE_PINCH || kind > GESTURE_HOLD || !(screen->gesture.mode & gesture_mode_bit(kind))) return false;
+    logical_subpixel_point(screen, &x, &y);
     GestureState *g = screen->gesture.gestures + kind;
     if (phase == GESTURE_BEGIN) {
         if (g->active) write_gesture_report(screen, kind, GESTURE_CANCEL, timestamp, fine, g->x, g->y, g->mods, 0, g->total, 0, 0, g->fingers);
@@ -2359,7 +2386,9 @@ screen_pointer_action(Screen *screen, const PointerAction *a) {
     n += snprintf(buf + n, sizeof(buf) - n, ":action=%d", a->action);
     if (a->state >= 0) n += snprintf(buf + n, sizeof(buf) - n, ":state=%d", a->state);
     if (a->state == 2) n += snprintf(buf + n, sizeof(buf) - n, ":dx=%d:dy=%d", MIN(MAX(a->dx, -32767), 32767), MIN(MAX(a->dy, -32767), 32767));
-    snprintf(buf + n, sizeof(buf) - n, ":x=%d:y=%d:mods=%d", a->x, a->y, a->mods);
+    int x = a->x, y = a->y;
+    logical_subpixel_point(screen, &x, &y);
+    snprintf(buf + n, sizeof(buf) - n, ":x=%d:y=%d:mods=%d", x, y, a->mods);
     write_escape_code_to_child(screen, ESC_OSC, buf);
     return true;
 }
@@ -2522,7 +2551,9 @@ pointer_contact(Screen *screen, const PointerReport *r, bool create) {
 // cancelled and hidden. A frame closes the finger reports before it, and is
 // not sent when there were none
 bool
-screen_pointer_report(Screen *screen, PointerReport *r) {
+screen_pointer_report(Screen *screen, PointerReport *raw) {
+    PointerReport mapped = *raw, *r = &mapped;
+    if (!r->src && r->phase != POINTER_FRAME) logical_subpixel_point(screen, &r->x, &r->y);
     if (!(screen->pointer.mode & r->kind)) return false;
     if (r->phase == POINTER_FRAME) {
         if (r->kind == POINTER_TOUCH && !screen->pointer.unframed) return false;

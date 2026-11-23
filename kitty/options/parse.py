@@ -24,7 +24,7 @@ from kitty.options.utils import (
     spatial_angle, spatial_divergence, spatial_exponent, spatial_phase_limit, spatial_scale,
     store_multiple, symbol_map, tab_activity_symbol, tab_bar_edge, tab_bar_margin_height,
     tab_bar_min_tabs, tab_fade, tab_font_style, tab_separator, tab_title_template, tab_title_wrap,
-    text_fg_override_threshold, titlebar_color, to_cursor_shape, to_cursor_unfocused_shape,
+    text_fg_override_threshold, text_flow, titlebar_color, to_cursor_shape, to_cursor_unfocused_shape,
     to_font_size, to_layout_names, to_modifiers, transparent_background_colors, underline_exclusion,
     url_prefixes, url_style, visual_bell_duration, visual_window_select_characters, window_border_width,
     window_logo_scale, window_size
@@ -1670,6 +1670,9 @@ class Parser:
 
     def text_fg_override_threshold(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['text_fg_override_threshold'] = text_fg_override_threshold(val)
+
+    def text_flow(self, val: str, ans: dict[str, typing.Any]) -> None:
+        ans['text_flow'] = text_flow(val)
 
     def touch_scroll_multiplier(self, val: str, ans: dict[str, typing.Any]) -> None:
         ans['touch_scroll_multiplier'] = float(val)

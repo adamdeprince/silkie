@@ -501,6 +501,7 @@ grman_pause_rendering(GraphicsManager *self, GraphicsManager *dest) {
     dest->num_of_positive_refs = 0;
     dest->num_of_indexed_refs = 0;
     if (self == NULL) return;
+    dest->flow = self->flow;
     dest->window_id = self->window_id;
     dest->layers_dirty = true;
     // Copy the visible ref counts so that the decision on whether to render in
@@ -2442,28 +2443,30 @@ update_src_rect(ImageRef *ref, Image *img) {
 }
 
 static void
-update_dest_rect(ImageRef *ref, uint32_t num_cols, uint32_t num_rows, CellPixelSize cell) {
+update_dest_rect(const GraphicsManager *self, ImageRef *ref, uint32_t num_cols, uint32_t num_rows, CellPixelSize cell) {
+    const double iw = self->flow & FLOW_VERTICAL ? ref->src_height : ref->src_width;
+    const double ih = self->flow & FLOW_VERTICAL ? ref->src_width : ref->src_height;
     uint32_t t;
     const bool auto_cols = num_cols == 0, auto_rows = num_rows == 0;
     if (auto_cols) {
         if (auto_rows) {
-            t = (uint32_t)(ref->src_width + ref->cell_x_offset);
+            t = (uint32_t)(iw + ref->cell_x_offset);
             num_cols = t / cell.width;
             if (t > num_cols * cell.width) num_cols += 1;
         } else {
             double height_px = cell.height * num_rows + ref->cell_y_offset;
-            double width_px = height_px * ref->src_width / (double)ref->src_height;
+            double width_px = height_px * iw / (double)ih;
             num_cols = (uint32_t)ceil(width_px / cell.width);
         }
     }
     if (auto_rows) {
         if (auto_cols) {
-            t = (uint32_t)(ref->src_height + ref->cell_y_offset);
+            t = (uint32_t)(ih + ref->cell_y_offset);
             num_rows = t / cell.height;
             if (t > num_rows * cell.height) num_rows += 1;
         } else {
             double width_px = cell.width * num_cols + ref->cell_x_offset;
-            double height_px = width_px * ref->src_height / (double)ref->src_width;
+            double height_px = width_px * ih / (double)iw;
             num_rows = (uint32_t)ceil(height_px / cell.height);
         }
     }
@@ -2560,12 +2563,14 @@ grman_put_cell_image(
     ref.depth_pixels = virt_img_ref->depth_pixels;
     ref.phase = virt_img_ref->phase;
 
+    const uint32_t inline_extent = self->flow & FLOW_VERTICAL ? img->height : img->width;
+    const uint32_t line_extent = self->flow & FLOW_VERTICAL ? img->width : img->height;
     uint32_t img_rows = virt_img_ref->num_rows;
     uint32_t img_columns = virt_img_ref->num_cols;
     // If the number of columns or rows for the image is not set, compute them
     // in such a way that the image is as close as possible to its natural size.
-    if (img_columns == 0) img_columns = (img->width + cell.width - 1) / cell.width;
-    if (img_rows == 0) img_rows = (img->height + cell.height - 1) / cell.height;
+    if (img_columns == 0) img_columns = (inline_extent + cell.width - 1) / cell.width;
+    if (img_rows == 0) img_rows = (line_extent + cell.height - 1) / cell.height;
 
     ref.start_row = screen_row;
     ref.start_column = screen_col;
@@ -2581,18 +2586,18 @@ grman_put_cell_image(
     float x_offset, y_offset, x_scale, y_scale;
 
     // Fit the image to the box while preserving aspect ratio
-    if ((uint64_t)img->width * img_rows * cell.height > (uint64_t)img->height * img_columns * cell.width) {
+    if ((uint64_t)inline_extent * img_rows * cell.height > (uint64_t)line_extent * img_columns * cell.width) {
         // Fit to width and center vertically.
         x_offset = 0;
-        x_scale = (float)(img_columns * cell.width) / MAX(1u, img->width);
+        x_scale = (float)(img_columns * cell.width) / MAX(1u, inline_extent);
         y_scale = x_scale;
-        y_offset = (img_rows * cell.height - img->height * y_scale) / 2;
+        y_offset = (img_rows * cell.height - line_extent * y_scale) / 2;
     } else {
         // Fit to height and center horizontally.
         y_offset = 0;
-        y_scale = (float)(img_rows * cell.height) / MAX(1u, img->height);
+        y_scale = (float)(img_rows * cell.height) / MAX(1u, line_extent);
         x_scale = y_scale;
-        x_offset = (img_columns * cell.width - img->width * x_scale) / 2;
+        x_offset = (img_columns * cell.width - inline_extent * x_scale) / 2;
     }
 
     // Now we can compute source (image) coordinates from destination (box)
@@ -2640,19 +2645,27 @@ grman_put_cell_image(
 
     // For the bottom right corner we can remove only completely empty rows and
     // columns.
-    if (ref.src_x + ref.src_width > img->width) {
-        float redundant_w = ref.src_x + ref.src_width - img->width;
+    if (ref.src_x + ref.src_width > inline_extent) {
+        float redundant_w = ref.src_x + ref.src_width - inline_extent;
         uint32_t redundant_cols = (uint32_t)(redundant_w * x_scale) / cell.width;
         if (ref.num_cols <= redundant_cols) return;
         ref.src_width -= redundant_cols * cell.width / x_scale;
         ref.num_cols -= redundant_cols;
     }
-    if (ref.src_y + ref.src_height > img->height) {
-        float redundant_h = ref.src_y + ref.src_height - img->height;
+    if (ref.src_y + ref.src_height > line_extent) {
+        float redundant_h = ref.src_y + ref.src_height - line_extent;
         uint32_t redundant_rows = (uint32_t)(redundant_h * y_scale) / cell.height;
         if (ref.num_rows <= redundant_rows) return;
         ref.src_height -= redundant_rows * cell.height / y_scale;
         ref.num_rows -= redundant_rows;
+    }
+
+    if (self->flow) {
+        double u = ref.src_x / inline_extent, v = ref.src_y / line_extent;
+        double w = ref.src_width / inline_extent, h = ref.src_height / line_extent;
+        flow_rect(self->flow, &u, &v, &w, &h);
+        ref.src_x = u * img->width; ref.src_y = v * img->height;
+        ref.src_width = w * img->width; ref.src_height = h * img->height;
     }
 
     // The cursor will be drawn on top of the image.
@@ -2669,7 +2682,7 @@ grman_put_cell_image(
     set_layers_dirty(self);
 
     update_src_rect(real_ref, img);
-    update_dest_rect(real_ref, ref.num_cols, ref.num_rows, cell);
+    update_dest_rect(self, real_ref, ref.num_cols, ref.num_rows, cell);
 }
 
 static void remove_ref(Image *img, ImageRef *ref);
@@ -2802,7 +2815,7 @@ handle_put_command(GraphicsManager *self, const GraphicsCommand *g, Cursor *c, b
         ref->client_id = g->placement_id;
     }
     update_src_rect(ref, img);
-    update_dest_rect(ref, g->num_cells, g->num_lines, cell);
+    update_dest_rect(self, ref, g->num_cells, g->num_lines, cell);
     ref->parent.img = parent_id;
     ref->parent.ref = parent_placement_id;
     ref->parent.offset.x = g->offset_from_parent_x;
@@ -3161,6 +3174,23 @@ add_render_item(GraphicsManager *self, const ImageRenderData *rd) {
     self->render_data.item[self->render_data.count++] = *rd;
 }
 
+static void
+placement_pixels(const GraphicsManager *self, const ImageRef *ref, const InkView *view, int32_t start_row, int32_t start_column,
+                 double *left, double *top, double *width, double *height) {
+    const double iw = self->flow & FLOW_VERTICAL ? ref->src_height : ref->src_width;
+    const double ih = self->flow & FLOW_VERTICAL ? ref->src_width : ref->src_height;
+    const double cw = view->cell.width, ch = view->cell.height, first_row_at = (double)view->scrolled_by * ch + view->scroll_offset;
+    *left = start_column * cw + ref->cell_x_offset;
+    *top = first_row_at + start_row * ch + ref->cell_y_offset;
+    if (ref->num_rows) {
+        *height = first_row_at + ((double)start_row + ref->num_rows) * ch - *top;
+        *width = ref->num_cols ? ((double)start_column + ref->num_cols) * cw - *left : *height * iw / ih;
+    } else {
+        *width = ref->num_cols ? ((double)start_column + ref->num_cols) * cw - *left : iw;
+        *height = *width * ih / iw;
+    }
+}
+
 bool
 grman_update_layers(
     GraphicsManager *self, unsigned int scrolled_by, float scroll_offset_lines,
@@ -3203,11 +3233,12 @@ grman_update_magnified_layers(
     self->num_of_positive_refs = 0;
     self->num_of_indexed_refs = 0;
     ImageRect r;
-    float screen_width = dx * num_cols, screen_height = dy * num_rows;
+    const double screen_width = (double)dx * num_cols, screen_height = (double)dy * num_rows;
     float screen_bottom = screen_top - screen_height;
-    float screen_width_px = num_cols * cell.width;
-    float screen_height_px = num_rows * cell.height;
-    float y0 = screen_top - dy * ((float)scrolled_by + scroll_offset_lines);
+    const double logical_width = (double)num_cols * cell.width, logical_height = (double)num_rows * cell.height;
+    const bool vertical = self->flow & FLOW_VERTICAL;
+    const double screen_width_px = vertical ? logical_height : logical_width, screen_height_px = vertical ? logical_width : logical_height;
+    const InkView view = {.cell = cell, .scrolled_by = scrolled_by, .scroll_offset = scroll_offset_lines * cell.height};
 
     // Iterate over all visible refs and create render data
     self->render_data.count = 0;
@@ -3253,25 +3284,15 @@ grman_update_magnified_layers(
                     continue;
                 }
             }
-            r.top = y0 - start_row * dy - dy * (float)ref->cell_y_offset / (float)cell.height;
-            r.left = screen_left + start_column * dx + dx * (float)ref->cell_x_offset / (float)cell.width;
-
-            int32_t nr = ref->num_rows, nc = ref->num_cols;
-            if (nr) {
-                r.bottom = y0 - (start_row + nr) * dy;
-                if (nc) r.right = screen_left + (start_column + nc) * dx;
-                else {
-                    double height_px = (((double)r.top - r.bottom) / screen_height) * screen_height_px;
-                    double width_px = height_px * ref->src_width / (double)ref->src_height;
-                    r.right = r.left + (float)((width_px / screen_width_px) * screen_width);
-                }
-            } else {
-                if (nc) r.right = screen_left + (start_column + nc) * dx;
-                else r.right = r.left + screen_width * (float)ref->src_width / screen_width_px;
-                double width_px = (((double)r.right - r.left) / screen_width) * screen_width_px;
-                double height_px = width_px * ref->src_height / (double)ref->src_width;
-                r.bottom = r.top - (float)((height_px / screen_height_px) * screen_height);
-            }
+            double x, y, w, h;
+            placement_pixels(self, ref, &view, start_row, start_column, &x, &y, &w, &h);
+            x /= logical_width; w /= logical_width;
+            y /= logical_height; h /= logical_height;
+            flow_rect(self->flow, &x, &y, &w, &h);
+            r.left = screen_left + x * screen_width;
+            r.right = screen_left + (x + w) * screen_width;
+            r.top = screen_top - y * screen_height;
+            r.bottom = screen_top - (y + h) * screen_height;
 
             if (r.top <= screen.bottom || r.bottom >= screen.top ||
                 (zoom > 1. && (r.left >= screen.right || r.right <= screen.left))) {
@@ -3988,16 +4009,7 @@ ref_rect_in_pixels(const GraphicsManager *self, const ImageRef *ref, const InkVi
         bool has_virtual_ancestor;
         if (!resolve_parent_offset(self, ref, &start_row, &start_column, &has_virtual_ancestor)) return false;
     }
-    const double cw = view->cell.width, ch = view->cell.height, first_row_at = (double)view->scrolled_by * ch + view->scroll_offset;
-    *left = start_column * cw + ref->cell_x_offset;
-    *top = first_row_at + start_row * ch + ref->cell_y_offset;
-    if (ref->num_rows) {
-        *height = first_row_at + ((double)start_row + ref->num_rows) * ch - *top;
-        *width = ref->num_cols ? ((double)start_column + ref->num_cols) * cw - *left : *height * ref->src_width / ref->src_height;
-    } else {
-        *width = ref->num_cols ? ((double)start_column + ref->num_cols) * cw - *left : ref->src_width;
-        *height = *width * ref->src_height / ref->src_width;
-    }
+    placement_pixels(self, ref, view, start_row, start_column, left, top, width, height);
     return *width > 0 && *height > 0;
 }
 
@@ -4032,8 +4044,11 @@ static bool
 ink_point(const GraphicsManager *self, const Image *img, const ImageRef *ref, uint32_t group, const InkView *view, double *x, double *y) {
     double left, top, width, height;
     if (!ref_rect_in_pixels(self, ref, view, &left, &top, &width, &height)) return false;
-    *x = ref->src_x + (*x - left) * ref->src_width / width;
-    *y = ref->src_y + (*y - top) * ref->src_height / height;
+    double u = (*x - left) / width, v = (*y - top) / height;
+    if (self->flow & FLOW_REVERSE_INLINE) u = 1. - u;
+    if (self->flow & FLOW_REVERSE_LINE) v = 1. - v;
+    *x = ref->src_x + (self->flow & FLOW_VERTICAL ? v : u) * ref->src_width;
+    *y = ref->src_y + (self->flow & FLOW_VERTICAL ? u : v) * ref->src_height;
     return vector_doc_point_to_group(img->vector, group, x, y);
 }
 
@@ -4846,20 +4861,6 @@ ref_outside_region(const ImageRef *ref, index_type margin_top, index_type margin
     return ref->start_row + (int32_t)ref->effective_num_rows <= (int32_t)margin_top || ref->start_row > (int32_t)margin_bottom;
 }
 
-static float
-src_pixels_per_screen_pixel(const ImageRef *ref, CellPixelSize cell) {
-    // The vertical scale factor mapping pixels in the destination rectangle on
-    // the screen to pixels in the source rectangle. Must match the dest rect
-    // calculation used for rendering in grman_update_layers().
-    float dest_height_px;
-    if (ref->num_rows) dest_height_px = (float)(ref->num_rows * cell.height) - (float)ref->cell_y_offset;
-    else if (ref->num_cols && ref->src_width > 0) {
-        float dest_width_px = (float)(ref->num_cols * cell.width) - (float)ref->cell_x_offset;
-        dest_height_px = dest_width_px * ref->src_height / ref->src_width;
-    } else return 1.f; // rendered at native size
-    return dest_height_px > 0 ? ref->src_height / dest_height_px : 1.f;
-}
-
 static bool
 scroll_filter_margins_func(ImageRef *ref, Image *img, const void *data, CellPixelSize cell) {
     if (ref->is_virtual_ref) return false;
@@ -4877,14 +4878,21 @@ scroll_filter_margins_func(ImageRef *ref, Image *img, const void *data, CellPixe
         // Clip the image if scrolling has resulted in part of it being outside the page area
         uint32_t clipped_rows;
         float clip_amt;
-        const float scale = src_pixels_per_screen_pixel(ref, cell);
+        float *extent = d->flow & FLOW_VERTICAL ? &ref->src_width : &ref->src_height;
+        float *origin = d->flow & FLOW_VERTICAL ? &ref->src_x : &ref->src_y;
+        float inline_extent = d->flow & FLOW_VERTICAL ? ref->src_height : ref->src_width;
+        double height = *extent;
+        if (ref->num_rows) height = (double)ref->num_rows * cell.height - ref->cell_y_offset;
+        else if (ref->num_cols && inline_extent > 0)
+            height = ((double)ref->num_cols * cell.width - ref->cell_x_offset) * *extent / inline_extent;
+        const float scale = height > 0 ? *extent / height : 1.f;
         if (ref->start_row < (int32_t)d->margin_top) {
             // image moved up
             clipped_rows = d->margin_top - ref->start_row;
             clip_amt = scale * (float)(cell.height * clipped_rows - ref->cell_y_offset);
-            if (ref->src_height <= clip_amt) return true;
-            ref->src_y += clip_amt;
-            ref->src_height -= clip_amt;
+            if (*extent <= clip_amt) return true;
+            if (!(d->flow & FLOW_REVERSE_LINE)) *origin += clip_amt;
+            *extent -= clip_amt;
             ref->effective_num_rows -= clipped_rows;
             if (ref->num_rows) ref->num_rows -= clipped_rows;
             ref->cell_y_offset = 0;
@@ -4898,8 +4906,11 @@ scroll_filter_margins_func(ImageRef *ref, Image *img, const void *data, CellPixe
             float visible_height_px = (float)(cell.height * (ref->effective_num_rows - clipped_rows)) - (float)ref->cell_y_offset;
             float new_src_height = scale * visible_height_px;
             if (new_src_height <= 0) return true;
-            clip_amt = ref->src_height - new_src_height;
-            if (clip_amt > 0) ref->src_height -= clip_amt;
+            clip_amt = *extent - new_src_height;
+            if (clip_amt > 0) {
+                if (d->flow & FLOW_REVERSE_LINE) *origin += clip_amt;
+                *extent -= clip_amt;
+            }
             ref->effective_num_rows -= clipped_rows;
             if (ref->num_rows) ref->num_rows -= clipped_rows;
             update_src_rect(ref, img);
@@ -4913,7 +4924,9 @@ void
 grman_scroll_images(GraphicsManager *self, const ScrollData *data, CellPixelSize cell) {
     if (vt_size(&self->images_by_internal_id)) {
         set_layers_dirty(self);
-        modify_refs(self, data, data->has_margins ? scroll_filter_margins_func : scroll_filter_func, cell);
+        ScrollData state = *data;
+        state.flow = self->flow;
+        modify_refs(self, &state, data->has_margins ? scroll_filter_margins_func : scroll_filter_func, cell);
     }
 }
 
@@ -5147,7 +5160,7 @@ grman_rescale(GraphicsManager *self, CellPixelSize cell) {
             if (ref->is_virtual_ref || is_cell_image(ref)) continue;
             ref->cell_x_offset = MIN(ref->cell_x_offset, cell.width - 1);
             ref->cell_y_offset = MIN(ref->cell_y_offset, cell.height - 1);
-            update_dest_rect(ref, ref->num_cols, ref->num_rows, cell);
+            update_dest_rect(self, ref, ref->num_cols, ref->num_rows, cell);
         }
     }
 }
@@ -5941,6 +5954,12 @@ init_graphics(PyObject *module) {
     if (PyModule_AddIntMacro(module, IMAGE_PLACEHOLDER_CHAR) != 0) return false;
     Py_INCREF(&GraphicsManager_Type);
     return true;
+}
+
+void
+grman_set_flow(GraphicsManager *self, unsigned flow) {
+    self->flow = flow;
+    set_layers_dirty(self);
 }
 
 void

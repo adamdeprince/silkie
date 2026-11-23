@@ -275,6 +275,7 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="flow-protocol.html">Writing direction and reading order</a></li>
 <li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
@@ -350,7 +351,7 @@ which makes color cycling, fades and highlights cheap.</p>
 <section id="discovery">
 <h2>Discovery<a class="headerlink" href="#discovery" title="Link to this heading">¶</a></h2>
 <p>The <a class="reference internal" href="capabilities-protocol.html"><span class="doc">Extension capabilities protocol</span></a> lists <code class="docutils literal notranslate"><span class="pre">401,402,404,408</span></code> in its <code class="docutils literal notranslate"><span class="pre">format</span></code>
-field. A <span class="xref std std-ref">feature query</span> asks about one
+field. A <a class="reference internal" href="capabilities-protocol.html#graphics-query-features"><span class="std std-ref">feature query</span></a> asks about one
 format, for example <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Ga=q,i=42,e=t,f=404&lt;ESC&gt;\</span></code>, and
 <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Ga=q,i=42,e=e,x=1,w=2&lt;ESC&gt;\</span></code> asks whether palette updates of a
 range of slots are understood. A normal <code class="docutils literal notranslate"><span class="pre">a=q</span></code> with data checks one

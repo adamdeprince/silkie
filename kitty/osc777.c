@@ -14,10 +14,45 @@
 // protocol, see docs/capabilities-protocol.rst. A selector handled in
 // dispatch_osc() must also be listed here.
 static const struct { const char *selector; unsigned version; } extensions[] = {
-    {"depth", 1},
+    {"depth", 1}, {"flow", 1},
     {"ssh-agent", 1},
     {"a11y", 1}, {"a11y", 2}, {"caps", 1}, {"display", 1}, {"font", 1}, {"frame", 1}, {"gesture", 1}, {"haptic", 1}, {"ink", 1}, {"latency", 1}, {"scroll", 1}, {"speech", 1}, {"tablet-pointer", 1},
 };
+
+// The index is stored in the cell's three-bit reading_direction field.
+static const char *const reading_hints[] = {"auto", "right", "left", "down", "up", "end"};
+
+static int
+reading_hint_index(const char *value) {
+    if (value) for (unsigned i = 0; i < arraysz(reading_hints); i++) if (!strcmp(value, reading_hints[i])) return i;
+    return -1;
+}
+
+void
+screen_flow_protocol(Screen *self, const char *data, size_t size) {
+    EXTENSION_FIELDS(f);
+    const char *op;
+    long long id = -1;
+    if (memchr(data, 0, size) || !extension_fields_parse(&f, data, size) ||
+        !extension_frame_header(&f, 1, &op) || !extension_field_int(&f, "id", 0, INT32_MAX, &id)) return;
+    if (!strcmp(op, "set")) {
+        const int a = reading_hint_index(extension_field(&f, "inline")) - 1, b = reading_hint_index(extension_field(&f, "line")) - 1;
+        if (a < 0 || a >= 4 || b < 0 || b >= 4 || a / 2 == b / 2) return;
+        if (!screen_set_flow(self, (a >= 2 ? FLOW_VERTICAL : 0) | (a & 1) | ((b & 1) << 1))) { PyErr_Print(); return; }
+    } else if (!strcmp(op, "reading")) {
+        int hint = reading_hint_index(extension_field(&f, "next"));
+        if (hint < 0) return;
+        self->reading_direction = hint;
+    } else if (strcmp(op, "query")) return;
+    if (id >= 0) {
+        const unsigned a = ((self->flow & FLOW_VERTICAL) ? 2 : 0) + (self->flow & 1);
+        const unsigned b = ((self->flow & FLOW_VERTICAL) ? 0 : 2) + ((self->flow >> 1) & 1);
+        RAII_PyObject(reply, PyUnicode_FromFormat("777;flow;v=1:op=state:id=%lld:inline=%s:line=%s:next=%s",
+            id, reading_hints[a + 1], reading_hints[b + 1], reading_hints[self->reading_direction]));
+        if (reply) write_escape_code_to_child(self, ESC_OSC, PyUnicode_AsUTF8(reply));
+        else PyErr_Print();
+    }
+}
 
 void
 screen_depth_protocol(Screen *self, const char *data, size_t sz) {
@@ -264,6 +299,8 @@ screen_reset_extension_modes(Screen *self) {
     self->cursor->sgr.depth = 0;
     self->cursor->sgr.depth_pixels = 0;
     self->cursor->sgr.phase = 0;
+    self->reading_direction = 0;
+    if (!screen_set_flow(self, self->default_flow)) PyErr_Print();
     // tablet-pointer
     screen_pointer_cancel(self, 0);
     self->pointer.mode = 0;

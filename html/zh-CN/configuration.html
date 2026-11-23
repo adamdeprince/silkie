@@ -274,6 +274,7 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">扩展能力协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 扩展封装</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">字体选择协议</a></li>
+<li class="toctree-l2"><a class="reference internal" href="flow-protocol.html">书写方向与朗读顺序</a></li>
 <li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">数位板指针协议</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">滚动协议</a></li>
@@ -380,6 +381,10 @@ add this to <code class="docutils literal notranslate"><span class="pre">silkie.
 </div>
 <p>The application menu's Quit command remains available without a keyboard
 shortcut unless you configure one.</p>
+</section>
+<section id="function-keys-on-macos">
+<h2>macOS 功能键<a class="headerlink" href="#function-keys-on-macos" title="链接到此标题。">¶</a></h2>
+<p>使用传统按键报告时，单按 F11 会向终端程序发送 <code class="docutils literal notranslate"><span class="pre">ESC</span> <span class="pre">[</span> <span class="pre">23</span> <span class="pre">~</span></code>。使用 <code class="docutils literal notranslate"><span class="pre">kitten</span> <span class="pre">show-key</span></code> 查看接收到的事件。shell 提示符可能没有为此键绑定可见操作。如果 macOS 将 F11 保留给“显示桌面”，可在 <strong>系统设置 → 键盘 → 键盘快捷键 → 调度中心</strong> 中更改快捷键，或以 <code class="docutils literal notranslate"><span class="pre">--grab-keyboard</span></code> 启动 Silkie，请求在前台接收系统快捷键。macOS 可能要求授予辅助功能权限。如果键盘默认使用媒体键，请按 Fn-F11 输入功能键。</p>
 </section>
 <section id="spatial-display">
 <h2>Spatial display<a class="headerlink" href="#spatial-display" title="链接到此标题。">¶</a></h2>
@@ -811,6 +816,13 @@ X11. Dithering draws a window through an intermediate image, which costs one
 more pass over the window for every frame.</p>
 </dd></dl>
 
+<dl class="std opt">
+<dt class="sig sig-object std" id="opt-text_flow">
+<span class="sig-name descname"><span class="pre">text_flow</span></span><a class="headerlink" href="#opt-text_flow" title="链接到此定义。">¶</a></dt>
+<dd><p>默认值：<code class="docutils literal notranslate"><span class="pre">right</span> <span class="pre">down</span></code>。</p>
+<p>依次设置字符前进和换行的方向。从 right、left、down 和 up 中选择相互垂直的两个方向。传统中文竖排使用 <code class="docutils literal notranslate"><span class="pre">down</span> <span class="pre">left</span></code>。应用程序可通过 Silkie 书写方向协议逐窗格覆盖此设置。</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -871,6 +883,7 @@ more pass over the window for every frame.</p>
 <li><a class="reference internal" href="#">Silkie 配置</a><ul>
 <li><a class="reference internal" href="#configuration-paths">Configuration paths</a></li>
 <li><a class="reference internal" href="#quitting-on-macos">Quitting on macOS</a></li>
+<li><a class="reference internal" href="#function-keys-on-macos">macOS 功能键</a></li>
 <li><a class="reference internal" href="#spatial-display">Spatial display</a></li>
 <li><a class="reference internal" href="#ssh-agent-forwarding">SSH agent forwarding</a></li>
 <li><a class="reference internal" href="#e-paper-and-color-switching">电子纸与配色切换</a></li>

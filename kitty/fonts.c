@@ -2336,7 +2336,7 @@ multicell_intersects_cursor(const Line *line, index_type lnum, const Cursor *cur
 }
 
 void
-render_line(FONTS_DATA_HANDLE fg_, Line *line, index_type lnum, Cursor *cursor, DisableLigature disable_ligature_strategy, ListOfChars *lc) {
+render_line(FONTS_DATA_HANDLE fg_, Line *line, index_type lnum, Cursor *cursor, DisableLigature disable_ligature_strategy, ListOfChars *lc, unsigned flow) {
 #define RENDER                                                                                                          \
     if (run_font.font_idx != NO_FONT && i > first_cell_in_run) {                                                        \
         int cursor_offset = -1;                                                                                         \
@@ -2355,10 +2355,17 @@ render_line(FONTS_DATA_HANDLE fg_, Line *line, index_type lnum, Cursor *cursor, 
             disable_ligature_strategy,                                                                                  \
             line->text_cache,                                                                                           \
             lc);                                                                                                        \
+        if (rtl_run) {                                                                                                  \
+            for (index_type a = first_cell_in_run, b = i - 1; a < b; a++, b--) {                                        \
+                sprite_index t = line->gpu_cells[a].sprite_idx;                                                         \
+                line->gpu_cells[a].sprite_idx = line->gpu_cells[b].sprite_idx;                                          \
+                line->gpu_cells[b].sprite_idx = t;                                                                      \
+            }                                                                                                           \
+        }                                                                                                               \
     }
     FontGroup *fg = (FontGroup *)fg_;
     RunFont basic_font = {.scale = 1, .font_idx = NO_FONT}, run_font = basic_font, cell_font = basic_font;
-    bool center_glyph = false;
+    bool center_glyph = false, rtl_run = false;
     bool disable_ligature_at_cursor = cursor != NULL && disable_ligature_strategy == DISABLE_LIGATURES_CURSOR;
     index_type first_cell_in_run, i;
     for (i = 0; i < line->xnum; i++) {
@@ -2386,7 +2393,7 @@ render_line(FONTS_DATA_HANDLE fg_, Line *line, index_type lnum, Cursor *cursor, 
         const char_type first_ch = lc->chars[0];
         cell_font.font_idx = font_for_cell(fg, cpu_cell, gpu_cell, &is_main_font, &is_emoji_presentation, line->text_cache, lc);
         CharProps cp = char_props_for(first_ch);
-        if (cell_font.font_idx != MISSING_FONT && ((!is_main_font && !is_emoji_presentation && cp.is_symbol) ||
+        if (!(flow & (FLOW_REVERSE_INLINE | FLOW_VERTICAL)) && cell_font.font_idx != MISSING_FONT && ((!is_main_font && !is_emoji_presentation && cp.is_symbol) ||
                                                    (cell_font.font_idx != BOX_FONT && (is_private_use(cp))) || is_non_emoji_dingbat(first_ch, cp))) {
             unsigned int desired_cells = 1;
             if (cell_font.font_idx > 0) {
@@ -2434,10 +2441,13 @@ render_line(FONTS_DATA_HANDLE fg_, Line *line, index_type lnum, Cursor *cursor, 
                 continue;
             }
         }
-        if (run_font.font_idx == NO_FONT) run_font = cell_font;
-        if (run_fonts_are_equal(&run_font, &cell_font)) continue;
+        bool rtl = (flow & (FLOW_REVERSE_INLINE | FLOW_VERTICAL)) == FLOW_REVERSE_INLINE && !cpu_cell->is_multicell &&
+            !OPT(force_ltr) && hb_script_get_horizontal_direction(hb_unicode_script(hb_unicode_funcs_get_default(), first_ch)) == HB_DIRECTION_RTL;
+        if (run_font.font_idx == NO_FONT) { run_font = cell_font; rtl_run = rtl; }
+        if ((!(flow & (FLOW_REVERSE_INLINE | FLOW_VERTICAL)) || (rtl && rtl_run)) && run_fonts_are_equal(&run_font, &cell_font)) continue;
         RENDER
         run_font = cell_font;
+        rtl_run = rtl;
         first_cell_in_run = i;
     }
     RENDER
@@ -2752,7 +2762,7 @@ test_render_line(PyObject UNUSED *self, PyObject *args) {
         return NULL;
     }
     RAII_ListOfChars(lc);
-    render_line((FONTS_DATA_HANDLE)font_groups, (Line *)line, 0, NULL, DISABLE_LIGATURES_NEVER, &lc);
+    render_line((FONTS_DATA_HANDLE)font_groups, (Line *)line, 0, NULL, DISABLE_LIGATURES_NEVER, &lc, 0);
     Py_RETURN_NONE;
 }
 

@@ -746,6 +746,10 @@ dispatch_osc(PS *self, uint8_t *buf, size_t limit, bool is_extended_osc) {
             break;
         case 8: dispatch_hyperlink(self, (char *)buf + i); break;
         case 777:
+            if (limit - i > 5 && memcmp(buf + i, "flow;", 5) == 0) {
+                screen_flow_protocol(self->screen, (const char *)buf + i + 5, limit - i - 5);
+                break;
+            }
             if (limit - i > 7 && memcmp(buf + i, "speech;", 7) == 0) {
                 screen_speech_protocol(self->screen, (const char *)buf + i + 7, limit - i - 7);
                 break;

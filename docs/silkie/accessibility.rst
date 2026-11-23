@@ -18,6 +18,8 @@ contrast and color-independent rendering hints. Set :opt:`high_contrast`
 or :opt:`differentiate_without_color` to ``auto``, ``off``, or ``on`` in
 ``silkie.conf``.
 
+See :doc:`flow-protocol` for per-character reading order and vertical writing.
+
 Magnify a pane
 --------------
 

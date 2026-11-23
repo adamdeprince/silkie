@@ -191,3 +191,7 @@ msgstr "在 ``silkie.conf`` 中绑定 ``magnify_pane`` 可自定义操作。数�
 #: ../../../Users/adam/dev/silkie/docs/silkie/accessibility.rst:41
 msgid "Silkie also samples desktop zoom on its existing display-monitoring wakeup. It reads GNOME Zoom's settings, queries KWin versions that report the target zoom, and checks whether macOS Accessibility Zoom is active. The macOS zoom factor is available on a best-effort basis. With desktop zoom, final sharpness depends on how the compositor scales the window. Android tablets running Silkie in an X11 or Wayland session can use the pane magnifier. The Android system magnifier belongs to the Android host and its factor is available to Android accessibility services."
 msgstr "Silkie 在已有的显示器监测唤醒中读取桌面缩放状态，包括 GNOME Zoom 的设置、支持报告目标倍率的 KWin 版本以及 macOS 辅助功能缩放是否启用。macOS 的缩放倍率取决于系统可提供的信息。使用桌面缩放时，最终清晰度取决于合成器如何缩放窗口。在 X11 或 Wayland 会话中运行 Silkie 的 Android 平板可使用窗格放大功能。Android 系统放大镜由 Android 主机管理，Android 辅助功能服务可获取其倍率。"
+
+#: docs/silkie/accessibility.rst:21
+msgid "See :doc:`flow-protocol` for per-character reading order and vertical writing."
+msgstr "关于逐字符朗读顺序与竖排书写，请参阅 :doc:`flow-protocol`。"

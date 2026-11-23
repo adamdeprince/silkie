@@ -275,6 +275,7 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="flow-protocol.html">Writing direction and reading order</a></li>
 <li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
@@ -381,7 +382,7 @@ keeps these pixels at their full precision all the way to the GPU.</p>
 <section id="discovery">
 <h2>Discovery<a class="headerlink" href="#discovery" title="Link to this heading">¶</a></h2>
 <p>The <a class="reference internal" href="capabilities-protocol.html"><span class="doc">Extension capabilities protocol</span></a> lists <code class="docutils literal notranslate"><span class="pre">316</span></code>, <code class="docutils literal notranslate"><span class="pre">632</span></code> and <code class="docutils literal notranslate"><span class="pre">664</span></code> in its
-<code class="docutils literal notranslate"><span class="pre">format</span></code> field. A <span class="xref std std-ref">feature query</span> reports a
+<code class="docutils literal notranslate"><span class="pre">format</span></code> field. A <a class="reference internal" href="capabilities-protocol.html#graphics-query-features"><span class="std std-ref">feature query</span></a> reports a
 format and the transfer key together, for example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span><span class="n">_Ga</span><span class="o">=</span><span class="n">q</span><span class="p">,</span><span class="n">i</span><span class="o">=</span><span class="mi">31</span><span class="p">,</span><span class="n">e</span><span class="o">=</span><span class="n">t</span><span class="p">,</span><span class="n">f</span><span class="o">=</span><span class="mi">632</span><span class="p">,</span><span class="n">E</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span><span class="n">G</span><span class="o">=</span><span class="mi">2</span><span class="o">&lt;</span><span class="n">ESC</span><span class="o">&gt;</span>\
 </pre></div>

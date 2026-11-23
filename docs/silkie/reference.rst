@@ -26,6 +26,7 @@ kitty's protocols, kitten tools, and the underlying terminal conventions.
    :caption: Text and typography
 
    font-protocol
+   flow-protocol
    spatial-protocol
 
 .. toctree::

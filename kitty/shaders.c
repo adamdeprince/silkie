@@ -1711,6 +1711,7 @@ create_cell_vao(void) {
     A1("depth", 1, GL_INT, depth);
     A1("depth_pixels", 1, GL_FLOAT, depth_pixels);
     A1("phase", 1, GL_FLOAT, phase);
+    A1("glyph_tile", 1, GL_UNSIGNED_INT, text_style);
 
     B(GL_ARRAY_BUFFER, other);
     A("is_selected", 1, GL_UNSIGNED_BYTE, NULL, 0);
@@ -2510,13 +2511,24 @@ has_hyperlink_target(OSWindow *os_window, Window *w, Screen *screen) {
            !is_mouse_hidden(os_window) && global_state.mouse_hover_in_window == w->id;
 }
 
+static void
+hovered_cell_bounds(const UIRenderData *ui, double *left, double *top, double *height) {
+    const Screen *s = ui->screen;
+    double dx = 1. / s->columns, dy = 1. / s->lines;
+    double u = s->current_hyperlink_under_mouse.x * dx;
+    double v = (s->current_hyperlink_under_mouse.y + (double)s->pixel_scroll_offset_y / s->cell_size.height) * dy;
+    flow_rect(s->flow, &u, &v, &dx, &dy);
+    *left = u * ui->screen_width; *top = v * ui->screen_height; *height = dy * ui->screen_height;
+}
+
 // Return the offset from the top of the screen at which to draw a bar of the
 // specified height so that it does not obscure the hovered line
 static unsigned
 hyperlink_target_bar_top(const UIRenderData *ui, unsigned bar_height) {
     const double max_top = ui->screen_height - bar_height;
-    const double row_top = (double)ui->screen->current_hyperlink_under_mouse.y * ui->cell_height + ui->screen->pixel_scroll_offset_y;
-    const double row_bottom = row_top + ui->cell_height;
+    double left, row_top, height;
+    hovered_cell_bounds(ui, &left, &row_top, &height);
+    const double row_bottom = row_top + height;
     double top = 0;
     switch (OPT(hyperlink_target_position)) {
         case HYPERLINK_TARGET_TOP: top = row_top < bar_height ? max_top : 0; break;
@@ -2538,8 +2550,9 @@ draw_hyperlink_target_tooltip(const UIRenderData *ui, Viewport rect, PyObject *u
     bar_colors(ui, &fg, &bg);
     if (!render_bar_text(ui, bar, url, rect.width - 2 * border_width, rect.height - 2 * border_width, true, fg, bg)) return;
     const unsigned width = bar->width + 2 * border_width;
-    const unsigned left = ui->screen->current_hyperlink_under_mouse.x * ui->cell_width;
-    rect.left += MIN(left, rect.width - width);
+    double left, top, height;
+    hovered_cell_bounds(ui, &left, &top, &height);
+    rect.left += (unsigned)MAX(0., MIN(left, rect.width - width));
     rect.width = width;
     draw_bar(ui, bar, rect, fg, bg);
 }
@@ -2988,6 +3001,7 @@ call_cell_program(int program, const UIRenderData *ui, ssize_t vao_idx, bool for
         w->spatial.positive, w->spatial.negative);
     glUniform2f(program_uniform_location(program, "spatial_phase"),
         w->spatial.mode ? -(float)w->spatial.eye / ui->screen_height : 0.f, w->spatial.phase_limit);
+    glUniform1ui(program_uniform_location(program, "flow"), ui->screen->flow);
     glUniform1f(program_uniform_location(program, "spatial_multiplier"), w->spatial.mode ? w->spatial.multiplier : 1.f);
     glUniform2f(program_uniform_location(program, "spatial_pixel_size"),
         w->spatial.mode ? 2.f / ui->screen_width : 0.f, w->spatial.mode ? 2.f / ui->screen_height : 0.f);

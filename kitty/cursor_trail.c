@@ -16,6 +16,16 @@ typedef struct ndc_coords {
 static void
 update_cursor_trail_target(CursorTrail *ct, Window *w, ndc_coords g) {
     float left = FLT_MAX, right = FLT_MAX, top = FLT_MAX, bottom = FLT_MAX;
+    if (WD.screen->flow) {
+        const Screen *s = WD.screen;
+        double dx = 1. / s->columns, dy = 1. / s->lines;
+        double x = s->cursor_render_info.x * dx, y = s->cursor_render_info.y * dy;
+        flow_rect(s->flow, &x, &y, &dx, &dy);
+        double width = s->physical_columns * g.dx, height = s->physical_lines * g.dy;
+        g.dx = dx * width; g.dy = dy * height;
+        g.xstart += x * width - s->cursor_render_info.x * g.dx;
+        g.ystart -= y * height - s->cursor_render_info.y * g.dy;
+    }
     switch (WD.screen->cursor_render_info.shape) {
         case CURSOR_BLOCK:
         case CURSOR_HOLLOW:

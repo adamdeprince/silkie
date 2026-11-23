@@ -48,6 +48,17 @@ add this to ``silkie.conf``::
 The application menu's Quit command remains available without a keyboard
 shortcut unless you configure one.
 
+Function keys on macOS
+----------------------
+
+Plain F11 sends ``ESC [ 23 ~`` to a terminal program using legacy key reporting.
+Use ``kitten show-key`` to see the received event. A shell prompt may have no
+visible action bound to it. If macOS reserves F11 for Show Desktop, either
+change that shortcut in **System Settings → Keyboard → Keyboard Shortcuts →
+Mission Control**, or start Silkie with ``--grab-keyboard`` to request system
+shortcuts while it is frontmost. macOS may require Accessibility permission
+for the latter. On media-first keyboards, use Fn-F11 for the function key.
+
 Spatial display
 ----------------
 

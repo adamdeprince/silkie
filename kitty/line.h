@@ -91,7 +91,8 @@ typedef union CPUCell {
         // The padding is named because unnamed bit-fields are left
         // indeterminate by initializers, and clang on arm64 fills them with
         // stack garbage, making cells with identical contents compare unequal.
-        char_type padding : 17;
+        char_type reading_direction : 3;
+        char_type padding : 14;
     };
     struct {
         char_type ch_and_idx : sizeof(char_type) * 8;

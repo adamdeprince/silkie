@@ -549,6 +549,7 @@ option_names = (
     'terminfo_type',
     'text_composition_strategy',
     'text_fg_override_threshold',
+    'text_flow',
     'touch_scroll_multiplier',
     'transparent_background_colors',
     'undercurl_style',
@@ -816,6 +817,7 @@ class Options:
     terminfo_type: choices_for_terminfo_type = 'path'
     text_composition_strategy: str = 'platform'
     text_fg_override_threshold: tuple[float, typing.Literal['%', 'ratio']] = (0.0, '%')
+    text_flow: int = 0
     touch_scroll_multiplier: float = 1.0
     transparent_background_colors: tuple[tuple[kitty.fast_data_types.Color, float], ...] = ()
     undercurl_style: choices_for_undercurl_style = 'thin-sparse'

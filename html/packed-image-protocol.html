@@ -275,6 +275,7 @@
 <li class="toctree-l2"><a class="reference internal" href="capabilities-protocol.html">Extension capabilities protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extension-framing.html">OSC 777 extension framing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="font-protocol.html">Font selection protocol</a></li>
+<li class="toctree-l2"><a class="reference internal" href="flow-protocol.html">Writing direction and reading order</a></li>
 <li class="toctree-l2"><a class="reference internal" href="spatial-protocol.html">Spatial display and depth</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tablet-protocol.html">Tablet pointer protocol</a></li>
 <li class="toctree-l2"><a class="reference internal" href="scroll-protocol.html">Scroll protocol</a></li>
@@ -362,7 +363,7 @@ protocol’s <code class="docutils literal notranslate"><span class="pre">a=q</s
 <p>The one-byte payload is hexadecimal <code class="docutils literal notranslate"><span class="pre">55</span></code>: eight alternating black and white
 pixels. A terminal accepting it replies <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Gi=42;OK&lt;ESC&gt;\</span></code> without
 keeping the image. Applications should handle rejection or timeout and fall
-back to an accepted format. A <span class="xref std std-ref">feature query</span>,
+back to an accepted format. A <a class="reference internal" href="capabilities-protocol.html#graphics-query-features"><span class="std std-ref">feature query</span></a>,
 for example <code class="docutils literal notranslate"><span class="pre">&lt;ESC&gt;_Ga=q,i=42,e=t,f=301&lt;ESC&gt;\</span></code>, asks the same without sending
 pixels.</p>
 </section>

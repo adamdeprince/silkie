@@ -220,6 +220,8 @@ vertex_main(
     [[vk::location(3)]] int depth,
     [[vk::location(4)]] float phase,
     [[vk::location(5)]] float depth_pixels,
+    [[vk::location(6)]] uint glyph_tile,
+    uniform uint flow,
     uint vertex_id: SV_VertexID,
     uint instance_id: SV_InstanceID,
     uniform uint draw_bg_bitfield, uniform float4 spatial_depth, uniform float2 spatial_phase, uniform float spatial_multiplier,
@@ -228,6 +230,21 @@ vertex_main(
 
     BackgroundOutput bo = compute_background(colors, sprite_idx, is_selected, instance_id, vertex_id);
     vo.position = bo.position;
+    if (flow != 0u) {
+        // Move the glyph's bounding box, then put its sprite tiles back in
+        // their original order inside it. This keeps wide Han glyphs upright.
+        float2 tile = float2(glyph_tile & 255u, (glyph_tile >> 8) & 255u);
+        float2 span = max(float2(1.f), float2((glyph_tile >> 16) & 255u, glyph_tile >> 24));
+        float2 grid = float2(crd.columns, crd.lines);
+        uint row = instance_id / crd.columns;
+        float2 lo = (float2(instance_id - row * crd.columns, float(row) + crd.row_offset) - tile) / grid;
+        float2 extent = span / grid;
+        if ((flow & 1u) != 0u) lo.x = 1.f - lo.x - extent.x;
+        if ((flow & 2u) != 0u) lo.y = 1.f - lo.y - extent.y;
+        if ((flow & 4u) != 0u) { lo = lo.yx; extent = extent.yx; }
+        float2 p = lo + (tile + float2(bo.cell_data.pos)) / span * extent;
+        vo.position.xy = float2(2.f, -2.f) * p + float2(-1.f, 1.f);
+    }
     float angle = clamp(float(depth) * 0.001f * spatial_multiplier, -spatial_depth.w, spatial_depth.z);
     float disparity = tan(angle * 0.008726646259971648f) / spatial_depth.y;
     if (depth_pixels != 0.f) disparity = clamp(depth_pixels / 1920.f * spatial_multiplier,
@@ -248,6 +265,15 @@ vertex_main(
     if (!ONLY_BACKGROUND) { // background does not depend on foreground
         // The character sprite being rendered
         vo.sprite_pos = to_sprite_pos(cell_data.pos, sprite_idx[0] & SPRITE_INDEX_MASK);
+        if ((flow & 4u) != 0u && glyph_tile == 0u) {
+            float aspect = float(crd.cell_height) / float(crd.cell_width);
+            float2 uvScale = float2(max(1.f, aspect * aspect), max(1.f, 1.f / (aspect * aspect)));
+            float2 corners = float2(cell_data.pos) - 0.5f;
+            vo.sprite_pos.xy += corners * (uvScale - 1.f) * float2(1.f / crd.sprites_xnum,
+                float(crd.cell_height) / float((crd.cell_height + 1u) * crd.sprites_ynum));
+            // Clamp out-of-tile samples to transparent in the atlas sampler.
+            vo.spatial_antialias = 1.f;
+        }
         vo.colored_sprite = float((sprite_idx[0] & SPRITE_COLORED_MASK) >> SPRITE_COLORED_SHIFT);
 
         float has_dim = float((text_attrs >> DIM_SHIFT) & BIT_MASK), has_blink = float((text_attrs >> BLINK_SHIFT) & BIT_MASK);
@@ -294,7 +320,7 @@ vertex_main(
         vo.sprite_indices = uint4(sprite_idx[0] & SPRITE_INDEX_MASK, decs[1], cursor_sprite, decs[0]);
         uint skip_text = uint((sprite_idx[0] & SPRITE_INDEX_MASK) == 0u && decs[0] == 0u && decs[1] == 0u && cursor_sprite == 0u);
         vo.underline_exclusion_pos = to_underline_exclusion_pos(sprite_idx) | (skip_text * SKIP_TEXT_FLAG);
-        if (ONLY_FOREGROUND && vo.spatial_antialias != 0.f) {
+        if (ONLY_FOREGROUND && spatial_pixel_size.x > 0.f) {
             // Leave a one-pixel transparent apron for fractional glyph coverage.
             // Samples outside this atlas tile are zero, never a neighboring glyph.
             float2 sign = float2(cell_data.pos) * 2.f - 1.f;
