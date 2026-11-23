@@ -124,9 +124,10 @@ def main() -> None:
             subprocess.run(['aws', '--endpoint-url', endpoint, 's3', *command, *flags,
                             '--only-show-errors'], env=env, check=True)
 
-        # Install immutable bytes before publishing any manifest or page that
-        # refers to them. Existing images remain available to running guests.
-        aws('cp', str(deployment / guest_image), SITE_BUCKET + guest_image.as_posix(),
+        # Publish the SHA-256-named image before any manifest or page refers to
+        # it. The name identifies the verified bytes across repeated deployments.
+        aws('sync', str(deployment / guest_image.parent), SITE_BUCKET + guest_image.parent.as_posix() + '/',
+            '--exclude', '*', '--include', guest_image.name, '--size-only',
             '--content-type', 'application/octet-stream',
             '--cache-control', 'public, max-age=31536000, immutable')
         if args.cask:

@@ -95,18 +95,18 @@ class PublishTests(unittest.TestCase):
             self.assertNotIn('--delete', command)
             observed.append(command)
             source = Path(command[5])
-            staging = source if source.is_dir() else source.parents[2] if source.suffix == '.ext2' else source.parent
             if len(observed) == 1:
-                self.assertEqual(source.name, f'guest-{self.digest}.ext2')
-                self.assertEqual(source.read_bytes(), self.image)
-                self.assertEqual(command[6], publisher.SITE_BUCKET + '_static/demo/' + source.name)
+                image = f'guest-{self.digest}.ext2'
+                self.assertEqual((source / image).read_bytes(), self.image)
+                self.assertEqual(command[6], publisher.SITE_BUCKET + '_static/demo/')
+                self.assertEqual(command[7:12], ['--exclude', '*', '--include', image, '--size-only'])
                 self.assertIn('public, max-age=31536000, immutable', command)
-                self.assertEqual(json.loads((staging / publisher.GUEST_MANIFEST).read_text())['image'], source.name)
+                self.assertEqual(json.loads((source / 'guest.json').read_text())['image'], image)
             self.assertEqual((self.demo / 'guest.json').read_bytes(), local_manifest)
 
         auth, _ = self.invoke(run=run)
         auth.assert_called_once()
-        self.assertEqual([command[4] for command in observed], ['cp', 'sync', 'cp', 'sync'])
+        self.assertEqual([command[4] for command in observed], ['sync', 'sync', 'cp', 'sync'])
         assets, installer, html = observed[1:]
         self.assertIn('*.html', assets)
         self.assertIn('_static/demo/guest*.ext2', assets)
@@ -127,7 +127,7 @@ class PublishTests(unittest.TestCase):
         for command in commands:
             self.assertIn('--dryrun', command)
             self.assertNotIn('--delete', command)
-        self.assertIn('/guest-' + self.digest + '.ext2', commands[0][6])
+        self.assertIn('guest-' + self.digest + '.ext2', commands[0])
         self.assertEqual(commands[1][6], 's3://site-brew-goblinreactor-com/casks/Silkie.zip')
         self.assertEqual(commands[2][6], 's3://site-brew-goblinreactor-com/homebrew-tap.git/objects/')
         self.assertEqual(commands[3][6], 's3://site-brew-goblinreactor-com/homebrew-tap.git/')

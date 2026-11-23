@@ -120,7 +120,7 @@ export SLANGC=${SLANGC:-/Applications/Silkie.app/Contents/MacOS/slangc}
 test -x "$SLANGC" || deploy_die "slangc not found at $SLANGC"
 font="$DEPLOY_REPO/fonts/SymbolsNerdFontMono-Regular.ttf"
 test -f "$font" || deploy_die "missing $font (fonts/ is not in git)"
-mkdir -p fonts
+mkdir -p fonts docs/_build/man
 cp "$font" fonts/
 python3.14 setup.py kitty.app
 slang_resources="$(dirname "$SLANGC")/../Resources"
