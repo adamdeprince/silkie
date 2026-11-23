@@ -43,18 +43,28 @@ PROJECT = {
         'loongson': 'the Kylin build bundles its own Python runtime and code generated on naamah (release-local/*/loongarch64); that workflow is not scripted yet',
     },
     # Per-target overrides of HOST_DEFAULTS (ssh, suite, jobs, python, env).
-    'hosts': {},
+    'hosts': {
+        'graviton5': {'env': {
+            'CARGO_HOME': '$HOME/.cache/silkie-build/cargo',
+            'RUSTUP_HOME': '$HOME/.cache/silkie-build/rustup',
+        }},
+    },
     # Runs on each Linux target in the extracted source; writes .deb files to $DEPLOY_OUT.
     'linux_build': r'''
 slangc=${SLANGC:-$HOME/.cache/slang/bin/slangc}
 font=${SILKIE_SYMBOLS_FONT:-$HOME/dev/silkie/fonts/SymbolsNerdFontMono-Regular.ttf}
+if [ -z "${SILKIE_SYMBOLS_FONT:-}" ] && [ ! -f "$font" ]; then
+  font=/usr/lib/silkie/lib/kitty/fonts/SymbolsNerdFontMono-Regular.ttf
+fi
 test -x "$slangc" || deploy_die "slangc not found at $slangc (set SLANGC in HOSTS)"
-test -f "$font" || deploy_die "Symbols Nerd Font not found at $font (fonts/ is not in git)"
+test -f "$font" || deploy_die "Symbols Nerd Font not found at $font (set SILKIE_SYMBOLS_FONT in HOSTS)"
+slang_root=$(dirname "$(dirname "$(realpath "$slangc")")")
 mkdir -p bin fonts docs/_build/man
 ln -sf "$slangc" bin/slangc
 cp "$font" fonts/
-export PATH="$PWD/bin:$PATH" GOFLAGS=-buildvcs=false
+export PATH="$PWD/bin:${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" GOFLAGS=-buildvcs=false
 make debug
+./test.py --module text_flow
 if ./test.py > "$DEPLOY_OUT/silkie-tests.log" 2>&1; then
   echo "test suite passed"
 else
@@ -67,24 +77,40 @@ pkg="$DEPLOY_WORK/pkg"
 lib="$pkg/usr/lib/silkie"
 mkdir -p "$pkg/usr/lib" "$pkg/usr/bin" "$pkg/usr/share/applications" "$pkg/usr/share/doc/silkie"
 cp -a "$DEPLOY_WORK/stage/opt/silkie" "$lib"
+install -m 0755 "$slangc" "$lib/bin/slangc"
+cp -a "$slang_root"/lib/*.so* "$lib/lib/"
+patchelf --set-rpath '$ORIGIN/../lib' "$lib/bin/slangc"
+shlibs="$DEPLOY_WORK/shlibs.local"
+touch "$shlibs"
+for library in "$lib"/lib/*.so*; do
+  test ! -L "$library" || continue
+  patchelf --set-rpath '$ORIGIN' "$library"
+  soname=$(patchelf --print-soname "$library")
+  if [ -n "$soname" ]; then
+    printf '%s %s silkie\n' "${soname%%.so*}" "${soname#*.so.}" >> "$shlibs"
+  fi
+done
+notices="$pkg/usr/share/doc/silkie/bundled-shader-compiler"
+find "$slang_root" -type f \( -iname '*license*' -o -iname '*notice*' \) -print0 |
+  while IFS= read -r -d '' notice; do
+    install -D -m 0644 "$notice" "$notices/${notice#"$slang_root"/}"
+  done
 ln -s ../lib/silkie/bin/kitty "$pkg/usr/bin/silkie"
 ln -s ../lib/silkie/bin/kitten "$pkg/usr/bin/silkie-kitten"
-sed -e '/^\(Exec\|TryExec\|Icon\)=/s/kitty/silkie/' -e 's/^Name=.*/Name=silkie/' \
-  "$lib/share/applications/kitty.desktop" > "$pkg/usr/share/applications/silkie.desktop"
-for icon in 256x256/apps/kitty.png scalable/apps/kitty.svg; do
-  if [ -f "$lib/share/icons/hicolor/$icon" ]; then
-    install -D -m 0644 "$lib/share/icons/hicolor/$icon" \
-      "$pkg/usr/share/icons/hicolor/${icon%kitty.*}silkie.${icon##*.}"
-  fi
+install -m 0644 "$lib/share/applications/"silkie{,-open}.desktop "$pkg/usr/share/applications/"
+for icon in 256x256/apps/silkie.png scalable/apps/silkie.svg; do
+  install -D -m 0644 "$lib/share/icons/hicolor/$icon" "$pkg/usr/share/icons/hicolor/$icon"
 done
 install -m 0644 LICENSE "$pkg/usr/share/doc/silkie/copyright"
 printf '%s\n' 'silkie is a fork of the kitty terminal emulator with protocol extensions.' \
   'Documentation and protocol specifications: https://silkie.goblinreactor.com/' \
   'The terminal is installed under /usr/lib/silkie and started as silkie.' > "$pkg/usr/share/doc/silkie/README"
 "$lib/bin/kitty" --version
+env -u SLANGC -u LD_LIBRARY_PATH "$lib/bin/kitty" +runpy 'from kitty.shaders.slang import test_slang_build; test_slang_build()'
 python=$(python3 -c 'import sys; v = sys.version_info; print("python3 (>= %d.%d), python3 (<< %d.%d)" % (v[0], v[1], v[0], v[1] + 1))')
+export DEPLOY_SHLIBDEPS_ARGS="-l$lib/lib -L$shlibs -xsilkie"
 DEPLOY_DEB_SECTION=x11 deploy_make_deb silkie "$DEPLOY_VERSION+$DEPLOY_SUITE$DEPLOY_DEB_REVISION" "$pkg" \
-  "kitty terminal emulator with the silkie protocol extensions" "$python"
+  "kitty terminal emulator with the silkie protocol extensions" "$python, libgl1, libgtk-3-0t64"
 ''',
     # Runs on this Mac in the extracted source; writes NAME.rb and artifacts to $DEPLOY_OUT.
     'mac_build': r'''
@@ -97,6 +123,10 @@ test -f "$font" || deploy_die "missing $font (fonts/ is not in git)"
 mkdir -p fonts
 cp "$font" fonts/
 python3.14 setup.py kitty.app
+slang_resources="$(dirname "$SLANGC")/../Resources"
+install -m 0755 "$SLANGC" kitty.app/Contents/MacOS/slangc
+cp -R "$slang_resources/slang" "$slang_resources/SLANG-LICENSE" "$slang_resources/SLANG-LICENSES" kitty.app/Contents/Resources/
+env -u SLANGC kitty.app/Contents/MacOS/silkie +runpy 'from kitty.shaders.slang import test_slang_build; test_slang_build()'
 python3.14 packaging/macos.py kitty.app "$DEPLOY_OUT" --version "$DEPLOY_BREW_VERSION"
 # packaging/macos.py points the cask at the old casks/ directory.
 sed -i '' "s|https://brew.goblinreactor.com/casks/silkie-#{version}.zip|${DEPLOY_BREW_URL}silkie-#{version}.zip|" \
