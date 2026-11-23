@@ -2664,8 +2664,10 @@ grman_put_cell_image(
         double u = ref.src_x / inline_extent, v = ref.src_y / line_extent;
         double w = ref.src_width / inline_extent, h = ref.src_height / line_extent;
         flow_rect(self->flow, &u, &v, &w, &h);
-        ref.src_x = u * img->width; ref.src_y = v * img->height;
-        ref.src_width = w * img->width; ref.src_height = h * img->height;
+        ref.src_x = (float)(u * img->width);
+        ref.src_y = (float)(v * img->height);
+        ref.src_width = (float)(w * img->width);
+        ref.src_height = (float)(h * img->height);
     }
 
     // The cursor will be drawn on top of the image.
@@ -3234,7 +3236,7 @@ grman_update_magnified_layers(
     self->num_of_indexed_refs = 0;
     ImageRect r;
     const double screen_width = (double)dx * num_cols, screen_height = (double)dy * num_rows;
-    float screen_bottom = screen_top - screen_height;
+    const float screen_bottom = (float)(screen_top - screen_height);
     const double logical_width = (double)num_cols * cell.width, logical_height = (double)num_rows * cell.height;
     const bool vertical = self->flow & FLOW_VERTICAL;
     const double screen_width_px = vertical ? logical_height : logical_width, screen_height_px = vertical ? logical_width : logical_height;
@@ -3246,7 +3248,7 @@ grman_update_magnified_layers(
     self->render_data.has_visible_raster = false;
     const monotonic_t now = monotonic();
     // what of the window is on screen, in normalized device coordinates, outside which no tile is drawn
-    ImageRect screen = {.left = screen_left, .top = screen_top, .right = screen_left + screen_width, .bottom = screen_bottom};
+    ImageRect screen = {.left = screen_left, .top = screen_top, .right = (float)(screen_left + screen_width), .bottom = screen_bottom};
     const double zoom = MAX(1., magnification.scale);
     if (zoom > 1.) {
         double half = 0.5 / zoom;
@@ -3289,10 +3291,10 @@ grman_update_magnified_layers(
             x /= logical_width; w /= logical_width;
             y /= logical_height; h /= logical_height;
             flow_rect(self->flow, &x, &y, &w, &h);
-            r.left = screen_left + x * screen_width;
-            r.right = screen_left + (x + w) * screen_width;
-            r.top = screen_top - y * screen_height;
-            r.bottom = screen_top - (y + h) * screen_height;
+            r.left = (float)(screen_left + x * screen_width);
+            r.right = (float)(screen_left + (x + w) * screen_width);
+            r.top = (float)(screen_top - y * screen_height);
+            r.bottom = (float)(screen_top - (y + h) * screen_height);
 
             if (r.top <= screen.bottom || r.bottom >= screen.top ||
                 (zoom > 1. && (r.left >= screen.right || r.right <= screen.left))) {
@@ -4885,7 +4887,7 @@ scroll_filter_margins_func(ImageRef *ref, Image *img, const void *data, CellPixe
         if (ref->num_rows) height = (double)ref->num_rows * cell.height - ref->cell_y_offset;
         else if (ref->num_cols && inline_extent > 0)
             height = ((double)ref->num_cols * cell.width - ref->cell_x_offset) * *extent / inline_extent;
-        const float scale = height > 0 ? *extent / height : 1.f;
+        const float scale = height > 0 ? (float)(*extent / height) : 1.f;
         if (ref->start_row < (int32_t)d->margin_top) {
             // image moved up
             clipped_rows = d->margin_top - ref->start_row;
